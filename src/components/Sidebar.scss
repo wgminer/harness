@@ -1,0 +1,32 @@
+.sidebar {
+  width: 300px;
+  border-right: 1px solid #ccc;
+  flex: none;
+  height: 100vh;
+  overflow: auto;
+
+  .sidebar-header {
+    padding: 1rem;
+    display: flex;
+  }
+}
+
+.new-chat {
+  margin-right: auto;
+}
+
+.chat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 1rem;
+  cursor: pointer;
+
+  &:hover {
+    background-color: #eee;
+  }
+
+  &.active {
+    background-color: #eef;
+  }
+}

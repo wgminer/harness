@@ -1,31 +1,22 @@
-.App {
+.app {
   height: 100vh;
   display: flex;
-  flex-direction: column;
+}
+
+.app-body {
+  width: 100%;
+  flex: auto;
+}
+
+.chat-timestamp {
+  font-size: 0.8em;
+  color: #666;
+}
+
+.empty-state {
+  display: flex;
   justify-content: center;
   align-items: center;
-}
-
-.input {
-  margin-bottom: 1rem;
-  position: relative;
-  min-width: 400px;
-
-  textarea {
-    min-height: 160px;
-  }
-}
-
-.recording-button {
-  position: absolute;
-  left: 0.5rem;
-  bottom: 0.5rem;
-}
-
-.submit-button {
-  margin-left: auto;
-  margin-top: 0.5rem;
-  position: absolute;
-  right: 0.5rem;
-  bottom: 0.5rem;
+  height: 100%;
+  color: #666;
 }

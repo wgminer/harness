@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
+import { doc, setDoc } from "firebase/firestore";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { debounce } from "lodash";
@@ -20,15 +20,22 @@ export function Modal({ apiKey, setApiKey, showModal, setShowModal, user }) {
   const showToast = useToast();
 
   const debouncedSetApiKey = useCallback(
-    debounce((value) => {
-      setApiKey(value);
-      showToast("API key saved");
+    debounce(async (value) => {
+      if (user) {
+        await setDoc(
+          doc(db, "users", user.uid),
+          { apiKey: value },
+          { merge: true }
+        );
+        setApiKey(value);
+        showToast("API key saved");
+      }
     }, 1000),
-    [setApiKey, showToast]
+    [setApiKey, showToast, user]
   );
 
   const handleApiKeyChange = (e) => {
-    const value = e.target.value;
+    const value = e.target.value.trim();
     debouncedSetApiKey(value);
   };
 
@@ -71,7 +78,7 @@ export function Modal({ apiKey, setApiKey, showModal, setShowModal, user }) {
                   <label className="label-input">
                     OpenAI API key
                     <input
-                      type="password"
+                      type="text"
                       defaultValue={apiKey}
                       onChange={handleApiKeyChange}
                     />
