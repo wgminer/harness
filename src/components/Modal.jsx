@@ -12,31 +12,31 @@ import { debounce } from "lodash";
 import { useToast } from "./ToastProvider";
 import "./Modal.scss";
 
-export function Modal({ apiKey, setApiKey, showModal, setShowModal, user }) {
+export function Modal({ apiKeys, setApiKeys, showModal, setShowModal, user }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState("");
   const showToast = useToast();
 
-  const debouncedSetApiKey = useCallback(
-    debounce(async (value) => {
+  const debouncedSetApiKeys = useCallback(
+    debounce(async (keys) => {
       if (user) {
         await setDoc(
           doc(db, "users", user.uid),
-          { apiKey: value },
+          { apiKeys: keys },
           { merge: true }
         );
-        setApiKey(value);
-        showToast("API key saved");
+        setApiKeys(keys);
+        showToast("API keys saved");
       }
     }, 1000),
-    [setApiKey, showToast, user]
+    [setApiKeys, showToast, user]
   );
 
-  const handleApiKeyChange = (e) => {
-    const value = e.target.value.trim();
-    debouncedSetApiKey(value);
+  const handleApiKeyChange = (service, value) => {
+    const newKeys = { ...apiKeys, [service]: value.trim() };
+    debouncedSetApiKeys(newKeys);
   };
 
   const handleAuth = async (e) => {
@@ -79,8 +79,20 @@ export function Modal({ apiKey, setApiKey, showModal, setShowModal, user }) {
                     OpenAI API key
                     <input
                       type="text"
-                      defaultValue={apiKey}
-                      onChange={handleApiKeyChange}
+                      defaultValue={apiKeys?.openai || ""}
+                      onChange={(e) =>
+                        handleApiKeyChange("openai", e.target.value)
+                      }
+                    />
+                  </label>
+                  <label className="label-input">
+                    Claude API key
+                    <input
+                      type="text"
+                      defaultValue={apiKeys?.claude || ""}
+                      onChange={(e) =>
+                        handleApiKeyChange("claude", e.target.value)
+                      }
                     />
                   </label>
                   <div className="user-info">
@@ -89,7 +101,7 @@ export function Modal({ apiKey, setApiKey, showModal, setShowModal, user }) {
                   </div>
                 </>
               ) : (
-                <form onSubmit={handleAuth}>
+                <form onSubmit={handleAuth} className="auth-form">
                   {error && <div className="error">{error}</div>}
                   <label className="label-input">
                     Email
@@ -109,7 +121,7 @@ export function Modal({ apiKey, setApiKey, showModal, setShowModal, user }) {
                       required
                     />
                   </label>
-                  <button type="submit">
+                  <button type="submit" className="submit-auth">
                     {isRegistering ? "Register" : "Login"}
                   </button>
                   <button

@@ -23,12 +23,11 @@
     background: #ffeeee;
     border-radius: 4px;
   }
+}
 
-  form {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
+.auth-form {
+  display: flex;
+  flex-direction: column;
 }
 
 // Modal sections
@@ -70,12 +69,17 @@
   // top: 1rem;
 }
 
+.submit-auth {
+  margin-top: 2rem;
+}
+
 .switch-auth {
   background: none;
   border: none;
   color: #666;
   text-decoration: underline;
   cursor: pointer;
+  margin-top: 1rem;
 
   &:hover {
     color: #333;

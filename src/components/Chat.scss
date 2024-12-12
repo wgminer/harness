@@ -16,11 +16,24 @@
 
 .message {
   margin-bottom: 1rem;
-  width: 50%;
+  max-width: 50%;
+
+  span {
+    display: inline-block;
+  }
 
   &.user {
     margin-left: auto;
-    text-align: right;
+
+    span {
+      background-color: #eee;
+      padding: 1rem;
+      border-radius: 1rem;
+    }
+  }
+
+  &.assistant {
+    font-family: menlo;
   }
 }
 
@@ -47,4 +60,28 @@
   position: absolute;
   right: 3rem;
   bottom: 3rem;
+  background-color: green;
+  color: #fff;
+
+  &:hover {
+    background-color: green;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    color: #999;
+    background-color: #eee;
+  }
+}
+
+.api-selector {
+  padding: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #eee;
+
+  select {
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+  }
 }

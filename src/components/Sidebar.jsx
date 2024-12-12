@@ -11,8 +11,8 @@ export function Sidebar({
   currentChat,
   setCurrentChat,
   user,
-  apiKey,
-  setApiKey,
+  apiKeys,
+  setApiKeys,
 }) {
   const [showModal, setShowModal] = useState(false);
 
@@ -33,16 +33,11 @@ export function Sidebar({
     setCurrentChat(chatWithId);
   }, [user, setChats, setCurrentChat]);
 
-  const formatDate = (timestamp) => {
-    if (!timestamp || !timestamp.seconds) return "Just now";
-    const date = new Date(timestamp.seconds * 1000);
-    const isValid = !isNaN(date.getTime());
-    return isValid
-      ? date.toLocaleDateString() +
-          " " +
-          date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      : "";
-  };
+  const sortedChats = [...chats].sort((a, b) => {
+    const timeA = a.createdAt?.seconds || 0;
+    const timeB = b.createdAt?.seconds || 0;
+    return timeB - timeA;
+  });
 
   return (
     <aside className="sidebar">
@@ -51,8 +46,8 @@ export function Sidebar({
           <AddIcon /> New Chat
         </button>
         <Modal
-          apiKey={apiKey}
-          setApiKey={setApiKey}
+          apiKeys={apiKeys}
+          setApiKeys={setApiKeys}
           showModal={showModal}
           setShowModal={setShowModal}
           user={user}
@@ -60,20 +55,22 @@ export function Sidebar({
       </div>
 
       <div className="chats-list">
-        {chats
-          .map((conv) => (
-            <div
-              key={conv.id}
-              className={`chat-item ${
-                conv.id === currentChat?.id ? "active" : ""
-              }`}
-              onClick={() => setCurrentChat(conv)}
-            >
-              <div className="chat-title">{conv.title}</div>
-              <div className="chat-timestamp">{formatDate(conv.createdAt)}</div>
+        {sortedChats.map((conv) => (
+          <div
+            key={conv.id}
+            className={`chat-item ${
+              conv.id === currentChat?.id ? "active" : ""
+            }`}
+            onClick={() => setCurrentChat(conv)}
+          >
+            <div className="chat-title">{conv.title}</div>
+            <div className="chat-timestamp">
+              {conv.createdAt?.seconds
+                ? new Date(conv.createdAt.seconds * 1000).toLocaleString()
+                : "Just now"}
             </div>
-          ))
-          .reverse()}
+          </div>
+        ))}
       </div>
     </aside>
   );

@@ -15,7 +15,7 @@ import "./App.scss";
 
 function App() {
   const [user, setUser] = useState(null);
-  const [apiKey, setApiKey] = useState("");
+  const [apiKeys, setApiKeys] = useState({});
   const [currentChat, setCurrentChat] = useState(null);
   const [chats, setChats] = useState([]);
 
@@ -26,7 +26,7 @@ function App() {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          setApiKey(userData.apiKey || "");
+          setApiKeys(userData.apiKeys || {});
         }
 
         const chatsQuery = query(
@@ -41,7 +41,7 @@ function App() {
         setChats(userChats);
       } else {
         setUser(null);
-        setApiKey("");
+        setApiKeys({});
         setChats([]);
         setCurrentChat(null);
       }
@@ -49,10 +49,6 @@ function App() {
 
     return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    console.log("Current API key:", apiKey);
-  }, [apiKey]);
 
   return (
     <div className="app">
@@ -62,14 +58,14 @@ function App() {
         currentChat={currentChat}
         setCurrentChat={setCurrentChat}
         user={user}
-        apiKey={apiKey}
-        setApiKey={setApiKey}
+        apiKeys={apiKeys}
+        setApiKeys={setApiKeys}
       />
       <main className="app-body">
         {currentChat ? (
           <Chat
             chat={currentChat}
-            apiKey={apiKey}
+            apiKeys={apiKeys}
             user={user}
             updateChats={setChats}
           />

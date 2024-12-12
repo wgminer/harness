@@ -6,61 +6,112 @@ import StopCircleIcon from "@mui/icons-material/StopCircle";
 import SendIcon from "@mui/icons-material/Send";
 import "./Chat.scss";
 
-export function Chat({ chat, apiKey, user, updateChats }) {
+export function Chat({ chat, apiKeys, user, updateChats }) {
   const [prompt, setPrompt] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
   const mediaRecorder = useRef(null);
   const chunks = useRef([]);
   const [messages, setMessages] = useState(chat.messages || []);
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
+  const [selectedAPI, setSelectedAPI] = useState("openai");
 
   useEffect(() => {
     setMessages(chat.messages || []);
+    textareaRef.current?.focus();
   }, [chat]);
 
-  const handleSubmit = async () => {
-    if (!apiKey || !prompt.trim()) return;
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "instant",
+    });
+  }, [messages]);
+
+  const getApiKey = () => {
+    return selectedAPI === "claude" ? apiKeys?.claude : apiKeys?.openai;
+  };
+
+  const callClaudeAPI = async (messages) => {
+    const response = await fetch("/claude/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": getApiKey(),
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-3-opus-20240229",
+        messages: messages.map((m) => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: m.content,
+        })),
+        max_tokens: 1024,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || "Claude API request failed");
+    }
+
+    const data = await response.json();
+    return data.content[0].text;
+  };
+
+  const callOpenAIAPI = async (messages) => {
+    const response = await fetch("/openai/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getApiKey()}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || "OpenAI API request failed");
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  };
+
+  const handleSubmit = async (inputPrompt = prompt) => {
+    const currentApiKey = getApiKey();
+    if (!currentApiKey || !inputPrompt.trim()) return;
+    setLoading(true);
 
     const message = {
       role: "user",
-      content: prompt,
+      content: inputPrompt,
       timestamp: new Date(),
     };
 
+    setPrompt("");
     setMessages((prev) => [...prev, message]);
 
     try {
-      const response = await fetch(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey.trim()}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-3.5-turbo",
-            messages: [...messages, message].map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
-          }),
-        }
-      );
+      const allMessages = [...messages, message];
+      const responseContent = await (selectedAPI === "claude"
+        ? callClaudeAPI(allMessages)
+        : callOpenAIAPI(allMessages));
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || "API request failed");
-      }
-
-      const data = await response.json();
       const assistantMessage = {
         role: "assistant",
-        content: data.choices[0].message.content,
+        content: responseContent,
         timestamp: new Date(),
       };
 
-      const newMessages = [...messages, message, assistantMessage];
+      const newMessages = [...allMessages, assistantMessage];
       setMessages(newMessages);
 
       await updateDoc(doc(db, "chats", chat.id), {
@@ -77,10 +128,17 @@ export function Chat({ chat, apiKey, user, updateChats }) {
             : conv
         )
       );
-
-      setPrompt("");
     } catch (err) {
       alert(`Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
@@ -111,8 +169,9 @@ export function Chat({ chat, apiKey, user, updateChats }) {
   };
 
   const transcribeAudio = async (audioBlob) => {
-    if (!apiKey) {
-      alert("Please enter your OpenAI API key first");
+    const currentApiKey = getApiKey();
+    if (!currentApiKey) {
+      alert("Please enter your API key first");
       return;
     }
     setLoading(true);
@@ -126,13 +185,15 @@ export function Chat({ chat, apiKey, user, updateChats }) {
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${apiKeys.openai}`,
           },
           body: formData,
         }
       );
       const data = await response.json();
-      if (data.text) setPrompt(data.text);
+      if (data.text) {
+        await handleSubmit(data.text);
+      }
     } catch (err) {
       alert("Error transcribing audio. Please check your API key.");
     }
@@ -141,30 +202,44 @@ export function Chat({ chat, apiKey, user, updateChats }) {
 
   return (
     <div className="chat">
+      <div className="api-selector">
+        <select
+          value={selectedAPI}
+          onChange={(e) => setSelectedAPI(e.target.value)}
+          disabled={loading}
+        >
+          <option value="openai">OpenAI</option>
+          <option value="claude">Claude</option>
+        </select>
+      </div>
       <div className="messages">
         {messages.map((message, index) => (
           <div key={index} className={`message ${message.role}`}>
-            {message.content}
+            <span>{message.content}</span>
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="input">
         <textarea
+          ref={textareaRef}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Enter your prompt..."
+          disabled={loading}
         />
         <button
           onClick={isRecording ? stopRecording : startRecording}
-          disabled={loading || !apiKey}
+          disabled={loading || !apiKeys.openai}
           className="icon recording-button"
         >
           {isRecording ? <StopCircleIcon className="red" /> : <MicIcon />}
         </button>
         <button
-          onClick={handleSubmit}
-          disabled={!prompt.trim() || loading || !apiKey}
+          onClick={() => handleSubmit()}
+          disabled={!prompt.trim() || loading || !getApiKey()}
           className="submit-button inline-icon"
         >
           <SendIcon />
