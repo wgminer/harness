@@ -4,9 +4,12 @@ import { doc, updateDoc } from "firebase/firestore";
 import MicIcon from "@mui/icons-material/Mic";
 import StopCircleIcon from "@mui/icons-material/StopCircle";
 import SendIcon from "@mui/icons-material/Send";
+import MenuIcon from "@mui/icons-material/Menu";
+import TextareaAutosize from "react-textarea-autosize";
+
 import "./Chat.scss";
 
-export function Chat({ chat, apiKeys, user, updateChats }) {
+export function Chat({ chat, apiKeys, user, updateChats, onMenuClick }) {
   const [prompt, setPrompt] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,6 +19,7 @@ export function Chat({ chat, apiKeys, user, updateChats }) {
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const [selectedAPI, setSelectedAPI] = useState("openai");
+  const requestStartTime = useRef(null);
 
   useEffect(() => {
     setMessages(chat.messages || []);
@@ -30,6 +34,12 @@ export function Chat({ chat, apiKeys, user, updateChats }) {
 
   const getApiKey = () => {
     return selectedAPI === "claude" ? apiKeys?.claude : apiKeys?.openai;
+  };
+
+  const getModelName = () => {
+    return selectedAPI === "claude"
+      ? "claude-3-opus-20240229"
+      : "gpt-3.5-turbo";
   };
 
   const callClaudeAPI = async (messages) => {
@@ -89,6 +99,7 @@ export function Chat({ chat, apiKeys, user, updateChats }) {
     const currentApiKey = getApiKey();
     if (!currentApiKey || !inputPrompt.trim()) return;
     setLoading(true);
+    requestStartTime.current = Date.now();
 
     const message = {
       role: "user",
@@ -105,10 +116,14 @@ export function Chat({ chat, apiKeys, user, updateChats }) {
         ? callClaudeAPI(allMessages)
         : callOpenAIAPI(allMessages));
 
+      const requestDuration = Date.now() - requestStartTime.current;
+
       const assistantMessage = {
         role: "assistant",
         content: responseContent,
         timestamp: new Date(),
+        model: getModelName(),
+        requestDuration, // Add request duration in milliseconds
       };
 
       const newMessages = [...allMessages, assistantMessage];
@@ -200,29 +215,55 @@ export function Chat({ chat, apiKeys, user, updateChats }) {
     setLoading(false);
   };
 
+  const formatDuration = (ms) => {
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(2)}s`;
+  };
+
   return (
     <div className="chat">
-      <div className="api-selector">
-        <select
-          value={selectedAPI}
-          onChange={(e) => setSelectedAPI(e.target.value)}
-          disabled={loading}
-        >
-          <option value="openai">OpenAI</option>
-          <option value="claude">Claude</option>
-        </select>
+      <div className="chat-header">
+        {window.innerWidth <= 768 && (
+          <button className="menu-button icon" onClick={onMenuClick}>
+            <MenuIcon />
+          </button>
+        )}
       </div>
       <div className="messages">
         {messages.map((message, index) => (
           <div key={index} className={`message ${message.role}`}>
-            <span>{message.content}</span>
+            <div className="message-content">
+              <span>{message.content}</span>
+              <div className="message-metadata">
+                {message.model && (
+                  <span className="message-model">{message.model}</span>
+                )}
+                {message.requestDuration && (
+                  <span className="message-duration">
+                    in {formatDuration(message.requestDuration)}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         ))}
+        {loading && (
+          <div className="message assistant">
+            <div className="loading-indicator">
+              <div className="loading-dots">
+                <div></div>
+                <div></div>
+                <div></div>
+              </div>
+              <span>Generating response...</span>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
       <div className="input">
-        <textarea
+        <TextareaAutosize
           ref={textareaRef}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
@@ -237,14 +278,26 @@ export function Chat({ chat, apiKeys, user, updateChats }) {
         >
           {isRecording ? <StopCircleIcon className="red" /> : <MicIcon />}
         </button>
-        <button
-          onClick={() => handleSubmit()}
-          disabled={!prompt.trim() || loading || !getApiKey()}
-          className="submit-button inline-icon"
-        >
-          <SendIcon />
-          Submit
-        </button>
+        <div className="submit-group">
+          <div className="api-selector">
+            <select
+              value={selectedAPI}
+              onChange={(e) => setSelectedAPI(e.target.value)}
+              disabled={loading}
+            >
+              <option value="openai">OpenAI</option>
+              <option value="claude">Claude</option>
+            </select>
+          </div>
+          <button
+            onClick={() => handleSubmit()}
+            disabled={!prompt.trim() || loading || !getApiKey()}
+            className="submit-button inline-icon"
+          >
+            <SendIcon />
+            Submit
+          </button>
+        </div>
       </div>
     </div>
   );

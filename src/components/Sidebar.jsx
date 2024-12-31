@@ -13,6 +13,8 @@ export function Sidebar({
   user,
   apiKeys,
   setApiKeys,
+  showSidebar,
+  setShowSidebar,
 }) {
   const [showModal, setShowModal] = useState(false);
 
@@ -40,7 +42,7 @@ export function Sidebar({
   });
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${showSidebar ? "show" : "hide"}`}>
       <div className="sidebar-header">
         <button onClick={createNewChat} className="inline-icon new-chat">
           <AddIcon /> New Chat
@@ -61,7 +63,12 @@ export function Sidebar({
             className={`chat-item ${
               conv.id === currentChat?.id ? "active" : ""
             }`}
-            onClick={() => setCurrentChat(conv)}
+            onClick={() => {
+              setCurrentChat(conv);
+              if (window.innerWidth <= 768) {
+                setShowSidebar(false);
+              }
+            }}
           >
             <div className="chat-title">{conv.title}</div>
             <div className="chat-timestamp">

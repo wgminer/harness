@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Sidebar } from "./Sidebar";
 import { Chat } from "./Chat";
 import { auth, db } from "../firebase";
@@ -18,6 +18,37 @@ function App() {
   const [apiKeys, setApiKeys] = useState({});
   const [currentChat, setCurrentChat] = useState(null);
   const [chats, setChats] = useState([]);
+  const [showSidebar, setShowSidebar] = useState(true);
+  const touchStart = useRef(null);
+  const touchEnd = useRef(null);
+
+  const MIN_SWIPE_DISTANCE = 1;
+
+  const onTouchStart = (e) => {
+    console.log("Start");
+    touchEnd.current = null;
+    touchStart.current = e.targetTouches[0].clientX;
+  };
+
+  const onTouchMove = (e) => {
+    console.log("Move");
+    touchEnd.current = e.targetTouches[0].clientX;
+  };
+
+  const onTouchEnd = () => {
+    console.log("End");
+    if (!touchStart.current || !touchEnd.current) return;
+    console.log("End2");
+    const distance = touchStart.current - touchEnd.current;
+    const isLeftSwipe = distance > MIN_SWIPE_DISTANCE;
+    const isRightSwipe = distance < -MIN_SWIPE_DISTANCE;
+    console.log(isLeftSwipe, showSidebar, isRightSwipe, distance);
+    if (isLeftSwipe && showSidebar) {
+      setShowSidebar(false);
+    } else if (isRightSwipe && !showSidebar) {
+      setShowSidebar(true);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -51,7 +82,12 @@ function App() {
   }, []);
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
       <Sidebar
         chats={chats}
         setChats={setChats}
@@ -60,14 +96,17 @@ function App() {
         user={user}
         apiKeys={apiKeys}
         setApiKeys={setApiKeys}
+        showSidebar={showSidebar}
+        setShowSidebar={setShowSidebar}
       />
-      <main className="app-body">
+      <main className={`app-body ${!showSidebar ? "full-width" : ""}`}>
         {currentChat ? (
           <Chat
             chat={currentChat}
             apiKeys={apiKeys}
             user={user}
             updateChats={setChats}
+            onMenuClick={() => setShowSidebar(true)}
           />
         ) : (
           <div className="empty-state">Select or create a chat</div>

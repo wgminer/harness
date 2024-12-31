@@ -1,13 +1,13 @@
 {
-  "name": "timer",
+  "name": "harness",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && firebase deploy"
   },
   "dependencies": {
     "@emotion/react": "^11.13.5",
@@ -18,7 +18,8 @@
     "firebase": "^11.0.2",
     "lodash": "^4.17.21",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-textarea-autosize": "^8.5.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

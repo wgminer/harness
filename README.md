@@ -1,8 +1,16 @@
-# React + Vite
+# 🐴 Harness
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+_Harness_ is a focused, elegant UI crafted for effortless interactions with large language models (LLMs). Designed with productivity, privacy, and efficiency in mind, Harness offers an opinionated approach to maximizing your effectiveness when working with LLMs.
 
-Currently, two official plugins are available:
+## Roadmap
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Push to github
+- Develop landing page
+- Overhaul routing
+  - Login/register page
+  - Settings page to configure API keys
+  - Todo lists
+  - Export and delete account
+  - Color theme
+  - Chat titles
+  - Better voice input
