@@ -1,0 +1,53 @@
+{
+  "name": "harness",
+  "version": "0.1.0",
+  "private": true,
+  "main": "out/main/index.js",
+  "author": "Your Name",
+  "description": "Harness app",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "icon:icns": "node build/make-icns.js"
+  },
+  "dependencies": {
+    "lucide-react": "^0.575.0",
+    "openai": "^4.73.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@electron/notarize": "^2.2.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.0"
+  },
+  "build": {
+    "appId": "com.yourcompany.harness",
+    "productName": "Harness",
+    "files": ["out", "resources", "package.json"],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.icns",
+      "target": ["dmg", "zip"],
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "sign": false
+    },
+    "afterSign": "build/notarize.js"
+  }
+}
