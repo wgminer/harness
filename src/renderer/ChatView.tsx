@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -89,7 +89,19 @@ export function ChatView({ conversationId, onConversationCreated }: ChatViewProp
   const [streamingContent, setStreamingContent] = useState("");
   const [sending, setSending] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [expandedUserCards, setExpandedUserCards] = useState<Set<number>>(new Set());
+  const [overflowedUserCards, setOverflowedUserCards] = useState<Set<number>>(new Set());
   const [hasScrolled, setHasScrolled] = useState(false);
+  const userCardContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  const toggleUserCardExpanded = useCallback((index: number) => {
+    setExpandedUserCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
   /** Tool calls for the assistant turn currently being streamed; shown inline and then stored on the message when stream ends. */
   const [currentTurnToolCalls, setCurrentTurnToolCalls] = useState<ToolCallDisplay[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -143,6 +155,19 @@ export function ChatView({ conversationId, onConversationCreated }: ChatViewProp
           },
         ]
       : messages;
+
+  useLayoutEffect(() => {
+    const next = new Set<number>();
+    displayMessages.forEach((m, i) => {
+      if (m.role !== "user") return;
+      if (expandedUserCards.has(i)) return;
+      const el = userCardContentRefs.current[i];
+      if (el && el.scrollHeight > el.clientHeight) next.add(i);
+    });
+    setOverflowedUserCards((prev) =>
+      prev.size !== next.size || [...prev].some((n) => !next.has(n)) ? next : prev
+    );
+  }, [displayMessages, expandedUserCards]);
 
   useEffect(() => {
     const unsubChunk = window.electron.chat.onStreamChunk((cid, chunk) => {
@@ -273,12 +298,35 @@ export function ChatView({ conversationId, onConversationCreated }: ChatViewProp
 
             return (
               <div key={i} className={`message-block ${m.role}`}>
+                <div className="message-block-header">
+                  {m.role === "user" && (m as Message).timestamp != null && (
+                    <span className="message-block-time">{formatMessageTime((m as Message).timestamp!)}</span>
+                  )}
+                  <button
+                    type="button"
+                    className="message-block-top"
+                    onClick={scrollToTop}
+                    aria-label="Scroll to top"
+                  >
+                    top
+                  </button>
+                </div>
                 <div className="content">
                   {m.role === "user" ? (
-                    <div className="message-user-card">
-                      <div className="message-user-card__content">
+                    <div className={`message-user-card${expandedUserCards.has(i) ? " message-user-card--expanded" : ""}`}>
+                      <div className="message-user-card__content" ref={(el) => { userCardContentRefs.current[i] = el; }}>
                         {m.content ? <MarkdownContent content={m.content} /> : null}
                       </div>
+                      {(expandedUserCards.has(i) || overflowedUserCards.has(i)) && (
+                        <button
+                          type="button"
+                          className="message-user-card__toggle"
+                          onClick={() => toggleUserCardExpanded(i)}
+                          aria-expanded={expandedUserCards.has(i)}
+                        >
+                          {expandedUserCards.has(i) ? "Show less" : "Show more"}
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <>
@@ -317,7 +365,7 @@ export function ChatView({ conversationId, onConversationCreated }: ChatViewProp
                     </>
                   )}
                 </div>
-                {/* {isAssistant && (
+                {isAssistant && (
                   <div className="message-block-footer">
                     <CopyButton
                       content={m.content}
@@ -326,7 +374,7 @@ export function ChatView({ conversationId, onConversationCreated }: ChatViewProp
                       onCopied={setCopiedIndex}
                     />
                   </div>
-                )} */}
+                )}
               </div>
             );
           })}
