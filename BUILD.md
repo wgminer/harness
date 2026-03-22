@@ -91,11 +91,11 @@ npm run dist:mac
 
 Outputs (for Mac) are under:
 
-- `dist/Client-x.x.x.dmg` – installer
-- `dist/Client-x.x.x-mac.zip` – zip of the app (e.g. for auto-updates)
-- `dist/mac-arm64/Client.app` (and/or `mac/` for Intel) – the actual app bundle
+- `dist/Harness-x.x.x.dmg` – installer
+- `dist/Harness-x.x.x-mac.zip` – zip of the app (e.g. for auto-updates)
+- `dist/mac-arm64/Harness.app` (and/or `mac/` for Intel) – the actual app bundle
 
-You can double‑click `Client.app` or the DMG to install and open from the icon.
+You can double‑click `Harness.app` or the DMG to install and open from the icon.
 
 ---
 
@@ -104,7 +104,7 @@ You can double‑click `Client.app` or the DMG to install and open from the icon
 In `package.json`, under `build`:
 
 - `appId`: e.g. `com.yourcompany.client` (use your reverse-DNS bundle id).
-- `productName`: displayed name of the app (default here: “Client”).
+- `productName`: displayed name of the app (default here: “Harness”).
 
 Update `author` and `description` in `package.json` as needed.
 
