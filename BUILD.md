@@ -1,5 +1,16 @@
 # Building and signing the Mac app
 
+| Command | What it does |
+|---------|----------------|
+| `npm install` | Install project dependencies. |
+| `npm run dev` | Run the app in development mode with hot reload. |
+| `npm run build` | Compile the renderer and main process for production. |
+| `npm run preview` | Preview the production build locally. |
+| `npm run dist` | Build, then run electron-builder for the **current OS** (on macOS, Mac DMG/zip—similar output to `dist:mac` here). |
+| `npm run dist:mac` | Build, then `electron-builder --mac` via `scripts/dist-mac.js` (explicit Mac target; same signing/notarization as below). Use this for the documented flow and for `--replace`. |
+| `npm run dist:mac:replace` | `dist:mac` with `--replace`: copy the built `.app` into `/Applications`. |
+| `npm run icon:icns` | Generate `build/icon.icns` from the project icon assets. |
+
 This guide walks you through creating a double-clickable, signed (and optionally notarized) Mac app using your Apple Developer account.
 
 ---
@@ -86,25 +97,35 @@ export APPLE_TEAM_ID="ABCD1234"
 npm run dist:mac
 ```
 
+To copy the built app into **`/Applications`** (replacing an existing install with the same name):
+
+```bash
+npm run dist:mac:replace
+```
+
+Equivalent: `npm run dist:mac -- --replace` (the dedicated script avoids the extra `--`).
+
+Quit Harness if it is running before replacing, so the copy can succeed.
+
 - If you **omit** the `APPLE_*` variables, the app will still be **signed**; the build will skip notarization and print a warning. The app will run but users may see Gatekeeper warnings.
 - If you **set** all of them, the build will sign and then notarize the app. After notarization, the DMG/zip is ready to distribute.
 
 Outputs (for Mac) are under:
 
-- `dist/Harness-x.x.x.dmg` – installer
-- `dist/Harness-x.x.x-mac.zip` – zip of the app (e.g. for auto-updates)
-- `dist/mac-arm64/Harness.app` (and/or `mac/` for Intel) – the actual app bundle
+- `dist/harness-vx.x.x-mac.dmg` – installer (`harness` comes from `package.json` `name`; `v` matches `version`)
+- `dist/harness-vx.x.x-mac.zip` – zip of the app (e.g. for auto-updates)
+- `dist/mac-arm64/Harness.app` (and/or `mac/` for Intel) – the app bundle (Dock/Finder title is **Harness**; the semantic version still comes from `package.json` and is shown in the app UI)
 
-You can double‑click `Harness.app` or the DMG to install and open from the icon.
+You can double‑click `Harness.app` in `dist/mac-*` or the DMG to install and open from the icon.
 
 ---
 
 ## 7. Optional: Customize app id and name
 
-In `package.json`, under `build`:
+In `electron-builder.js`:
 
-- `appId`: e.g. `com.yourcompany.client` (use your reverse-DNS bundle id).
-- `productName`: displayed name of the app (default here: “Harness”).
+- `appId`: e.g. `com.yourcompany.harness` (reverse-DNS bundle id).
+- `productName`: **Harness** (Dock/Finder name; version is shown inside the app, not in the title).
 
 Update `author` and `description` in `package.json` as needed.
 

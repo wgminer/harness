@@ -1,10 +1,17 @@
 /**
  * Generate build/icon.icns from resources/icon.png using macOS sips + iconutil.
- * Run on Mac: npm run icon:icns
+ * Runs before `npm run build` on macOS (prebuild); no-op on other platforms.
  */
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+
+if (process.platform !== "darwin") {
+  console.log(
+    "icon:icns: skipped (macOS only); leave build/icon.icns as-is or generate on a Mac"
+  );
+  process.exit(0);
+}
 
 const root = path.join(__dirname, "..");
 const srcPng = path.join(root, "resources", "icon.png");

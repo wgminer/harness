@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("electron", {
+  app: {
+    getVersion: () => ipcRenderer.invoke("app:getVersion") as Promise<string>,
+  },
   windowSize: {
     get: () => ipcRenderer.invoke("window:getSize") as Promise<"small" | "large">,
     toggle: () => ipcRenderer.invoke("window:toggleSize") as Promise<"small" | "large">,

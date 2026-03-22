@@ -162,6 +162,17 @@ hr {
   transition: max-height 0.2s ease, opacity 0.2s ease;
 }
 
+.sidebar-version {
+  flex-shrink: 0;
+  padding: 8px 12px 10px;
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+  opacity: 0.65;
+  user-select: none;
+}
+
 .sidebar-group {
   list-style: none;
   margin: 0;
@@ -292,31 +303,6 @@ hr {
   color: var(--fg-muted);
   font-size: 13px;
   list-style: none;
-}
-
-.sidebar-group-older .sidebar-group-label {
-  padding-bottom: 6px;
-}
-
-.sidebar-older-picker {
-  padding: 4px 12px 12px;
-}
-
-.sidebar-older-select {
-  width: 100%;
-  font-size: 13px;
-  font-family: inherit;
-  padding: 6px 8px;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.sidebar-older-select:focus {
-  outline: none;
-  border-color: var(--accent);
 }
 
 .search-result-item {

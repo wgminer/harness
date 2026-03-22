@@ -9,7 +9,20 @@ type Conversation = { id: string; title: string | null; createdAt: number };
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** Returns a sortable key: "today" | "yesterday" | YYYY-MM-DD (past 7 days) | YYYY-MM (month). */
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Returns a sortable key:
+ * - today | yesterday
+ * - YYYY-MM-DD for each of the 7 calendar days 2–8 days ago (labeled by weekday in the UI)
+ * - earlier-in:YYYY-MM for the rest of the current calendar month
+ * - month:YYYY-MM for prior full months
+ */
 function getDateGroupKey(ts: number): string {
   const date = new Date(ts);
   const now = new Date();
@@ -20,11 +33,16 @@ function getDateGroupKey(ts: number): string {
   if (dateStart >= yesterdayStart) return "yesterday";
   const daysAgo = Math.floor((todayStart - dateStart) / MS_PER_DAY);
   if (daysAgo >= 2 && daysAgo <= 8) {
-    return date.toISOString().slice(0, 10); // YYYY-MM-DD for weekday grouping
+    return localDateKey(date);
+  }
+  const sameMonth =
+    date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+  if (sameMonth && daysAgo >= 9) {
+    return `earlier-in:${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
   }
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+  return `month:${y}-${m}`;
 }
 
 /** Display label for a group key. */
@@ -35,13 +53,22 @@ function getDateGroupLabel(key: string): string {
     const d = new Date(key + "T12:00:00");
     return d.toLocaleDateString(undefined, { weekday: "long" });
   }
-  if (/^\d{4}-\d{2}$/.test(key)) {
-    const [y, m] = key.split("-");
-    const d = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+  if (key.startsWith("earlier-in:")) {
+    const ym = key.slice("earlier-in:".length);
+    const [yStr, mStr] = ym.split("-");
+    const d = new Date(parseInt(yStr, 10), parseInt(mStr, 10) - 1, 1);
+    const monthName = d.toLocaleDateString(undefined, { month: "long" });
+    return `Earlier in ${monthName}`;
+  }
+  if (key.startsWith("month:")) {
+    const ym = key.slice("month:".length);
+    const [yStr, mStr] = ym.split("-");
+    const y = parseInt(yStr, 10);
+    const d = new Date(y, parseInt(mStr, 10) - 1, 1);
     const now = new Date();
     return d.toLocaleDateString(undefined, {
       month: "long",
-      year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+      year: y !== now.getFullYear() ? "numeric" : undefined,
     });
   }
   return key;
@@ -49,13 +76,7 @@ function getDateGroupLabel(key: string): string {
 
 type SidebarGroup = { key: string; label: string; items: Conversation[] };
 
-const RECENT_MONTHS_COUNT = 3;
-
-function groupConversations(conversations: Conversation[]): {
-  recentGroups: SidebarGroup[];
-  olderMonthKeys: string[];
-  olderByMonth: Map<string, Conversation[]>;
-} {
+function groupConversations(conversations: Conversation[]): { groups: SidebarGroup[] } {
   const byKey = new Map<string, Conversation[]>();
   for (const c of conversations) {
     const key = getDateGroupKey(c.createdAt);
@@ -67,34 +88,30 @@ function groupConversations(conversations: Conversation[]): {
   }
 
   const now = new Date();
-  const monthKeys = Array.from(byKey.keys()).filter((k) => /^\d{4}-\d{2}$/.test(k));
-  monthKeys.sort((a, b) => b.localeCompare(a));
-  const recentMonthKeys = monthKeys.slice(0, RECENT_MONTHS_COUNT);
-  const olderMonthKeys = monthKeys.slice(RECENT_MONTHS_COUNT);
-
-  const recentKeysOrder: string[] = ["today", "yesterday"];
+  const keyOrder: string[] = ["today", "yesterday"];
   for (let d = 2; d <= 8; d++) {
     const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     t.setDate(t.getDate() - d);
-    recentKeysOrder.push(t.toISOString().slice(0, 10));
+    keyOrder.push(localDateKey(t));
   }
-  recentKeysOrder.push(...recentMonthKeys);
+  const cy = now.getFullYear();
+  const cm = String(now.getMonth() + 1).padStart(2, "0");
+  keyOrder.push(`earlier-in:${cy}-${cm}`);
 
-  const recentGroups: SidebarGroup[] = [];
-  for (const key of recentKeysOrder) {
+  const monthKeys = Array.from(byKey.keys())
+    .filter((k) => k.startsWith("month:"))
+    .sort((a, b) => b.localeCompare(a));
+  keyOrder.push(...monthKeys);
+
+  const groups: SidebarGroup[] = [];
+  for (const key of keyOrder) {
     const items = byKey.get(key);
     if (items?.length) {
-      recentGroups.push({ key, label: getDateGroupLabel(key), items });
+      groups.push({ key, label: getDateGroupLabel(key), items });
     }
   }
 
-  const olderByMonth = new Map<string, Conversation[]>();
-  for (const key of olderMonthKeys) {
-    const items = byKey.get(key);
-    if (items?.length) olderByMonth.set(key, items);
-  }
-
-  return { recentGroups, olderMonthKeys, olderByMonth };
+  return { groups };
 }
 
 function HighlightText({ text, range }: { text: string; range?: [number, number] }) {
@@ -115,6 +132,7 @@ function HighlightText({ text, range }: { text: string; range?: [number, number]
 declare global {
   interface Window {
     electron: {
+      app: { getVersion: () => Promise<string> };
       windowSize: { get: () => Promise<"small" | "large">; toggle: () => Promise<"small" | "large"> };
       settings: { get: () => Promise<unknown>; set: (p: unknown) => Promise<unknown> };
       memory: {
@@ -184,6 +202,7 @@ export default function App() {
   const [newPlanOpen, setNewPlanOpen] = useState(false);
   const [newPlanTitle, setNewPlanTitle] = useState("");
   const [newPlanDescription, setNewPlanDescription] = useState("");
+  const [appVersion, setAppVersion] = useState<string | null>(null);
 
   const loadPlans = useCallback(async () => {
     const list = await window.electron.plans.list();
@@ -206,6 +225,10 @@ export default function App() {
 
   useEffect(() => {
     window.electron.windowSize.get().then(setWindowSize);
+  }, []);
+
+  useEffect(() => {
+    window.electron.app.getVersion().then(setAppVersion).catch(() => setAppVersion(null));
   }, []);
 
   useEffect(() => {
@@ -248,11 +271,7 @@ export default function App() {
     [conversationId, conversations]
   );
 
-  const { recentGroups, olderMonthKeys, olderByMonth } = useMemo(
-    () => groupConversations(conversations),
-    [conversations]
-  );
-  const [olderSelectedMonth, setOlderSelectedMonth] = useState<string | null>(null);
+  const { groups: sidebarGroups } = useMemo(() => groupConversations(conversations), [conversations]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -440,7 +459,7 @@ export default function App() {
             )
           ) : (
             <>
-              {recentGroups.map(({ key, label, items }) => (
+              {sidebarGroups.map(({ key, label, items }) => (
                 <li key={key} className="sidebar-group">
                   <span className="sidebar-group-label">{label}</span>
                   <ul className="sidebar-group-items">
@@ -464,50 +483,14 @@ export default function App() {
                   </ul>
                 </li>
               ))}
-              {olderMonthKeys.length > 0 && (
-                <li className="sidebar-group sidebar-group-older">
-                  <span className="sidebar-group-label">Older</span>
-                  <div className="sidebar-older-picker">
-                    <select
-                      className="sidebar-older-select"
-                      value={olderSelectedMonth ?? ""}
-                      onChange={(e) => setOlderSelectedMonth(e.target.value || null)}
-                      aria-label="Select month"
-                    >
-                      <option value="">Select month…</option>
-                      {olderMonthKeys.map((monthKey) => (
-                        <option key={monthKey} value={monthKey}>
-                          {getDateGroupLabel(monthKey)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {olderSelectedMonth && olderByMonth.has(olderSelectedMonth) && (
-                    <ul className="sidebar-group-items">
-                      {olderByMonth.get(olderSelectedMonth)!.map((c) => (
-                        <li
-                          key={c.id}
-                          className={`sidebar-item ${conversationId === c.id ? "active" : ""}`}
-                          onClick={() => { setConversationId(c.id); setView("chat"); }}
-                        >
-                          <span className="sidebar-item-title">{typeof c.title === "string" ? c.title : c.id}</span>
-                          <button
-                            type="button"
-                            className="sidebar-item-delete"
-                            onClick={(e) => deleteConversation(e, c.id)}
-                            aria-label="Delete conversation"
-                          >
-                            ×
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              )}
             </>
           )}
         </ul>
+        {appVersion != null && appVersion !== "" ? (
+          <div className="sidebar-version" title={`Harness ${appVersion}`}>
+            v{appVersion}
+          </div>
+        ) : null}
       </aside>
       <main className="main">
         {view === "chat" && (

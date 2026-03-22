@@ -7,10 +7,12 @@
   "description": "Personal all-in-one desktop harness for LLMs (chat, memory, tasks, tools)",
   "scripts": {
     "dev": "electron-vite dev",
+    "prebuild": "npm run icon:icns",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "npm run build && electron-builder",
-    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:mac": "npm run build && node scripts/dist-mac.js",
+    "dist:mac:replace": "npm run dist:mac -- --replace",
     "icon:icns": "node build/make-icns.js"
   },
   "dependencies": {
@@ -31,23 +33,5 @@
     "electron-vite": "^2.3.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.0"
-  },
-  "build": {
-    "appId": "com.yourcompany.harness",
-    "productName": "Harness",
-    "files": ["out", "resources", "package.json"],
-    "mac": {
-      "category": "public.app-category.utilities",
-      "icon": "build/icon.icns",
-      "target": ["dmg", "zip"],
-      "hardenedRuntime": true,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "gatekeeperAssess": false
-    },
-    "dmg": {
-      "sign": false
-    },
-    "afterSign": "build/notarize.js"
   }
 }

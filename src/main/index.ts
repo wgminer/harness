@@ -62,6 +62,8 @@ function isSmallSize(): boolean {
   return w <= SMALL_WIDTH;
 }
 
+ipcMain.handle("app:getVersion", () => app.getVersion());
+
 ipcMain.handle("window:getSize", (): "small" | "large" => {
   return isSmallSize() ? "small" : "large";
 });
