@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { AppendMessageMeta } from "../shared/types";
 
 contextBridge.exposeInMainWorld("electron", {
   app: {
@@ -18,8 +19,8 @@ contextBridge.exposeInMainWorld("electron", {
     listConversations: () => ipcRenderer.invoke("memory:listConversations"),
     deleteConversation: (conversationId: string) => ipcRenderer.invoke("memory:deleteConversation", conversationId),
     getMessages: (conversationId: string) => ipcRenderer.invoke("memory:getMessages", conversationId),
-    appendMessage: (conversationId: string, role: string, content: string) =>
-      ipcRenderer.invoke("memory:appendMessage", conversationId, role, content),
+    appendMessage: (conversationId: string, role: string, content: string, meta?: AppendMessageMeta) =>
+      ipcRenderer.invoke("memory:appendMessage", conversationId, role, content, meta),
     getUserMemory: () => ipcRenderer.invoke("memory:getUserMemory"),
     setUserMemory: (key: string, value: string) => ipcRenderer.invoke("memory:setUserMemory", key, value),
     deleteUserMemoryKey: (key: string) => ipcRenderer.invoke("memory:deleteUserMemoryKey", key),
@@ -76,6 +77,16 @@ contextBridge.exposeInMainWorld("electron", {
       const sub = (_: unknown, cid: string) => cb(cid);
       ipcRenderer.on("chat:conversationTitleUpdated", sub);
       return () => ipcRenderer.removeListener("chat:conversationTitleUpdated", sub);
+    },
+    onTitleGenerationStarted: (cb: (conversationId: string) => void) => {
+      const sub = (_: unknown, cid: string) => cb(cid);
+      ipcRenderer.on("chat:titleGenerationStarted", sub);
+      return () => ipcRenderer.removeListener("chat:titleGenerationStarted", sub);
+    },
+    onTitleGenerationEnded: (cb: (conversationId: string) => void) => {
+      const sub = (_: unknown, cid: string) => cb(cid);
+      ipcRenderer.on("chat:titleGenerationEnded", sub);
+      return () => ipcRenderer.removeListener("chat:titleGenerationEnded", sub);
     },
   },
   customization: {

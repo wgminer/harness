@@ -1,4 +1,4 @@
-import type { LayoutOptions, Plan, SearchResult } from "./types";
+import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./types";
 
 export interface TaskItem {
   id: string;
@@ -30,8 +30,10 @@ export interface ElectronAPI {
     getConversation: (id: string) => Promise<unknown>;
     listConversations: () => Promise<{ id: string; title: string | null; createdAt: number }[]>;
     deleteConversation: (id: string) => Promise<void>;
-    getMessages: (id: string) => Promise<{ role: string; content: string }[]>;
-    appendMessage: (conversationId: string, role: string, content: string) => Promise<void>;
+    getMessages: (id: string) => Promise<
+      { role: string; content: string; toolCalls?: unknown; timestamp?: number; model?: string }[]
+    >;
+    appendMessage: (conversationId: string, role: string, content: string, meta?: AppendMessageMeta) => Promise<void>;
     getUserMemory: () => Promise<Record<string, string>>;
     setUserMemory: (key: string, value: string) => Promise<void>;
     deleteUserMemoryKey: (key: string) => Promise<void>;
@@ -65,6 +67,8 @@ export interface ElectronAPI {
     onStreamEnd: (cb: (conversationId: string) => void) => () => void;
     onToolPanelUpdate: (cb: (conversationId: string, toolName: string, payload: unknown) => void) => () => void;
     onConversationTitleUpdated: (cb: (conversationId: string) => void) => () => void;
+    onTitleGenerationStarted: (cb: (conversationId: string) => void) => () => void;
+    onTitleGenerationEnded: (cb: (conversationId: string) => void) => () => void;
   };
   customization: {
     getActiveTheme: () => Promise<string>;

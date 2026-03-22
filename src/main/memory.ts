@@ -3,7 +3,7 @@ import { readFile, writeFile, access, mkdir, unlink } from "fs/promises";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { app } from "electron";
-import type { ChatMessage, SearchResult } from "../shared/types";
+import type { AppendMessageMeta, ChatMessage, SearchResult } from "../shared/types";
 import { notifyConversationTitleUpdated } from "./titleEvents";
 import { generateId } from "./utils";
 
@@ -34,7 +34,10 @@ interface MessageRecord {
   role: string;
   content: string;
   toolCalls?: Array<{ toolName: string; payload?: unknown }>;
+  timestamp?: number;
+  model?: string;
 }
+
 
 async function fileExists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
@@ -195,6 +198,8 @@ async function getMessages(conversationId: string): Promise<ChatMessage[]> {
   return rows.map((r) => {
     const msg: ChatMessage = { role: r.role as ChatMessage["role"], content: r.content };
     if (r.toolCalls?.length) msg.toolCalls = r.toolCalls;
+    if (typeof r.timestamp === "number") msg.timestamp = r.timestamp;
+    if (typeof r.model === "string" && r.model) msg.model = r.model;
     return msg;
   });
 }
@@ -203,11 +208,13 @@ async function appendMessage(
   conversationId: string,
   role: ChatMessage["role"],
   content: string,
-  options?: { toolCalls?: Array<{ toolName: string; payload?: unknown }> }
+  options?: AppendMessageMeta
 ): Promise<void> {
   const messages = await loadMessages(conversationId);
   const record: MessageRecord = { role, content };
   if (options?.toolCalls?.length) record.toolCalls = options.toolCalls;
+  if (typeof options?.timestamp === "number") record.timestamp = options.timestamp;
+  if (typeof options?.model === "string" && options.model) record.model = options.model;
   messages.push(record);
   await saveMessages(conversationId, messages);
 }
@@ -332,8 +339,8 @@ export function registerMemoryHandlers(): void {
   ipcMain.handle("memory:getMessages", (_e, conversationId: string) => getMessages(conversationId));
   ipcMain.handle(
     "memory:appendMessage",
-    (_e, conversationId: string, role: ChatMessage["role"], content: string, toolCalls?: Array<{ toolName: string; payload?: unknown }>) =>
-      appendMessage(conversationId, role, content, toolCalls?.length ? { toolCalls } : undefined)
+    (_e, conversationId: string, role: ChatMessage["role"], content: string, meta?: AppendMessageMeta) =>
+      appendMessage(conversationId, role, content, meta)
   );
   ipcMain.handle("memory:getUserMemory", () => getUserMemory());
   ipcMain.handle("memory:setUserMemory", (_e, key: string, value: string) => setUserMemory(key, value));

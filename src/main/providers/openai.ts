@@ -3,6 +3,48 @@ import type { ChatMessage } from "../../shared/types";
 import type { LLMProvider } from "./types";
 import { TOOL_DEFINITIONS } from "./toolDefinitions";
 
+/** Thread titles are always generated with this model, independent of the chat model. */
+export const OPENAI_THREAD_TITLE_MODEL = "gpt-5-nano";
+
+export async function generateThreadTitleWithOpenAI(
+  apiKey: string,
+  previousTitle: string | null,
+  context: string
+): Promise<string | null> {
+  const client = new OpenAI({ apiKey });
+  const system =
+    "You name chat threads for a sidebar. Reply with a short, descriptive title (a few words). " +
+    "No quotes or extra punctuation. " +
+    "If the previous title still fits the recent conversation, reply with exactly: UNCHANGED";
+
+  const userBlock = [
+    previousTitle ? `Previous title: ${previousTitle}` : "Previous title: (none)",
+    "",
+    "Recent conversation:",
+    context,
+  ].join("\n");
+
+  const completion = await client.chat.completions.create(
+    {
+      model: OPENAI_THREAD_TITLE_MODEL,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: userBlock },
+      ],
+      max_completion_tokens: 512,
+      reasoning_effort: "low",
+    },
+    { signal: AbortSignal.timeout(10_000) }
+  );
+
+  console.log(completion.choices[0]);
+
+  const raw = completion.choices[0]?.message?.content?.trim() ?? "";
+  if (!raw) return null;
+  if (/^UNCHANGED$/i.test(raw)) return null;
+  return raw;
+}
+
 type ChatCompletionMessage = OpenAI.Chat.Completions.ChatCompletionMessage;
 type ChatCompletionChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 
@@ -116,35 +158,7 @@ export function createOpenAIProvider(apiKey: string, model: string): LLMProvider
       context: string,
       _model: string
     ): Promise<string | null> {
-      const system =
-        "You name chat threads for a sidebar. Reply with a short, descriptive title (a few words). " +
-        "No quotes or extra punctuation. " +
-        "If the previous title still fits the recent conversation, reply with exactly: UNCHANGED";
-
-      const userBlock = [
-        previousTitle ? `Previous title: ${previousTitle}` : "Previous title: (none)",
-        "",
-        "Recent conversation:",
-        context,
-      ].join("\n");
-
-      const completion = await client.chat.completions.create(
-        {
-          model,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: userBlock },
-          ],
-          max_completion_tokens: 64,
-          temperature: 0.35,
-        },
-        { signal: AbortSignal.timeout(10_000) }
-      );
-
-      const raw = completion.choices[0]?.message?.content?.trim() ?? "";
-      if (!raw) return null;
-      if (/^UNCHANGED$/i.test(raw)) return null;
-      return raw;
+      return generateThreadTitleWithOpenAI(apiKey, previousTitle, context);
     },
   };
 }

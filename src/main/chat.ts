@@ -7,7 +7,13 @@ import { getProvider } from "./providers/registry";
 import { executeFileTool } from "./fileTools";
 import { executeCustomizationTool } from "./customization";
 import { executeAssistantTool, isAssistantToolName } from "./assistantTools";
-import type { ChatMessage } from "../shared/types";
+import type { ChatMessage, Settings } from "../shared/types";
+
+function activeChatModel(settings: Settings): string {
+  return settings.activeProvider === "ollama"
+    ? (settings.ollama?.model ?? "")
+    : (settings.openai?.model ?? "");
+}
 
 let activeAbortController: AbortController | null = null;
 
@@ -127,6 +133,8 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
     return result;
   };
 
+  const modelLabel = activeChatModel(settings);
+
   let didAppendAssistant = false;
   try {
     const stream = await provider.sendMessageWithTools(
@@ -140,7 +148,11 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
     }
     win?.webContents.send("chat:streamEnd", conversationId);
     if (fullContent || toolCallsThisTurn.length > 0) {
-      await appendMessage(conversationId, "assistant", fullContent, toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : undefined);
+      await appendMessage(conversationId, "assistant", fullContent, {
+        timestamp: Date.now(),
+        model: modelLabel,
+        ...(toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : {}),
+      });
       didAppendAssistant = true;
     }
   } catch (err) {
@@ -148,11 +160,18 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
     const isAbort =
       err instanceof OpenAI.APIUserAbortError || (err instanceof Error && err.name === "AbortError");
     if (fullContent || toolCallsThisTurn.length > 0) {
-      await appendMessage(conversationId, "assistant", fullContent || "[Error]", toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : undefined);
+      await appendMessage(conversationId, "assistant", fullContent || "[Error]", {
+        timestamp: Date.now(),
+        model: modelLabel,
+        ...(toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : {}),
+      });
       didAppendAssistant = true;
     } else if (!isAbort) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      await appendMessage(conversationId, "assistant", `[Error: ${errorMessage}]`);
+      await appendMessage(conversationId, "assistant", `[Error: ${errorMessage}]`, {
+        timestamp: Date.now(),
+        model: modelLabel,
+      });
       didAppendAssistant = true;
     }
     if (!isAbort) throw err;
@@ -169,7 +188,7 @@ export function registerChatHandlers(): void {
     "chat:send",
     async (_e, conversationId: string, userContent: string) => {
       const messages = await buildMessageList(conversationId, userContent);
-      await appendMessage(conversationId, "user", userContent);
+      await appendMessage(conversationId, "user", userContent, { timestamp: Date.now() });
       await streamAssistantReply(conversationId, messages);
     }
   );

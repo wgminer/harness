@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Settings, Maximize2, Minimize2, Plus, Search, X, ListTodo, ChevronRight, ChevronDown, FolderPlus } from "lucide-react";
+import { Settings, Maximize2, Minimize2, Plus, Search, X, ListTodo, ChevronRight, ChevronDown, FolderPlus, Loader2 } from "lucide-react";
 import { ChatView } from "./ChatView";
 import { SettingsView } from "./SettingsView";
 import { TasksView } from "./TasksView";
@@ -160,6 +160,10 @@ export default function App() {
   const [appVersion, setAppVersion] = useState<string | null>(null);
   /** Bump to remount TasksView after tasks.json is cleared externally (e.g. settings reset). */
   const [tasksRemountKey, setTasksRemountKey] = useState(0);
+  /** True while the open chat is waiting on / streaming from the chat model (not composer voice). */
+  const [activeChatProcessing, setActiveChatProcessing] = useState(false);
+  /** Per-conversation refcount for async LLM thread title generation after a reply. */
+  const [titleGenInFlight, setTitleGenInFlight] = useState<Record<string, number>>({});
 
   // Hotkey recorder — owns the background mic capture for the global shortcut path
   const hotkeyRecorder = useRecorder();
@@ -208,6 +212,25 @@ export default function App() {
     });
     return unsub;
   }, [loadConversations]);
+
+  const bumpTitleGen = useCallback((id: string, delta: 1 | -1) => {
+    setTitleGenInFlight((prev) => {
+      const n = (prev[id] ?? 0) + delta;
+      const next = { ...prev };
+      if (n <= 0) delete next[id];
+      else next[id] = n;
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const unsubStart = window.electron.chat.onTitleGenerationStarted((id) => bumpTitleGen(id, 1));
+    const unsubEnd = window.electron.chat.onTitleGenerationEnded((id) => bumpTitleGen(id, -1));
+    return () => {
+      unsubStart();
+      unsubEnd();
+    };
+  }, [bumpTitleGen]);
 
   useEffect(() => {
     loadPlans();
@@ -287,7 +310,7 @@ export default function App() {
           } else {
             await window.electron.recording.pasteText(result.text);
             const newId = await window.electron.memory.createConversation();
-            await window.electron.memory.appendMessage(newId, "user", result.text);
+            await window.electron.memory.appendMessage(newId, "user", result.text, { timestamp: Date.now() });
             const voiceTitle = await window.electron.memory.setVoiceDictationTitle(newId);
             setConversations((prev) => [{ id: newId, title: voiceTitle, createdAt: Date.now() }, ...prev]);
             setConversationId(newId);
@@ -415,6 +438,10 @@ export default function App() {
 
   const convById = useMemo(() => new Map(conversations.map((c) => [c.id, c])), [conversations]);
 
+  const handleChatActivityChange = useCallback((active: boolean) => {
+    setActiveChatProcessing(active);
+  }, []);
+
   return (
     <div
       className="app"
@@ -524,23 +551,34 @@ export default function App() {
                 <li key={key} className="sidebar-group">
                   <span className="sidebar-group-label">{label}</span>
                   <ul className="sidebar-group-items">
-                    {items.map((c) => (
-                      <li
-                        key={c.id}
-                        className={`sidebar-item ${conversationId === c.id ? "active" : ""}`}
-                        onClick={() => { setConversationId(c.id); setView("chat"); }}
-                      >
-                        <span className="sidebar-item-title">{c.title || formatNewChatLabel(c.createdAt)}</span>
-                        <button
-                          type="button"
-                          className="sidebar-item-delete"
-                          onClick={(e) => deleteConversation(e, c.id)}
-                          aria-label="Delete conversation"
+                    {items.map((c) => {
+                      const rowBusy =
+                        conversationId === c.id &&
+                        (activeChatProcessing || (titleGenInFlight[c.id] ?? 0) > 0);
+                      return (
+                        <li
+                          key={c.id}
+                          className={`sidebar-item ${conversationId === c.id ? "active" : ""}`}
+                          onClick={() => { setConversationId(c.id); setView("chat"); }}
+                          aria-busy={rowBusy ? true : undefined}
                         >
-                          ×
-                        </button>
-                      </li>
-                    ))}
+                          {rowBusy ? (
+                            <span className="sidebar-item-spinner" aria-hidden>
+                              <Loader2 size={11} strokeWidth={2.5} className="voice-spinner" />
+                            </span>
+                          ) : null}
+                          <span className="sidebar-item-title">{c.title || formatNewChatLabel(c.createdAt)}</span>
+                          <button
+                            type="button"
+                            className="sidebar-item-delete"
+                            onClick={(e) => deleteConversation(e, c.id)}
+                            aria-label="Delete conversation"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </li>
               ))}
@@ -565,6 +603,7 @@ export default function App() {
               setPendingHotkeyText(null);
               setPendingHotkeyDraftOnly(false);
             }}
+            onChatActivityChange={handleChatActivityChange}
           />
         )}
         {view === "settings" && (

@@ -9,7 +9,18 @@ export interface ChatMessage {
   role: MessageRole;
   content: string;
   toolCalls?: ToolCallRecord[];
+  /** When the message was created (ms since epoch). */
+  timestamp?: number;
+  /** Chat model used for assistant messages; omitted for user/system. */
+  model?: string;
 }
+
+/** Optional fields when appending a message via IPC / storage. */
+export type AppendMessageMeta = {
+  toolCalls?: ToolCallRecord[];
+  timestamp?: number;
+  model?: string;
+};
 
 export interface Conversation {
   id: string;

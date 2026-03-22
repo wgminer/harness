@@ -265,6 +265,14 @@ hr {
   padding-right: 8px;
 }
 
+.sidebar-item-spinner {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg-muted);
+  opacity: 0.85;
+}
+
 .sidebar-item-title {
   flex: 1;
   overflow: hidden;
@@ -529,14 +537,6 @@ hr {
   padding: 2px 8px;
 }
 
-.message-block-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  padding: 8px 0 0;
-}
-
 .chat-scroll-top {
   position: sticky;
   top: 4px;
@@ -559,16 +559,36 @@ hr {
   color: var(--accent);
 }
 
-.message-block-time {
-  font-size: 11px;
-  color: var(--fg-muted);
-}
-
 .message-block-footer {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
   margin-top: 6px;
   padding-top: 4px;
+}
+
+.message-block-meta {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: var(--fg-muted);
+  opacity: 0.4;
+}
+
+.message-block-meta-model {
+  font-family: var(--font-mono);
+}
+
+.message-block-meta-time {
+  white-space: nowrap;
+}
+
+.message-block-meta-sep {
+  margin: 0 0.35em;
+  opacity: 0.85;
 }
 
 .message-copy-btn {

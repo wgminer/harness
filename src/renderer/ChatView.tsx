@@ -15,10 +15,15 @@ interface Message {
   content: string;
   toolCalls?: ToolCallDisplay[];
   timestamp?: number;
+  model?: string;
 }
 
 function formatMessageTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return new Date(ts).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 interface ChatViewProps {
@@ -29,6 +34,8 @@ interface ChatViewProps {
   /** If true, always pre-fill input (never auto-send), e.g. recording stopped while the app was unfocused. */
   pendingHotkeyDraftOnly?: boolean;
   onPendingHotkeyTextConsumed?: () => void;
+  /** Fires when this chat is waiting on / streaming from the model (not composer voice). */
+  onChatActivityChange?: (active: boolean) => void;
 }
 
 /** Renders markdown (bold, lists, code, etc.) without headers (they render as paragraphs). */
@@ -98,6 +105,7 @@ export function ChatView({
   pendingHotkeyText,
   pendingHotkeyDraftOnly,
   onPendingHotkeyTextConsumed,
+  onChatActivityChange,
 }: ChatViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -108,6 +116,10 @@ export function ChatView({
   const [overflowedUserCards, setOverflowedUserCards] = useState<Set<number>>(new Set());
   const [hasScrolled, setHasScrolled] = useState(false);
   const userCardContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const [activeChatModel, setActiveChatModel] = useState("");
+  const [streamingMeta, setStreamingMeta] = useState<{ model: string; startedAt: number } | null>(null);
+  const streamingMetaRef = useRef<{ model: string; startedAt: number } | null>(null);
+  const activeChatModelRef = useRef("");
 
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -142,6 +154,35 @@ export function ChatView({
   }, [currentTurnToolCalls]);
 
   useEffect(() => {
+    streamingMetaRef.current = streamingMeta;
+  }, [streamingMeta]);
+
+  useEffect(() => {
+    activeChatModelRef.current = activeChatModel;
+  }, [activeChatModel]);
+
+  useEffect(() => {
+    window.electron.settings.get().then((s) => {
+      const settings = s as { activeProvider: string; openai?: { model?: string }; ollama?: { model?: string } };
+      const m =
+        settings.activeProvider === "ollama"
+          ? (settings.ollama?.model ?? "")
+          : (settings.openai?.model ?? "");
+      setActiveChatModel(m);
+    });
+  }, [conversationId]);
+
+  /** Sidebar spinner: model reply only (not composer voice record/transcribe). */
+  const chatActivityBusy = sending;
+  useEffect(() => {
+    onChatActivityChange?.(chatActivityBusy);
+  }, [chatActivityBusy, onChatActivityChange]);
+
+  useEffect(() => {
+    return () => onChatActivityChange?.(false);
+  }, [onChatActivityChange]);
+
+  useEffect(() => {
     if (!conversationId) {
       setMessages([]);
       return;
@@ -162,11 +203,20 @@ export function ChatView({
       recordingTimerRef.current = null;
     }
     setVoiceState("idle");
+    setStreamingMeta(null);
 
     let cancelled = false;
     window.electron.memory.getMessages(conversationId).then((list) => {
       if (cancelled) return;
-      setMessages(list.map((m) => ({ role: m.role, content: m.content, toolCalls: (m as Message).toolCalls })));
+      setMessages(
+        list.map((m) => ({
+          role: m.role,
+          content: m.content,
+          toolCalls: (m as Message).toolCalls,
+          timestamp: (m as Message).timestamp,
+          model: (m as Message).model,
+        }))
+      );
     });
     return () => {
       cancelled = true;
@@ -198,6 +248,8 @@ export function ChatView({
             role: "assistant",
             content: streamingContent,
             toolCalls: currentTurnToolCalls.length > 0 ? currentTurnToolCalls : undefined,
+            model: streamingMeta?.model ?? activeChatModel,
+            timestamp: streamingMeta?.startedAt ?? Date.now(),
           },
         ]
       : messages;
@@ -223,13 +275,24 @@ export function ChatView({
       if (cid === conversationId) {
         const finalContent = streamingContentRef.current;
         const toolCalls = currentTurnToolCallsRef.current.length > 0 ? [...currentTurnToolCallsRef.current] : undefined;
+        const model = streamingMetaRef.current?.model ?? activeChatModelRef.current;
         setMessages((prev) =>
           finalContent || toolCalls
-            ? [...prev, { role: "assistant", content: finalContent || "", toolCalls }]
+            ? [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: finalContent || "",
+                  toolCalls,
+                  model: model || undefined,
+                  timestamp: Date.now(),
+                },
+              ]
             : prev
         );
         setStreamingContent("");
         setCurrentTurnToolCalls([]);
+        setStreamingMeta(null);
         setSending(false);
       }
     });
@@ -307,12 +370,15 @@ export function ChatView({
     setSending(true);
     setStreamingContent("");
     setCurrentTurnToolCalls([]);
-    setMessages((prev) => [...prev, { role: "user", content: text, timestamp: Date.now() }]);
+    const userTs = Date.now();
+    setMessages((prev) => [...prev, { role: "user", content: text, timestamp: userTs }]);
+    setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
     try {
       await window.electron.chat.send(conversationId, text);
       onConversationCreated();
     } catch (e) {
       setStreamingContent(`[Error: ${e instanceof Error ? e.message : String(e)}]`);
+      setStreamingMeta(null);
       setSending(false);
     }
   }, [conversationId, sending, onConversationCreated]);
@@ -329,11 +395,13 @@ export function ChatView({
     setSending(true);
     setStreamingContent("");
     setCurrentTurnToolCalls([]);
+    setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
     try {
       await window.electron.chat.generateReply(conversationId);
       onConversationCreated();
     } catch (e) {
       setStreamingContent(`[Error: ${e instanceof Error ? e.message : String(e)}]`);
+      setStreamingMeta(null);
       setSending(false);
     }
   }, [conversationId, sending, onConversationCreated]);
@@ -442,11 +510,6 @@ export function ChatView({
 
             return (
               <div key={i} className={`message-block ${m.role}`}>
-                {m.role === "user" && m.timestamp != null && (
-                  <div className="message-block-header">
-                    <span className="message-block-time">{formatMessageTime(m.timestamp)}</span>
-                  </div>
-                )}
                 <div className="content">
                   {m.role === "user" ? (
                     <div className={`message-user-card${expandedUserCards.has(i) ? " message-user-card--expanded" : ""}`}>
@@ -502,6 +565,25 @@ export function ChatView({
                   )}
                 </div>
                 <div className="message-block-footer">
+                  <div className="message-block-meta">
+                    {m.role === "user" ? (
+                      <>
+                        <span>You</span>
+                        <span className="message-block-meta-sep" aria-hidden="true">
+                          ·
+                        </span>
+                        <span className="message-block-meta-time">{formatMessageTime(m.timestamp!)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="message-block-meta-model">{m.model}</span>
+                        <span className="message-block-meta-sep" aria-hidden="true">
+                          ·
+                        </span>
+                        <span className="message-block-meta-time">{formatMessageTime(m.timestamp!)}</span>
+                      </>
+                    )}
+                  </div>
                   <CopyButton
                     content={m.content}
                     messageIndex={i}

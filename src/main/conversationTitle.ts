@@ -1,6 +1,12 @@
 import type { ChatMessage } from "../shared/types";
 import type { LLMProvider } from "./providers/types";
-import { notifyConversationTitleUpdated } from "./titleEvents";
+import { generateThreadTitleWithOpenAI } from "./providers/openai";
+import {
+  notifyConversationTitleUpdated,
+  notifyTitleGenerationStarted,
+  notifyTitleGenerationEnded,
+} from "./titleEvents";
+import { getSettings } from "./settings";
 import {
   getConversationMetaForId,
   patchConversationMeta,
@@ -47,6 +53,7 @@ function buildContext(messages: ChatMessage[]): string {
  */
 export function scheduleConversationTitleRefinement(conversationId: string, provider: LLMProvider): void {
   void (async () => {
+    let notifiedStart = false;
     try {
       const messages = await getMessages(conversationId);
       if (!shouldRefineTitle(messages)) return;
@@ -57,13 +64,25 @@ export function scheduleConversationTitleRefinement(conversationId: string, prov
       const context = buildContext(messages);
       if (!context.trim()) return;
 
-      const title = cleanTitle(await provider.generateTitle(meta.title, context, "") ?? "");
+      notifyTitleGenerationStarted(conversationId);
+      notifiedStart = true;
+
+      const settings = await getSettings();
+      const openaiKey = settings.openai?.apiKey?.trim();
+      const rawTitle = openaiKey
+        ? await generateThreadTitleWithOpenAI(openaiKey, meta.title, context)
+        : await provider.generateTitle(meta.title, context, "");
+      const title = cleanTitle(rawTitle ?? "");
       if (!title) return;
 
       await patchConversationMeta(conversationId, { title, titleSource: "auto" });
       notifyConversationTitleUpdated(conversationId);
     } catch (err) {
       console.error("[title] LLM title generation failed:", err);
+    } finally {
+      if (notifiedStart) {
+        notifyTitleGenerationEnded(conversationId);
+      }
     }
   })();
 }
