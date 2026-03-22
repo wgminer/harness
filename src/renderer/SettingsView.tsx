@@ -214,6 +214,20 @@ export function SettingsView({ onBack, onImportComplete }: SettingsViewProps) {
         </div>
       )}
 
+      <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", marginTop: "24px", marginBottom: "8px" }}>Recordings</h3>
+      <p style={{ color: "var(--fg-muted)", fontSize: "12px", marginBottom: "8px" }}>
+        Voice recordings are saved automatically to the app data folder.
+      </p>
+      <div className="settings-section" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => window.electron.recording.openFolder()}
+        >
+          Open recordings folder
+        </button>
+      </div>
+
       <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", marginTop: "24px", marginBottom: "8px" }}>Reset history</h3>
       <p style={{ color: "var(--fg-muted)", fontSize: "12px", marginBottom: "8px" }}>
         Clear all conversations and their messages. Use this to undo an import or start fresh. This cannot be undone.

@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "
 import { join } from "path";
 import { app } from "electron";
 import type { ChatMessage, SearchResult } from "../shared/types";
+import { notifyConversationTitleUpdated } from "./titleEvents";
 
 const MEMORY_DIR = "memory";
 const CONVERSATIONS_FILE = "conversations.json";
@@ -15,11 +16,17 @@ function getMemoryDir(): string {
 }
 
 /** Stored per-conversation; optional isFromChatGPT/chatgptId used for ChatGPT import dedupe. */
-interface ConversationMeta {
+export type ConversationTitleSource = "auto" | "user" | "imported";
+
+export interface ConversationMeta {
   title: string | null;
   createdAt: number;
   isFromChatGPT?: boolean;
   chatgptId?: string;
+  /** How the title was set; auto titles may be refined by the app. */
+  titleSource?: ConversationTitleSource;
+  /** User message count when the title was last refined by the LLM. */
+  lastTitleRefinementUserCount?: number;
 }
 
 interface MessageRecord {
@@ -72,6 +79,30 @@ function getConversation(id: string): { id: string; title: string | null; create
   return { id, title: c.title, createdAt: c.createdAt };
 }
 
+export function getConversationMetaForId(conversationId: string): ConversationMeta | null {
+  const conv = loadConversations();
+  const c = conv[conversationId];
+  return c ? { ...c } : null;
+}
+
+export function patchConversationMeta(conversationId: string, patch: Partial<ConversationMeta>): void {
+  const conv = loadConversations();
+  const c = conv[conversationId];
+  if (!c) return;
+  Object.assign(c, patch);
+  saveConversations(conv);
+}
+
+function setConversationTitle(
+  conversationId: string,
+  title: string,
+  source: ConversationTitleSource = "user"
+): void {
+  const trimmed = title.trim();
+  if (!trimmed) return;
+  patchConversationMeta(conversationId, { title: trimmed, titleSource: source });
+}
+
 function listConversations(): { id: string; title: string | null; createdAt: number }[] {
   const conv = loadConversations();
   return Object.entries(conv)
@@ -105,6 +136,7 @@ function importConversations(items: ImportConversationItem[]): { imported: numbe
     const meta: ConversationMeta = {
       title: item.title,
       createdAt: item.createdAt,
+      ...(item.title ? { titleSource: "imported" as const } : {}),
     };
     if (item.chatgptId != null) {
       meta.isFromChatGPT = true;
@@ -276,6 +308,10 @@ export function registerMemoryHandlers(): void {
   ipcMain.handle("memory:deleteConversation", (_e, conversationId: string) => deleteConversation(conversationId));
   ipcMain.handle("memory:searchConversations", (_e, query: string) => searchConversations(query));
   ipcMain.handle("memory:resetHistory", () => resetHistory());
+  ipcMain.handle("memory:setConversationTitle", (_e, conversationId: string, title: string) => {
+    setConversationTitle(conversationId, title, "user");
+    notifyConversationTitleUpdated(conversationId);
+  });
 }
 
 export {
@@ -288,4 +324,5 @@ export {
   getExistingChatgptIds,
   importConversations,
   searchConversations,
+  setConversationTitle,
 };

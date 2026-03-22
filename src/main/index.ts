@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, dialog, nativeTheme } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, dialog, nativeTheme, globalShortcut } from "electron";
 import { join } from "path";
 import { registerSettingsHandlers } from "./settings";
 import { registerMemoryHandlers } from "./memory";
@@ -7,6 +7,7 @@ import { registerCustomizationHandlers } from "./customization";
 import { registerFileToolsHandlers } from "./fileTools";
 import { registerAssistantToolsHandlers } from "./assistantTools";
 import { registerPlansHandlers } from "./plans";
+import { registerRecordingHandlers } from "./recording";
 import { importFromFolder } from "./importChatGPT";
 
 let mainWindow: BrowserWindow | null = null;
@@ -97,6 +98,7 @@ app.whenReady().then(() => {
   registerCustomizationHandlers();
   registerFileToolsHandlers();
   registerAssistantToolsHandlers();
+  registerRecordingHandlers();
 
   if (process.platform === "darwin") {
     app.dock.setIcon(nativeImage.createFromPath(iconPath));
@@ -104,9 +106,22 @@ app.whenReady().then(() => {
 
   createWindow();
 
+  globalShortcut.register("CommandOrControl+Shift+Space", () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    win.webContents.send("recording:globalTrigger");
+  });
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {

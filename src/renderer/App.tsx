@@ -146,6 +146,7 @@ declare global {
         searchConversations: (query: string) => Promise<SearchResult[]>;
         importFromChatGPTFolder: () => Promise<{ imported: number; errors: string[] }>;
         resetHistory: () => Promise<void>;
+        setConversationTitle: (conversationId: string, title: string) => Promise<void>;
       };
       plans: {
         list: () => Promise<Plan[]>;
@@ -162,6 +163,7 @@ declare global {
         onStreamChunk: (cb: (conversationId: string, chunk: string) => void) => () => void;
         onStreamEnd: (cb: (conversationId: string) => void) => () => void;
         onToolPanelUpdate: (cb: (conversationId: string, toolName: string, payload: unknown) => void) => () => void;
+        onConversationTitleUpdated: (cb: (conversationId: string) => void) => () => void;
       };
       customization: {
         getActiveTheme: () => Promise<string>;
@@ -176,6 +178,14 @@ declare global {
         update: (payload: { id: string; title?: string; status?: string }) => Promise<{ tasks: { id: string; title: string; status: string }[] }>;
         delete: (id: string) => Promise<{ tasks: { id: string; title: string; status: string }[] }>;
         clearCompleted: () => Promise<{ tasks: { id: string; title: string; status: string }[] }>;
+      };
+      recording: {
+        saveWav: (data: ArrayBuffer) => Promise<{ path: string }>;
+        showInFolder: (path: string) => Promise<void>;
+        exportWav: (data: ArrayBuffer, suggestedName?: string) => Promise<{ path: string } | { cancelled: true }>;
+        openFolder: () => Promise<void>;
+        transcribe: (data: ArrayBuffer) => Promise<{ text: string } | { error: string }>;
+        onGlobalTrigger: (cb: () => void) => () => void;
       };
     };
   }
@@ -203,6 +213,7 @@ export default function App() {
   const [newPlanTitle, setNewPlanTitle] = useState("");
   const [newPlanDescription, setNewPlanDescription] = useState("");
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [autoStartRecording, setAutoStartRecording] = useState(0);
 
   const loadPlans = useCallback(async () => {
     const list = await window.electron.plans.list();
@@ -217,6 +228,13 @@ export default function App() {
 
   useEffect(() => {
     loadConversations();
+  }, [loadConversations]);
+
+  useEffect(() => {
+    const unsub = window.electron.chat.onConversationTitleUpdated(() => {
+      void loadConversations();
+    });
+    return unsub;
   }, [loadConversations]);
 
   useEffect(() => {
@@ -256,6 +274,17 @@ export default function App() {
     setConversationId(id);
     setConversations((prev) => [{ id, title: null, createdAt: Date.now() }, ...prev]);
     setView("chat");
+  }, []);
+
+  useEffect(() => {
+    const unsub = window.electron.recording.onGlobalTrigger(async () => {
+      const id = await window.electron.memory.createConversation();
+      setConversationId(id);
+      setConversations((prev) => [{ id, title: null, createdAt: Date.now() }, ...prev]);
+      setView("chat");
+      setAutoStartRecording((n) => n + 1);
+    });
+    return unsub;
   }, []);
 
   const deleteConversation = useCallback(
@@ -497,6 +526,7 @@ export default function App() {
           <ChatView
             conversationId={conversationId}
             onConversationCreated={loadConversations}
+            autoStartRecording={autoStartRecording}
           />
         )}
         {view === "settings" && <SettingsView onBack={() => setView("chat")} onImportComplete={loadConversations} />}

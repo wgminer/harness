@@ -14,6 +14,9 @@ module.exports = {
     entitlements: "build/entitlements.mac.plist",
     entitlementsInherit: "build/entitlements.mac.plist",
     gatekeeperAssess: false,
+    extendInfo: {
+      NSMicrophoneUsageDescription: "Harness uses your microphone to record voice messages for transcription.",
+    },
   },
   dmg: {
     sign: false,

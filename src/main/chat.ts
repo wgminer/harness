@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from "electron";
 import OpenAI from "openai";
 import { getSettings } from "./settings";
 import { getMessages, getUserMemory, appendMessage } from "./memory";
+import { applyHeuristicTitleIfEmpty, scheduleConversationTitleRefinement } from "./conversationTitle";
 import { sendMessageWithTools } from "./providers/openai";
 import { executeFileTool } from "./fileTools";
 import { executeCustomizationTool } from "./customization";
@@ -112,6 +113,7 @@ export function registerChatHandlers(): void {
 
       const messages = buildMessageList(conversationId, userContent);
       appendMessage(conversationId, "user", userContent);
+      applyHeuristicTitleIfEmpty(conversationId, userContent);
 
       const win = getMainWindow();
       let fullContent = "";
@@ -130,6 +132,7 @@ export function registerChatHandlers(): void {
         return result;
       };
 
+      let didAppendAssistant = false;
       try {
         const stream = await sendMessageWithTools(
           apiKey,
@@ -145,6 +148,7 @@ export function registerChatHandlers(): void {
         win?.webContents.send("chat:streamEnd", conversationId);
         if (fullContent || toolCallsThisTurn.length > 0) {
           appendMessage(conversationId, "assistant", fullContent, toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : undefined);
+          didAppendAssistant = true;
         }
       } catch (err) {
         win?.webContents.send("chat:streamEnd", conversationId);
@@ -152,13 +156,18 @@ export function registerChatHandlers(): void {
           err instanceof OpenAI.APIUserAbortError || (err instanceof Error && err.name === "AbortError");
         if (fullContent || toolCallsThisTurn.length > 0) {
           appendMessage(conversationId, "assistant", fullContent || "[Error]", toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : undefined);
+          didAppendAssistant = true;
         } else if (!isAbort) {
           const errorMessage = err instanceof Error ? err.message : String(err);
           appendMessage(conversationId, "assistant", `[Error: ${errorMessage}]`);
+          didAppendAssistant = true;
         }
         if (!isAbort) throw err;
       } finally {
         activeAbortController = null;
+        if (didAppendAssistant) {
+          scheduleConversationTitleRefinement(conversationId, apiKey, model);
+        }
       }
     }
   );

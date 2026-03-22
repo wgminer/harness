@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld("electron", {
     importFromChatGPTFolder: () =>
       ipcRenderer.invoke("memory:importFromChatGPTFolder") as Promise<{ imported: number; errors: string[] }>,
     resetHistory: () => ipcRenderer.invoke("memory:resetHistory"),
+    setConversationTitle: (conversationId: string, title: string) =>
+      ipcRenderer.invoke("memory:setConversationTitle", conversationId, title),
   },
   plans: {
     list: () => ipcRenderer.invoke("plans:list"),
@@ -66,6 +68,11 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.on("chat:toolPanelUpdate", sub);
       return () => ipcRenderer.removeListener("chat:toolPanelUpdate", sub);
     },
+    onConversationTitleUpdated: (cb: (conversationId: string) => void) => {
+      const sub = (_: unknown, cid: string) => cb(cid);
+      ipcRenderer.on("chat:conversationTitleUpdated", sub);
+      return () => ipcRenderer.removeListener("chat:conversationTitleUpdated", sub);
+    },
   },
   customization: {
     getActiveTheme: () => ipcRenderer.invoke("customization:getActiveTheme"),
@@ -80,5 +87,22 @@ contextBridge.exposeInMainWorld("electron", {
   },
   fileTools: {
     getAllowedRoots: () => ipcRenderer.invoke("fileTools:getAllowedRoots"),
+  },
+  recording: {
+    saveWav: (data: ArrayBuffer) =>
+      ipcRenderer.invoke("recording:saveWav", data) as Promise<{ path: string }>,
+    showInFolder: (path: string) =>
+      ipcRenderer.invoke("recording:showInFolder", path) as Promise<void>,
+    exportWav: (data: ArrayBuffer, suggestedName?: string) =>
+      ipcRenderer.invoke("recording:exportWav", data, suggestedName) as Promise<{ path: string } | { cancelled: true }>,
+    openFolder: () =>
+      ipcRenderer.invoke("recording:openFolder") as Promise<void>,
+    transcribe: (data: ArrayBuffer) =>
+      ipcRenderer.invoke("recording:transcribe", data) as Promise<{ text: string } | { error: string }>,
+    onGlobalTrigger: (cb: () => void) => {
+      const sub = () => cb();
+      ipcRenderer.on("recording:globalTrigger", sub);
+      return () => ipcRenderer.removeListener("recording:globalTrigger", sub);
+    },
   },
 });

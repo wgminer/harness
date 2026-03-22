@@ -43,6 +43,6 @@ Packaged installers (macOS, signing/notarization): see [BUILD.md](BUILD.md).
 | `src/renderer/` | React UI (chat, settings, tasks, styles). |
 | `src/shared/` | Shared TypeScript types. |
 
-## Progress log
+## Roadmap
 
-Ongoing notes and milestones are recorded in [PROGRESS_LOG.md](PROGRESS_LOG.md) (timestamped entries).
+Completed milestones and upcoming work are tracked in [ROADMAP.md](ROADMAP.md).

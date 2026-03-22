@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Mic, Square, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -22,6 +22,7 @@ function formatMessageTime(ts: number): string {
 interface ChatViewProps {
   conversationId: string | null;
   onConversationCreated: () => void;
+  autoStartRecording?: number;
 }
 
 /** Renders markdown (bold, lists, code, etc.) without headers (they render as paragraphs). */
@@ -83,7 +84,39 @@ function CopyButton({ content, messageIndex, copiedIndex, onCopied }: { content:
 
 const SCROLL_TOP_THRESHOLD = 24;
 
-export function ChatView({ conversationId, onConversationCreated }: ChatViewProps) {
+function encodeWav(buffers: Float32Array[], sampleRate: number): ArrayBuffer {
+  const totalSamples = buffers.reduce((n, b) => n + b.length, 0);
+  const dataBytes = totalSamples * 2;
+  const buf = new ArrayBuffer(44 + dataBytes);
+  const view = new DataView(buf);
+  const str = (s: string, off: number) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  str("RIFF", 0);
+  view.setUint32(4, 36 + dataBytes, true);
+  str("WAVE", 8);
+  str("fmt ", 12);
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  str("data", 36);
+  view.setUint32(40, dataBytes, true);
+  let off = 44;
+  for (const b of buffers) {
+    for (let i = 0; i < b.length; i++) {
+      const s = Math.max(-1, Math.min(1, b[i]));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      off += 2;
+    }
+  }
+  return buf;
+}
+
+type VoiceState = "idle" | "recording" | "processing";
+
+export function ChatView({ conversationId, onConversationCreated, autoStartRecording }: ChatViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
@@ -93,6 +126,18 @@ export function ChatView({ conversationId, onConversationCreated }: ChatViewProp
   const [overflowedUserCards, setOverflowedUserCards] = useState<Set<number>>(new Set());
   const [hasScrolled, setHasScrolled] = useState(false);
   const userCardContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [recordingMs, setRecordingMs] = useState(0);
+  const recordingStartRef = useRef<number>(0);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const scriptProcRef = useRef<ScriptProcessorNode | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const pcmBuffersRef = useRef<Float32Array[]>([]);
+  const lastWavRef = useRef<ArrayBuffer | null>(null);
+  const [lastSavedPath, setLastSavedPath] = useState<string | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const toggleUserCardExpanded = useCallback((index: number) => {
     setExpandedUserCards((prev) => {
@@ -255,6 +300,76 @@ export function ChatView({ conversationId, onConversationCreated }: ChatViewProp
     []
   );
 
+  const startRecording = useCallback(async () => {
+    setVoiceError(null);
+    setRecordingMs(0);
+    lastWavRef.current = null;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ctx = new AudioContext();
+      const source = ctx.createMediaStreamSource(stream);
+      // createScriptProcessor is deprecated but reliable in Electron's pinned Chromium
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      const buffers: Float32Array[] = [];
+      processor.onaudioprocess = (e) => {
+        buffers.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      };
+      source.connect(processor);
+      processor.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      scriptProcRef.current = processor;
+      mediaStreamRef.current = stream;
+      pcmBuffersRef.current = buffers;
+      setVoiceState("recording");
+      recordingStartRef.current = Date.now();
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingMs(Date.now() - recordingStartRef.current);
+      }, 33);
+    } catch (err) {
+      setVoiceError(err instanceof Error ? err.message : "Microphone access denied.");
+    }
+  }, []);
+
+  const stopAndTranscribe = useCallback(async () => {
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
+    const ctx = audioCtxRef.current;
+    const processor = scriptProcRef.current;
+    const stream = mediaStreamRef.current;
+    const buffers = pcmBuffersRef.current;
+    processor?.disconnect();
+    stream?.getTracks().forEach((t) => t.stop());
+    audioCtxRef.current = null;
+    scriptProcRef.current = null;
+    mediaStreamRef.current = null;
+    pcmBuffersRef.current = [];
+    setVoiceState("processing");
+    setVoiceError(null);
+    const sampleRate = ctx?.sampleRate ?? 44100;
+    await ctx?.close().catch(() => {});
+    const wav = encodeWav(buffers, sampleRate);
+    lastWavRef.current = wav;
+    window.electron.recording.saveWav(wav).then((r) => setLastSavedPath(r.path)).catch(() => {});
+    const result = await window.electron.recording.transcribe(wav);
+    if ("error" in result) {
+      setVoiceError(result.error);
+    } else {
+      setInput((prev) => (prev ? prev + " " + result.text : result.text));
+    }
+    setVoiceState("idle");
+  }, []);
+
+  const openLastRecording = useCallback(async () => {
+    const wav = lastWavRef.current;
+    if (!wav) return;
+    await window.electron.recording.exportWav(wav, `harness-recording-${Date.now()}.wav`);
+  }, []);
+
+  useEffect(() => {
+    if (!autoStartRecording) return;
+    void startRecording();
+  }, [autoStartRecording, startRecording]);
+
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || !conversationId || sending) return;
@@ -382,6 +497,9 @@ export function ChatView({ conversationId, onConversationCreated }: ChatViewProp
         </div>
       </div>
       <div className="input-container input-container--sticky">
+        {voiceError && (
+          <div className="voice-error">{voiceError}</div>
+        )}
         <textarea
           ref={inputRef}
           className="chat-input"
@@ -394,11 +512,57 @@ export function ChatView({ conversationId, onConversationCreated }: ChatViewProp
             }
           }}
           placeholder="Type a message..."
-          disabled={sending}
+          disabled={sending || voiceState === "recording" || voiceState === "processing"}
           rows={1}
         />
         <div className="input-actions">
-          <button type="button" className="btn btn-primary" onClick={send} disabled={sending || !input.trim()}>
+          <div className="voice-controls">
+            {voiceState === "idle" && (
+              <button
+                type="button"
+                className="btn btn-icon voice-btn"
+                onClick={startRecording}
+                disabled={sending}
+                title="Record voice message"
+                aria-label="Start recording"
+              >
+                <Mic size={15} />
+              </button>
+            )}
+            {voiceState === "recording" && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-icon voice-btn voice-btn--recording"
+                  onClick={stopAndTranscribe}
+                  title="Stop recording"
+                  aria-label="Stop recording"
+                >
+                  <Square size={13} />
+                </button>
+                <span className="voice-timer">
+                  {`${Math.floor(recordingMs / 60000)}:${String(Math.floor((recordingMs % 60000) / 1000)).padStart(2, "0")}.${String(recordingMs % 1000).padStart(3, "0")}`}
+                </span>
+              </>
+            )}
+            {voiceState === "processing" && (
+              <span className="voice-status">
+                <Loader2 size={13} className="voice-spinner" />
+                Transcribing…
+              </span>
+            )}
+            {voiceState === "idle" && lastSavedPath && (
+              <button type="button" className="btn voice-save-link" onClick={openLastRecording} title="Open last recording">
+                Open .wav
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={send}
+            disabled={sending || !input.trim() || voiceState !== "idle"}
+          >
             Send
           </button>
           {sending && (
