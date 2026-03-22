@@ -81,6 +81,7 @@ export interface ElectronAPI {
     getAllowedRoots: () => Promise<string[]>;
   };
   recording: {
+    requestMicrophoneAccess: () => Promise<boolean>;
     saveWav: (data: ArrayBuffer) => Promise<{ path: string }>;
     showInFolder: (path: string) => Promise<void>;
     exportWav: (data: ArrayBuffer, suggestedName?: string) => Promise<{ path: string } | { cancelled: true }>;

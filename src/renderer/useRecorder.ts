@@ -9,6 +9,12 @@ export function useRecorder() {
 
   async function start(): Promise<void> {
     await playStartChime();
+    if (typeof window !== "undefined" && window.electron?.recording?.requestMicrophoneAccess) {
+      const ok = await window.electron.recording.requestMicrophoneAccess();
+      if (!ok) {
+        throw new Error("Microphone access denied.");
+      }
+    }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const ctx = new AudioContext();
     const source = ctx.createMediaStreamSource(stream);

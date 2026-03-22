@@ -111,7 +111,7 @@ async function setConversationTitle(
 /** Placeholder title for voice-dictation threads; `titleSource: "auto"` so LLM refinement can replace it. */
 export async function setVoiceDictationTitle(conversationId: string): Promise<string> {
   const time = new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  const title = `Voice Dictation ${time}`;
+  const title = `Dictation @ ${time}`;
   await patchConversationMeta(conversationId, { title, titleSource: "auto" });
   notifyConversationTitleUpdated(conversationId);
   return title;

@@ -104,6 +104,8 @@ contextBridge.exposeInMainWorld("electron", {
     getAllowedRoots: () => ipcRenderer.invoke("fileTools:getAllowedRoots"),
   },
   recording: {
+    requestMicrophoneAccess: () =>
+      ipcRenderer.invoke("recording:requestMicrophoneAccess") as Promise<boolean>,
     saveWav: (data: ArrayBuffer) =>
       ipcRenderer.invoke("recording:saveWav", data) as Promise<{ path: string }>,
     showInFolder: (path: string) =>

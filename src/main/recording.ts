@@ -1,4 +1,4 @@
-import { ipcMain, app, shell, dialog, clipboard } from "electron";
+import { ipcMain, app, shell, dialog, clipboard, systemPreferences } from "electron";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { exec } from "child_process";
@@ -10,6 +10,21 @@ function getRecordingsDir(): string {
 }
 
 export function registerRecordingHandlers(): void {
+  /** macOS: TCC requires this main-process call before getUserMedia will receive mic audio. */
+  ipcMain.handle("recording:requestMicrophoneAccess", async (): Promise<boolean> => {
+    if (process.platform !== "darwin") {
+      return true;
+    }
+    const status = systemPreferences.getMediaAccessStatus("microphone");
+    if (status === "granted") {
+      return true;
+    }
+    if (status === "denied" || status === "restricted") {
+      return false;
+    }
+    return systemPreferences.askForMediaAccess("microphone");
+  });
+
   ipcMain.handle("recording:saveWav", async (_e, data: ArrayBuffer) => {
     const dir = getRecordingsDir();
     await mkdir(dir, { recursive: true });

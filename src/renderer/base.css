@@ -52,6 +52,7 @@ hr {
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--border);
+  border-radius: 4px;
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
@@ -398,7 +399,6 @@ hr {
 .chat-area-inner {
   max-width: 72ch;
   margin: 0 auto;
-  padding: var(--space-unit);
 }
 
 .message-block .content {
@@ -651,6 +651,7 @@ hr {
   flex-direction: column;
   border-top: 1px solid var(--border);
   background: var(--bg);
+  
 }
 
 .input-container--sticky {

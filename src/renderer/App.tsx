@@ -118,7 +118,7 @@ function groupConversations(conversations: Conversation[]): { groups: SidebarGro
 }
 
 function formatNewChatLabel(createdAt: number): string {
-  return "New Chat " + new Date(createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return "New chat @ " + new Date(createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 function HighlightText({ text, range }: { text: string; range?: [number, number] }) {
