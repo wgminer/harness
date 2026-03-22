@@ -2,8 +2,8 @@ import { ipcMain, BrowserWindow } from "electron";
 import OpenAI from "openai";
 import { getSettings } from "./settings";
 import { getMessages, getUserMemory, appendMessage } from "./memory";
-import { applyHeuristicTitleIfEmpty, scheduleConversationTitleRefinement } from "./conversationTitle";
-import { sendMessageWithTools } from "./providers/openai";
+import { scheduleConversationTitleRefinement } from "./conversationTitle";
+import { getProvider } from "./providers/registry";
 import { executeFileTool } from "./fileTools";
 import { executeCustomizationTool } from "./customization";
 import { executeAssistantTool, isAssistantToolName } from "./assistantTools";
@@ -22,8 +22,8 @@ function getMainWindow(): BrowserWindow | null {
   return wins.length > 0 ? wins[0] : null;
 }
 
-function buildMessageList(conversationId: string, userContent: string): ChatMessage[] {
-  const userMemory = getUserMemory();
+async function buildMessageList(conversationId: string, userContent?: string): Promise<ChatMessage[]> {
+  const userMemory = await getUserMemory();
   const memoryBlock =
     Object.keys(userMemory).length > 0
       ? "User context / remembered facts:\n" +
@@ -36,12 +36,14 @@ function buildMessageList(conversationId: string, userContent: string): ChatMess
     "Helpful assistant running in a local desktop app. Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent task list visible in a dedicated panel); and memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations). Call them when appropriate."
     + (memoryBlock ? "\n\n" + memoryBlock : "");
 
-  const history = getMessages(conversationId);
+  const history = await getMessages(conversationId);
   const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
   for (const m of history) {
     messages.push(m);
   }
-  messages.push({ role: "user", content: userContent });
+  if (userContent) {
+    messages.push({ role: "user", content: userContent });
+  }
   return messages;
 }
 
@@ -80,7 +82,7 @@ async function executeTool(
       });
       skipToolPanelUpdate = true; // UI already updated via handleToolConfirm
     } else {
-      result = executeAssistantTool(name, args);
+      result = await executeAssistantTool(name, args);
     }
   } else {
     result = executeFileTool(name, args);
@@ -100,75 +102,83 @@ async function executeTool(
   return result;
 }
 
+async function streamAssistantReply(conversationId: string, messages: ChatMessage[]): Promise<void> {
+  const settings = await getSettings();
+  const provider = getProvider(settings);
+
+  if (settings.activeProvider === "openai" && !settings.openai?.apiKey) {
+    throw new Error("OpenAI API key not set. Configure it in Settings.");
+  }
+
+  const win = getMainWindow();
+  let fullContent = "";
+  const toolCallsThisTurn: Array<{ toolName: string; payload: unknown }> = [];
+  activeAbortController = new AbortController();
+
+  const executeToolAndCollect = async (name: string, args: Record<string, unknown>): Promise<string> => {
+    const result = await executeTool(name, args, conversationId);
+    if (isAssistantToolName(name)) {
+      try {
+        toolCallsThisTurn.push({ toolName: name, payload: JSON.parse(result) });
+      } catch {
+        toolCallsThisTurn.push({ toolName: name, payload: result });
+      }
+    }
+    return result;
+  };
+
+  let didAppendAssistant = false;
+  try {
+    const stream = await provider.sendMessageWithTools(
+      messages,
+      executeToolAndCollect,
+      activeAbortController.signal
+    );
+    for await (const chunk of stream) {
+      fullContent += chunk;
+      win?.webContents.send("chat:streamChunk", conversationId, chunk);
+    }
+    win?.webContents.send("chat:streamEnd", conversationId);
+    if (fullContent || toolCallsThisTurn.length > 0) {
+      await appendMessage(conversationId, "assistant", fullContent, toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : undefined);
+      didAppendAssistant = true;
+    }
+  } catch (err) {
+    win?.webContents.send("chat:streamEnd", conversationId);
+    const isAbort =
+      err instanceof OpenAI.APIUserAbortError || (err instanceof Error && err.name === "AbortError");
+    if (fullContent || toolCallsThisTurn.length > 0) {
+      await appendMessage(conversationId, "assistant", fullContent || "[Error]", toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : undefined);
+      didAppendAssistant = true;
+    } else if (!isAbort) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      await appendMessage(conversationId, "assistant", `[Error: ${errorMessage}]`);
+      didAppendAssistant = true;
+    }
+    if (!isAbort) throw err;
+  } finally {
+    activeAbortController = null;
+    if (didAppendAssistant) {
+      scheduleConversationTitleRefinement(conversationId, provider);
+    }
+  }
+}
+
 export function registerChatHandlers(): void {
   ipcMain.handle(
     "chat:send",
     async (_e, conversationId: string, userContent: string) => {
-      const settings = getSettings();
-      const apiKey = settings.openai?.apiKey ?? "";
-      const model = settings.openai?.model ?? "gpt-5.2";
-      if (!apiKey) {
-        throw new Error("OpenAI API key not set. Configure it in Settings.");
-      }
+      const messages = await buildMessageList(conversationId, userContent);
+      await appendMessage(conversationId, "user", userContent);
+      await streamAssistantReply(conversationId, messages);
+    }
+  );
 
-      const messages = buildMessageList(conversationId, userContent);
-      appendMessage(conversationId, "user", userContent);
-      applyHeuristicTitleIfEmpty(conversationId, userContent);
-
-      const win = getMainWindow();
-      let fullContent = "";
-      const toolCallsThisTurn: Array<{ toolName: string; payload: unknown }> = [];
-      activeAbortController = new AbortController();
-
-      const executeToolAndCollect = async (name: string, args: Record<string, unknown>): Promise<string> => {
-        const result = await executeTool(name, args, conversationId);
-        if (isAssistantToolName(name)) {
-          try {
-            toolCallsThisTurn.push({ toolName: name, payload: JSON.parse(result) });
-          } catch {
-            toolCallsThisTurn.push({ toolName: name, payload: result });
-          }
-        }
-        return result;
-      };
-
-      let didAppendAssistant = false;
-      try {
-        const stream = await sendMessageWithTools(
-          apiKey,
-          model,
-          messages,
-          executeToolAndCollect,
-          activeAbortController.signal
-        );
-        for await (const chunk of stream) {
-          fullContent += chunk;
-          win?.webContents.send("chat:streamChunk", conversationId, chunk);
-        }
-        win?.webContents.send("chat:streamEnd", conversationId);
-        if (fullContent || toolCallsThisTurn.length > 0) {
-          appendMessage(conversationId, "assistant", fullContent, toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : undefined);
-          didAppendAssistant = true;
-        }
-      } catch (err) {
-        win?.webContents.send("chat:streamEnd", conversationId);
-        const isAbort =
-          err instanceof OpenAI.APIUserAbortError || (err instanceof Error && err.name === "AbortError");
-        if (fullContent || toolCallsThisTurn.length > 0) {
-          appendMessage(conversationId, "assistant", fullContent || "[Error]", toolCallsThisTurn.length > 0 ? { toolCalls: toolCallsThisTurn } : undefined);
-          didAppendAssistant = true;
-        } else if (!isAbort) {
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          appendMessage(conversationId, "assistant", `[Error: ${errorMessage}]`);
-          didAppendAssistant = true;
-        }
-        if (!isAbort) throw err;
-      } finally {
-        activeAbortController = null;
-        if (didAppendAssistant) {
-          scheduleConversationTitleRefinement(conversationId, apiKey, model);
-        }
-      }
+  ipcMain.handle(
+    "chat:generateReply",
+    async (_e, conversationId: string) => {
+      const messages = await buildMessageList(conversationId);
+      await streamAssistantReply(conversationId, messages);
     }
   );
 
@@ -180,13 +190,13 @@ export function registerChatHandlers(): void {
 
   ipcMain.handle(
     "chat:resolveGatedTool",
-    (_e, pendingId: string, action: "proceed" | "cancel") => {
+    async (_e, pendingId: string, action: "proceed" | "cancel") => {
       const pending = pendingGatedTools.get(pendingId);
       if (!pending) return;
       pendingGatedTools.delete(pendingId);
       if (action === "proceed") {
         try {
-          const result = executeAssistantTool(pending.tool, pending.args);
+          const result = await executeAssistantTool(pending.tool, pending.args);
           pending.resolve(result);
         } catch (err) {
           pending.reject(err instanceof Error ? err : new Error(String(err)));

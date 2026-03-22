@@ -1,11 +1,9 @@
-import { app, ipcMain } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { ipcMain } from "electron";
+import { readFile, writeFile, access } from "fs/promises";
 import { join } from "path";
-import { getUserMemory, setUserMemory, searchConversations } from "./memory";
+import { getUserMemory, setUserMemory, searchConversations, getMemoryDir, TASKS_FILE } from "./memory";
+import { generateId } from "./utils";
 import type { SearchResult } from "../shared/types";
-
-const MEMORY_DIR = "memory";
-const TASKS_FILE = "tasks.json";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
 
@@ -40,21 +38,19 @@ interface MemorySearchPayload {
   results: SearchResult[];
 }
 
-function getMemoryDir(): string {
-  const dir = join(app.getPath("userData"), MEMORY_DIR);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
 function getTasksFilePath(): string {
   return join(getMemoryDir(), TASKS_FILE);
 }
 
-function loadTasks(): TaskState {
+async function fileExists(path: string): Promise<boolean> {
+  try { await access(path); return true; } catch { return false; }
+}
+
+async function loadTasks(): Promise<TaskState> {
   const path = getTasksFilePath();
-  if (!existsSync(path)) return { tasks: [] };
+  if (!(await fileExists(path))) return { tasks: [] };
   try {
-    const raw = readFileSync(path, "utf-8");
+    const raw = await readFile(path, "utf-8");
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed?.tasks)) {
       return { tasks: parsed.tasks as TaskItem[] };
@@ -68,23 +64,22 @@ function loadTasks(): TaskState {
   return { tasks: [] };
 }
 
-function saveTasks(state: TaskState): void {
-  const path = getTasksFilePath();
-  writeFileSync(path, JSON.stringify({ tasks: state.tasks }, null, 2), "utf-8");
+async function saveTasks(state: TaskState): Promise<void> {
+  await writeFile(getTasksFilePath(), JSON.stringify({ tasks: state.tasks }, null, 2), "utf-8");
 }
 
-export function listTasks(): TasksPayload {
-  const state = loadTasks();
+export async function listTasks(): Promise<TasksPayload> {
+  const state = await loadTasks();
   return { ...state, lastAction: "list" };
 }
 
-export function createTask(args: Record<string, unknown>): TasksPayload {
+export async function createTask(args: Record<string, unknown>): Promise<TasksPayload> {
   const title = String(args.title ?? "").trim();
   const rawStatus = String(args.status ?? "pending").trim() as TaskStatus;
   const metadata = (args.metadata && typeof args.metadata === "object" ? (args.metadata as Record<string, unknown>) : undefined) ?? undefined;
 
   if (!title) {
-    const state = loadTasks();
+    const state = await loadTasks();
     return {
       ...state,
       lastAction: "create",
@@ -93,7 +88,7 @@ export function createTask(args: Record<string, unknown>): TasksPayload {
   }
 
   const now = Date.now();
-  const state = loadTasks();
+  const state = await loadTasks();
   const status: TaskStatus =
     rawStatus === "pending" ||
     rawStatus === "in_progress" ||
@@ -103,7 +98,7 @@ export function createTask(args: Record<string, unknown>): TasksPayload {
       : "pending";
 
   const task: TaskItem = {
-    id: `task_${now}_${Math.random().toString(36).slice(2, 8)}`,
+    id: generateId("task"),
     title,
     status,
     createdAt: now,
@@ -112,7 +107,7 @@ export function createTask(args: Record<string, unknown>): TasksPayload {
   };
 
   state.tasks.push(task);
-  saveTasks(state);
+  await saveTasks(state);
 
   return {
     ...state,
@@ -121,10 +116,10 @@ export function createTask(args: Record<string, unknown>): TasksPayload {
   };
 }
 
-export function updateTask(args: Record<string, unknown>): TasksPayload {
+export async function updateTask(args: Record<string, unknown>): Promise<TasksPayload> {
   const id = String(args.id ?? "").trim();
   if (!id) {
-    const state = loadTasks();
+    const state = await loadTasks();
     return {
       ...state,
       lastAction: "update",
@@ -132,7 +127,7 @@ export function updateTask(args: Record<string, unknown>): TasksPayload {
     };
   }
 
-  const state = loadTasks();
+  const state = await loadTasks();
   const idx = state.tasks.findIndex((t) => t.id === id);
   if (idx === -1) {
     return {
@@ -163,7 +158,7 @@ export function updateTask(args: Record<string, unknown>): TasksPayload {
   }
 
   state.tasks[idx] = next;
-  saveTasks(state);
+  await saveTasks(state);
 
   return {
     ...state,
@@ -172,10 +167,10 @@ export function updateTask(args: Record<string, unknown>): TasksPayload {
   };
 }
 
-export function deleteTask(args: Record<string, unknown>): TasksPayload {
+export async function deleteTask(args: Record<string, unknown>): Promise<TasksPayload> {
   const id = String(args.id ?? "").trim();
   if (!id) {
-    const state = loadTasks();
+    const state = await loadTasks();
     return {
       ...state,
       lastAction: "delete",
@@ -183,7 +178,7 @@ export function deleteTask(args: Record<string, unknown>): TasksPayload {
     };
   }
 
-  const state = loadTasks();
+  const state = await loadTasks();
   const before = state.tasks.length;
   state.tasks = state.tasks.filter((t) => t.id !== id);
   const after = state.tasks.length;
@@ -196,7 +191,7 @@ export function deleteTask(args: Record<string, unknown>): TasksPayload {
     };
   }
 
-  saveTasks(state);
+  await saveTasks(state);
 
   return {
     ...state,
@@ -205,8 +200,8 @@ export function deleteTask(args: Record<string, unknown>): TasksPayload {
   };
 }
 
-export function clearCompletedTasks(): TasksPayload {
-  const state = loadTasks();
+export async function clearCompletedTasks(): Promise<TasksPayload> {
+  const state = await loadTasks();
   const remaining: TaskItem[] = [];
   const removedIds: string[] = [];
   for (const t of state.tasks) {
@@ -217,7 +212,7 @@ export function clearCompletedTasks(): TasksPayload {
     }
   }
   state.tasks = remaining;
-  saveTasks(state);
+  await saveTasks(state);
   return {
     ...state,
     lastAction: "clear_completed",
@@ -225,12 +220,12 @@ export function clearCompletedTasks(): TasksPayload {
   };
 }
 
-function setMemoryFact(args: Record<string, unknown>): MemoryFactsPayload {
+async function setMemoryFact(args: Record<string, unknown>): Promise<MemoryFactsPayload> {
   const key = String(args.key ?? "").trim();
   const value = String(args.value ?? "").trim();
 
   if (!key) {
-    const current = getUserMemory();
+    const current = await getUserMemory();
     return {
       lastAction: "set_fact",
       memory: current,
@@ -238,8 +233,8 @@ function setMemoryFact(args: Record<string, unknown>): MemoryFactsPayload {
     };
   }
 
-  setUserMemory(key, value);
-  const memory = getUserMemory();
+  await setUserMemory(key, value);
+  const memory = await getUserMemory();
   return {
     lastAction: "set_fact",
     memory,
@@ -247,17 +242,17 @@ function setMemoryFact(args: Record<string, unknown>): MemoryFactsPayload {
   };
 }
 
-function listMemoryFacts(): MemoryFactsPayload {
-  const memory = getUserMemory();
+async function listMemoryFacts(): Promise<MemoryFactsPayload> {
+  const memory = await getUserMemory();
   return {
     lastAction: "list_facts",
     memory,
   };
 }
 
-function searchMemoryConversations(args: Record<string, unknown>): MemorySearchPayload {
+async function searchMemoryConversations(args: Record<string, unknown>): Promise<MemorySearchPayload> {
   const query = String(args.query ?? "").trim();
-  const results = query ? searchConversations(query) : [];
+  const results = query ? await searchConversations(query) : [];
   return {
     lastAction: "search_conversations",
     query,
@@ -278,47 +273,45 @@ export function isAssistantToolName(name: string): boolean {
   ].includes(name);
 }
 
-export function executeAssistantTool(name: string, args: Record<string, unknown>): string {
+export async function executeAssistantTool(name: string, args: Record<string, unknown>): Promise<string> {
   switch (name) {
     case "task_list":
-      return JSON.stringify(listTasks());
+      return JSON.stringify(await listTasks());
     case "task_create":
-      return JSON.stringify(createTask(args));
+      return JSON.stringify(await createTask(args));
     case "task_update":
-      return JSON.stringify(updateTask(args));
+      return JSON.stringify(await updateTask(args));
     case "task_delete":
-      return JSON.stringify(deleteTask(args));
+      return JSON.stringify(await deleteTask(args));
     case "task_clear_completed":
-      return JSON.stringify(clearCompletedTasks());
+      return JSON.stringify(await clearCompletedTasks());
     case "memory_set_fact":
-      return JSON.stringify(setMemoryFact(args));
+      return JSON.stringify(await setMemoryFact(args));
     case "memory_list_facts":
-      return JSON.stringify(listMemoryFacts());
+      return JSON.stringify(await listMemoryFacts());
     case "memory_search_conversations":
-      return JSON.stringify(searchMemoryConversations(args));
+      return JSON.stringify(await searchMemoryConversations(args));
     default:
       return JSON.stringify({ error: `Unknown assistant tool: ${name}` });
   }
 }
 
 export function registerAssistantToolsHandlers(): void {
-  ipcMain.handle("tasks:list", (): TasksPayload => listTasks());
+  ipcMain.handle("tasks:list", () => listTasks());
   ipcMain.handle(
     "tasks:create",
-    (_e, title: string, status?: string): TasksPayload =>
+    (_e, title: string, status?: string) =>
       createTask({ title, status })
   );
   ipcMain.handle(
     "tasks:update",
-    (_e, payload: { id: string; title?: string; status?: string }): TasksPayload =>
+    (_e, payload: { id: string; title?: string; status?: string }) =>
       updateTask(payload as Record<string, unknown>)
   );
   ipcMain.handle(
     "tasks:delete",
-    (_e, id: string): TasksPayload =>
+    (_e, id: string) =>
       deleteTask({ id })
   );
-  ipcMain.handle("tasks:clearCompleted", (): TasksPayload => clearCompletedTasks());
+  ipcMain.handle("tasks:clearCompleted", () => clearCompletedTasks());
 }
-
-

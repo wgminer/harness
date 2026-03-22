@@ -22,12 +22,15 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("memory:appendMessage", conversationId, role, content),
     getUserMemory: () => ipcRenderer.invoke("memory:getUserMemory"),
     setUserMemory: (key: string, value: string) => ipcRenderer.invoke("memory:setUserMemory", key, value),
+    deleteUserMemoryKey: (key: string) => ipcRenderer.invoke("memory:deleteUserMemoryKey", key),
     searchConversations: (query: string) => ipcRenderer.invoke("memory:searchConversations", query),
     importFromChatGPTFolder: () =>
       ipcRenderer.invoke("memory:importFromChatGPTFolder") as Promise<{ imported: number; errors: string[] }>,
-    resetHistory: () => ipcRenderer.invoke("memory:resetHistory"),
+    resetStoredData: () => ipcRenderer.invoke("memory:resetStoredData"),
     setConversationTitle: (conversationId: string, title: string) =>
       ipcRenderer.invoke("memory:setConversationTitle", conversationId, title),
+    setVoiceDictationTitle: (conversationId: string) =>
+      ipcRenderer.invoke("memory:setVoiceDictationTitle", conversationId) as Promise<string>,
   },
   plans: {
     list: () => ipcRenderer.invoke("plans:list"),
@@ -50,6 +53,7 @@ contextBridge.exposeInMainWorld("electron", {
   },
   chat: {
     send: (conversationId: string, userContent: string) => ipcRenderer.invoke("chat:send", conversationId, userContent),
+    generateReply: (conversationId: string) => ipcRenderer.invoke("chat:generateReply", conversationId),
     stop: () => ipcRenderer.invoke("chat:stop"),
     resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") =>
       ipcRenderer.invoke("chat:resolveGatedTool", pendingId, action),
@@ -99,10 +103,24 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("recording:openFolder") as Promise<void>,
     transcribe: (data: ArrayBuffer) =>
       ipcRenderer.invoke("recording:transcribe", data) as Promise<{ text: string } | { error: string }>,
-    onGlobalTrigger: (cb: () => void) => {
+    pasteText: (text: string) =>
+      ipcRenderer.invoke("recording:pasteText", text) as Promise<void>,
+    done: () =>
+      ipcRenderer.invoke("recording:done") as Promise<void>,
+    onStartSilent: (cb: () => void) => {
       const sub = () => cb();
-      ipcRenderer.on("recording:globalTrigger", sub);
-      return () => ipcRenderer.removeListener("recording:globalTrigger", sub);
+      ipcRenderer.on("recording:startSilent", sub);
+      return () => ipcRenderer.removeListener("recording:startSilent", sub);
+    },
+    onStopAndPaste: (cb: (wasFocused: boolean) => void) => {
+      const sub = (_: unknown, wasFocused: boolean) => cb(wasFocused);
+      ipcRenderer.on("recording:stopAndPaste", sub);
+      return () => ipcRenderer.removeListener("recording:stopAndPaste", sub);
+    },
+    onCancel: (cb: () => void) => {
+      const sub = () => cb();
+      ipcRenderer.on("recording:cancel", sub);
+      return () => ipcRenderer.removeListener("recording:cancel", sub);
     },
   },
 });

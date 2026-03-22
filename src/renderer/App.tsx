@@ -3,7 +3,10 @@ import { Settings, Maximize2, Minimize2, Plus, Search, X, ListTodo, ChevronRight
 import { ChatView } from "./ChatView";
 import { SettingsView } from "./SettingsView";
 import { TasksView } from "./TasksView";
+import { useRecorder } from "./useRecorder";
+import { playCancelChime } from "./recordingUtils";
 import type { LayoutOptions, Plan, SearchResult } from "../shared/types";
+import type {} from "../shared/electronAPI";
 
 type Conversation = { id: string; title: string | null; createdAt: number };
 
@@ -114,6 +117,10 @@ function groupConversations(conversations: Conversation[]): { groups: SidebarGro
   return { groups };
 }
 
+function formatNewChatLabel(createdAt: number): string {
+  return "New Chat " + new Date(createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 function HighlightText({ text, range }: { text: string; range?: [number, number] }) {
   if (range == null || range[0] < 0 || range[1] <= range[0] || range[0] >= text.length) {
     return <>{text}</>;
@@ -127,68 +134,6 @@ function HighlightText({ text, range }: { text: string; range?: [number, number]
       {text.slice(end)}
     </>
   );
-}
-
-declare global {
-  interface Window {
-    electron: {
-      app: { getVersion: () => Promise<string> };
-      windowSize: { get: () => Promise<"small" | "large">; toggle: () => Promise<"small" | "large"> };
-      settings: { get: () => Promise<unknown>; set: (p: unknown) => Promise<unknown> };
-      memory: {
-        createConversation: () => Promise<string>;
-        getConversation: (id: string) => Promise<unknown>;
-        listConversations: () => Promise<{ id: string; title: string | null; createdAt: number }[]>;
-        deleteConversation: (id: string) => Promise<void>;
-        getMessages: (id: string) => Promise<{ role: string; content: string }[]>;
-        getUserMemory: () => Promise<Record<string, string>>;
-        setUserMemory: (key: string, value: string) => Promise<void>;
-        searchConversations: (query: string) => Promise<SearchResult[]>;
-        importFromChatGPTFolder: () => Promise<{ imported: number; errors: string[] }>;
-        resetHistory: () => Promise<void>;
-        setConversationTitle: (conversationId: string, title: string) => Promise<void>;
-      };
-      plans: {
-        list: () => Promise<Plan[]>;
-        create: (title: string, description: string) => Promise<Plan>;
-        update: (planId: string, updates: { title?: string; description?: string }) => Promise<Plan | null>;
-        delete: (planId: string) => Promise<void>;
-        addConversation: (planId: string, conversationId: string) => Promise<Plan | null>;
-        removeConversation: (planId: string, conversationId: string) => Promise<Plan | null>;
-      };
-      chat: {
-        send: (conversationId: string, content: string) => Promise<void>;
-        stop: () => Promise<void>;
-        resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") => Promise<void>;
-        onStreamChunk: (cb: (conversationId: string, chunk: string) => void) => () => void;
-        onStreamEnd: (cb: (conversationId: string) => void) => () => void;
-        onToolPanelUpdate: (cb: (conversationId: string, toolName: string, payload: unknown) => void) => () => void;
-        onConversationTitleUpdated: (cb: (conversationId: string) => void) => () => void;
-      };
-      customization: {
-        getActiveTheme: () => Promise<string>;
-        setTheme: (css: string) => Promise<void>;
-        getLayoutOptions: () => Promise<LayoutOptions>;
-        setLayout: (o: Partial<LayoutOptions>) => Promise<void>;
-        onUpdated: (cb: (p: { type: string }) => void) => () => void;
-      };
-      tasks: {
-        list: () => Promise<{ tasks: { id: string; title: string; status: string }[] }>;
-        create: (title: string, status?: string) => Promise<{ tasks: { id: string; title: string; status: string }[] }>;
-        update: (payload: { id: string; title?: string; status?: string }) => Promise<{ tasks: { id: string; title: string; status: string }[] }>;
-        delete: (id: string) => Promise<{ tasks: { id: string; title: string; status: string }[] }>;
-        clearCompleted: () => Promise<{ tasks: { id: string; title: string; status: string }[] }>;
-      };
-      recording: {
-        saveWav: (data: ArrayBuffer) => Promise<{ path: string }>;
-        showInFolder: (path: string) => Promise<void>;
-        exportWav: (data: ArrayBuffer, suggestedName?: string) => Promise<{ path: string } | { cancelled: true }>;
-        openFolder: () => Promise<void>;
-        transcribe: (data: ArrayBuffer) => Promise<{ text: string } | { error: string }>;
-        onGlobalTrigger: (cb: () => void) => () => void;
-      };
-    };
-  }
 }
 
 type View = "chat" | "settings" | "tasks";
@@ -213,7 +158,22 @@ export default function App() {
   const [newPlanTitle, setNewPlanTitle] = useState("");
   const [newPlanDescription, setNewPlanDescription] = useState("");
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [autoStartRecording, setAutoStartRecording] = useState(0);
+  /** Bump to remount TasksView after tasks.json is cleared externally (e.g. settings reset). */
+  const [tasksRemountKey, setTasksRemountKey] = useState(0);
+
+  // Hotkey recorder — owns the background mic capture for the global shortcut path
+  const hotkeyRecorder = useRecorder();
+
+  // Text from the hotkey — injected into the open chat (send vs pre-fill follows recording.autoSend unless draft-only)
+  const [pendingHotkeyText, setPendingHotkeyText] = useState<string | null>(null);
+  /** When true, hotkey text is always pre-filled (never auto-sent). Used for global recording while the app was unfocused. */
+  const [pendingHotkeyDraftOnly, setPendingHotkeyDraftOnly] = useState(false);
+
+  const hotkeyRecordingRef = useRef(false);
+  const hotkeyCancelledRef = useRef(false);
+
+  const conversationIdRef = useRef(conversationId);
+  useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
 
   const loadPlans = useCallback(async () => {
     const list = await window.electron.plans.list();
@@ -223,8 +183,20 @@ export default function App() {
   const loadConversations = useCallback(async () => {
     const list = await window.electron.memory.listConversations();
     setConversations(list);
-    if (list.length > 0 && !conversationId) setConversationId(list[0].id);
-  }, [conversationId]);
+    setConversationId((current) => {
+      if (list.length === 0) return null;
+      if (!current) return list[0].id;
+      if (list.some((c) => c.id === current)) return current;
+      return list[0].id;
+    });
+  }, []);
+
+  const onStoredDataReset = useCallback(() => {
+    void loadConversations();
+    void loadPlans();
+    setExpandedPlanId(null);
+    setTasksRemountKey((k) => k + 1);
+  }, [loadConversations, loadPlans]);
 
   useEffect(() => {
     loadConversations();
@@ -276,15 +248,75 @@ export default function App() {
     setView("chat");
   }, []);
 
+
   useEffect(() => {
-    const unsub = window.electron.recording.onGlobalTrigger(async () => {
-      const id = await window.electron.memory.createConversation();
-      setConversationId(id);
-      setConversations((prev) => [{ id, title: null, createdAt: Date.now() }, ...prev]);
-      setView("chat");
-      setAutoStartRecording((n) => n + 1);
+    const unsub = window.electron.recording.onStartSilent(async () => {
+      hotkeyCancelledRef.current = false;
+      hotkeyRecordingRef.current = true;
+      try {
+        await hotkeyRecorder.start();
+      } catch (_) {
+        hotkeyRecordingRef.current = false;
+      }
     });
     return unsub;
+  // hotkeyRecorder is stable (created once via useRef internals)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const unsub = window.electron.recording.onStopAndPaste(async (wasFocused: boolean) => {
+      hotkeyRecordingRef.current = false;
+      try {
+        const wav = await hotkeyRecorder.stop();
+        if (hotkeyCancelledRef.current) return;
+        window.electron.recording.saveWav(wav).catch(() => {});
+        const result = await window.electron.recording.transcribe(wav);
+        if (hotkeyCancelledRef.current) return;
+        if (!("error" in result)) {
+          if (wasFocused) {
+            let targetId = conversationIdRef.current;
+            if (!targetId) {
+              targetId = await window.electron.memory.createConversation();
+              setConversations((prev) => [{ id: targetId!, title: null, createdAt: Date.now() }, ...prev]);
+              setConversationId(targetId);
+            }
+            setView("chat");
+            setPendingHotkeyDraftOnly(false);
+            setPendingHotkeyText(result.text);
+          } else {
+            await window.electron.recording.pasteText(result.text);
+            const newId = await window.electron.memory.createConversation();
+            await window.electron.memory.appendMessage(newId, "user", result.text);
+            const voiceTitle = await window.electron.memory.setVoiceDictationTitle(newId);
+            setConversations((prev) => [{ id: newId, title: voiceTitle, createdAt: Date.now() }, ...prev]);
+            setConversationId(newId);
+            setView("chat");
+            void loadConversations();
+          }
+        }
+      } finally {
+        if (!hotkeyCancelledRef.current) {
+          await window.electron.recording.done();
+        }
+      }
+    });
+    return unsub;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const unsub = window.electron.recording.onCancel(async () => {
+      hotkeyCancelledRef.current = true;
+      if (hotkeyRecordingRef.current) {
+        hotkeyRecordingRef.current = false;
+        try { await hotkeyRecorder.stop(); } catch (_) { /* already stopped */ }
+      }
+      playCancelChime();
+      await window.electron.recording.done();
+    });
+    return unsub;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const deleteConversation = useCallback(
@@ -466,7 +498,7 @@ export default function App() {
                   >
                     <span className="search-result-title">
                       <HighlightText
-                        text={typeof r.title === "string" ? r.title : r.id}
+                        text={r.title || formatNewChatLabel(r.createdAt)}
                         range={r.titleMatched ? r.titleMatchRange ?? undefined : undefined}
                       />
                     </span>
@@ -498,7 +530,7 @@ export default function App() {
                         className={`sidebar-item ${conversationId === c.id ? "active" : ""}`}
                         onClick={() => { setConversationId(c.id); setView("chat"); }}
                       >
-                        <span className="sidebar-item-title">{typeof c.title === "string" ? c.title : c.id}</span>
+                        <span className="sidebar-item-title">{c.title || formatNewChatLabel(c.createdAt)}</span>
                         <button
                           type="button"
                           className="sidebar-item-delete"
@@ -524,15 +556,26 @@ export default function App() {
       <main className="main">
         {view === "chat" && (
           <ChatView
+            key={conversationId ?? "none"}
             conversationId={conversationId}
             onConversationCreated={loadConversations}
-            autoStartRecording={autoStartRecording}
+            pendingHotkeyText={pendingHotkeyText}
+            pendingHotkeyDraftOnly={pendingHotkeyDraftOnly}
+            onPendingHotkeyTextConsumed={() => {
+              setPendingHotkeyText(null);
+              setPendingHotkeyDraftOnly(false);
+            }}
           />
         )}
-        {view === "settings" && <SettingsView onBack={() => setView("chat")} onImportComplete={loadConversations} />}
-        {view === "tasks" && <TasksView onBack={() => setView("chat")} />}
+        {view === "settings" && (
+          <SettingsView
+            onBack={() => setView("chat")}
+            onImportComplete={loadConversations}
+            onStoredDataReset={onStoredDataReset}
+          />
+        )}
+        {view === "tasks" && <TasksView key={tasksRemountKey} onBack={() => setView("chat")} />}
       </main>
-      <style id="custom-theme" />
     </div>
   );
 }

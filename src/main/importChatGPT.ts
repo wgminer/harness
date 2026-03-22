@@ -183,7 +183,7 @@ export async function importFromFolder(folderPath: string): Promise<{ imported: 
     }
   }
 
-  const existingIds = new Set(getExistingChatgptIds());
+  const existingIds = new Set(await getExistingChatgptIds());
   const withOrder: { item: ImportConversationItem; orderIndex: number }[] = [];
   for (const c of byId.values()) {
     if (existingIds.has(c.id)) continue;
@@ -204,6 +204,6 @@ export async function importFromFolder(folderPath: string): Promise<{ imported: 
   withOrder.sort((a, b) => a.orderIndex - b.orderIndex);
   const toImport = withOrder.map((x) => x.item);
 
-  const { imported } = importConversations(toImport);
+  const { imported } = await importConversations(toImport);
   return { imported, errors };
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, dialog, nativeTheme, globalShortcut } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, dialog, nativeTheme, globalShortcut, Tray } from "electron";
 import { join } from "path";
 import { registerSettingsHandlers } from "./settings";
 import { registerMemoryHandlers } from "./memory";
@@ -11,6 +11,7 @@ import { registerRecordingHandlers } from "./recording";
 import { importFromFolder } from "./importChatGPT";
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 
 const iconPath = join(app.getAppPath(), "resources", "icon.png");
 
@@ -34,7 +35,7 @@ function createWindow() {
   const devServerUrl = process.env["ELECTRON_RENDERER_URL"];
   if (devServerUrl) {
     mainWindow.loadURL(devServerUrl);
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
@@ -106,13 +107,61 @@ app.whenReady().then(() => {
 
   createWindow();
 
+  const trayIconPath = join(app.getAppPath(), "resources", "icon-tray.png");
+  const trayIcon = nativeImage.createFromPath(trayIconPath).resize({ width: 18, height: 18 });
+  trayIcon.setTemplateImage(true);
+
+  const trayRecordingIconPath = join(app.getAppPath(), "resources", "icon-tray-recording.png");
+  const trayRecordingIcon = nativeImage.createFromPath(trayRecordingIconPath).resize({ width: 18, height: 18 });
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip("Harness");
+  tray.setTitle(" {READY}");
+
+  ipcMain.handle("recording:done", () => {
+    tray?.setImage(trayIcon);
+    tray?.setTitle(" {READY}");
+    globalShortcut.unregister("Escape");
+  });
+
+  let globalRecording = false;
+
+  function registerEscapeCancel() {
+    if (globalShortcut.isRegistered("Escape")) return;
+    globalShortcut.register("Escape", () => {
+      const win = BrowserWindow.getAllWindows()[0];
+      if (!win) return;
+      globalRecording = false;
+      tray?.setImage(trayIcon);
+      tray?.setTitle(" {READY}");
+      globalShortcut.unregister("Escape");
+      win.webContents.send("recording:cancel");
+    });
+  }
+
   globalShortcut.register("CommandOrControl+Shift+Space", () => {
     const win = BrowserWindow.getAllWindows()[0];
     if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-    win.webContents.send("recording:globalTrigger");
+    if (!globalRecording) {
+      globalRecording = true;
+      tray?.setImage(trayRecordingIcon);
+      tray?.setTitle(" {REC}");
+      registerEscapeCancel();
+      win.webContents.send("recording:startSilent");
+    } else {
+      globalRecording = false;
+      tray?.setImage(trayIcon);
+      tray?.setTitle(" {PROCESSING}");
+      const wasFocused = win.isFocused();
+      win.webContents.send("recording:stopAndPaste", wasFocused);
+      if (wasFocused) {
+        if (process.platform === "darwin") {
+          app.focus({ steal: true });
+        }
+        win.show();
+        win.focus();
+      }
+    }
   });
 
   app.on("activate", () => {

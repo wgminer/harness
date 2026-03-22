@@ -5,3 +5,4 @@ import_v2
 .DS_Store
 dist
 out
+*.tsbuildinfo

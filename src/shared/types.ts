@@ -19,10 +19,22 @@ export interface Conversation {
 
 export interface Settings {
   version: number;
-  activeProvider: string;
+  activeProvider: "openai" | "ollama";
   openai?: {
     apiKey: string;
     model: string;
+  };
+  ollama?: {
+    baseUrl: string;
+    model: string;
+  };
+  recording?: {
+    autoSend: boolean;
+  };
+  transcription?: {
+    activeProvider: "openai" | "local";
+    baseUrl?: string;
+    model?: string;
   };
 }
 
@@ -60,5 +72,15 @@ export const DEFAULT_SETTINGS: Settings = {
   openai: {
     apiKey: "",
     model: "gpt-5.2",
+  },
+  ollama: {
+    baseUrl: "http://localhost:11434",
+    model: "llama3",
+  },
+  recording: {
+    autoSend: true,
+  },
+  transcription: {
+    activeProvider: "openai",
   },
 };

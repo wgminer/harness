@@ -1,8 +1,9 @@
-import { ipcMain, app, shell, dialog } from "electron";
+import { ipcMain, app, shell, dialog, clipboard } from "electron";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
-import OpenAI, { toFile } from "openai";
+import { exec } from "child_process";
 import { getSettings } from "./settings";
+import { getTranscriptionProvider } from "./providers/transcriptionRegistry";
 
 function getRecordingsDir(): string {
   return join(app.getPath("userData"), "recordings");
@@ -39,16 +40,29 @@ export function registerRecordingHandlers(): void {
   });
 
   ipcMain.handle("recording:transcribe", async (_e, data: ArrayBuffer) => {
-    const settings = getSettings();
-    const apiKey = settings.openai?.apiKey ?? "";
-    if (!apiKey) return { error: "No OpenAI API key configured. Add one in Settings." };
+    const settings = await getSettings();
+    const isOpenAI = (settings.transcription?.activeProvider ?? "openai") === "openai";
+    if (isOpenAI && !settings.openai?.apiKey) {
+      return { error: "No OpenAI API key configured. Add one in Settings." };
+    }
     try {
-      const client = new OpenAI({ apiKey });
-      const file = await toFile(Buffer.from(data), "recording.wav", { type: "audio/wav" });
-      const response = await client.audio.transcriptions.create({ file, model: "whisper-1" });
-      return { text: response.text };
+      const provider = getTranscriptionProvider(settings);
+      const text = await provider.transcribe(data);
+      return { text };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle("recording:pasteText", async (_e, text: string) => {
+    clipboard.writeText(text);
+    if (process.platform === "darwin") {
+      await new Promise<void>((resolve) => {
+        exec(
+          `osascript -e 'tell application "System Events" to keystroke "v" using command down'`,
+          () => resolve()
+        );
+      });
     }
   });
 }

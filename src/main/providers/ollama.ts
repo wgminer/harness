@@ -41,11 +41,19 @@ function messageReducer(
   return acc as Partial<ChatCompletionMessage>;
 }
 
-export function createOpenAIProvider(apiKey: string, model: string): LLMProvider {
-  const client = new OpenAI({ apiKey });
+/**
+ * Creates an LLMProvider that talks to any OpenAI-compatible local server.
+ * Ollama:    baseUrl = "http://localhost:11434"  (exposes /v1 route)
+ * LM Studio: baseUrl = "http://localhost:1234"   (exposes /v1 route)
+ */
+export function createOllamaProvider(baseUrl: string, model: string): LLMProvider {
+  const client = new OpenAI({
+    apiKey: "ollama",
+    baseURL: `${baseUrl.replace(/\/$/, "")}/v1`,
+  });
 
   return {
-    id: "openai",
+    id: "ollama",
 
     async sendMessageWithTools(
       messages: ChatMessage[],
@@ -135,7 +143,7 @@ export function createOpenAIProvider(apiKey: string, model: string): LLMProvider
             { role: "system", content: system },
             { role: "user", content: userBlock },
           ],
-          max_completion_tokens: 64,
+          max_tokens: 64,
           temperature: 0.35,
         },
         { signal: AbortSignal.timeout(10_000) }

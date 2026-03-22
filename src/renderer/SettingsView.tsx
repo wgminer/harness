@@ -1,52 +1,63 @@
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft } from "lucide-react";
-
-interface Settings {
-  version: number;
-  activeProvider: string;
-  openai?: { apiKey: string; model: string };
-}
+import { ArrowLeft, Trash2 } from "lucide-react";
+import { DEFAULT_SETTINGS } from "../shared/types";
+import type { Settings } from "../shared/types";
+import { useScrolledHeader } from "./useScrolledHeader";
 
 interface SettingsViewProps {
   onBack: () => void;
+  /** After ChatGPT import (new conversations in sidebar). */
   onImportComplete?: () => void;
+  /** After full local data erase (conversations, memory file, tasks, plans). */
+  onStoredDataReset?: () => void;
 }
 
 const SAVE_DEBOUNCE_MS = 500;
 
-export function SettingsView({ onBack, onImportComplete }: SettingsViewProps) {
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("gpt-5.2");
+const OPENAI_MODELS = [
+  { value: "gpt-5.3-codex", label: "Coding" },
+  { value: "gpt-5.2", label: "General" },
+  { value: "gpt-5-mini", label: "Fast & cheap" },
+];
 
-  const OPENAI_MODELS = [
-    { value: "gpt-5.3-codex", label: "Coding" },
-    { value: "gpt-5.2", label: "General" },
-    { value: "gpt-5-mini", label: "Fast & cheap" },
-  ];
+const D = DEFAULT_SETTINGS;
+
+export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: SettingsViewProps) {
+  const [activeProvider, setActiveProvider] = useState<"openai" | "ollama">(D.activeProvider);
+  const [apiKey, setApiKey] = useState(D.openai!.apiKey);
+  const [model, setModel] = useState(D.openai!.model);
+  const [ollamaBaseUrl, setOllamaBaseUrl] = useState(D.ollama!.baseUrl);
+  const [ollamaModel, setOllamaModel] = useState(D.ollama!.model);
+
+  const [transcriptionProvider, setTranscriptionProvider] = useState<"openai" | "local">(D.transcription!.activeProvider);
+  const [transcriptionBaseUrl, setTranscriptionBaseUrl] = useState(D.transcription?.baseUrl ?? "http://localhost:8080");
+  const [transcriptionModel, setTranscriptionModel] = useState(D.transcription?.model ?? "whisper-1");
+
+  const [autoSend, setAutoSend] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [userMemory, setUserMemory] = useState<Record<string, string>>({});
-  const [newMemKey, setNewMemKey] = useState("");
-  const [newMemVal, setNewMemVal] = useState("");
+  const [newMemTitle, setNewMemTitle] = useState("");
+  const [newMemDetail, setNewMemDetail] = useState("");
   const [importStatus, setImportStatus] = useState<{ imported: number; errors: string[] } | null>(null);
   const [importing, setImporting] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
   const skipNextSaveRef = useRef(true);
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [headerScrolled, setHeaderScrolled] = useState(false);
-
-  const onScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setHeaderScrolled(el.scrollTop > 12);
-  };
+  const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
 
   useEffect(() => {
     window.electron.settings.get().then((s) => {
       const S = s as Settings;
-      setApiKey(S.openai?.apiKey ?? "");
-      setModel(S.openai?.model ?? "gpt-5.2");
+      setActiveProvider(S.activeProvider ?? D.activeProvider);
+      setApiKey(S.openai?.apiKey ?? D.openai!.apiKey);
+      setModel(S.openai?.model ?? D.openai!.model);
+      setOllamaBaseUrl(S.ollama?.baseUrl ?? D.ollama!.baseUrl);
+      setOllamaModel(S.ollama?.model ?? D.ollama!.model);
+      setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
+      setTranscriptionProvider(S.transcription?.activeProvider ?? D.transcription!.activeProvider);
+      setTranscriptionBaseUrl(S.transcription?.baseUrl ?? D.transcription?.baseUrl ?? "http://localhost:8080");
+      setTranscriptionModel(S.transcription?.model ?? D.transcription?.model ?? "whisper-1");
     });
     window.electron.memory.getUserMemory().then(setUserMemory);
   }, []);
@@ -59,7 +70,15 @@ export function SettingsView({ onBack, onImportComplete }: SettingsViewProps) {
     const timer = setTimeout(async () => {
       setSaveStatus("saving");
       await window.electron.settings.set({
+        activeProvider,
         openai: { apiKey, model },
+        ollama: { baseUrl: ollamaBaseUrl, model: ollamaModel },
+        recording: { autoSend },
+        transcription: {
+          activeProvider: transcriptionProvider,
+          baseUrl: transcriptionBaseUrl,
+          model: transcriptionModel,
+        },
       });
       setSaveStatus("saved");
       if (hideToastRef.current) clearTimeout(hideToastRef.current);
@@ -75,23 +94,28 @@ export function SettingsView({ onBack, onImportComplete }: SettingsViewProps) {
         hideToastRef.current = null;
       }
     };
-  }, [apiKey, model]);
+  }, [activeProvider, apiKey, model, ollamaBaseUrl, ollamaModel, autoSend, transcriptionProvider, transcriptionBaseUrl, transcriptionModel]);
 
   const addMemory = async () => {
-    if (!newMemKey.trim()) return;
-    await window.electron.memory.setUserMemory(newMemKey.trim(), newMemVal.trim());
+    if (!newMemTitle.trim()) return;
+    await window.electron.memory.setUserMemory(newMemTitle.trim(), newMemDetail.trim());
     setUserMemory(await window.electron.memory.getUserMemory());
-    setNewMemKey("");
-    setNewMemVal("");
+    setNewMemTitle("");
+    setNewMemDetail("");
   };
 
-  const runResetHistory = async () => {
+  const deleteMemoryEntry = async (key: string) => {
+    await window.electron.memory.deleteUserMemoryKey(key);
+    setUserMemory(await window.electron.memory.getUserMemory());
+  };
+
+  const runResetStoredData = async () => {
     if (!resetConfirm) return;
     setResetting(true);
     try {
-      await window.electron.memory.resetHistory();
+      await window.electron.memory.resetStoredData();
       setResetConfirm(false);
-      onImportComplete?.();
+      onStoredDataReset?.();
     } finally {
       setResetting(false);
     }
@@ -125,145 +149,288 @@ export function SettingsView({ onBack, onImportComplete }: SettingsViewProps) {
       </header>
       <div ref={scrollRef} className="settings-scroll" onScroll={onScroll}>
         <div className="settings-content">
-      <div className="settings-section">
-        <label>OpenAI API key</label>
-        <input
-          type="text"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder="sk-..."
-        />
-      </div>
-      <div className="settings-section">
-        <label>Model</label>
-        <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-        >
-          {!OPENAI_MODELS.some((m) => m.value === model) && (
-            <option value={model}>{model}</option>
-          )}
-          {OPENAI_MODELS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </div>
 
-      {saveStatus !== "idle" && (
-        <div className="settings-toast" role="status">
-          {saveStatus === "saving" ? "Saving…" : "Saved"}
-        </div>
-      )}
+          <section className="settings-group">
+            <h3 className="settings-group__title">Chat model</h3>
+            <div className="settings-section">
+              <label>LLM provider</label>
+              <select
+                value={activeProvider}
+                onChange={(e) => setActiveProvider(e.target.value as "openai" | "ollama")}
+              >
+                <option value="openai">OpenAI</option>
+                <option value="ollama">Ollama (local)</option>
+              </select>
+            </div>
 
-      <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", marginTop: "24px", marginBottom: "8px" }}>User memory</h3>
-      <p style={{ color: "var(--fg-muted)", fontSize: "12px", marginBottom: "8px" }}>Facts remembered across conversations.</p>
-      {Object.entries(userMemory).map(([k, v]) => (
-        <div key={k} style={{ marginBottom: "8px", fontSize: "13px" }}>
-          <strong>{k}:</strong> {v}
-        </div>
-      ))}
-      <div className="settings-section" style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          type="text"
-          placeholder="Key"
-          value={newMemKey}
-          onChange={(e) => setNewMemKey(e.target.value)}
-          style={{ width: "120px" }}
-        />
-        <input
-          type="text"
-          placeholder="Value"
-          value={newMemVal}
-          onChange={(e) => setNewMemVal(e.target.value)}
-          style={{ flex: 1, minWidth: "100px" }}
-        />
-        <button type="button" className="btn" onClick={addMemory}>Add</button>
-      </div>
+            {activeProvider === "openai" && (
+              <>
+                <div className="settings-section">
+                  <label>OpenAI API key</label>
+                  <input
+                    type="text"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="sk-..."
+                  />
+                </div>
+                <div className="settings-section">
+                  <label>Model</label>
+                  <select value={model} onChange={(e) => setModel(e.target.value)}>
+                    {!OPENAI_MODELS.some((m) => m.value === model) && (
+                      <option value={model}>{model}</option>
+                    )}
+                    {OPENAI_MODELS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label} — {m.value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
 
-      <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", marginTop: "24px", marginBottom: "8px" }}>Import ChatGPT history</h3>
-      <p style={{ color: "var(--fg-muted)", fontSize: "12px", marginBottom: "8px" }}>
-        Import from the raw unzipped ChatGPT export folder (the folder that contains <code>conversations-*.json</code> and optionally <code>shared_conversations.json</code>). Titles and order use shared_conversations when present.
-      </p>
-      <div className="settings-section" style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-        <button
-          type="button"
-          className="btn"
-          onClick={runImport}
-          disabled={importing}
-        >
-          {importing ? "Importing…" : "Import"}
-        </button>
-      </div>
-      {importStatus != null && (
-        <div style={{ marginTop: "8px", fontSize: "13px" }} role="status">
-          {importStatus.imported > 0 && (
-            <p style={{ color: "var(--fg)" }}>Imported {importStatus.imported} conversation{importStatus.imported !== 1 ? "s" : ""}.</p>
-          )}
-          {importStatus.errors.length > 0 && (
-            <div style={{ color: "var(--fg-muted)" }}>
-              <p style={{ marginBottom: "4px" }}>Errors:</p>
-              <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                {importStatus.errors.map((err, i) => (
-                  <li key={i}>{err}</li>
-                ))}
-              </ul>
+            {activeProvider === "ollama" && (
+              <>
+                <div className="settings-section">
+                  <label>Ollama base URL</label>
+                  <input
+                    type="text"
+                    value={ollamaBaseUrl}
+                    onChange={(e) => setOllamaBaseUrl(e.target.value)}
+                    placeholder="http://localhost:11434"
+                  />
+                </div>
+                <div className="settings-section">
+                  <label>Model</label>
+                  <input
+                    type="text"
+                    value={ollamaModel}
+                    onChange={(e) => setOllamaModel(e.target.value)}
+                    placeholder="llama3"
+                  />
+                </div>
+                <p className="settings-group__hint settings-group__hint--flush">
+                  Ollama must be running locally. Any model that supports tool calling (e.g. llama3, mistral-nemo) will work.
+                </p>
+              </>
+            )}
+          </section>
+
+          <section className="settings-group">
+            <h3 className="settings-group__title">Transcription</h3>
+            <p className="settings-group__lead">Where voice is turned into text before it reaches the chat.</p>
+            <div className="settings-section">
+              <label>Provider</label>
+              <select
+                value={transcriptionProvider}
+                onChange={(e) => setTranscriptionProvider(e.target.value as "openai" | "local")}
+              >
+                <option value="openai">OpenAI Whisper</option>
+                <option value="local">Local Whisper server</option>
+              </select>
+            </div>
+            {transcriptionProvider === "local" && (
+              <>
+                <div className="settings-section">
+                  <label>Base URL</label>
+                  <input
+                    type="text"
+                    value={transcriptionBaseUrl}
+                    onChange={(e) => setTranscriptionBaseUrl(e.target.value)}
+                    placeholder="http://localhost:8080"
+                  />
+                </div>
+                <div className="settings-section">
+                  <label>Model</label>
+                  <input
+                    type="text"
+                    value={transcriptionModel}
+                    onChange={(e) => setTranscriptionModel(e.target.value)}
+                    placeholder="whisper-1"
+                  />
+                </div>
+                <p className="settings-group__hint settings-group__hint--flush">
+                  Requires a local server exposing <code>/v1/audio/transcriptions</code> (e.g. whisper.cpp with <code>--server</code>, or faster-whisper-server).
+                </p>
+              </>
+            )}
+          </section>
+
+          <section className="settings-group">
+            <h3 className="settings-group__title">Recordings folder</h3>
+            <p className="settings-group__lead">
+              Voice recordings are saved automatically to the app data folder.
+            </p>
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => window.electron.recording.openFolder()}
+              >
+                Open recordings folder
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-group">
+            <h3 className="settings-group__title">Auto-send</h3>
+            <p className="settings-group__lead">
+              After a voice recording finishes in a new conversation, automatically send the transcription as a new message.
+            </p>
+            <div className="settings-toggle-row">
+              <input
+                id="autoSendToggle"
+                type="checkbox"
+                checked={autoSend}
+                onChange={(e) => setAutoSend(e.target.checked)}
+              />
+              <label htmlFor="autoSendToggle">
+                Activate auto-send
+              </label>
+            </div>
+          </section>
+
+          {saveStatus !== "idle" && (
+            <div className="settings-toast" role="status">
+              {saveStatus === "saving" ? "Saving…" : "Saved"}
             </div>
           )}
-        </div>
-      )}
 
-      <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", marginTop: "24px", marginBottom: "8px" }}>Recordings</h3>
-      <p style={{ color: "var(--fg-muted)", fontSize: "12px", marginBottom: "8px" }}>
-        Voice recordings are saved automatically to the app data folder.
-      </p>
-      <div className="settings-section" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => window.electron.recording.openFolder()}
-        >
-          Open recordings folder
-        </button>
-      </div>
+          <section className="settings-group">
+            <h3 className="settings-group__title">Long-term memory</h3>
+            <p className="settings-group__lead">
+              Short facts the assistant can rely on in every chat. On each message you send, these entries are merged into the <strong>system prompt</strong> for that request (alongside the fixed assistant instructions), so whichever model you use—OpenAI or local—sees them as context for that turn.
+              Use a <strong>short label</strong> (like a filename: <code>preferred_stack</code>) and a <strong>detail</strong> line or two.
+              The label must be unique; adding again with the same label replaces the detail.
+            </p>
+            {Object.entries(userMemory).map(([k, v]) => (
+              <div key={k} className="settings-memory-row">
+                <div className="settings-memory-entry">
+                  <div className="settings-memory-entry__title">{k}</div>
+                  <div className="settings-memory-entry__detail">{v || "—"}</div>
+                </div>
+                <button
+                  type="button"
+                  className="settings-memory-delete btn btn-icon"
+                  onClick={() => deleteMemoryEntry(k)}
+                  aria-label={`Remove ${k}`}
+                  title="Remove"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+            <div className="settings-section settings-section--inline settings-memory-add">
+              <label className="settings-memory-field">
+                <span className="settings-memory-field__label">Label</span>
+                <input
+                  type="text"
+                  placeholder="e.g. timezone"
+                  value={newMemTitle}
+                  onChange={(e) => setNewMemTitle(e.target.value)}
+                  className="settings-input--key"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="settings-memory-field settings-memory-field--grow">
+                <span className="settings-memory-field__label">Detail</span>
+                <input
+                  type="text"
+                  placeholder="What to remember"
+                  value={newMemDetail}
+                  onChange={(e) => setNewMemDetail(e.target.value)}
+                  className="settings-input--value"
+                  autoComplete="off"
+                />
+              </label>
+              <button type="button" className="btn" onClick={addMemory}>
+                Save
+              </button>
+            </div>
+          </section>
 
-      <h3 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", marginTop: "24px", marginBottom: "8px" }}>Reset history</h3>
-      <p style={{ color: "var(--fg-muted)", fontSize: "12px", marginBottom: "8px" }}>
-        Clear all conversations and their messages. Use this to undo an import or start fresh. This cannot be undone.
-      </p>
-      <div className="settings-section" style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-        {!resetConfirm ? (
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setResetConfirm(true)}
-            disabled={resetting}
-          >
-            Reset history
-          </button>
-        ) : (
-          <>
-            <span style={{ fontSize: "13px", color: "var(--fg-muted)" }}>Clear everything?</span>
-            <button
-              type="button"
-              className="btn"
-              onClick={runResetHistory}
-              disabled={resetting}
-            >
-              {resetting ? "Resetting…" : "Yes, clear all"}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setResetConfirm(false)}
-              disabled={resetting}
-            >
-              Cancel
-            </button>
-          </>
-        )}
-      </div>
+          <section className="settings-group">
+            <h3 className="settings-group__title">Import ChatGPT history</h3>
+            <p className="settings-group__lead">
+              Import from the raw unzipped ChatGPT export folder (the folder that contains <code>conversations-*.json</code> and optionally <code>shared_conversations.json</code>). Titles and order use shared_conversations when present.
+            </p>
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="btn"
+                onClick={runImport}
+                disabled={importing}
+              >
+                {importing ? "Importing…" : "Import"}
+              </button>
+            </div>
+            {importStatus != null && (
+              <div className="settings-import-status" role="status">
+                {importStatus.imported > 0 && (
+                  <p className="settings-import-status__ok">
+                    Imported {importStatus.imported} conversation{importStatus.imported !== 1 ? "s" : ""}.
+                  </p>
+                )}
+                {importStatus.errors.length > 0 && (
+                  <div className="settings-import-status__errors">
+                    <p>Errors:</p>
+                    <ul>
+                      {importStatus.errors.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          <section className="settings-group">
+            <h3 className="settings-group__title">Reset stored chat data</h3>
+            <p className="settings-group__lead">
+              Harness keeps data in plain JSON files under your app data folder (there is no separate database). This removes the chat-related files in the <code>memory</code> subdirectory.
+            </p>
+            <p className="settings-group__hint">
+              <strong>Deletes:</strong> <code>conversations.json</code>, every <code>messages_*.json</code> transcript file,{" "}
+              <code>user_memory.json</code> (long-term facts above), <code>tasks.json</code>, and <code>plans.json</code>.
+            </p>
+            <p className="settings-group__hint">
+              <strong>Does not delete:</strong> <code>settings.json</code> (API keys and preferences), theme/layout files, or voice recordings in <code>recordings/</code>.
+            </p>
+            <div className="settings-actions" style={{ marginTop: 12 }}>
+              {!resetConfirm ? (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setResetConfirm(true)}
+                  disabled={resetting}
+                >
+                  Erase all local data
+                </button>
+              ) : (
+                <>
+                  <div className="settings-reset-prompt">Erase all of the files listed above?</div>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={runResetStoredData}
+                    disabled={resetting}
+                  >
+                    {resetting ? "Erasing…" : "Yes, erase"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setResetConfirm(false)}
+                    disabled={resetting}
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </div>

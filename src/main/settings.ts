@@ -1,52 +1,71 @@
 import { ipcMain } from "electron";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFile, writeFile, access } from "fs/promises";
 import { join } from "path";
 import { app } from "electron";
+import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings } from "../shared/types";
 
 const SETTINGS_FILE = "settings.json";
+
+const D = DEFAULT_SETTINGS;
 
 function getSettingsPath(): string {
   return join(app.getPath("userData"), SETTINGS_FILE);
 }
 
-function loadSettings(): Settings {
-  const path = getSettingsPath();
-  if (!existsSync(path)) {
-    return {
-      version: 1,
-      activeProvider: "openai",
-      openai: { apiKey: "", model: "gpt-5.2" },
-    };
-  }
-  const data = JSON.parse(readFileSync(path, "utf-8"));
+async function fileExists(path: string): Promise<boolean> {
+  try { await access(path); return true; } catch { return false; }
+}
+
+function parseSettings(data: Record<string, unknown>): Settings {
   return {
-    version: 1,
-    activeProvider: data.activeProvider ?? "openai",
+    version: D.version,
+    activeProvider: (data.activeProvider as Settings["activeProvider"]) ?? D.activeProvider,
     openai: {
-      apiKey: data.openai?.apiKey ?? "",
-      model: data.openai?.model ?? "gpt-5.2",
+      apiKey: (data.openai as Record<string, unknown> | undefined)?.apiKey as string ?? D.openai!.apiKey,
+      model: (data.openai as Record<string, unknown> | undefined)?.model as string ?? D.openai!.model,
+    },
+    ollama: {
+      baseUrl: (data.ollama as Record<string, unknown> | undefined)?.baseUrl as string ?? D.ollama!.baseUrl,
+      model: (data.ollama as Record<string, unknown> | undefined)?.model as string ?? D.ollama!.model,
+    },
+    recording: {
+      autoSend: (data.recording as Record<string, unknown> | undefined)?.autoSend as boolean ?? D.recording!.autoSend,
+    },
+    transcription: {
+      activeProvider: (data.transcription as Record<string, unknown> | undefined)?.activeProvider as "openai" | "local" ?? D.transcription!.activeProvider,
+      baseUrl: (data.transcription as Record<string, unknown> | undefined)?.baseUrl as string | undefined,
+      model: (data.transcription as Record<string, unknown> | undefined)?.model as string | undefined,
     },
   };
 }
 
-function saveSettings(settings: Settings): void {
+async function loadSettings(): Promise<Settings> {
   const path = getSettingsPath();
-  writeFileSync(path, JSON.stringify(settings, null, 2), "utf-8");
+  if (!(await fileExists(path))) return { ...D };
+  const raw = await readFile(path, "utf-8");
+  return parseSettings(JSON.parse(raw));
 }
 
-export function getSettings(): Settings {
+async function saveSettings(settings: Settings): Promise<void> {
+  await writeFile(getSettingsPath(), JSON.stringify(settings, null, 2), "utf-8");
+}
+
+export async function getSettings(): Promise<Settings> {
   return loadSettings();
 }
 
-export function setSettings(partial: Partial<Settings>): Settings {
-  const current = loadSettings();
+export async function setSettings(partial: Partial<Settings>): Promise<Settings> {
+  const current = await loadSettings();
   const next: Settings = {
     ...current,
     ...partial,
     openai: partial.openai ? { ...current.openai, ...partial.openai } : current.openai,
+    ollama: partial.ollama ? { ...current.ollama, ...partial.ollama } : current.ollama,
+    recording: partial.recording ? { ...current.recording, ...partial.recording } : current.recording,
+    transcription: partial.transcription ? { ...current.transcription, ...partial.transcription } : current.transcription,
   };
-  saveSettings(next);
+  await saveSettings(next);
   return next;
 }
 

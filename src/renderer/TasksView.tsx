@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, ListTodo, Trash2 } from "lucide-react";
+import { useScrolledHeader } from "./useScrolledHeader";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
 
@@ -22,14 +23,7 @@ export function TasksView({ onBack }: TasksViewProps) {
   const [loading, setLoading] = useState(true);
   const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [headerScrolled, setHeaderScrolled] = useState(false);
-
-  const onScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setHeaderScrolled(el.scrollTop > 12);
-  };
+  const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
 
   useEffect(() => {
     (async () => {

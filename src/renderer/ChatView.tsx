@@ -1,7 +1,9 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
-import { Copy, Check, Mic, Square, Loader2 } from "lucide-react";
+import { Copy, Check, Mic, Square, Loader2, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useRecorder } from "./useRecorder";
+import { playCancelChime } from "./recordingUtils";
 
 interface ToolCallDisplay {
   toolName: string;
@@ -22,7 +24,11 @@ function formatMessageTime(ts: number): string {
 interface ChatViewProps {
   conversationId: string | null;
   onConversationCreated: () => void;
-  autoStartRecording?: number;
+  /** Text from the global hotkey — send vs pre-fill follows recording.autoSend unless draft-only. */
+  pendingHotkeyText?: string | null;
+  /** If true, always pre-fill input (never auto-send), e.g. recording stopped while the app was unfocused. */
+  pendingHotkeyDraftOnly?: boolean;
+  onPendingHotkeyTextConsumed?: () => void;
 }
 
 /** Renders markdown (bold, lists, code, etc.) without headers (they render as paragraphs). */
@@ -84,39 +90,15 @@ function CopyButton({ content, messageIndex, copiedIndex, onCopied }: { content:
 
 const SCROLL_TOP_THRESHOLD = 24;
 
-function encodeWav(buffers: Float32Array[], sampleRate: number): ArrayBuffer {
-  const totalSamples = buffers.reduce((n, b) => n + b.length, 0);
-  const dataBytes = totalSamples * 2;
-  const buf = new ArrayBuffer(44 + dataBytes);
-  const view = new DataView(buf);
-  const str = (s: string, off: number) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
-  str("RIFF", 0);
-  view.setUint32(4, 36 + dataBytes, true);
-  str("WAVE", 8);
-  str("fmt ", 12);
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  str("data", 36);
-  view.setUint32(40, dataBytes, true);
-  let off = 44;
-  for (const b of buffers) {
-    for (let i = 0; i < b.length; i++) {
-      const s = Math.max(-1, Math.min(1, b[i]));
-      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-      off += 2;
-    }
-  }
-  return buf;
-}
-
 type VoiceState = "idle" | "recording" | "processing";
 
-export function ChatView({ conversationId, onConversationCreated, autoStartRecording }: ChatViewProps) {
+export function ChatView({
+  conversationId,
+  onConversationCreated,
+  pendingHotkeyText,
+  pendingHotkeyDraftOnly,
+  onPendingHotkeyTextConsumed,
+}: ChatViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
@@ -131,13 +113,17 @@ export function ChatView({ conversationId, onConversationCreated, autoStartRecor
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [recordingMs, setRecordingMs] = useState(0);
   const recordingStartRef = useRef<number>(0);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const scriptProcRef = useRef<ScriptProcessorNode | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const pcmBuffersRef = useRef<Float32Array[]>([]);
-  const lastWavRef = useRef<ArrayBuffer | null>(null);
-  const [lastSavedPath, setLastSavedPath] = useState<string | null>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const recorder = useRecorder();
+
+  /** Tool calls for the assistant turn currently being streamed; shown inline and then stored on the message when stream ends. */
+  const [currentTurnToolCalls, setCurrentTurnToolCalls] = useState<ToolCallDisplay[]>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const chatAreaRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const streamingContentRef = useRef("");
+  const currentTurnToolCallsRef = useRef<ToolCallDisplay[]>([]);
 
   const toggleUserCardExpanded = useCallback((index: number) => {
     setExpandedUserCards((prev) => {
@@ -147,13 +133,6 @@ export function ChatView({ conversationId, onConversationCreated, autoStartRecor
       return next;
     });
   }, []);
-  /** Tool calls for the assistant turn currently being streamed; shown inline and then stored on the message when stream ends. */
-  const [currentTurnToolCalls, setCurrentTurnToolCalls] = useState<ToolCallDisplay[]>([]);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const chatAreaRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const streamingContentRef = useRef("");
-  const currentTurnToolCallsRef = useRef<ToolCallDisplay[]>([]);
 
   useEffect(() => {
     streamingContentRef.current = streamingContent;
@@ -167,9 +146,31 @@ export function ChatView({ conversationId, onConversationCreated, autoStartRecor
       setMessages([]);
       return;
     }
-    window.electron.memory.getMessages(conversationId).then((list) =>
-      setMessages(list.map((m) => ({ role: m.role, content: m.content, toolCalls: (m as Message).toolCalls })))
-    );
+
+    setMessages([]);
+    setStreamingContent("");
+    setCurrentTurnToolCalls([]);
+    setSending(false);
+    setInput("");
+    setCopiedIndex(null);
+    setExpandedUserCards(new Set());
+    setOverflowedUserCards(new Set());
+    userCardContentRefs.current = {};
+    setVoiceError(null);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setVoiceState("idle");
+
+    let cancelled = false;
+    window.electron.memory.getMessages(conversationId).then((list) => {
+      if (cancelled) return;
+      setMessages(list.map((m) => ({ role: m.role, content: m.content, toolCalls: (m as Message).toolCalls })));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [conversationId]);
 
   useEffect(() => {
@@ -300,84 +301,12 @@ export function ChatView({ conversationId, onConversationCreated, autoStartRecor
     []
   );
 
-  const startRecording = useCallback(async () => {
-    setVoiceError(null);
-    setRecordingMs(0);
-    lastWavRef.current = null;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const ctx = new AudioContext();
-      const source = ctx.createMediaStreamSource(stream);
-      // createScriptProcessor is deprecated but reliable in Electron's pinned Chromium
-      // eslint-disable-next-line @typescript-eslint/no-deprecated
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
-      const buffers: Float32Array[] = [];
-      processor.onaudioprocess = (e) => {
-        buffers.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-      };
-      source.connect(processor);
-      processor.connect(ctx.destination);
-      audioCtxRef.current = ctx;
-      scriptProcRef.current = processor;
-      mediaStreamRef.current = stream;
-      pcmBuffersRef.current = buffers;
-      setVoiceState("recording");
-      recordingStartRef.current = Date.now();
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingMs(Date.now() - recordingStartRef.current);
-      }, 33);
-    } catch (err) {
-      setVoiceError(err instanceof Error ? err.message : "Microphone access denied.");
-    }
-  }, []);
-
-  const stopAndTranscribe = useCallback(async () => {
-    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
-    const ctx = audioCtxRef.current;
-    const processor = scriptProcRef.current;
-    const stream = mediaStreamRef.current;
-    const buffers = pcmBuffersRef.current;
-    processor?.disconnect();
-    stream?.getTracks().forEach((t) => t.stop());
-    audioCtxRef.current = null;
-    scriptProcRef.current = null;
-    mediaStreamRef.current = null;
-    pcmBuffersRef.current = [];
-    setVoiceState("processing");
-    setVoiceError(null);
-    const sampleRate = ctx?.sampleRate ?? 44100;
-    await ctx?.close().catch(() => {});
-    const wav = encodeWav(buffers, sampleRate);
-    lastWavRef.current = wav;
-    window.electron.recording.saveWav(wav).then((r) => setLastSavedPath(r.path)).catch(() => {});
-    const result = await window.electron.recording.transcribe(wav);
-    if ("error" in result) {
-      setVoiceError(result.error);
-    } else {
-      setInput((prev) => (prev ? prev + " " + result.text : result.text));
-    }
-    setVoiceState("idle");
-  }, []);
-
-  const openLastRecording = useCallback(async () => {
-    const wav = lastWavRef.current;
-    if (!wav) return;
-    await window.electron.recording.exportWav(wav, `harness-recording-${Date.now()}.wav`);
-  }, []);
-
-  useEffect(() => {
-    if (!autoStartRecording) return;
-    void startRecording();
-  }, [autoStartRecording, startRecording]);
-
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || !conversationId || sending) return;
-    setInput("");
+  /** Core send logic; accepts text directly so it can be called programmatically (e.g. hotkey injection). */
+  const sendText = useCallback(async (text: string) => {
+    if (!text.trim() || !conversationId || sending) return;
     setSending(true);
     setStreamingContent("");
     setCurrentTurnToolCalls([]);
-    // Optimistically show user message immediately
     setMessages((prev) => [...prev, { role: "user", content: text, timestamp: Date.now() }]);
     try {
       await window.electron.chat.send(conversationId, text);
@@ -386,7 +315,97 @@ export function ChatView({ conversationId, onConversationCreated, autoStartRecor
       setStreamingContent(`[Error: ${e instanceof Error ? e.message : String(e)}]`);
       setSending(false);
     }
-  }, [input, conversationId, sending, onConversationCreated]);
+  }, [conversationId, sending, onConversationCreated]);
+
+  const send = useCallback(async () => {
+    const text = input.trim();
+    if (!text) return;
+    setInput("");
+    await sendText(text);
+  }, [input, sendText]);
+
+  const generateReply = useCallback(async () => {
+    if (!conversationId || sending) return;
+    setSending(true);
+    setStreamingContent("");
+    setCurrentTurnToolCalls([]);
+    try {
+      await window.electron.chat.generateReply(conversationId);
+      onConversationCreated();
+    } catch (e) {
+      setStreamingContent(`[Error: ${e instanceof Error ? e.message : String(e)}]`);
+      setSending(false);
+    }
+  }, [conversationId, sending, onConversationCreated]);
+
+  // Stable ref so the pendingHotkeyText effect always calls the latest sendText without it being a dep
+  const sendTextRef = useRef(sendText);
+  useEffect(() => { sendTextRef.current = sendText; });
+
+  // Global hotkey finished transcription — inject into this chat (send or pre-fill per settings, unless draft-only)
+  useEffect(() => {
+    if (!pendingHotkeyText || !conversationId) return;
+    window.electron.settings.get().then((s) => {
+      const autoSend = (s as { recording?: { autoSend: boolean } }).recording?.autoSend ?? true;
+      if (autoSend && !pendingHotkeyDraftOnly) {
+        sendTextRef.current(pendingHotkeyText);
+      } else {
+        setInput((prev) => (prev ? prev + " " + pendingHotkeyText : pendingHotkeyText));
+      }
+      onPendingHotkeyTextConsumed?.();
+    });
+  // Only re-run when the text itself changes (or conversationId changes underneath it)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingHotkeyText, conversationId, pendingHotkeyDraftOnly]);
+
+  const startRecording = useCallback(async () => {
+    setVoiceError(null);
+    setRecordingMs(0);
+    try {
+      await recorder.start();
+      setVoiceState("recording");
+      recordingStartRef.current = Date.now();
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingMs(Date.now() - recordingStartRef.current);
+      }, 33);
+    } catch (err) {
+      setVoiceError(err instanceof Error ? err.message : "Microphone access denied.");
+    }
+  }, [recorder]);
+
+  const stopAndTranscribe = useCallback(async () => {
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
+    setVoiceState("processing");
+    setVoiceError(null);
+    try {
+      const wav = await recorder.stop();
+      window.electron.recording.saveWav(wav).catch(() => {});
+      const result = await window.electron.recording.transcribe(wav);
+      if ("error" in result) {
+        setVoiceError(result.error);
+      } else {
+        const s = await window.electron.settings.get() as { recording?: { autoSend: boolean } };
+        if (s.recording?.autoSend ?? true) {
+          sendTextRef.current(result.text);
+        } else {
+          setInput((prev) => (prev ? prev + " " + result.text : result.text));
+        }
+      }
+    } catch (err) {
+      setVoiceError(err instanceof Error ? err.message : "Recording failed.");
+    } finally {
+      setVoiceState("idle");
+    }
+  }, [recorder]);
+
+  const cancelRecording = useCallback(async () => {
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
+    try { await recorder.stop(); } catch (_) { /* already stopped */ }
+    setVoiceState("idle");
+    setVoiceError(null);
+    setRecordingMs(0);
+    playCancelChime();
+  }, [recorder]);
 
   if (!conversationId) {
     return (
@@ -405,6 +424,16 @@ export function ChatView({ conversationId, onConversationCreated, autoStartRecor
       data-scrolled={hasScrolled || undefined}
       onScroll={onChatAreaScroll}
     >
+      {hasScrolled && (
+        <button
+          type="button"
+          className="chat-scroll-top"
+          onClick={scrollToTop}
+          aria-label="Scroll to top"
+        >
+          top
+        </button>
+      )}
       <div className="chat-area">
         <div className="chat-area-inner">
           {displayMessages.map((m, i) => {
@@ -413,19 +442,11 @@ export function ChatView({ conversationId, onConversationCreated, autoStartRecor
 
             return (
               <div key={i} className={`message-block ${m.role}`}>
-                <div className="message-block-header">
-                  {m.role === "user" && (m as Message).timestamp != null && (
-                    <span className="message-block-time">{formatMessageTime((m as Message).timestamp!)}</span>
-                  )}
-                  <button
-                    type="button"
-                    className="message-block-top"
-                    onClick={scrollToTop}
-                    aria-label="Scroll to top"
-                  >
-                    top
-                  </button>
-                </div>
+                {m.role === "user" && m.timestamp != null && (
+                  <div className="message-block-header">
+                    <span className="message-block-time">{formatMessageTime(m.timestamp)}</span>
+                  </div>
+                )}
                 <div className="content">
                   {m.role === "user" ? (
                     <div className={`message-user-card${expandedUserCards.has(i) ? " message-user-card--expanded" : ""}`}>
@@ -480,19 +501,33 @@ export function ChatView({ conversationId, onConversationCreated, autoStartRecor
                     </>
                   )}
                 </div>
-                {isAssistant && (
-                  <div className="message-block-footer">
-                    <CopyButton
-                      content={m.content}
-                      messageIndex={i}
-                      copiedIndex={copiedIndex}
-                      onCopied={setCopiedIndex}
-                    />
-                  </div>
-                )}
+                <div className="message-block-footer">
+                  <CopyButton
+                    content={m.content}
+                    messageIndex={i}
+                    copiedIndex={copiedIndex}
+                    onCopied={setCopiedIndex}
+                  />
+                </div>
               </div>
             );
           })}
+          {displayMessages.length > 0 &&
+            displayMessages[displayMessages.length - 1].role === "user" &&
+            !streamingContent && (
+              <div className="get-reply-prompt">
+                {sending ? (
+                  <span className="voice-status">
+                    <Loader2 size={13} className="voice-spinner" />
+                    Replying…
+                  </span>
+                ) : (
+                  <button type="button" className="btn btn-get-reply" onClick={generateReply}>
+                    Get reply
+                  </button>
+                )}
+              </div>
+            )}
           <div ref={bottomRef} />
         </div>
       </div>
@@ -551,23 +586,29 @@ export function ChatView({ conversationId, onConversationCreated, autoStartRecor
                 Transcribing…
               </span>
             )}
-            {voiceState === "idle" && lastSavedPath && (
-              <button type="button" className="btn voice-save-link" onClick={openLastRecording} title="Open last recording">
-                Open .wav
-              </button>
-            )}
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={send}
-            disabled={sending || !input.trim() || voiceState !== "idle"}
-          >
-            Send
-          </button>
-          {sending && (
+          {voiceState !== "idle" ? (
+            <button
+              type="button"
+              className="btn btn-cancel"
+              onClick={cancelRecording}
+              title="Cancel recording"
+            >
+              <X size={15} />
+              Cancel
+            </button>
+          ) : sending ? (
             <button type="button" className="btn input-actions-stop" onClick={() => window.electron.chat.stop()}>
               Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={send}
+              disabled={!input.trim()}
+            >
+              Send
             </button>
           )}
         </div>

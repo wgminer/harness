@@ -1,15 +1,20 @@
 import type { ChatMessage } from "../../shared/types";
 
-export interface SendMessageOptions {
-  stream?: boolean;
-}
-
-export interface ChatProvider {
+export interface LLMProvider {
   id: string;
-  sendMessage(messages: ChatMessage[], options?: SendMessageOptions): Promise<AsyncIterable<string> | string>;
+  sendMessageWithTools(
+    messages: ChatMessage[],
+    executeTool: (name: string, args: Record<string, unknown>) => Promise<string>,
+    signal?: AbortSignal
+  ): Promise<AsyncIterable<string>>;
+  generateTitle(
+    previousTitle: string | null,
+    context: string,
+    model: string
+  ): Promise<string | null>;
 }
 
-export interface ToolCallResult {
-  toolCallId: string;
-  result: string;
+export interface TranscriptionProvider {
+  id: string;
+  transcribe(audioBuffer: ArrayBuffer): Promise<string>;
 }
