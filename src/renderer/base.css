@@ -1142,3 +1142,249 @@ hr {
   border-bottom: 1px solid var(--border);
 }
 
+/* Tasks view */
+.tasks-new-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.tasks-new-row .tasks-textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+.tasks-new-add {
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.tasks-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.tasks-textarea,
+.tasks-modal-body textarea {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.45;
+  width: 100%;
+  max-width: 400px;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.tasks-textarea:focus,
+.tasks-modal-body textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tasks-textarea--modal {
+  max-width: none;
+  min-height: 120px;
+}
+
+.tasks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tasks-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.tasks-section-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-muted);
+}
+
+.tasks-row-check {
+  flex-shrink: 0;
+  margin: 2px 0 0;
+  padding: 2px;
+  width: auto;
+  min-width: unset;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.tasks-row-check:hover {
+  color: var(--fg);
+}
+
+.tasks-row-check:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tasks-check-icon {
+  display: block;
+}
+
+.tasks-check-icon--on {
+  color: var(--accent);
+}
+
+.tasks-row-body {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.tasks-row-body:hover .tasks-row-title {
+  color: var(--accent);
+}
+
+.tasks-row-title {
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tasks-row-title--done {
+  text-decoration: line-through;
+  opacity: 0.65;
+}
+
+.tasks-row-meta {
+  margin-top: 4px;
+}
+
+.tasks-status-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--fg-muted);
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+}
+
+.tasks-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: color-mix(in srgb, var(--bg) 40%, #000 60%);
+}
+
+.tasks-modal {
+  width: 100%;
+  max-width: 440px;
+  max-height: min(90vh, 560px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+.tasks-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tasks-modal-heading {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.tasks-modal-close {
+  flex-shrink: 0;
+}
+
+.tasks-modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tasks-modal-body label {
+  display: block;
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.tasks-modal-body select {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  width: 100%;
+  height: var(--input-height);
+  padding: 0 10px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.tasks-modal-body select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tasks-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.tasks-modal-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.tasks-modal-footer .btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
