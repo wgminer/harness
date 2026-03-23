@@ -10,6 +10,9 @@
   --accent: #f2ff00;
   --danger: #c0392b;
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  /* Default / raised control surface (slightly above --bg) */
+  --btn-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --btn-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.4);
   --font-family: system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Code", monospace;
   --font-size: 14px;
@@ -49,26 +52,44 @@ hr {
   font-size: 13px;
   height: var(--input-height);
   min-height: var(--input-height);
-  background: var(--bg);
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg));
   color: var(--fg);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 4px;
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  box-shadow: var(--btn-shadow);
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sidebar .btn {
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg-secondary));
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--accent);
   color: var(--accent);
+  background: color-mix(in srgb, var(--fg) 10%, var(--bg));
+  box-shadow: var(--btn-shadow-hover);
+}
+
+.sidebar .btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
 }
 
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .btn-primary {
@@ -84,10 +105,13 @@ hr {
   gap: 4px;
   background: var(--danger);
   color: #fff;
+  box-shadow: var(--btn-shadow);
 }
 
 .btn-cancel:hover {
   background: color-mix(in srgb, var(--danger) 85%, #000);
+  color: #fff;
+  box-shadow: var(--btn-shadow-hover);
 }
 
 /* Single icon-only button: 36×36 */
@@ -598,15 +622,15 @@ hr {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg));
   color: var(--fg-muted);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 4px;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  box-shadow: var(--btn-shadow);
+  transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
   flex-shrink: 0;
   opacity: 0.15;
-  transition: opacity 0.15s ease;
 }
 
 .message-block:hover .message-copy-btn {
@@ -619,8 +643,9 @@ hr {
 }
 
 .message-copy-btn:hover {
-  border-color: var(--accent);
   color: var(--accent);
+  background: color-mix(in srgb, var(--fg) 10%, var(--bg));
+  box-shadow: var(--btn-shadow-hover);
 }
 
 .get-reply-prompt {
@@ -633,16 +658,18 @@ hr {
   font-size: 12px;
   padding: 4px 12px;
   border-radius: 6px;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg));
   color: var(--fg);
-  border: 1px solid var(--border);
+  border: none;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  box-shadow: var(--btn-shadow);
+  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .btn-get-reply:hover {
-  border-color: var(--accent);
   color: var(--accent);
+  background: color-mix(in srgb, var(--fg) 10%, var(--bg));
+  box-shadow: var(--btn-shadow-hover);
 }
 
 /* Input: ChatGPT-style stacked layout */
@@ -937,7 +964,8 @@ hr {
 
 .settings-memory-delete:hover:not(:disabled) {
   color: var(--danger);
-  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, var(--bg));
+  box-shadow: var(--btn-shadow-hover);
 }
 
 .settings-memory-add {
@@ -1072,17 +1100,21 @@ hr {
 
 .voice-btn {
   color: var(--fg-muted);
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .voice-btn--recording {
-  border-color: #e05353;
+  box-shadow:
+    0 0 0 1px rgba(224, 83, 83, 0.9),
+    var(--btn-shadow);
   color: #e05353;
   animation: voice-pulse 1.2s ease-in-out infinite;
 }
 
 .voice-btn--recording:hover:not(:disabled) {
-  border-color: #ff6b6b;
+  box-shadow:
+    0 0 0 1px rgba(255, 107, 107, 0.95),
+    var(--btn-shadow-hover);
   color: #ff6b6b;
 }
 
@@ -1126,12 +1158,14 @@ hr {
   font-size: 12px;
   padding: 0 10px;
   color: var(--fg-muted);
-  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .voice-save-link:hover:not(:disabled) {
-  border-color: var(--border);
   color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg));
+  box-shadow: var(--btn-shadow);
 }
 
 .voice-error {

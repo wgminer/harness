@@ -17,6 +17,22 @@ async function fileExists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
 }
 
+function defaultParakeetUseGpu(): boolean {
+  return process.arch === "arm64" && process.platform === "darwin";
+}
+
+function parseTranscription(raw: Record<string, unknown> | undefined): NonNullable<Settings["transcription"]> {
+  const activeProvider = (raw?.activeProvider as "openai" | "local") ?? D.transcription!.activeProvider;
+  const p = raw?.parakeet as Record<string, unknown> | undefined;
+  const useGpu =
+    typeof p?.useGpu === "boolean" ? p.useGpu : defaultParakeetUseGpu();
+  const fp16 = typeof p?.fp16 === "boolean" ? p.fp16 : (D.transcription!.parakeet!.fp16);
+  return {
+    activeProvider,
+    parakeet: { useGpu, fp16 },
+  };
+}
+
 function parseSettings(data: Record<string, unknown>): Settings {
   return {
     version: D.version,
@@ -32,11 +48,7 @@ function parseSettings(data: Record<string, unknown>): Settings {
     recording: {
       autoSend: (data.recording as Record<string, unknown> | undefined)?.autoSend as boolean ?? D.recording!.autoSend,
     },
-    transcription: {
-      activeProvider: (data.transcription as Record<string, unknown> | undefined)?.activeProvider as "openai" | "local" ?? D.transcription!.activeProvider,
-      baseUrl: (data.transcription as Record<string, unknown> | undefined)?.baseUrl as string | undefined,
-      model: (data.transcription as Record<string, unknown> | undefined)?.model as string | undefined,
-    },
+    transcription: parseTranscription(data.transcription as Record<string, unknown> | undefined),
   };
 }
 
@@ -63,7 +75,15 @@ export async function setSettings(partial: Partial<Settings>): Promise<Settings>
     openai: partial.openai ? { ...current.openai, ...partial.openai } : current.openai,
     ollama: partial.ollama ? { ...current.ollama, ...partial.ollama } : current.ollama,
     recording: partial.recording ? { ...current.recording, ...partial.recording } : current.recording,
-    transcription: partial.transcription ? { ...current.transcription, ...partial.transcription } : current.transcription,
+    transcription: partial.transcription
+      ? {
+          ...current.transcription,
+          ...partial.transcription,
+          parakeet: partial.transcription.parakeet
+            ? { ...current.transcription?.parakeet, ...partial.transcription.parakeet }
+            : current.transcription?.parakeet,
+        }
+      : current.transcription,
   };
   await saveSettings(next);
   return next;

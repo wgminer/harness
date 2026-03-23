@@ -6,3 +6,10 @@ import_v2
 dist
 out
 *.tsbuildinfo
+
+# Parakeet setup (prebuild / npm run parakeet:setup)
+build/parakeet-cpp/
+build/parakeet-cache/
+build/parakeet-venv/
+resources/parakeet/*
+!resources/parakeet/.gitkeep

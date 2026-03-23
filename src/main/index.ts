@@ -139,7 +139,7 @@ app.whenReady().then(() => {
     });
   }
 
-  globalShortcut.register("CommandOrControl+Shift+Space", () => {
+  function handleRecordingToggle(): void {
     const win = BrowserWindow.getAllWindows()[0];
     if (!win) return;
     if (!globalRecording) {
@@ -162,7 +162,24 @@ app.whenReady().then(() => {
         win.focus();
       }
     }
-  });
+  }
+
+  // Capslock is unreliable on macOS (often never fires). Use Cmd/Ctrl+Shift+R there; elsewhere try Capslock then fallback.
+  const recordingAccelerators =
+    process.platform === "darwin"
+      ? ["CommandOrControl+Shift+R"]
+      : ["Capslock", "CommandOrControl+Shift+R"];
+
+  let registeredRecording = false;
+  for (const accel of recordingAccelerators) {
+    if (globalShortcut.register(accel, handleRecordingToggle)) {
+      registeredRecording = true;
+      break;
+    }
+  }
+  if (!registeredRecording) {
+    console.error("Harness: failed to register global recording shortcut");
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

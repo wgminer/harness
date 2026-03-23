@@ -44,8 +44,13 @@ export interface Settings {
   };
   transcription?: {
     activeProvider: "openai" | "local";
-    baseUrl?: string;
-    model?: string;
+    /** Parakeet (parakeet.cpp) when activeProvider is "local". */
+    parakeet?: {
+      /** Metal on Apple Silicon; default applied when loading settings on the main process. */
+      useGpu: boolean;
+      /** Half precision; only applies with useGpu. */
+      fp16: boolean;
+    };
   };
 }
 
@@ -93,5 +98,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   transcription: {
     activeProvider: "openai",
+    parakeet: {
+      useGpu: false,
+      fp16: false,
+    },
   },
 };

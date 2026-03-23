@@ -7,13 +7,14 @@
   "description": "Personal all-in-one desktop harness for LLMs (chat, memory, tasks, tools)",
   "scripts": {
     "dev": "electron-vite dev",
-    "prebuild": "npm run icon:icns",
+    "prebuild": "npm run icon:icns && npm run parakeet:setup",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && node scripts/dist-mac.js",
     "dist:mac:replace": "npm run dist:mac -- --replace",
-    "icon:icns": "node build/make-icns.js"
+    "icon:icns": "node build/make-icns.js",
+    "parakeet:setup": "node scripts/setup-parakeet.js"
   },
   "dependencies": {
     "lucide-react": "^0.575.0",

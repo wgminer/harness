@@ -30,8 +30,8 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
   const [ollamaModel, setOllamaModel] = useState(D.ollama!.model);
 
   const [transcriptionProvider, setTranscriptionProvider] = useState<"openai" | "local">(D.transcription!.activeProvider);
-  const [transcriptionBaseUrl, setTranscriptionBaseUrl] = useState(D.transcription?.baseUrl ?? "http://localhost:8080");
-  const [transcriptionModel, setTranscriptionModel] = useState(D.transcription?.model ?? "whisper-1");
+  const [parakeetUseGpu, setParakeetUseGpu] = useState(D.transcription?.parakeet?.useGpu ?? false);
+  const [parakeetFp16, setParakeetFp16] = useState(D.transcription?.parakeet?.fp16 ?? false);
 
   const [autoSend, setAutoSend] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -56,8 +56,8 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
       setOllamaModel(S.ollama?.model ?? D.ollama!.model);
       setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
       setTranscriptionProvider(S.transcription?.activeProvider ?? D.transcription!.activeProvider);
-      setTranscriptionBaseUrl(S.transcription?.baseUrl ?? D.transcription?.baseUrl ?? "http://localhost:8080");
-      setTranscriptionModel(S.transcription?.model ?? D.transcription?.model ?? "whisper-1");
+      setParakeetUseGpu(S.transcription?.parakeet?.useGpu ?? D.transcription?.parakeet?.useGpu ?? false);
+      setParakeetFp16(S.transcription?.parakeet?.fp16 ?? D.transcription?.parakeet?.fp16 ?? false);
     });
     window.electron.memory.getUserMemory().then(setUserMemory);
   }, []);
@@ -76,8 +76,7 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
         recording: { autoSend },
         transcription: {
           activeProvider: transcriptionProvider,
-          baseUrl: transcriptionBaseUrl,
-          model: transcriptionModel,
+          parakeet: { useGpu: parakeetUseGpu, fp16: parakeetFp16 },
         },
       });
       setSaveStatus("saved");
@@ -94,7 +93,7 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
         hideToastRef.current = null;
       }
     };
-  }, [activeProvider, apiKey, model, ollamaBaseUrl, ollamaModel, autoSend, transcriptionProvider, transcriptionBaseUrl, transcriptionModel]);
+  }, [activeProvider, apiKey, model, ollamaBaseUrl, ollamaModel, autoSend, transcriptionProvider, parakeetUseGpu, parakeetFp16]);
 
   const addMemory = async () => {
     if (!newMemTitle.trim()) return;
@@ -227,31 +226,40 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
                 onChange={(e) => setTranscriptionProvider(e.target.value as "openai" | "local")}
               >
                 <option value="openai">OpenAI Whisper</option>
-                <option value="local">Local Whisper server</option>
+                <option value="local">Local (Parakeet)</option>
               </select>
             </div>
             {transcriptionProvider === "local" && (
               <>
-                <div className="settings-section">
-                  <label>Base URL</label>
+                <div className="settings-toggle-row">
                   <input
-                    type="text"
-                    value={transcriptionBaseUrl}
-                    onChange={(e) => setTranscriptionBaseUrl(e.target.value)}
-                    placeholder="http://localhost:8080"
+                    id="parakeetGpuToggle"
+                    type="checkbox"
+                    checked={parakeetUseGpu}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setParakeetUseGpu(v);
+                      if (!v) setParakeetFp16(false);
+                    }}
                   />
+                  <label htmlFor="parakeetGpuToggle">Use GPU (Metal on Apple Silicon)</label>
                 </div>
-                <div className="settings-section">
-                  <label>Model</label>
+                <div className="settings-toggle-row">
                   <input
-                    type="text"
-                    value={transcriptionModel}
-                    onChange={(e) => setTranscriptionModel(e.target.value)}
-                    placeholder="whisper-1"
+                    id="parakeetFp16Toggle"
+                    type="checkbox"
+                    checked={parakeetFp16}
+                    onChange={(e) => setParakeetFp16(e.target.checked)}
+                    disabled={!parakeetUseGpu}
                   />
+                  <label htmlFor="parakeetFp16Toggle">FP16 (half precision; requires GPU)</label>
                 </div>
                 <p className="settings-group__hint settings-group__hint--flush">
-                  Requires a local server exposing <code>/v1/audio/transcriptions</code> (e.g. whisper.cpp with <code>--server</code>, or faster-whisper-server).
+                  Uses NVIDIA Parakeet TDT 0.6B via{" "}
+                  <a href="https://github.com/Frikallo/parakeet.cpp" target="_blank" rel="noreferrer">
+                    parakeet.cpp
+                  </a>
+                  . Bundled by <code>prebuild</code> when you run <code>npm run build</code>; or run <code>npm run parakeet:setup</code> alone (see BUILD.md).
                 </p>
               </>
             )}

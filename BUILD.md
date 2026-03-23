@@ -4,12 +4,13 @@
 |---------|----------------|
 | `npm install` | Install project dependencies. |
 | `npm run dev` | Run the app in development mode with hot reload. |
-| `npm run build` | Compile the renderer and main process for production. |
+| `npm run build` | Runs **`prebuild`** first: `icon:icns` then `parakeet:setup` (macOS; no-op / skip on other platforms or when Parakeet is already present), then compiles the renderer and main process. |
 | `npm run preview` | Preview the production build locally. |
 | `npm run dist` | Build, then run electron-builder for the **current OS** (on macOS, Mac DMG/zip—similar output to `dist:mac` here). |
-| `npm run dist:mac` | Build, then `electron-builder --mac` via `scripts/dist-mac.js` (explicit Mac target; same signing/notarization as below). Use this for the documented flow and for `--replace`. |
+| `npm run dist:mac` | Build and sign the Mac app (`electron-builder --mac`). Use for the main Mac build and with `--replace`. |
 | `npm run dist:mac:replace` | `dist:mac` with `--replace`: copy the built `.app` into `/Applications`. |
 | `npm run icon:icns` | Generate `build/icon.icns` from the project icon assets. |
+| `npm run parakeet:setup` | **(macOS)** Clone/build [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp), download NVIDIA Parakeet TDT 0.6B v3 (`.nemo`), convert to `model.safetensors` + `vocab.txt`, and copy the CLI + weights into `resources/parakeet/`. Needs **CMake**, **Python 3.12+** (e.g. `brew install python@3.12`), Xcode CLT, `git`, `curl`. Large download. |
 
 This guide walks you through creating a double-clickable, signed (and optionally notarized) Mac app using your Apple Developer account.
 
@@ -19,8 +20,31 @@ This guide walks you through creating a double-clickable, signed (and optionally
 
 ```bash
 npm install
-npm run icon:icns   # already done if you have build/icon.icns
 ```
+
+**Parakeet / parakeet.cpp:** install **CMake** so `cmake` is on your `PATH` (Apple does not ship it with Xcode CLT). Homebrew: `brew install cmake`. You also need Xcode Command Line Tools (`xcode-select --install`) for `make` and a C++ compiler. The build compiles **Metal** shaders; if `make build` fails with missing `metal` or “Metal Toolchain”, run **`xcodebuild -downloadComponent MetalToolchain`** (use `sudo` if required) or install **Xcode** from the App Store, then retry `npm run parakeet:setup`.
+
+NeMo conversion scripts require **Python 3.12+** (they use `tarfile.extract(..., filter=…)`). macOS’s default `python3` is often 3.9 — install a newer Python, e.g. **`brew install python@3.12`**, and ensure `python3.12` is on your `PATH`. The setup script recreates `build/parakeet-venv` if it was made with an older Python.
+
+`npm run build` (and anything that runs it, e.g. `dist:mac`) automatically runs **`prebuild`**: icon generation, then Parakeet setup on macOS. The first Parakeet run can take a long time and needs several GB free; later builds skip when `resources/parakeet/` is complete. Set `PARAKEET_FORCE=1` to redo Parakeet. `resources/parakeet/*` is gitignored except `.gitkeep`.
+
+### Local Parakeet transcription (optional)
+
+Voice transcription can use **NVIDIA Parakeet TDT 0.6B** via [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp) instead of the OpenAI Whisper API. **`parakeet:setup`** runs as part of **`prebuild`**; you can also run it alone:
+
+```bash
+npm run parakeet:setup
+```
+
+It clones `parakeet.cpp` under `build/parakeet-cpp`, runs `make build`, downloads the Hugging Face `parakeet-tdt-0.6b-v3.nemo` into `build/parakeet-cache`, creates `build/parakeet-venv` and installs `torch` + `safetensors`, runs `convert_nemo.py` and `extract_vocab.py`, then copies `parakeet`, `model.safetensors`, and `vocab.txt` into `resources/parakeet/`.
+
+**Manual copy** (skip download/build): put the three files in a folder and run:
+
+```bash
+PARAKEET_SOURCE_DIR=/path/to/folder npm run parakeet:setup
+```
+
+Or set `PARAKEET_BIN`, `PARAKEET_WEIGHTS`, and `PARAKEET_VOCAB`. Packaged apps load assets from `Contents/Resources/parakeet/` (`electron-builder.js` `extraResources`).
 
 ---
 

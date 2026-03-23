@@ -4,7 +4,8 @@ const pkg = require("./package.json");
 module.exports = {
   appId: "com.yourcompany.harness",
   productName: "Harness",
-  files: ["out", "resources", "package.json"],
+  files: ["out", "resources", "!resources/parakeet/**", "package.json"],
+  extraResources: [{ from: "resources/parakeet", to: "parakeet" }],
   artifactName: "${name}-v${version}-${os}.${ext}",
   mac: {
     category: "public.app-category.utilities",
