@@ -144,7 +144,62 @@ You can double‑click `Harness.app` in `dist/mac-*` or the DMG to install and o
 
 ---
 
-## 7. Optional: Customize app id and name
+## 8. Automated distribution website (GitHub Releases + Pages)
+
+This repo can publish a DMG download website automatically from tags.
+
+### One-command release
+
+Run:
+
+```bash
+npm run release
+```
+
+The command:
+
+1. Verifies your git working tree is clean.
+2. Asks whether this is a `patch`, `minor`, or `major` release.
+3. Shows current -> next version and asks for confirmation (`Continue? y/N`).
+4. Runs `npm run dist:mac`.
+5. Runs `npm version <type>` to create the version commit and `vX.Y.Z` tag.
+6. Pushes commit + tag to GitHub.
+
+Pushing the tag triggers GitHub Actions to build release assets and deploy the download site.
+
+### GitHub Actions workflows
+
+- `.github/workflows/release.yml`: on tag push (`v*`), builds mac artifacts and publishes DMG/ZIP to GitHub Releases.
+- `.github/workflows/pages.yml`: reads the latest release DMG metadata and deploys `site/` to GitHub Pages.
+
+### Required GitHub secrets
+
+Set these repository secrets so the release workflow can sign/notarize:
+
+- `CSC_LINK`
+- `CSC_KEY_PASSWORD`
+- `APPLE_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+- `APPLE_TEAM_ID`
+
+### GitHub Pages setup
+
+1. In GitHub repo settings, open **Pages**.
+2. Set **Source** to **GitHub Actions**.
+3. Run a release (`npm run release`) or manually run the **Deploy Download Site** workflow once.
+
+### Manual fallback
+
+If needed, you can still tag and push manually:
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+---
+
+## 9. Optional: Customize app id and name
 
 In `electron-builder.js`:
 

@@ -16,6 +16,7 @@
     "icon:icns": "node build/make-icns.js",
     "parakeet:setup": "node scripts/setup-parakeet.js",
     "build:fn-monitor": "bash scripts/build-fn-monitor.sh",
+    "release": "node scripts/release.js",
     "test": "vitest run",
     "test:e2e": "electron-vite build && playwright test",
     "test:e2e:ui": "electron-vite build && playwright test --ui"
