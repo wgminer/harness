@@ -34,6 +34,7 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
   const [parakeetFp16, setParakeetFp16] = useState(D.transcription?.parakeet?.fp16 ?? false);
 
   const [autoSend, setAutoSend] = useState(true);
+  const [scrollOnStream, setScrollOnStream] = useState(D.chat!.scrollOnStream);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [userMemory, setUserMemory] = useState<Record<string, string>>({});
   const [newMemTitle, setNewMemTitle] = useState("");
@@ -42,6 +43,10 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
   const [importing, setImporting] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [isMac] = useState(
+    () => typeof navigator !== "undefined" && navigator.platform.startsWith("Mac")
+  );
+  const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
   const skipNextSaveRef = useRef(true);
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
@@ -55,12 +60,18 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
       setOllamaBaseUrl(S.ollama?.baseUrl ?? D.ollama!.baseUrl);
       setOllamaModel(S.ollama?.model ?? D.ollama!.model);
       setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
+      setScrollOnStream(S.chat?.scrollOnStream ?? D.chat!.scrollOnStream);
       setTranscriptionProvider(S.transcription?.activeProvider ?? D.transcription!.activeProvider);
       setParakeetUseGpu(S.transcription?.parakeet?.useGpu ?? D.transcription?.parakeet?.useGpu ?? false);
       setParakeetFp16(S.transcription?.parakeet?.fp16 ?? D.transcription?.parakeet?.fp16 ?? false);
     });
     window.electron.memory.getUserMemory().then(setUserMemory);
   }, []);
+
+  useEffect(() => {
+    if (!isMac) return;
+    void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+  }, [isMac]);
 
   useEffect(() => {
     if (skipNextSaveRef.current) {
@@ -74,6 +85,7 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
         openai: { apiKey, model },
         ollama: { baseUrl: ollamaBaseUrl, model: ollamaModel },
         recording: { autoSend },
+        chat: { scrollOnStream },
         transcription: {
           activeProvider: transcriptionProvider,
           parakeet: { useGpu: parakeetUseGpu, fp16: parakeetFp16 },
@@ -93,7 +105,7 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
         hideToastRef.current = null;
       }
     };
-  }, [activeProvider, apiKey, model, ollamaBaseUrl, ollamaModel, autoSend, transcriptionProvider, parakeetUseGpu, parakeetFp16]);
+  }, [activeProvider, apiKey, model, ollamaBaseUrl, ollamaModel, autoSend, scrollOnStream, transcriptionProvider, parakeetUseGpu, parakeetFp16]);
 
   const addMemory = async () => {
     if (!newMemTitle.trim()) return;
@@ -140,7 +152,7 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
   return (
     <div className="settings-page">
       <header className={`settings-header ${headerScrolled ? "settings-header--scrolled" : ""}`}>
-        <button type="button" className="settings-back-btn btn" onClick={onBack}>
+        <button type="button" className="settings-back-btn btn" data-testid="settings-back" onClick={onBack}>
           <ArrowLeft size={18} />
           <span className="settings-back-label">Back</span>
         </button>
@@ -265,6 +277,61 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
             )}
           </section>
 
+          {isMac && (
+            <section className="settings-group">
+              <h3 className="settings-group__title">Global voice shortcut (Fn)</h3>
+              <p className="settings-group__lead">
+                Tap <strong>Fn</strong> once to start recording, then tap <strong>Fn</strong> again to stop and
+                transcribe. This requires{" "}
+                <strong>Accessibility</strong> for Harness (and the small <code>HarnessFnMonitor</code> helper
+                if macOS lists it separately).
+              </p>
+              <p className="settings-group__hint settings-group__hint--flush">
+                After enabling, <strong>quit and reopen Harness</strong> so the Fn listener can attach. If
+                nothing happens when you press Fn, use the buttons below — macOS does not always show a prompt
+                automatically.
+              </p>
+              <div className="settings-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="settings-accessibility-prompt"
+                  onClick={() => {
+                    void window.electron.system.requestAccessibilityPrompt();
+                    setTimeout(() => {
+                      void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+                    }, 800);
+                  }}
+                >
+                  Show permission prompt
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="settings-open-accessibility"
+                  onClick={() => {
+                    void window.electron.system.openAccessibilitySettings();
+                    setTimeout(() => {
+                      void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+                    }, 1500);
+                  }}
+                >
+                  Open Accessibility settings
+                </button>
+              </div>
+              {accessibilityTrusted === true ? (
+                <p className="settings-group__hint settings-group__hint--flush">
+                  Harness reports Accessibility as trusted. If Fn still does nothing, confirm{" "}
+                  <code>HarnessFnMonitor</code> is also allowed, then restart the app.
+                </p>
+              ) : (
+                <p className="settings-group__hint settings-group__hint--flush">
+                  Status: {accessibilityTrusted === false ? "not trusted yet (or helper still blocked)" : "checking…"}
+                </p>
+              )}
+            </section>
+          )}
+
           <section className="settings-group">
             <h3 className="settings-group__title">Recordings folder</h3>
             <p className="settings-group__lead">
@@ -282,6 +349,23 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
           </section>
 
           <section className="settings-group">
+            <h3 className="settings-group__title">Chat</h3>
+            <p className="settings-group__lead">
+              While the assistant is generating a reply, keep the transcript scrolled to the bottom so new text stays in view. Turn off if you prefer to read earlier messages without the view moving.
+            </p>
+            <div className="settings-toggle-row">
+              <input
+                id="scrollOnStreamToggle"
+                data-testid="settings-scroll-on-stream"
+                type="checkbox"
+                checked={scrollOnStream}
+                onChange={(e) => setScrollOnStream(e.target.checked)}
+              />
+              <label htmlFor="scrollOnStreamToggle">Scroll as the reply streams in</label>
+            </div>
+          </section>
+
+          <section className="settings-group">
             <h3 className="settings-group__title">Auto-send</h3>
             <p className="settings-group__lead">
               After a voice recording finishes in a new conversation, automatically send the transcription as a new message.
@@ -289,6 +373,7 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
             <div className="settings-toggle-row">
               <input
                 id="autoSendToggle"
+                data-testid="settings-auto-send"
                 type="checkbox"
                 checked={autoSend}
                 onChange={(e) => setAutoSend(e.target.checked)}

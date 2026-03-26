@@ -260,6 +260,53 @@ async function searchMemoryConversations(args: Record<string, unknown>): Promise
   };
 }
 
+function getDatetime(args: Record<string, unknown>): Record<string, string | number> {
+  const now = new Date();
+  const requested = String(args.timezone ?? "").trim();
+  let timezone: string;
+  try {
+    if (requested) {
+      new Intl.DateTimeFormat("en-US", { timeZone: requested }).format(now);
+      timezone = requested;
+    } else {
+      timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+  } catch {
+    return { error: `Invalid timezone: ${requested}` };
+  }
+
+  const utc_iso = now.toISOString();
+  const epoch_ms = now.getTime();
+
+  const offsetFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    timeZoneName: "longOffset",
+  });
+  const offset =
+    offsetFormatter.formatToParts(now).find((p) => p.type === "timeZoneName")?.value ?? "";
+
+  const calParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (t: string) => calParts.find((p) => p.type === t)?.value ?? "";
+  const local_iso = `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`;
+
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    timeZone: timezone,
+    dateStyle: "full",
+    timeStyle: "long",
+  }).format(now);
+
+  return { epoch_ms, utc_iso, timezone, offset, local_iso, formatted };
+}
+
 export function isAssistantToolName(name: string): boolean {
   return [
     "task_list",
@@ -270,6 +317,7 @@ export function isAssistantToolName(name: string): boolean {
     "memory_set_fact",
     "memory_list_facts",
     "memory_search_conversations",
+    "get_datetime",
   ].includes(name);
 }
 
@@ -291,6 +339,8 @@ export async function executeAssistantTool(name: string, args: Record<string, un
       return JSON.stringify(await listMemoryFacts());
     case "memory_search_conversations":
       return JSON.stringify(await searchMemoryConversations(args));
+    case "get_datetime":
+      return JSON.stringify(getDatetime(args));
     default:
       return JSON.stringify({ error: `Unknown assistant tool: ${name}` });
   }

@@ -276,6 +276,9 @@ export default function App() {
     const unsub = window.electron.recording.onStartSilent(async () => {
       hotkeyCancelledRef.current = false;
       hotkeyRecordingRef.current = true;
+      if (await window.electron.env.isHarnessE2E()) {
+        return;
+      }
       try {
         await hotkeyRecorder.start();
       } catch (_) {
@@ -291,12 +294,16 @@ export default function App() {
     const unsub = window.electron.recording.onStopAndPaste(async (wasFocused: boolean) => {
       hotkeyRecordingRef.current = false;
       try {
-        const wav = await hotkeyRecorder.stop();
+        const wav = (await window.electron.env.isHarnessE2E())
+          ? new ArrayBuffer(0)
+          : await hotkeyRecorder.stop();
         if (hotkeyCancelledRef.current) return;
         window.electron.recording.saveWav(wav).catch(() => {});
         const result = await window.electron.recording.transcribe(wav);
         if (hotkeyCancelledRef.current) return;
         if (!("error" in result)) {
+          const text = result.text.trim();
+          if (!text) return;
           if (wasFocused) {
             let targetId = conversationIdRef.current;
             if (!targetId) {
@@ -306,11 +313,11 @@ export default function App() {
             }
             setView("chat");
             setPendingHotkeyDraftOnly(false);
-            setPendingHotkeyText(result.text);
+            setPendingHotkeyText(text);
           } else {
-            await window.electron.recording.pasteText(result.text);
+            await window.electron.recording.pasteText(text);
             const newId = await window.electron.memory.createConversation();
-            await window.electron.memory.appendMessage(newId, "user", result.text, { timestamp: Date.now() });
+            await window.electron.memory.appendMessage(newId, "user", text, { timestamp: Date.now() });
             const voiceTitle = await window.electron.memory.setVoiceDictationTitle(newId);
             setConversations((prev) => [{ id: newId, title: voiceTitle, createdAt: Date.now() }, ...prev]);
             setConversationId(newId);
@@ -475,9 +482,15 @@ export default function App() {
           </div>
         ) : (
           <div className="sidebar-buttons">
-            <button type="button" className="btn mr-auto" onClick={createNew}>
-              <Plus size={18} style={{ marginRight: 6 }} />
-              New
+            <button
+              type="button"
+              className="btn mr-auto sidebar-new-chat-btn"
+              data-testid="sidebar-new-chat"
+              aria-label="New chat"
+              onClick={createNew}
+            >
+              <Plus size={18} className="sidebar-new-chat-icon" aria-hidden />
+              <span className="sidebar-new-chat-label">New</span>
             </button>
             <button
               ref={searchButtonRef}
@@ -496,7 +509,13 @@ export default function App() {
             >
               <ListTodo size={18} />
             </button>
-            <button type="button" className="btn btn-icon" onClick={() => setView("settings")} aria-label="Settings">
+            <button
+              type="button"
+              className="btn btn-icon"
+              data-testid="sidebar-settings"
+              onClick={() => setView("settings")}
+              aria-label="Settings"
+            >
               <Settings size={18} />
             </button>
             <button
@@ -559,6 +578,8 @@ export default function App() {
                         <li
                           key={c.id}
                           className={`sidebar-item ${conversationId === c.id ? "active" : ""}`}
+                          data-testid="sidebar-conversation"
+                          data-conversation-id={c.id}
                           onClick={() => { setConversationId(c.id); setView("chat"); }}
                           aria-busy={rowBusy ? true : undefined}
                         >

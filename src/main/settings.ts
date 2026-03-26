@@ -48,6 +48,12 @@ function parseSettings(data: Record<string, unknown>): Settings {
     recording: {
       autoSend: (data.recording as Record<string, unknown> | undefined)?.autoSend as boolean ?? D.recording!.autoSend,
     },
+    chat: {
+      scrollOnStream:
+        typeof (data.chat as Record<string, unknown> | undefined)?.scrollOnStream === "boolean"
+          ? ((data.chat as Record<string, unknown>).scrollOnStream as boolean)
+          : D.chat!.scrollOnStream,
+    },
     transcription: parseTranscription(data.transcription as Record<string, unknown> | undefined),
   };
 }
@@ -75,6 +81,7 @@ export async function setSettings(partial: Partial<Settings>): Promise<Settings>
     openai: partial.openai ? { ...current.openai, ...partial.openai } : current.openai,
     ollama: partial.ollama ? { ...current.ollama, ...partial.ollama } : current.ollama,
     recording: partial.recording ? { ...current.recording, ...partial.recording } : current.recording,
+    chat: partial.chat ? { ...(current.chat ?? D.chat), ...partial.chat } : (current.chat ?? D.chat),
     transcription: partial.transcription
       ? {
           ...current.transcription,

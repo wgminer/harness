@@ -12,6 +12,7 @@ import {
   patchConversationMeta,
   getMessages,
 } from "./memory";
+import { isHarnessE2E } from "./e2eStub";
 
 const CONTEXT_MAX_CHARS = 2400;
 const REFINE_EVERY = 4;
@@ -52,6 +53,7 @@ function buildContext(messages: ChatMessage[]): string {
  * Never touches user-set or imported titles.
  */
 export function scheduleConversationTitleRefinement(conversationId: string, provider: LLMProvider): void {
+  if (isHarnessE2E()) return;
   void (async () => {
     let notifiedStart = false;
     try {

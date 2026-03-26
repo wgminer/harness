@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import type { UIEvent, WheelEvent } from "react";
 import { Copy, Check, Mic, Square, Loader2, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -67,8 +68,37 @@ function toolLabel(name: string): string {
     memory_set_fact: "Updated memory",
     memory_list_facts: "Listed memories",
     memory_search_conversations: "Searched history",
+    get_datetime: "Checked date & time",
   };
   return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/** Secondary line for tool cards (e.g. task title after create/update). */
+function toolCallDetail(toolName: string, payload: unknown): string | null {
+  if (payload == null || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+
+  if (p.pending === true && p.args && typeof p.args === "object") {
+    const args = p.args as Record<string, unknown>;
+    if (toolName === "task_update" && typeof args.title === "string" && args.title.trim()) {
+      return args.title.trim();
+    }
+    return null;
+  }
+  if (p.cancelled === true) return null;
+
+  if (toolName === "task_create" || toolName === "task_update") {
+    if (typeof p.error === "string" && p.error) return p.error;
+    const ids = p.affectedIds as string[] | undefined;
+    const tasks = p.tasks as Array<{ id: string; title: string }> | undefined;
+    if (ids?.length && Array.isArray(tasks)) {
+      const id = ids[0];
+      const t = tasks.find((x) => x.id === id);
+      if (t?.title) return t.title;
+    }
+  }
+
+  return null;
 }
 
 function CopyButton({ content, messageIndex, copiedIndex, onCopied }: { content: string; messageIndex: number; copiedIndex: number | null; onCopied: (i: number | null) => void }) {
@@ -96,6 +126,8 @@ function CopyButton({ content, messageIndex, copiedIndex, onCopied }: { content:
 }
 
 const SCROLL_TOP_THRESHOLD = 24;
+/** If the viewport is within this many px of the bottom, streaming updates keep it pinned there. */
+const STREAM_NEAR_BOTTOM_PX = 120;
 
 type VoiceState = "idle" | "recording" | "processing";
 
@@ -115,6 +147,7 @@ export function ChatView({
   const [expandedUserCards, setExpandedUserCards] = useState<Set<number>>(new Set());
   const [overflowedUserCards, setOverflowedUserCards] = useState<Set<number>>(new Set());
   const [hasScrolled, setHasScrolled] = useState(false);
+  const [scrollOnStream, setScrollOnStream] = useState(true);
   const userCardContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [activeChatModel, setActiveChatModel] = useState("");
   const [streamingMeta, setStreamingMeta] = useState<{ model: string; startedAt: number } | null>(null);
@@ -131,7 +164,9 @@ export function ChatView({
 
   /** Tool calls for the assistant turn currently being streamed; shown inline and then stored on the message when stream ends. */
   const [currentTurnToolCalls, setCurrentTurnToolCalls] = useState<ToolCallDisplay[]>([]);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const prevSendingRef = useRef(false);
+  /** True while the user is following the latest content (updated on scroll; not inferred from layout after content grows). */
+  const stickToBottomRef = useRef(true);
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const streamingContentRef = useRef("");
@@ -163,12 +198,18 @@ export function ChatView({
 
   useEffect(() => {
     window.electron.settings.get().then((s) => {
-      const settings = s as { activeProvider: string; openai?: { model?: string }; ollama?: { model?: string } };
+      const settings = s as {
+        activeProvider: string;
+        openai?: { model?: string };
+        ollama?: { model?: string };
+        chat?: { scrollOnStream?: boolean };
+      };
       const m =
         settings.activeProvider === "ollama"
           ? (settings.ollama?.model ?? "")
           : (settings.openai?.model ?? "");
       setActiveChatModel(m);
+      setScrollOnStream(settings.chat?.scrollOnStream ?? true);
     });
   }, [conversationId]);
 
@@ -204,6 +245,8 @@ export function ChatView({
     }
     setVoiceState("idle");
     setStreamingMeta(null);
+    prevSendingRef.current = false;
+    stickToBottomRef.current = true;
 
     let cancelled = false;
     window.electron.memory.getMessages(conversationId).then((list) => {
@@ -253,6 +296,33 @@ export function ChatView({
           },
         ]
       : messages;
+
+  const scrollChatToBottom = useCallback(() => {
+    const el = chatAreaRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight - el.clientHeight;
+  }, []);
+
+  /** When a reply starts, follow the new turn (if setting is on). */
+  useLayoutEffect(() => {
+    if (scrollOnStream && sending && !prevSendingRef.current) {
+      stickToBottomRef.current = true;
+      scrollChatToBottom();
+    }
+    prevSendingRef.current = sending;
+  }, [sending, scrollOnStream, scrollChatToBottom]);
+
+  /**
+   * While streaming, keep the viewport pinned only when the user is still following the stream.
+   * We cannot infer "near bottom" from scroll metrics after content grows (scrollHeight increases but scrollTop is unchanged).
+   */
+  useLayoutEffect(() => {
+    if (!scrollOnStream || !sending || !stickToBottomRef.current) return;
+    scrollChatToBottom();
+    // Second pass: markdown/layout can change scrollHeight after the first paint.
+    const id = requestAnimationFrame(() => scrollChatToBottom());
+    return () => cancelAnimationFrame(id);
+  }, [streamingContent, currentTurnToolCalls, displayMessages, sending, scrollOnStream, scrollChatToBottom]);
 
   useLayoutEffect(() => {
     const next = new Set<number>();
@@ -314,10 +384,25 @@ export function ChatView({
     adjustInputHeight();
   }, [input, adjustInputHeight]);
 
-  const onChatAreaScroll = useCallback(() => {
+  const onChatAreaScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
     const el = chatAreaRef.current;
-    setHasScrolled(!!el && el.scrollTop > SCROLL_TOP_THRESHOLD);
+    if (!el) return;
+    setHasScrolled(el.scrollTop > SCROLL_TOP_THRESHOLD);
+    // Programmatic scrollTop updates also fire `scroll` with isTrusted false; ignore those so we
+    // don't flip back to "following" after the user scrolled away.
+    if (!e.nativeEvent.isTrusted) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distFromBottom <= STREAM_NEAR_BOTTOM_PX;
   }, []);
+
+  /** Wheel runs before layout; clears follow immediately so the next stream chunk can't scroll first. */
+  const onChatWheelCapture = useCallback((e: WheelEvent<HTMLDivElement>) => {
+    if (!scrollOnStream || !sending) return;
+    if (!e.nativeEvent.isTrusted) return;
+    // Standard wheel: negative deltaY = scroll toward older messages (up). Ignore mostly-horizontal trackpad pans.
+    if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+    if (e.deltaY < 0) stickToBottomRef.current = false;
+  }, [scrollOnStream, sending]);
 
   const scrollToTop = useCallback(() => {
     chatAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -452,11 +537,13 @@ export function ChatView({
       if ("error" in result) {
         setVoiceError(result.error);
       } else {
+        const text = result.text.trim();
+        if (!text) return;
         const s = await window.electron.settings.get() as { recording?: { autoSend: boolean } };
         if (s.recording?.autoSend ?? true) {
-          sendTextRef.current(result.text);
+          sendTextRef.current(text);
         } else {
-          setInput((prev) => (prev ? prev + " " + result.text : result.text));
+          setInput((prev) => (prev ? prev + " " + text : text));
         }
       }
     } catch (err) {
@@ -491,6 +578,7 @@ export function ChatView({
       className="chat-scroll"
       data-scrolled={hasScrolled || undefined}
       onScroll={onChatAreaScroll}
+      onWheelCapture={onChatWheelCapture}
     >
       {hasScrolled && (
         <button
@@ -503,7 +591,7 @@ export function ChatView({
         </button>
       )}
       <div className="chat-area">
-        <div className="chat-area-inner">
+        <div className="chat-area-inner" data-testid="chat-messages">
           {displayMessages.map((m, i) => {
             const isAssistant = m.role === "assistant";
             const hasToolCalls = isAssistant && m.toolCalls && m.toolCalls.length > 0;
@@ -534,9 +622,17 @@ export function ChatView({
                           {m.toolCalls!.map((call, j) => {
                             const p = call.payload as { pending?: boolean } | undefined;
                             const isPending = !!p?.pending;
+                            const detail = toolCallDetail(call.toolName, call.payload);
                             return (
                               <div key={j} className="tool-card-row">
-                                <span className="tool-card-label">{toolLabel(call.toolName)}</span>
+                                <div className="tool-card-row-text">
+                                  <span className="tool-card-label">{toolLabel(call.toolName)}</span>
+                                  {detail ? (
+                                    <span className="tool-card-detail" title={detail}>
+                                      {detail}
+                                    </span>
+                                  ) : null}
+                                </div>
                                 {isPending && (
                                   <span className="tool-card-actions">
                                     <button
@@ -610,16 +706,16 @@ export function ChatView({
                 )}
               </div>
             )}
-          <div ref={bottomRef} />
         </div>
       </div>
-      <div className="input-container input-container--sticky">
+      <div className="input-container input-container--sticky" data-testid="chat-composer">
         {voiceError && (
           <div className="voice-error">{voiceError}</div>
         )}
         <textarea
           ref={inputRef}
           className="chat-input"
+          data-testid="chat-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -687,6 +783,7 @@ export function ChatView({
             <button
               type="button"
               className="btn btn-primary"
+              data-testid="chat-send"
               onClick={send}
               disabled={!input.trim()}
             >

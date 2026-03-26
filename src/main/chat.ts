@@ -8,6 +8,7 @@ import { executeFileTool } from "./fileTools";
 import { executeCustomizationTool } from "./customization";
 import { executeAssistantTool, isAssistantToolName } from "./assistantTools";
 import type { ChatMessage, Settings } from "../shared/types";
+import { HARNESS_E2E_ASSISTANT_REPLY, isHarnessE2E } from "./e2eStub";
 
 function activeChatModel(settings: Settings): string {
   return settings.activeProvider === "ollama"
@@ -39,7 +40,7 @@ async function buildMessageList(conversationId: string, userContent?: string): P
       : "";
 
   const systemPrompt =
-    "Helpful assistant running in a local desktop app. Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent task list visible in a dedicated panel); and memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations). Call them when appropriate."
+    "Helpful assistant running in a local desktop app. Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent task list visible in a dedicated panel); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); and get_datetime (for the current date and time, optionally in a specific IANA timezone). Call them when appropriate."
     + (memoryBlock ? "\n\n" + memoryBlock : "");
 
   const history = await getMessages(conversationId);
@@ -111,6 +112,19 @@ async function executeTool(
 async function streamAssistantReply(conversationId: string, messages: ChatMessage[]): Promise<void> {
   const settings = await getSettings();
   const provider = getProvider(settings);
+
+  if (isHarnessE2E()) {
+    const win = getMainWindow();
+    const modelLabel = activeChatModel(settings);
+    const synthetic = HARNESS_E2E_ASSISTANT_REPLY;
+    win?.webContents.send("chat:streamChunk", conversationId, synthetic);
+    win?.webContents.send("chat:streamEnd", conversationId);
+    await appendMessage(conversationId, "assistant", synthetic, {
+      timestamp: Date.now(),
+      model: modelLabel,
+    });
+    return;
+  }
 
   if (settings.activeProvider === "openai" && !settings.openai?.apiKey) {
     throw new Error("OpenAI API key not set. Configure it in Settings.");

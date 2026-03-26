@@ -4,6 +4,7 @@ import { join } from "path";
 import { exec } from "child_process";
 import { getSettings } from "./settings";
 import { getTranscriptionProvider } from "./providers/transcriptionRegistry";
+import { HARNESS_E2E_TRANSCRIBE_TEXT, isHarnessE2E } from "./e2eStub";
 
 function getRecordingsDir(): string {
   return join(app.getPath("userData"), "recordings");
@@ -55,6 +56,10 @@ export function registerRecordingHandlers(): void {
   });
 
   ipcMain.handle("recording:transcribe", async (_e, data: ArrayBuffer) => {
+    if (isHarnessE2E()) {
+      void data;
+      return { text: HARNESS_E2E_TRANSCRIBE_TEXT };
+    }
     const settings = await getSettings();
     const isOpenAI = (settings.transcription?.activeProvider ?? "openai") === "openai";
     if (isOpenAI && !settings.openai?.apiKey) {

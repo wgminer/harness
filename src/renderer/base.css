@@ -195,8 +195,23 @@ hr {
   justify-content: center;
 }
 
-.app[data-window-size="small"] .sidebar-buttons .mr-auto {
+.app[data-window-size="small"] .sidebar-buttons .sidebar-new-chat-btn.mr-auto {
+  margin-right: 0;
+}
+
+.app[data-window-size="small"] .sidebar-new-chat-label {
   display: none;
+}
+
+.app[data-window-size="small"] .sidebar-new-chat-icon {
+  margin-right: 0;
+}
+
+.app[data-window-size="small"] .sidebar-new-chat-btn {
+  padding: var(--space-unit);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .app[data-sidebar="right"] .sidebar {
@@ -351,6 +366,11 @@ hr {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.sidebar-new-chat-btn .sidebar-new-chat-icon {
+  margin-right: 6px;
+  flex-shrink: 0;
 }
 
 .sidebar-search-row {
@@ -537,10 +557,16 @@ hr {
 }
 
 .tool-card-row {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  padding: 2px 0;
+  padding:  0 0 0;
+}
+
+.tool-card-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
 .tool-card-row:not(:last-child) {
@@ -548,17 +574,33 @@ hr {
 }
 
 .tool-card-label {
+  font-size: 10px;
+  line-height: 1.35;
   color: var(--fg-muted);
+}
+
+.tool-card-detail {
+  color: var(--fg);
+  font-weight: 400;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .tool-card-actions {
   display: flex;
   gap: 6px;
+  margin-top: 8px;
 }
 
 .btn-sm {
   font-size: 11px;
   padding: 2px 8px;
+  height: 24px;
+  min-height: 24px;
 }
 
 .chat-scroll-top {
@@ -690,7 +732,7 @@ hr {
 
 .chat-input {
   width: 100%;
-  font-family: var(--font-mono);
+  font-family: var(--font-family);
   font-size: 14px;
   background: transparent;
   color: var(--fg);

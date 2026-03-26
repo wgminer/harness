@@ -31,6 +31,13 @@ function parseParakeetTranscriptStdout(raw: string): string {
   return s.trim();
 }
 
+function parseParakeetTokenCount(raw: string): number | null {
+  const match = raw.match(/---\s*Transcription\s*\((\d+)\s+tokens?\)\s*---/i);
+  if (!match) return null;
+  const n = Number.parseInt(match[1], 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 function runParakeetCli(exe: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
     const child = spawn(exe, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -92,10 +99,14 @@ export function createParakeetTranscriptionProvider(settings: Settings): Transcr
         }
 
         const { stdout, stderr, code } = await runParakeetCli(exe, args);
+        const tokenCount = parseParakeetTokenCount(stdout);
         const text = parseParakeetTranscriptStdout(stdout);
         if (code !== 0) {
           const detail = stderr.trim() || stdout.trim() || `exit ${code}`;
           throw new Error(`Parakeet failed: ${detail}`);
+        }
+        if (tokenCount === 0) {
+          return "";
         }
         if (!text) {
           throw new Error(stderr.trim() || "Parakeet returned no transcript.");

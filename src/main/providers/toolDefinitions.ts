@@ -216,4 +216,22 @@ export const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_datetime",
+      description:
+        "Get the current date and time from the app host (accurate clock). Use for scheduling, what day or time it is, or answering questions in a specific IANA timezone (e.g. America/New_York, Europe/London, Asia/Tokyo).",
+      parameters: {
+        type: "object",
+        properties: {
+          timezone: {
+            type: "string",
+            description:
+              "Optional IANA timezone (e.g. America/Los_Angeles). Omit to use the system default timezone.",
+          },
+        },
+      },
+    },
+  },
 ];

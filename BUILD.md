@@ -10,7 +10,7 @@
 | `npm run dist:mac` | Build and sign the Mac app (`electron-builder --mac`). Use for the main Mac build and with `--replace`. |
 | `npm run dist:mac:replace` | `dist:mac` with `--replace`: copy the built `.app` into `/Applications`. |
 | `npm run icon:icns` | Generate `build/icon.icns` from the project icon assets. |
-| `npm run parakeet:setup` | **(macOS)** Clone/build [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp), download NVIDIA Parakeet TDT 0.6B v3 (`.nemo`), convert to `model.safetensors` + `vocab.txt`, and copy the CLI + weights into `resources/parakeet/`. Needs **CMake**, **Python 3.12+** (e.g. `brew install python@3.12`), Xcode CLT, `git`, `curl`. Large download. |
+| `npm run parakeet:setup` | **(macOS)** Clone/build [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp), download NVIDIA Parakeet TDT 0.6B v3 (`.nemo`), convert to `model.safetensors` + `vocab.txt`, and copy the CLI + runtime dylib + weights into `resources/parakeet/`. Needs **CMake**, **Python 3.12+** (e.g. `brew install python@3.12`), Xcode CLT, `git`, `curl`. Large download. |
 
 This guide walks you through creating a double-clickable, signed (and optionally notarized) Mac app using your Apple Developer account.
 
@@ -26,7 +26,7 @@ npm install
 
 NeMo conversion scripts require **Python 3.12+** (they use `tarfile.extract(..., filter=…)`). macOS’s default `python3` is often 3.9 — install a newer Python, e.g. **`brew install python@3.12`**, and ensure `python3.12` is on your `PATH`. The setup script recreates `build/parakeet-venv` if it was made with an older Python.
 
-`npm run build` (and anything that runs it, e.g. `dist:mac`) automatically runs **`prebuild`**: icon generation, then Parakeet setup on macOS. The first Parakeet run can take a long time and needs several GB free; later builds skip when `resources/parakeet/` is complete. Set `PARAKEET_FORCE=1` to redo Parakeet. `resources/parakeet/*` is gitignored except `.gitkeep`.
+`npm run build` (and anything that runs it, e.g. `dist:mac`) automatically runs **`prebuild`**: icon generation, then Parakeet setup on macOS. The first Parakeet run can take a long time and needs several GB free; later builds skip when `resources/parakeet/` already has `parakeet`, `libaxiom.0.dylib`, `model.safetensors`, and `vocab.txt`. Set `PARAKEET_FORCE=1` to redo Parakeet. `resources/parakeet/*` is gitignored except `.gitkeep`.
 
 ### Local Parakeet transcription (optional)
 
@@ -36,9 +36,9 @@ Voice transcription can use **NVIDIA Parakeet TDT 0.6B** via [parakeet.cpp](http
 npm run parakeet:setup
 ```
 
-It clones `parakeet.cpp` under `build/parakeet-cpp`, runs `make build`, downloads the Hugging Face `parakeet-tdt-0.6b-v3.nemo` into `build/parakeet-cache`, creates `build/parakeet-venv` and installs `torch` + `safetensors`, runs `convert_nemo.py` and `extract_vocab.py`, then copies `parakeet`, `model.safetensors`, and `vocab.txt` into `resources/parakeet/`.
+It clones `parakeet.cpp` under `build/parakeet-cpp`, runs `make build`, downloads the Hugging Face `parakeet-tdt-0.6b-v3.nemo` into `build/parakeet-cache`, creates `build/parakeet-venv` and installs `torch` + `safetensors`, runs `convert_nemo.py` and `extract_vocab.py`, then copies `parakeet`, `libaxiom.0.dylib`, `model.safetensors`, and `vocab.txt` into `resources/parakeet/`.
 
-**Manual copy** (skip download/build): put the three files in a folder and run:
+**Manual copy** (skip download/build): put `parakeet`, `libaxiom.0.dylib`, `model.safetensors`, and `vocab.txt` in a folder and run:
 
 ```bash
 PARAKEET_SOURCE_DIR=/path/to/folder npm run parakeet:setup

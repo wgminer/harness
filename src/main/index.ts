@@ -1,4 +1,6 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, dialog, nativeTheme, globalShortcut, Tray } from "electron";
+import "./e2eBootstrap";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, dialog, nativeTheme, globalShortcut, systemPreferences, Tray } from "electron";
+import { isHarnessE2E } from "./e2eStub";
 import { join } from "path";
 import { registerSettingsHandlers } from "./settings";
 import { registerMemoryHandlers } from "./memory";
@@ -8,6 +10,8 @@ import { registerFileToolsHandlers } from "./fileTools";
 import { registerAssistantToolsHandlers } from "./assistantTools";
 import { registerPlansHandlers } from "./plans";
 import { registerRecordingHandlers } from "./recording";
+import { registerGlobalFnRecording } from "./globalRecordingMain";
+import { registerSystemHandlers } from "./systemHandlers";
 import { importFromFolder } from "./importChatGPT";
 
 let mainWindow: BrowserWindow | null = null;
@@ -66,6 +70,8 @@ function isSmallSize(): boolean {
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
 
+ipcMain.handle("env:isHarnessE2E", () => process.env.HARNESS_E2E === "1");
+
 ipcMain.handle("window:getSize", (): "small" | "large" => {
   return isSmallSize() ? "small" : "large";
 });
@@ -92,6 +98,13 @@ ipcMain.handle("memory:importFromChatGPTFolder", async () => {
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = "dark";
+  if (
+    process.platform === "darwin" &&
+    !isHarnessE2E() &&
+    !systemPreferences.isTrustedAccessibilityClient(false)
+  ) {
+    systemPreferences.isTrustedAccessibilityClient(true);
+  }
   registerSettingsHandlers();
   registerMemoryHandlers();
   registerPlansHandlers();
@@ -100,6 +113,7 @@ app.whenReady().then(() => {
   registerFileToolsHandlers();
   registerAssistantToolsHandlers();
   registerRecordingHandlers();
+  registerSystemHandlers();
 
   if (process.platform === "darwin") {
     app.dock.setIcon(nativeImage.createFromPath(iconPath));
@@ -113,73 +127,14 @@ app.whenReady().then(() => {
 
   const trayRecordingIconPath = join(app.getAppPath(), "resources", "icon-tray-recording.png");
   const trayRecordingIcon = nativeImage.createFromPath(trayRecordingIconPath).resize({ width: 18, height: 18 });
+  const trayProcessingIconPath = join(app.getAppPath(), "resources", "icon-tray-processing.png");
+  const trayProcessingIcon = nativeImage.createFromPath(trayProcessingIconPath).resize({ width: 18, height: 18 });
 
   tray = new Tray(trayIcon);
   tray.setToolTip("Harness");
-  tray.setTitle(" {READY}");
+  tray.setTitle("");
 
-  ipcMain.handle("recording:done", () => {
-    tray?.setImage(trayIcon);
-    tray?.setTitle(" {READY}");
-    globalShortcut.unregister("Escape");
-  });
-
-  let globalRecording = false;
-
-  function registerEscapeCancel() {
-    if (globalShortcut.isRegistered("Escape")) return;
-    globalShortcut.register("Escape", () => {
-      const win = BrowserWindow.getAllWindows()[0];
-      if (!win) return;
-      globalRecording = false;
-      tray?.setImage(trayIcon);
-      tray?.setTitle(" {READY}");
-      globalShortcut.unregister("Escape");
-      win.webContents.send("recording:cancel");
-    });
-  }
-
-  function handleRecordingToggle(): void {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (!win) return;
-    if (!globalRecording) {
-      globalRecording = true;
-      tray?.setImage(trayRecordingIcon);
-      tray?.setTitle(" {REC}");
-      registerEscapeCancel();
-      win.webContents.send("recording:startSilent");
-    } else {
-      globalRecording = false;
-      tray?.setImage(trayIcon);
-      tray?.setTitle(" {PROCESSING}");
-      const wasFocused = win.isFocused();
-      win.webContents.send("recording:stopAndPaste", wasFocused);
-      if (wasFocused) {
-        if (process.platform === "darwin") {
-          app.focus({ steal: true });
-        }
-        win.show();
-        win.focus();
-      }
-    }
-  }
-
-  // Capslock is unreliable on macOS (often never fires). Use Cmd/Ctrl+Shift+R there; elsewhere try Capslock then fallback.
-  const recordingAccelerators =
-    process.platform === "darwin"
-      ? ["CommandOrControl+Shift+R"]
-      : ["Capslock", "CommandOrControl+Shift+R"];
-
-  let registeredRecording = false;
-  for (const accel of recordingAccelerators) {
-    if (globalShortcut.register(accel, handleRecordingToggle)) {
-      registeredRecording = true;
-      break;
-    }
-  }
-  if (!registeredRecording) {
-    console.error("Harness: failed to register global recording shortcut");
-  }
+  registerGlobalFnRecording({ tray, trayIcon, trayRecordingIcon, trayProcessingIcon });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -3,13 +3,13 @@
  * 1) Clone & build parakeet.cpp (Metal)
  * 2) Download NVIDIA parakeet-tdt-0.6b-v3.nemo from Hugging Face
  * 3) Python venv + torch/safetensors + convert_nemo.py + extract_vocab.py
- * 4) Copy parakeet CLI + model.safetensors + vocab.txt → resources/parakeet/
+ * 4) Copy parakeet CLI + libaxiom.0.dylib + model.safetensors + vocab.txt → resources/parakeet/
  *
  * Prerequisites: git, make, cmake, Python 3.12+ (for convert scripts; brew install python@3.12), curl.
  *
  * Env:
  *   PARAKEET_FORCE=1     Re-run even if resources/parakeet/ is complete
- *   PARAKEET_SOURCE_DIR   Skip automated setup; copy from folder (parakeet, model.safetensors, vocab.txt)
+ *   PARAKEET_SOURCE_DIR   Skip automated setup; copy from folder (parakeet, libaxiom.0.dylib, model.safetensors, vocab.txt)
  *   PARAKEET_BIN / PARAKEET_WEIGHTS / PARAKEET_VOCAB  Same as manual copy
  */
 const fs = require("fs");
@@ -22,7 +22,12 @@ const repoDir = path.join(root, "build", "parakeet-cpp");
 const cacheDir = path.join(root, "build", "parakeet-cache");
 const venvDir = path.join(root, "build", "parakeet-venv");
 
-const NAMES = { bin: "parakeet", weights: "model.safetensors", vocab: "vocab.txt" };
+const NAMES = {
+  bin: "parakeet",
+  axiom: "libaxiom.0.dylib",
+  weights: "model.safetensors",
+  vocab: "vocab.txt",
+};
 
 const HF_NEMO_URL =
   "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/resolve/main/parakeet-tdt-0.6b-v3.nemo";
@@ -37,9 +42,48 @@ let resolvedPython = "python3";
 function existsAll(dir) {
   return (
     fs.existsSync(path.join(dir, NAMES.bin)) &&
+    fs.existsSync(path.join(dir, NAMES.axiom)) &&
     fs.existsSync(path.join(dir, NAMES.weights)) &&
     fs.existsSync(path.join(dir, NAMES.vocab))
   );
+}
+
+function maybeCopyAxiom(srcDir) {
+  const axiomPath = path.join(srcDir, NAMES.axiom);
+  if (!fs.existsSync(axiomPath)) return false;
+  copyFile(axiomPath, NAMES.axiom);
+  return true;
+}
+
+function getMachORpaths(binaryPath) {
+  const out = execSync(`otool -l "${binaryPath}"`, {
+    encoding: "utf8",
+    shell: "/bin/bash",
+  });
+  const lines = out.split("\n");
+  const rpaths = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!lines[i].includes("cmd LC_RPATH")) continue;
+    for (let j = i + 1; j < Math.min(i + 8, lines.length); j += 1) {
+      const m = lines[j].match(/^\s*path\s+(.+?)\s+\(offset/);
+      if (m?.[1]) {
+        rpaths.push(m[1].trim());
+        break;
+      }
+    }
+  }
+  return rpaths;
+}
+
+function patchParakeetRpaths(parakeetPath) {
+  const rpaths = getMachORpaths(parakeetPath);
+  if (!rpaths.includes("@executable_path")) {
+    run(`install_name_tool -add_rpath "@executable_path" "${parakeetPath}"`);
+  }
+  for (const rp of rpaths) {
+    if (!rp.startsWith("/")) continue;
+    run(`install_name_tool -delete_rpath "${rp}" "${parakeetPath}"`);
+  }
 }
 
 function run(cmd, cwd = root) {
@@ -160,8 +204,22 @@ function manualCopyFromEnv() {
 
   fs.mkdirSync(destDir, { recursive: true });
   copyFile(binPath, NAMES.bin);
+  const copiedAxiom = maybeCopyAxiom(path.dirname(binPath));
   copyFile(weightsPath, NAMES.weights);
   copyFile(vocabPath, NAMES.vocab);
+  if (!copiedAxiom) {
+    console.warn(
+      `parakeet:setup: ${NAMES.axiom} not found next to ${NAMES.bin}; trying fallback from local build output`
+    );
+    maybeCopyAxiom(path.join(repoDir, "build", "third_party", "axiom"));
+  }
+  patchParakeetRpaths(path.join(destDir, NAMES.bin));
+  if (!fs.existsSync(path.join(destDir, NAMES.axiom))) {
+    console.error(
+      `parakeet:setup: missing ${NAMES.axiom} in ${destDir}. Put it next to ${NAMES.bin} or run full setup.`
+    );
+    process.exit(1);
+  }
   console.log("parakeet:setup: copied into", destDir);
   return true;
 }
@@ -284,9 +342,15 @@ function convertWeights(nemoPath) {
 function copyArtifacts(weightsOut, vocabOut) {
   fs.mkdirSync(destDir, { recursive: true });
   const binSrc = path.join(repoDir, "build", NAMES.bin);
+  const axiomSrcDir = path.join(repoDir, "build", "third_party", "axiom");
   copyFile(binSrc, NAMES.bin);
+  if (!maybeCopyAxiom(axiomSrcDir)) {
+    console.error("parakeet:setup: expected axiom dylib under", axiomSrcDir);
+    process.exit(1);
+  }
   copyFile(weightsOut, NAMES.weights);
   copyFile(vocabOut, NAMES.vocab);
+  patchParakeetRpaths(path.join(destDir, NAMES.bin));
   console.log("parakeet:setup: done →", destDir);
 }
 
@@ -305,7 +369,7 @@ if (manualCopyFromEnv()) {
 
 if (existsAll(destDir) && !force) {
   console.log(
-    "parakeet:setup: resources/parakeet/ already has parakeet, model.safetensors, vocab.txt — skipping (set PARAKEET_FORCE=1 to rebuild)"
+    `parakeet:setup: resources/parakeet/ already has ${NAMES.bin}, ${NAMES.axiom}, ${NAMES.weights}, ${NAMES.vocab} — skipping (set PARAKEET_FORCE=1 to rebuild)`
   );
   process.exit(0);
 }

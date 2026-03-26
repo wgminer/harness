@@ -1,9 +1,30 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AppendMessageMeta } from "../shared/types";
 
+const e2eBridge =
+  process.env.HARNESS_E2E === "1"
+    ? {
+        injectFnEvent: (phase: "down" | "up", ms?: number) =>
+          ipcRenderer.invoke("e2e:injectFnEvent", phase, ms) as Promise<void>,
+      }
+    : undefined;
+
 contextBridge.exposeInMainWorld("electron", {
   app: {
     getVersion: () => ipcRenderer.invoke("app:getVersion") as Promise<string>,
+  },
+  /** Main process is source of truth (Playwright sets env on the Electron process). */
+  env: {
+    isHarnessE2E: () => ipcRenderer.invoke("env:isHarnessE2E") as Promise<boolean>,
+  },
+  system: {
+    getPlatform: () => ipcRenderer.invoke("system:getPlatform") as Promise<NodeJS.Platform>,
+    macosAccessibilityTrusted: () =>
+      ipcRenderer.invoke("system:macosAccessibilityTrusted") as Promise<boolean>,
+    requestAccessibilityPrompt: () =>
+      ipcRenderer.invoke("system:requestAccessibilityPrompt") as Promise<boolean>,
+    openAccessibilitySettings: () =>
+      ipcRenderer.invoke("system:openAccessibilitySettings") as Promise<void>,
   },
   windowSize: {
     get: () => ipcRenderer.invoke("window:getSize") as Promise<"small" | "large">,
@@ -136,4 +157,5 @@ contextBridge.exposeInMainWorld("electron", {
       return () => ipcRenderer.removeListener("recording:cancel", sub);
     },
   },
+  ...(e2eBridge ? { e2e: e2eBridge } : {}),
 });

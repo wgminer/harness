@@ -42,6 +42,11 @@ export interface Settings {
   recording?: {
     autoSend: boolean;
   };
+  /** Chat UI behavior (renderer). */
+  chat?: {
+    /** Scroll the transcript as the assistant reply streams in; also jump to bottom when a reply starts. */
+    scrollOnStream: boolean;
+  };
   transcription?: {
     activeProvider: "openai" | "local";
     /** Parakeet (parakeet.cpp) when activeProvider is "local". */
@@ -95,6 +100,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   recording: {
     autoSend: true,
+  },
+  chat: {
+    scrollOnStream: true,
   },
   transcription: {
     activeProvider: "openai",

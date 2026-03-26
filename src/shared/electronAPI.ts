@@ -17,6 +17,15 @@ export interface ElectronAPI {
   app: {
     getVersion: () => Promise<string>;
   };
+  env: {
+    isHarnessE2E: () => Promise<boolean>;
+  };
+  system: {
+    getPlatform: () => Promise<NodeJS.Platform>;
+    macosAccessibilityTrusted: () => Promise<boolean>;
+    requestAccessibilityPrompt: () => Promise<boolean>;
+    openAccessibilitySettings: () => Promise<void>;
+  };
   windowSize: {
     get: () => Promise<"small" | "large">;
     toggle: () => Promise<"small" | "large">;
@@ -92,6 +101,10 @@ export interface ElectronAPI {
     onStartSilent: (cb: () => void) => () => void;
     onStopAndPaste: (cb: (wasFocused: boolean) => void) => () => void;
     onCancel: (cb: () => void) => () => void;
+  };
+  /** Present when the app is launched with `HARNESS_E2E=1`. */
+  e2e?: {
+    injectFnEvent: (phase: "down" | "up", ms?: number) => Promise<void>;
   };
 }
 
