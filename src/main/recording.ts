@@ -2,12 +2,42 @@ import { ipcMain, app, shell, dialog, clipboard, systemPreferences } from "elect
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { exec } from "child_process";
+import OpenAI from "openai";
 import { getSettings } from "./settings";
 import { getTranscriptionProvider } from "./providers/transcriptionRegistry";
 import { HARNESS_E2E_TRANSCRIBE_TEXT, isHarnessE2E } from "./e2eStub";
+import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
+import { recordOpenAIUsage, recordParakeetTranscription } from "./usageStats";
+
+const DEFAULT_TRANSCRIPT_CLEANUP_INSTRUCTIONS =
+  "Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Keep proper nouns and technical terms unchanged. Do not add new information.";
 
 function getRecordingsDir(): string {
   return join(app.getPath("userData"), "recordings");
+}
+
+async function runTranscriptCleanup(text: string, apiKey: string): Promise<string> {
+  const systemPrompt =
+    "You are an expert transcript editor for dictation text. Rewrite the transcript to remove filler words, verbal stumbles, and false starts while preserving meaning. Improve punctuation and readability. Do not add new facts. Keep proper nouns and technical terms intact. Return only the cleaned transcript text.\n\nAdditional user instructions:\n" +
+    DEFAULT_TRANSCRIPT_CLEANUP_INSTRUCTIONS;
+
+  const client = new OpenAI({ apiKey });
+  const completion = await client.chat.completions.create(
+    {
+      model: OPENAI_TRANSCRIPT_CLEANUP_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: text },
+      ],
+    },
+    { signal: AbortSignal.timeout(8_000) }
+  );
+  if (completion.usage) {
+    recordOpenAIUsage(completion.usage);
+  }
+
+  const cleaned = completion.choices[0]?.message?.content?.trim() ?? "";
+  return cleaned || text;
 }
 
 export function registerRecordingHandlers(): void {
@@ -61,14 +91,25 @@ export function registerRecordingHandlers(): void {
       return { text: HARNESS_E2E_TRANSCRIBE_TEXT };
     }
     const settings = await getSettings();
-    const isOpenAI = (settings.transcription?.activeProvider ?? "openai") === "openai";
-    if (isOpenAI && !settings.openai?.apiKey) {
-      return { error: "No OpenAI API key configured. Add one in Settings." };
-    }
     try {
-      const provider = getTranscriptionProvider(settings);
-      const text = await provider.transcribe(data);
-      return { text };
+      const provider = getTranscriptionProvider();
+      const { text, parakeetTokens } = await provider.transcribe(data);
+      recordParakeetTranscription(text, parakeetTokens ?? undefined);
+      const shouldCleanup = settings.transcription?.cleanup?.enabled ?? false;
+      if (!shouldCleanup || !text.trim()) {
+        return { text };
+      }
+      const key = settings.openai?.apiKey?.trim() ?? "";
+      if (!key) {
+        return { text };
+      }
+      try {
+        const cleaned = await runTranscriptCleanup(text, key);
+        return { text: cleaned };
+      } catch (err) {
+        console.warn("Transcript cleanup failed; returning original transcript.", err);
+        return { text };
+      }
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }

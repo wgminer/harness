@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, dialog, nativeTheme, gl
 import { isHarnessE2E } from "./e2eStub";
 import { join } from "path";
 import { registerSettingsHandlers } from "./settings";
+import { registerUsageStatsHandlers } from "./usageStats";
 import { registerMemoryHandlers } from "./memory";
 import { registerChatHandlers } from "./chat";
 import { registerCustomizationHandlers } from "./customization";
@@ -21,8 +22,8 @@ const iconPath = join(app.getAppPath(), "resources", "icon.png");
 
 const LARGE_WIDTH = 1024;
 const LARGE_HEIGHT = 768;
-const SMALL_WIDTH = 800;
-const SMALL_HEIGHT = 600;
+const SMALL_WIDTH = 400;
+const SMALL_HEIGHT = 480;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -45,16 +46,36 @@ function createWindow() {
   }
 
   mainWindow.webContents.on("context-menu", (_event, params) => {
-    const menu = Menu.buildFromTemplate([
+    const template: Electron.MenuItemConstructorOptions[] = [];
+
+    if (params.isEditable) {
+      template.push(
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        ...(process.platform === "darwin" ? ([{ role: "pasteAndMatchStyle" }] as const) : []),
+        { type: "separator" },
+        { role: "selectAll" }
+      );
+    } else {
+      template.push({ role: "copy" }, { type: "separator" }, { role: "selectAll" });
+    }
+
+    template.push(
+      { type: "separator" },
       {
-        label: "Inspect Element",
+        label: "Inspect element",
         click: () => {
           mainWindow?.webContents.inspectElement(params.x, params.y);
           mainWindow?.webContents.openDevTools();
         },
-      },
-    ]);
-    menu.popup({ window: mainWindow!, x: params.x, y: params.y });
+      }
+    );
+
+    Menu.buildFromTemplate(template).popup({ window: mainWindow!, x: params.x, y: params.y });
   });
 
   mainWindow.on("closed", () => {
@@ -106,6 +127,7 @@ app.whenReady().then(() => {
     systemPreferences.isTrustedAccessibilityClient(true);
   }
   registerSettingsHandlers();
+  registerUsageStatsHandlers();
   registerMemoryHandlers();
   registerPlansHandlers();
   registerChatHandlers();

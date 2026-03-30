@@ -1,5 +1,4 @@
 import type { ChatMessage } from "../shared/types";
-import type { LLMProvider } from "./providers/types";
 import { generateThreadTitleWithOpenAI } from "./providers/openai";
 import {
   notifyConversationTitleUpdated,
@@ -51,8 +50,9 @@ function buildContext(messages: ChatMessage[]): string {
  * Fire-and-forget: generate or refine the conversation title after an assistant reply is persisted.
  * Gating uses message roles (assistant present / first reply), not whether a title string is empty.
  * Never touches user-set or imported titles.
+ * Requires an OpenAI API key; skips silently when missing.
  */
-export function scheduleConversationTitleRefinement(conversationId: string, provider: LLMProvider): void {
+export function scheduleConversationTitleRefinement(conversationId: string): void {
   if (isHarnessE2E()) return;
   void (async () => {
     let notifiedStart = false;
@@ -66,14 +66,14 @@ export function scheduleConversationTitleRefinement(conversationId: string, prov
       const context = buildContext(messages);
       if (!context.trim()) return;
 
+      const settings = await getSettings();
+      const openaiKey = settings.openai?.apiKey?.trim();
+      if (!openaiKey) return;
+
       notifyTitleGenerationStarted(conversationId);
       notifiedStart = true;
 
-      const settings = await getSettings();
-      const openaiKey = settings.openai?.apiKey?.trim();
-      const rawTitle = openaiKey
-        ? await generateThreadTitleWithOpenAI(openaiKey, meta.title, context)
-        : await provider.generateTitle(meta.title, context, "");
+      const rawTitle = await generateThreadTitleWithOpenAI(openaiKey, meta.title, context);
       const title = cleanTitle(rawTitle ?? "");
       if (!title) return;
 

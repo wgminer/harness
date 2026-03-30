@@ -1,10 +1,12 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
-import type { UIEvent, WheelEvent } from "react";
+import type { UIEvent } from "react";
 import { Copy, Check, Mic, Square, Loader2, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
+import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
+import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 
 interface ToolCallDisplay {
   toolName: string;
@@ -29,6 +31,8 @@ function formatMessageTime(ts: number): string {
 
 interface ChatViewProps {
   conversationId: string | null;
+  /** Shown in header; matches sidebar label for this conversation. */
+  displayTitle: string;
   onConversationCreated: () => void;
   /** Text from the global hotkey — send vs pre-fill follows recording.autoSend unless draft-only. */
   pendingHotkeyText?: string | null;
@@ -37,6 +41,8 @@ interface ChatViewProps {
   onPendingHotkeyTextConsumed?: () => void;
   /** Fires when this chat is waiting on / streaming from the model (not composer voice). */
   onChatActivityChange?: (active: boolean) => void;
+  /** Parent increments when the composer should be focused (e.g. switching to small window). */
+  focusComposerNonce?: number;
 }
 
 /** Renders markdown (bold, lists, code, etc.) without headers (they render as paragraphs). */
@@ -126,18 +132,20 @@ function CopyButton({ content, messageIndex, copiedIndex, onCopied }: { content:
 }
 
 const SCROLL_TOP_THRESHOLD = 24;
-/** If the viewport is within this many px of the bottom, streaming updates keep it pinned there. */
-const STREAM_NEAR_BOTTOM_PX = 120;
+/** Inset when pinning the active user turn to the top of the chat scrollport. */
+const USER_TURN_PIN_PADDING = 6;
 
 type VoiceState = "idle" | "recording" | "processing";
 
 export function ChatView({
   conversationId,
+  displayTitle,
   onConversationCreated,
   pendingHotkeyText,
   pendingHotkeyDraftOnly,
   onPendingHotkeyTextConsumed,
   onChatActivityChange,
+  focusComposerNonce,
 }: ChatViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -147,7 +155,6 @@ export function ChatView({
   const [expandedUserCards, setExpandedUserCards] = useState<Set<number>>(new Set());
   const [overflowedUserCards, setOverflowedUserCards] = useState<Set<number>>(new Set());
   const [hasScrolled, setHasScrolled] = useState(false);
-  const [scrollOnStream, setScrollOnStream] = useState(true);
   const userCardContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [activeChatModel, setActiveChatModel] = useState("");
   const [streamingMeta, setStreamingMeta] = useState<{ model: string; startedAt: number } | null>(null);
@@ -155,7 +162,12 @@ export function ChatView({
   const activeChatModelRef = useRef("");
 
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+  /** After plain dictation, show polish next to reply (polish targets the dictated turn only). */
+  const [polishHintAfterDictation, setPolishHintAfterDictation] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [titleModalOpen, setTitleModalOpen] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [titleSaving, setTitleSaving] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
   const recordingStartRef = useRef<number>(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -164,9 +176,7 @@ export function ChatView({
 
   /** Tool calls for the assistant turn currently being streamed; shown inline and then stored on the message when stream ends. */
   const [currentTurnToolCalls, setCurrentTurnToolCalls] = useState<ToolCallDisplay[]>([]);
-  const prevSendingRef = useRef(false);
-  /** True while the user is following the latest content (updated on scroll; not inferred from layout after content grows). */
-  const stickToBottomRef = useRef(true);
+  const userTurnAnchorRef = useRef<HTMLDivElement | null>(null);
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const streamingContentRef = useRef("");
@@ -197,21 +207,13 @@ export function ChatView({
   }, [activeChatModel]);
 
   useEffect(() => {
-    window.electron.settings.get().then((s) => {
-      const settings = s as {
-        activeProvider: string;
-        openai?: { model?: string };
-        ollama?: { model?: string };
-        chat?: { scrollOnStream?: boolean };
-      };
-      const m =
-        settings.activeProvider === "ollama"
-          ? (settings.ollama?.model ?? "")
-          : (settings.openai?.model ?? "");
-      setActiveChatModel(m);
-      setScrollOnStream(settings.chat?.scrollOnStream ?? true);
-    });
+    setActiveChatModel(OPENAI_CHAT_MODEL);
   }, [conversationId]);
+
+  useEffect(() => {
+    if (focusComposerNonce == null || focusComposerNonce < 1) return;
+    inputRef.current?.focus();
+  }, [focusComposerNonce]);
 
   /** Sidebar spinner: model reply only (not composer voice record/transcribe). */
   const chatActivityBusy = sending;
@@ -244,9 +246,9 @@ export function ChatView({
       recordingTimerRef.current = null;
     }
     setVoiceState("idle");
+    setPolishHintAfterDictation(false);
     setStreamingMeta(null);
-    prevSendingRef.current = false;
-    stickToBottomRef.current = true;
+    setTitleModalOpen(false);
 
     let cancelled = false;
     window.electron.memory.getMessages(conversationId).then((list) => {
@@ -297,32 +299,24 @@ export function ChatView({
         ]
       : messages;
 
-  const scrollChatToBottom = useCallback(() => {
-    const el = chatAreaRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight - el.clientHeight;
-  }, []);
-
-  /** When a reply starts, follow the new turn (if setting is on). */
+  /** Pin the last user message to the top of `.chat-scroll`; assistant streams below without further scrolling. */
   useLayoutEffect(() => {
-    if (scrollOnStream && sending && !prevSendingRef.current) {
-      stickToBottomRef.current = true;
-      scrollChatToBottom();
-    }
-    prevSendingRef.current = sending;
-  }, [sending, scrollOnStream, scrollChatToBottom]);
-
-  /**
-   * While streaming, keep the viewport pinned only when the user is still following the stream.
-   * We cannot infer "near bottom" from scroll metrics after content grows (scrollHeight increases but scrollTop is unchanged).
-   */
-  useLayoutEffect(() => {
-    if (!scrollOnStream || !sending || !stickToBottomRef.current) return;
-    scrollChatToBottom();
-    // Second pass: markdown/layout can change scrollHeight after the first paint.
-    const id = requestAnimationFrame(() => scrollChatToBottom());
+    if (!sending) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "user") return;
+    const container = chatAreaRef.current;
+    const anchor = userTurnAnchorRef.current;
+    if (!container || !anchor) return;
+    const pin = () => {
+      const cR = container.getBoundingClientRect();
+      const aR = anchor.getBoundingClientRect();
+      const nextTop = container.scrollTop + (aR.top - cR.top) - USER_TURN_PIN_PADDING;
+      container.scrollTop = Math.max(0, nextTop);
+    };
+    pin();
+    const id = requestAnimationFrame(pin);
     return () => cancelAnimationFrame(id);
-  }, [streamingContent, currentTurnToolCalls, displayMessages, sending, scrollOnStream, scrollChatToBottom]);
+  }, [sending, messages]);
 
   useLayoutEffect(() => {
     const next = new Set<number>();
@@ -384,25 +378,11 @@ export function ChatView({
     adjustInputHeight();
   }, [input, adjustInputHeight]);
 
-  const onChatAreaScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+  const onChatAreaScroll = useCallback((_e: UIEvent<HTMLDivElement>) => {
     const el = chatAreaRef.current;
     if (!el) return;
     setHasScrolled(el.scrollTop > SCROLL_TOP_THRESHOLD);
-    // Programmatic scrollTop updates also fire `scroll` with isTrusted false; ignore those so we
-    // don't flip back to "following" after the user scrolled away.
-    if (!e.nativeEvent.isTrusted) return;
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    stickToBottomRef.current = distFromBottom <= STREAM_NEAR_BOTTOM_PX;
   }, []);
-
-  /** Wheel runs before layout; clears follow immediately so the next stream chunk can't scroll first. */
-  const onChatWheelCapture = useCallback((e: WheelEvent<HTMLDivElement>) => {
-    if (!scrollOnStream || !sending) return;
-    if (!e.nativeEvent.isTrusted) return;
-    // Standard wheel: negative deltaY = scroll toward older messages (up). Ignore mostly-horizontal trackpad pans.
-    if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
-    if (e.deltaY < 0) stickToBottomRef.current = false;
-  }, [scrollOnStream, sending]);
 
   const scrollToTop = useCallback(() => {
     chatAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -450,23 +430,68 @@ export function ChatView({
   );
 
   /** Core send logic; accepts text directly so it can be called programmatically (e.g. hotkey injection). */
-  const sendText = useCallback(async (text: string) => {
-    if (!text.trim() || !conversationId || sending) return;
+  const sendText = useCallback(
+    async (text: string, opts?: { fromDictation?: boolean }) => {
+      if (!text.trim() || !conversationId || sending) return;
+      if (opts?.fromDictation) setPolishHintAfterDictation(true);
+      else setPolishHintAfterDictation(false);
+      setSending(true);
+      setStreamingContent("");
+      setCurrentTurnToolCalls([]);
+      const userTs = Date.now();
+      setMessages((prev) => [...prev, { role: "user", content: text, timestamp: userTs }]);
+      setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
+      try {
+        await window.electron.chat.send(conversationId, text);
+        onConversationCreated();
+      } catch (e) {
+        setStreamingContent(`[Error: ${e instanceof Error ? e.message : String(e)}]`);
+        setStreamingMeta(null);
+        setSending(false);
+      }
+    },
+    [conversationId, sending, onConversationCreated]
+  );
+
+  /** Post-strip polish: replace last user dictation with instruction + same text, then stream. */
+  const polishLastUserFromStrip = useCallback(async () => {
+    if (!conversationId || sending) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "user" || !last.content?.trim()) return;
+    setPolishHintAfterDictation(false);
+    const instruction = DICTATION_POLISH_INSTRUCTION;
+    const t1 = Date.now();
+    const t2 = t1 + 1;
+    const transcript = last.content;
     setSending(true);
     setStreamingContent("");
     setCurrentTurnToolCalls([]);
-    const userTs = Date.now();
-    setMessages((prev) => [...prev, { role: "user", content: text, timestamp: userTs }]);
+    setMessages((prev) => [
+      ...prev.slice(0, -1),
+      { role: "user", content: instruction, timestamp: t1 },
+      { role: "user", content: transcript, timestamp: t2 },
+    ]);
     setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
     try {
-      await window.electron.chat.send(conversationId, text);
+      await window.electron.chat.polishLastUser(conversationId);
       onConversationCreated();
     } catch (e) {
       setStreamingContent(`[Error: ${e instanceof Error ? e.message : String(e)}]`);
       setStreamingMeta(null);
       setSending(false);
+      void window.electron.memory.getMessages(conversationId).then((list) => {
+        setMessages(
+          list.map((m) => ({
+            role: m.role,
+            content: m.content,
+            toolCalls: (m as Message).toolCalls,
+            timestamp: (m as Message).timestamp,
+            model: (m as Message).model,
+          }))
+        );
+      });
     }
-  }, [conversationId, sending, onConversationCreated]);
+  }, [conversationId, sending, messages, onConversationCreated]);
 
   const send = useCallback(async () => {
     const text = input.trim();
@@ -493,7 +518,9 @@ export function ChatView({
 
   // Stable ref so the pendingHotkeyText effect always calls the latest sendText without it being a dep
   const sendTextRef = useRef(sendText);
-  useEffect(() => { sendTextRef.current = sendText; });
+  useEffect(() => {
+    sendTextRef.current = sendText;
+  });
 
   // Global hotkey finished transcription — inject into this chat (send or pre-fill per settings, unless draft-only)
   useEffect(() => {
@@ -501,7 +528,7 @@ export function ChatView({
     window.electron.settings.get().then((s) => {
       const autoSend = (s as { recording?: { autoSend: boolean } }).recording?.autoSend ?? true;
       if (autoSend && !pendingHotkeyDraftOnly) {
-        sendTextRef.current(pendingHotkeyText);
+        sendTextRef.current(pendingHotkeyText, { fromDictation: true });
       } else {
         setInput((prev) => (prev ? prev + " " + pendingHotkeyText : pendingHotkeyText));
       }
@@ -541,7 +568,7 @@ export function ChatView({
         if (!text) return;
         const s = await window.electron.settings.get() as { recording?: { autoSend: boolean } };
         if (s.recording?.autoSend ?? true) {
-          sendTextRef.current(text);
+          sendTextRef.current(text, { fromDictation: true });
         } else {
           setInput((prev) => (prev ? prev + " " + text : text));
         }
@@ -562,6 +589,24 @@ export function ChatView({
     playCancelChime();
   }, [recorder]);
 
+  const openTitleModal = useCallback(() => {
+    setTitleDraft(displayTitle);
+    setTitleModalOpen(true);
+  }, [displayTitle]);
+
+  const saveConversationTitle = useCallback(async () => {
+    const trimmed = titleDraft.trim();
+    if (!trimmed || !conversationId) return;
+    setTitleSaving(true);
+    try {
+      await window.electron.memory.setConversationTitle(conversationId, trimmed);
+      onConversationCreated();
+      setTitleModalOpen(false);
+    } finally {
+      setTitleSaving(false);
+    }
+  }, [titleDraft, conversationId, onConversationCreated]);
+
   if (!conversationId) {
     return (
       <div className="chat-area" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--fg-muted)" }}>
@@ -572,13 +617,24 @@ export function ChatView({
     );
   }
 
+  const showReplyActions =
+    displayMessages.length > 0 &&
+    displayMessages[displayMessages.length - 1].role === "user" &&
+    !streamingContent;
+  const showPolishInStrip = showReplyActions && polishHintAfterDictation;
+
+  const userTurnAnchorIndex =
+    sending && messages.length > 0 && messages[messages.length - 1].role === "user"
+      ? messages.length - 1
+      : -1;
+
   return (
     <div
       ref={chatAreaRef}
       className="chat-scroll"
       data-scrolled={hasScrolled || undefined}
+      data-sending={sending || undefined}
       onScroll={onChatAreaScroll}
-      onWheelCapture={onChatWheelCapture}
     >
       {hasScrolled && (
         <button
@@ -587,9 +643,19 @@ export function ChatView({
           onClick={scrollToTop}
           aria-label="Scroll to top"
         >
-          top
+          Top
         </button>
       )}
+      <header className="chat-pane-header">
+        <button
+          type="button"
+          className="btn chat-pane-title"
+          onClick={openTitleModal}
+          title="Edit title"
+        >
+          {displayTitle}
+        </button>
+      </header>
       <div className="chat-area">
         <div className="chat-area-inner" data-testid="chat-messages">
           {displayMessages.map((m, i) => {
@@ -597,7 +663,11 @@ export function ChatView({
             const hasToolCalls = isAssistant && m.toolCalls && m.toolCalls.length > 0;
 
             return (
-              <div key={i} className={`message-block ${m.role}`}>
+              <div
+                key={i}
+                ref={i === userTurnAnchorIndex ? userTurnAnchorRef : undefined}
+                className={`message-block ${m.role}`}
+              >
                 <div className="content">
                   {m.role === "user" ? (
                     <div className={`message-user-card${expandedUserCards.has(i) ? " message-user-card--expanded" : ""}`}>
@@ -690,108 +760,184 @@ export function ChatView({
               </div>
             );
           })}
-          {displayMessages.length > 0 &&
-            displayMessages[displayMessages.length - 1].role === "user" &&
-            !streamingContent && (
-              <div className="get-reply-prompt">
-                {sending ? (
-                  <span className="voice-status">
-                    <Loader2 size={13} className="voice-spinner" />
-                    Replying…
-                  </span>
-                ) : (
-                  <button type="button" className="btn btn-get-reply" onClick={generateReply}>
-                    Get reply
+          {showReplyActions && (
+            <div className="chat-secondary-actions">
+              {sending ? (
+                <span className="voice-status">
+                  <Loader2 size={13} className="voice-spinner" />
+                  Replying…
+                </span>
+              ) : (
+                <>
+                  {showPolishInStrip && (
+                    <button type="button" className="btn btn-chat-secondary" onClick={polishLastUserFromStrip}>
+                      Polish
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-chat-secondary" onClick={generateReply}>
+                    Reply
                   </button>
-                )}
-              </div>
-            )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="input-container input-container--sticky" data-testid="chat-composer">
         {voiceError && (
           <div className="voice-error">{voiceError}</div>
         )}
-        <textarea
-          ref={inputRef}
-          className="chat-input"
-          data-testid="chat-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          placeholder="Type a message..."
-          disabled={sending || voiceState === "recording" || voiceState === "processing"}
-          rows={1}
-        />
-        <div className="input-actions">
-          <div className="voice-controls">
-            {voiceState === "idle" && (
-              <button
-                type="button"
-                className="btn btn-icon voice-btn"
-                onClick={startRecording}
-                disabled={sending}
-                title="Record voice message"
-                aria-label="Start recording"
-              >
-                <Mic size={15} />
-              </button>
-            )}
-            {voiceState === "recording" && (
-              <>
+        <div className="chat-composer-inner">
+          <textarea
+            ref={inputRef}
+            className="chat-input"
+            data-testid="chat-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder="Type a message..."
+            disabled={voiceState === "recording" || voiceState === "processing"}
+            rows={1}
+          />
+          <div className="input-actions">
+            <div className="voice-controls">
+              {voiceState === "idle" && (
                 <button
                   type="button"
-                  className="btn btn-icon voice-btn voice-btn--recording"
-                  onClick={stopAndTranscribe}
-                  title="Stop recording"
-                  aria-label="Stop recording"
+                  className="btn btn-icon voice-btn"
+                  onClick={startRecording}
+                  disabled={sending}
+                  title="Record voice message"
+                  aria-label="Start recording"
                 >
-                  <Square size={13} />
+                  <Mic size={15} />
                 </button>
-                <span className="voice-timer">
-                  {`${Math.floor(recordingMs / 60000)}:${String(Math.floor((recordingMs % 60000) / 1000)).padStart(2, "0")}.${String(recordingMs % 1000).padStart(3, "0")}`}
+              )}
+              {voiceState === "recording" && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-icon voice-btn voice-btn--recording"
+                    onClick={stopAndTranscribe}
+                    title="Stop recording"
+                    aria-label="Stop recording"
+                  >
+                    <Square size={13} />
+                  </button>
+                  <span className="voice-timer">
+                    {`${Math.floor(recordingMs / 60000)}:${String(Math.floor((recordingMs % 60000) / 1000)).padStart(2, "0")}.${String(recordingMs % 1000).padStart(3, "0")}`}
+                  </span>
+                </>
+              )}
+              {voiceState === "processing" && (
+                <span className="voice-status">
+                  <Loader2 size={13} className="voice-spinner" />
+                  Transcribing…
                 </span>
-              </>
-            )}
-            {voiceState === "processing" && (
-              <span className="voice-status">
-                <Loader2 size={13} className="voice-spinner" />
-                Transcribing…
-              </span>
+              )}
+            </div>
+            {voiceState !== "idle" ? (
+              <button
+                type="button"
+                className="btn btn-cancel"
+                onClick={cancelRecording}
+                title="Cancel recording"
+              >
+                <X size={15} />
+                Cancel
+              </button>
+            ) : sending ? (
+              <button type="button" className="btn input-actions-stop" onClick={() => window.electron.chat.stop()}>
+                Stop
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="chat-send"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={send}
+                disabled={!input.trim()}
+              >
+                Send
+              </button>
             )}
           </div>
-          {voiceState !== "idle" ? (
-            <button
-              type="button"
-              className="btn btn-cancel"
-              onClick={cancelRecording}
-              title="Cancel recording"
-            >
-              <X size={15} />
-              Cancel
-            </button>
-          ) : sending ? (
-            <button type="button" className="btn input-actions-stop" onClick={() => window.electron.chat.stop()}>
-              Stop
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-primary"
-              data-testid="chat-send"
-              onClick={send}
-              disabled={!input.trim()}
-            >
-              Send
-            </button>
-          )}
         </div>
       </div>
+
+      {titleModalOpen && (
+        <div
+          className="chat-title-modal-backdrop"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !titleSaving) setTitleModalOpen(false);
+          }}
+        >
+          <div
+            className="chat-title-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="chat-title-modal-heading"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="chat-title-modal-header">
+              <h3 id="chat-title-modal-heading" className="chat-title-modal-heading">
+                Conversation title
+              </h3>
+              <button
+                type="button"
+                className="btn btn-icon chat-title-modal-close"
+                onClick={() => !titleSaving && setTitleModalOpen(false)}
+                disabled={titleSaving}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="chat-title-modal-body">
+              <label htmlFor="chat-title-modal-input">Title</label>
+              <input
+                id="chat-title-modal-input"
+                type="text"
+                className="chat-title-modal-input"
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void saveConversationTitle();
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+            <div className="chat-title-modal-footer">
+              <button
+                type="button"
+                className="btn btn-cancel"
+                onClick={() => setTitleModalOpen(false)}
+                disabled={titleSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void saveConversationTitle()}
+                disabled={titleSaving || !titleDraft.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

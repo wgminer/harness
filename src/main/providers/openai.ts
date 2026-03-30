@@ -1,10 +1,9 @@
 import OpenAI from "openai";
 import type { ChatMessage } from "../../shared/types";
+import { OPENAI_CHAT_MODEL, OPENAI_TITLE_MODEL } from "../../shared/openaiModels";
+import { recordOpenAIUsage } from "../usageStats";
 import type { LLMProvider } from "./types";
 import { TOOL_DEFINITIONS } from "./toolDefinitions";
-
-/** Thread titles are always generated with this model, independent of the chat model. */
-export const OPENAI_THREAD_TITLE_MODEL = "gpt-5-nano";
 
 export async function generateThreadTitleWithOpenAI(
   apiKey: string,
@@ -26,7 +25,7 @@ export async function generateThreadTitleWithOpenAI(
 
   const completion = await client.chat.completions.create(
     {
-      model: OPENAI_THREAD_TITLE_MODEL,
+      model: OPENAI_TITLE_MODEL,
       messages: [
         { role: "system", content: system },
         { role: "user", content: userBlock },
@@ -37,7 +36,9 @@ export async function generateThreadTitleWithOpenAI(
     { signal: AbortSignal.timeout(10_000) }
   );
 
-  console.log(completion.choices[0]);
+  if (completion.usage) {
+    recordOpenAIUsage(completion.usage);
+  }
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? "";
   if (!raw) return null;
@@ -83,8 +84,9 @@ function messageReducer(
   return acc as Partial<ChatCompletionMessage>;
 }
 
-export function createOpenAIProvider(apiKey: string, model: string): LLMProvider {
+export function createOpenAIProvider(apiKey: string): LLMProvider {
   const client = new OpenAI({ apiKey });
+  const model = OPENAI_CHAT_MODEL;
 
   return {
     id: "openai",
@@ -106,6 +108,7 @@ export function createOpenAIProvider(apiKey: string, model: string): LLMProvider
               model,
               messages: currentMessages,
               stream: true,
+              stream_options: { include_usage: true },
               tools: TOOL_DEFINITIONS,
               tool_choice: "auto",
             },
@@ -114,6 +117,9 @@ export function createOpenAIProvider(apiKey: string, model: string): LLMProvider
 
           let message: Partial<ChatCompletionMessage> = {};
           for await (const chunk of stream) {
+            if (chunk.usage) {
+              recordOpenAIUsage(chunk.usage);
+            }
             message = messageReducer(message, chunk);
             const delta = chunk.choices[0]?.delta?.content;
             if (delta) yield delta;

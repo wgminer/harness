@@ -4,13 +4,17 @@ import { join } from "path";
 import { getUserMemory, setUserMemory, searchConversations, getMemoryDir, TASKS_FILE } from "./memory";
 import { generateId } from "./utils";
 import type { SearchResult } from "../shared/types";
-
-type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
+import {
+  coerceTaskTags,
+  normalizeTags,
+  tagsFromLegacyStatus,
+  taskIsClearable,
+} from "../shared/taskTags";
 
 export interface TaskItem {
   id: string;
   title: string;
-  status: TaskStatus;
+  tags: string[];
   createdAt: number;
   updatedAt: number;
   metadata?: Record<string, unknown>;
@@ -46,18 +50,47 @@ async function fileExists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
 }
 
+function migrateRawTask(raw: unknown): TaskItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const id = String(r.id ?? "").trim();
+  const title = String(r.title ?? "").trim();
+  if (!id || !title) return null;
+  const createdAt = typeof r.createdAt === "number" ? r.createdAt : Date.now();
+  const updatedAt = typeof r.updatedAt === "number" ? r.updatedAt : createdAt;
+  const tags = coerceTaskTags(r);
+  const metadata =
+    r.metadata && typeof r.metadata === "object" ? (r.metadata as Record<string, unknown>) : undefined;
+  return {
+    id,
+    title,
+    tags,
+    createdAt,
+    updatedAt,
+    ...(metadata ? { metadata } : {}),
+  };
+}
+
 async function loadTasks(): Promise<TaskState> {
   const path = getTasksFilePath();
   if (!(await fileExists(path))) return { tasks: [] };
   try {
     const raw = await readFile(path, "utf-8");
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed?.tasks)) {
-      return { tasks: parsed.tasks as TaskItem[] };
+    const rows: unknown[] = Array.isArray(parsed?.tasks)
+      ? parsed.tasks
+      : Array.isArray(parsed)
+        ? parsed
+        : [];
+    const needsLegacyRewrite = rows.some(
+      (r) => !!r && typeof r === "object" && "status" in (r as Record<string, unknown>)
+    );
+    const tasks = rows.map(migrateRawTask).filter((t): t is TaskItem => t !== null);
+    const state: TaskState = { tasks };
+    if (needsLegacyRewrite && tasks.length > 0) {
+      await saveTasks(state);
     }
-    if (Array.isArray(parsed)) {
-      return { tasks: parsed as TaskItem[] };
-    }
+    return state;
   } catch {
     // If the file is corrupt, start fresh
   }
@@ -75,7 +108,6 @@ export async function listTasks(): Promise<TasksPayload> {
 
 export async function createTask(args: Record<string, unknown>): Promise<TasksPayload> {
   const title = String(args.title ?? "").trim();
-  const rawStatus = String(args.status ?? "pending").trim() as TaskStatus;
   const metadata = (args.metadata && typeof args.metadata === "object" ? (args.metadata as Record<string, unknown>) : undefined) ?? undefined;
 
   if (!title) {
@@ -89,18 +121,17 @@ export async function createTask(args: Record<string, unknown>): Promise<TasksPa
 
   const now = Date.now();
   const state = await loadTasks();
-  const status: TaskStatus =
-    rawStatus === "pending" ||
-    rawStatus === "in_progress" ||
-    rawStatus === "completed" ||
-    rawStatus === "cancelled"
-      ? rawStatus
-      : "pending";
+  let tags = normalizeTags(args.tags);
+  if (tags.length === 0 && typeof args.status === "string") {
+    const fromStatus = tagsFromLegacyStatus(args.status);
+    if (fromStatus) tags = fromStatus;
+  }
+  if (tags.length === 0) tags = ["pending"];
 
   const task: TaskItem = {
     id: generateId("task"),
     title,
-    status,
+    tags,
     createdAt: now,
     updatedAt: now,
     ...(metadata ? { metadata } : {}),
@@ -145,11 +176,12 @@ export async function updateTask(args: Record<string, unknown>): Promise<TasksPa
     if (title) next.title = title;
   }
 
-  if (typeof args.status === "string") {
-    const s = args.status.trim() as TaskStatus;
-    if (s === "pending" || s === "in_progress" || s === "completed" || s === "cancelled") {
-      next.status = s;
-    }
+  if (args.tags !== undefined && Array.isArray(args.tags)) {
+    next.tags = normalizeTags(args.tags);
+    if (next.tags.length === 0) next.tags = ["pending"];
+  } else if (typeof args.status === "string") {
+    const fromStatus = tagsFromLegacyStatus(args.status);
+    if (fromStatus) next.tags = fromStatus;
   }
 
   if (args.metadata && typeof args.metadata === "object") {
@@ -205,7 +237,7 @@ export async function clearCompletedTasks(): Promise<TasksPayload> {
   const remaining: TaskItem[] = [];
   const removedIds: string[] = [];
   for (const t of state.tasks) {
-    if (t.status === "completed" || t.status === "cancelled") {
+    if (taskIsClearable(t.tags)) {
       removedIds.push(t.id);
     } else {
       remaining.push(t);
@@ -350,12 +382,12 @@ export function registerAssistantToolsHandlers(): void {
   ipcMain.handle("tasks:list", () => listTasks());
   ipcMain.handle(
     "tasks:create",
-    (_e, title: string, status?: string) =>
-      createTask({ title, status })
+    (_e, title: string, tags?: string[]) =>
+      createTask({ title, tags })
   );
   ipcMain.handle(
     "tasks:update",
-    (_e, payload: { id: string; title?: string; status?: string }) =>
+    (_e, payload: { id: string; title?: string; tags?: string[] }) =>
       updateTask(payload as Record<string, unknown>)
   );
   ipcMain.handle(

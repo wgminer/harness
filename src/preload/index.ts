@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AppendMessageMeta } from "../shared/types";
+import type { UsageStatsSnapshot } from "../shared/usageStats";
 
 const e2eBridge =
   process.env.HARNESS_E2E === "1"
@@ -34,6 +35,11 @@ contextBridge.exposeInMainWorld("electron", {
     get: () => ipcRenderer.invoke("settings:get"),
     set: (partial: unknown) => ipcRenderer.invoke("settings:set", partial),
   },
+  usage: {
+    getStats: () => ipcRenderer.invoke("usage:getStats") as Promise<UsageStatsSnapshot>,
+    reset: () => ipcRenderer.invoke("usage:reset") as Promise<UsageStatsSnapshot>,
+    openOpenAIDashboard: () => ipcRenderer.invoke("usage:openOpenAIDashboard") as Promise<void>,
+  },
   memory: {
     createConversation: () => ipcRenderer.invoke("memory:createConversation"),
     getConversation: (id: string) => ipcRenderer.invoke("memory:getConversation", id),
@@ -67,14 +73,16 @@ contextBridge.exposeInMainWorld("electron", {
   },
   tasks: {
     list: () => ipcRenderer.invoke("tasks:list"),
-    create: (title: string, status?: string) => ipcRenderer.invoke("tasks:create", title, status),
-    update: (payload: { id: string; title?: string; status?: string }) =>
+    create: (title: string, tags?: string[]) => ipcRenderer.invoke("tasks:create", title, tags),
+    update: (payload: { id: string; title?: string; tags?: string[] }) =>
       ipcRenderer.invoke("tasks:update", payload),
     delete: (id: string) => ipcRenderer.invoke("tasks:delete", id),
     clearCompleted: () => ipcRenderer.invoke("tasks:clearCompleted"),
   },
   chat: {
     send: (conversationId: string, userContent: string) => ipcRenderer.invoke("chat:send", conversationId, userContent),
+    polishLastUser: (conversationId: string) =>
+      ipcRenderer.invoke("chat:polishLastUser", conversationId) as Promise<void>,
     generateReply: (conversationId: string) => ipcRenderer.invoke("chat:generateReply", conversationId),
     stop: () => ipcRenderer.invoke("chat:stop"),
     resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") =>

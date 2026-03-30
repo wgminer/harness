@@ -34,19 +34,40 @@ jobs:
       - name: Build and package macOS artifacts
         run: npm run dist:mac
 
+      - name: Resolve release artifact paths
+        id: artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          dmgs=(dist/**/*.dmg)
+          zips=(dist/**/*.zip)
+          if [ ${#dmgs[@]} -eq 0 ]; then
+            echo "No DMG artifacts found under dist/."
+            exit 1
+          fi
+          if [ ${#zips[@]} -eq 0 ]; then
+            echo "No ZIP artifacts found under dist/."
+            exit 1
+          fi
+          {
+            printf 'files<<EOF\n'
+            printf '%s\n' "${dmgs[@]}"
+            printf '%s\n' "${zips[@]}"
+            printf 'EOF\n'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist-macos
-          path: |
-            dist/*.dmg
-            dist/*.zip
+          path: ${{ steps.artifacts.outputs.files }}
           if-no-files-found: error
 
       - name: Publish GitHub release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/*.dmg
-            dist/*.zip
+          tag_name: ${{ github.ref_name }}
+          files: ${{ steps.artifacts.outputs.files }}
+          fail_on_unmatched_files: true
           generate_release_notes: true

@@ -28,9 +28,9 @@ NeMo conversion scripts require **Python 3.12+** (they use `tarfile.extract(...,
 
 `npm run build` (and anything that runs it, e.g. `dist:mac`) automatically runs **`prebuild`**: icon generation, then Parakeet setup on macOS. The first Parakeet run can take a long time and needs several GB free; later builds skip when `resources/parakeet/` already has `parakeet`, `libaxiom.0.dylib`, `model.safetensors`, and `vocab.txt`. Set `PARAKEET_FORCE=1` to redo Parakeet. `resources/parakeet/*` is gitignored except `.gitkeep`.
 
-### Local Parakeet transcription (optional)
+### Parakeet transcription (bundled)
 
-Voice transcription can use **NVIDIA Parakeet TDT 0.6B** via [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp) instead of the OpenAI Whisper API. **`parakeet:setup`** runs as part of **`prebuild`**; you can also run it alone:
+Voice is transcribed locally with **NVIDIA Parakeet TDT 0.6B** via [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp) (no separate transcription API). **`parakeet:setup`** runs as part of **`prebuild`**; you can also run it alone:
 
 ```bash
 npm run parakeet:setup

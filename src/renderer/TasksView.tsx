@@ -1,32 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ListTodo, Square, SquareCheck, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronRight, ListTodo, Square, SquareCheck, Trash2, X } from "lucide-react";
+import type { TaskItem, TasksPayload } from "../shared/electronAPI";
+import { normalizeTags, taskIsDone, toggleCompletedTag } from "../shared/taskTags";
 import { useScrolledHeader } from "./useScrolledHeader";
 
-type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
-
-interface TaskItem {
-  id: string;
-  title: string;
-  status: TaskStatus;
-}
-
-interface TasksPayload {
-  tasks: TaskItem[];
-}
-
-interface TasksViewProps {
-  onBack: () => void;
-}
-
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  pending: "Pending",
-  in_progress: "In progress",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-function statusLabel(s: TaskStatus): string {
-  return STATUS_LABEL[s] ?? s;
+function TagChips({ tags, className }: { tags: string[]; className?: string }) {
+  if (tags.length === 0) return null;
+  return (
+    <div className={className}>
+      {tags.map((tag) => (
+        <span key={tag} className="tasks-tag">
+          {tag.replace(/_/g, " ")}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function TaskRow({
@@ -38,7 +26,8 @@ function TaskRow({
   onToggleDone: (t: TaskItem) => void;
   onOpen: (t: TaskItem) => void;
 }) {
-  const done = t.status === "completed";
+  const tags = normalizeTags(t.tags);
+  const done = taskIsDone(tags);
   return (
     <li className="tasks-row">
       <button
@@ -56,30 +45,51 @@ function TaskRow({
       </button>
       <button type="button" className="tasks-row-body" onClick={() => onOpen(t)}>
         <div className={`tasks-row-title ${done ? "tasks-row-title--done" : ""}`}>{t.title}</div>
-        <div className="tasks-row-meta">
-          <span className="tasks-status-pill">{statusLabel(t.status)}</span>
-        </div>
+        <TagChips tags={tags} className="tasks-row-tags" />
       </button>
     </li>
   );
 }
 
-export function TasksView({ onBack }: TasksViewProps) {
+export function TasksView() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
   const [modalTask, setModalTask] = useState<TaskItem | null>(null);
   const [modalTitle, setModalTitle] = useState("");
-  const [modalStatus, setModalStatus] = useState<TaskStatus>("pending");
+  const [modalTags, setModalTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [modalSaving, setModalSaving] = useState(false);
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
+  const newTaskInputRef = useRef<HTMLTextAreaElement>(null);
+  const tagFieldRef = useRef<HTMLInputElement>(null);
+  const [activeOpen, setActiveOpen] = useState(true);
+  const [completedOpen, setCompletedOpen] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      newTaskInputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const adjustNewTaskInputHeight = useCallback(() => {
+    const el = newTaskInputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
+  useEffect(() => {
+    adjustNewTaskInputHeight();
+  }, [newTitle, adjustNewTaskInputHeight]);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const payload = (await window.electron.tasks.list()) as TasksPayload;
+        const payload = await window.electron.tasks.list();
         setTasks(payload.tasks ?? []);
       } finally {
         setLoading(false);
@@ -99,7 +109,7 @@ export function TasksView({ onBack }: TasksViewProps) {
     if (!title) return;
     setCreating(true);
     try {
-      const payload = await window.electron.tasks.create(title, "pending");
+      const payload = await window.electron.tasks.create(title, ["pending"]);
       refreshFromPayload(payload);
       setNewTitle("");
     } finally {
@@ -107,8 +117,8 @@ export function TasksView({ onBack }: TasksViewProps) {
     }
   };
 
-  const updateTaskStatus = async (id: string, status: TaskStatus) => {
-    const payload = await window.electron.tasks.update({ id, status });
+  const updateTaskTags = async (id: string, tags: string[]) => {
+    const payload = await window.electron.tasks.update({ id, tags });
     refreshFromPayload(payload);
   };
 
@@ -118,17 +128,15 @@ export function TasksView({ onBack }: TasksViewProps) {
   };
 
   const toggleDone = (t: TaskItem) => {
-    if (t.status === "completed") {
-      void updateTaskStatus(t.id, "pending");
-    } else {
-      void updateTaskStatus(t.id, "completed");
-    }
+    void updateTaskTags(t.id, toggleCompletedTag(t.tags));
   };
 
   const openModal = (t: TaskItem) => {
     setModalTask(t);
     setModalTitle(t.title);
-    setModalStatus(t.status);
+    setModalTags(normalizeTags(t.tags));
+    setTagInput("");
+    requestAnimationFrame(() => tagFieldRef.current?.focus());
   };
 
   const closeModal = useCallback(() => {
@@ -148,16 +156,32 @@ export function TasksView({ onBack }: TasksViewProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [modalTask, closeModal]);
 
+  const addModalTagFromInput = () => {
+    const next = normalizeTags([tagInput]);
+    if (next.length === 0) {
+      setTagInput("");
+      return;
+    }
+    const merged = normalizeTags([...modalTags, ...next]);
+    setModalTags(merged);
+    setTagInput("");
+  };
+
+  const removeModalTag = (tag: string) => {
+    setModalTags(modalTags.filter((x) => x !== tag));
+  };
+
   const saveModal = async () => {
     if (!modalTask) return;
     const trimmed = modalTitle.trim();
     if (!trimmed) return;
     setModalSaving(true);
     try {
+      const tags = modalTags.length > 0 ? modalTags : ["pending"];
       const payload = await window.electron.tasks.update({
         id: modalTask.id,
         title: trimmed,
-        status: modalStatus,
+        tags,
       });
       refreshFromPayload(payload);
       setModalTask(null);
@@ -177,79 +201,118 @@ export function TasksView({ onBack }: TasksViewProps) {
     }
   };
 
-  const activeTasks = tasks.filter((t) => t.status !== "completed");
-  const completedTasks = tasks.filter((t) => t.status === "completed");
+  const activeTasks = tasks.filter((t) => !taskIsDone(normalizeTags(t.tags)));
+  const completedTasks = tasks.filter((t) => taskIsDone(normalizeTags(t.tags)));
 
   return (
     <div className="settings-page">
       <header className={`settings-header ${headerScrolled ? "settings-header--scrolled" : ""}`}>
-        <button type="button" className="settings-back-btn btn" onClick={onBack}>
-          <ArrowLeft size={18} />
-          <span className="settings-back-label">Back</span>
-        </button>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <ListTodo size={18} />
-          <h2 className="settings-title">Tasks</h2>
+        <div className="settings-header-inner">
+          <div className="settings-header-title-row">
+            <ListTodo size={18} />
+            <h2 className="settings-title">Tasks</h2>
+          </div>
         </div>
       </header>
       <div ref={scrollRef} className="settings-scroll" onScroll={onScroll}>
         <div className="settings-content">
           <div className="settings-section">
-            <label htmlFor="tasks-new-input">New task</label>
-            <div className="tasks-new-row">
-              <textarea
-                id="tasks-new-input"
-                className="tasks-textarea"
-                placeholder="Describe the task…"
-                rows={3}
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    void createTask();
-                  }
-                }}
+            <button
+              type="button"
+              className="tasks-section-heading"
+              aria-expanded={activeOpen}
+              aria-controls="tasks-active-panel"
+              id="tasks-active-heading"
+              onClick={() => setActiveOpen((o) => !o)}
+            >
+              <ChevronRight
+                size={18}
+                strokeWidth={2}
+                className={`tasks-section-caret${activeOpen ? " tasks-section-caret--open" : ""}`}
+                aria-hidden
               />
-              <button
-                type="button"
-                className="btn tasks-new-add"
-                onClick={() => void createTask()}
-                disabled={creating || !newTitle.trim()}
-              >
-                Add
-              </button>
+              <span>Active</span>
+            </button>
+            <div id="tasks-active-panel" role="region" aria-labelledby="tasks-active-heading" hidden={!activeOpen}>
+              {loading ? (
+                <p className="tasks-section-lead">Loading tasks…</p>
+              ) : activeTasks.length === 0 ? (
+                <p className="tasks-section-lead">
+                  {tasks.length === 0 ? "No tasks yet." : "No active tasks."}
+                </p>
+              ) : (
+                <ul className="tasks-list">
+                  {activeTasks.map((t) => (
+                    <TaskRow key={t.id} task={t} onToggleDone={toggleDone} onOpen={openModal} />
+                  ))}
+                </ul>
+              )}
             </div>
-            <p className="tasks-hint">⌘/Ctrl+Enter to add</p>
-          </div>
-
-          <div className="settings-section">
-            <h3 className="settings-group__title">Active</h3>
-            {loading ? (
-              <p className="tasks-section-lead">Loading tasks…</p>
-            ) : activeTasks.length === 0 ? (
-              <p className="tasks-section-lead">
-                {tasks.length === 0 ? "No tasks yet." : "No active tasks."}
-              </p>
-            ) : (
-              <ul className="tasks-list">
-                {activeTasks.map((t) => (
-                  <TaskRow key={t.id} task={t} onToggleDone={toggleDone} onOpen={openModal} />
-                ))}
-              </ul>
-            )}
           </div>
 
           {completedTasks.length > 0 && (
             <div className="settings-group">
-              <h3 className="settings-group__title">Completed</h3>
-              <ul className="tasks-list">
-                {completedTasks.map((t) => (
-                  <TaskRow key={t.id} task={t} onToggleDone={toggleDone} onOpen={openModal} />
-                ))}
-              </ul>
+              <button
+                type="button"
+                className="tasks-section-heading"
+                aria-expanded={completedOpen}
+                aria-controls="tasks-completed-panel"
+                id="tasks-completed-heading"
+                onClick={() => setCompletedOpen((o) => !o)}
+              >
+                <ChevronRight
+                  size={18}
+                  strokeWidth={2}
+                  className={`tasks-section-caret${completedOpen ? " tasks-section-caret--open" : ""}`}
+                  aria-hidden
+                />
+                <span>Completed</span>
+              </button>
+              <div
+                id="tasks-completed-panel"
+                role="region"
+                aria-labelledby="tasks-completed-heading"
+                hidden={!completedOpen}
+              >
+                <ul className="tasks-list">
+                  {completedTasks.map((t) => (
+                    <TaskRow key={t.id} task={t} onToggleDone={toggleDone} onOpen={openModal} />
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="input-container input-container--sticky" data-testid="tasks-composer">
+        <div className="chat-composer-inner">
+          <textarea
+            ref={newTaskInputRef}
+            id="tasks-new-input"
+            className="chat-input"
+            aria-label="New task"
+            placeholder="Describe the task…"
+            rows={1}
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                void createTask();
+              }
+            }}
+          />
+          <div className="input-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void createTask()}
+              disabled={creating || !newTitle.trim()}
+            >
+              Add
+            </button>
+          </div>
         </div>
       </div>
 
@@ -291,17 +354,42 @@ export function TasksView({ onBack }: TasksViewProps) {
                 value={modalTitle}
                 onChange={(e) => setModalTitle(e.target.value)}
               />
-              <label htmlFor="tasks-modal-status">Status</label>
-              <select
-                id="tasks-modal-status"
-                value={modalStatus}
-                onChange={(e) => setModalStatus(e.target.value as TaskStatus)}
-              >
-                <option value="pending">Pending</option>
-                <option value="in_progress">In progress</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+              <label htmlFor="tasks-modal-tags-input">Tags</label>
+              <p className="tasks-modal-hint">Press Enter to add. Underscores show as spaces in the list.</p>
+              <div className="tasks-tag-field">
+                <div className="tasks-tag-editor">
+                  {modalTags.map((tag) => (
+                    <span key={tag} className="tasks-tag tasks-tag--editable">
+                      {tag.replace(/_/g, " ")}
+                      <button
+                        type="button"
+                        className="tasks-tag-remove"
+                        onClick={() => removeModalTag(tag)}
+                        disabled={modalSaving}
+                        aria-label={`Remove tag ${tag}`}
+                      >
+                        <X size={12} strokeWidth={2.5} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <input
+                  ref={tagFieldRef}
+                  id="tasks-modal-tags-input"
+                  type="text"
+                  className="tasks-tags-input"
+                  value={tagInput}
+                  placeholder="e.g. in progress, urgent"
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addModalTagFromInput();
+                    }
+                  }}
+                  disabled={modalSaving}
+                />
+              </div>
             </div>
             <div className="tasks-modal-footer">
               <button

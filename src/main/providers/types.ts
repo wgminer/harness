@@ -14,7 +14,13 @@ export interface LLMProvider {
   ): Promise<string | null>;
 }
 
+export interface TranscriptionResult {
+  text: string;
+  /** Subword token count from Parakeet CLI output when parseable. */
+  parakeetTokens?: number | null;
+}
+
 export interface TranscriptionProvider {
   id: string;
-  transcribe(audioBuffer: ArrayBuffer): Promise<string>;
+  transcribe(audioBuffer: ArrayBuffer): Promise<TranscriptionResult>;
 }

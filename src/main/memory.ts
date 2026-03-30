@@ -204,6 +204,15 @@ async function getMessages(conversationId: string): Promise<ChatMessage[]> {
   });
 }
 
+/** Removes the last message if it is from the user; returns its content, or null. */
+export async function popLastUserMessage(conversationId: string): Promise<string | null> {
+  const rows = await loadMessages(conversationId);
+  if (rows.length === 0 || rows[rows.length - 1].role !== "user") return null;
+  const content = rows[rows.length - 1].content;
+  await saveMessages(conversationId, rows.slice(0, -1));
+  return content;
+}
+
 async function appendMessage(
   conversationId: string,
   role: ChatMessage["role"],

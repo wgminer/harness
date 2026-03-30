@@ -7,8 +7,11 @@ import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import type { LayoutOptions, Plan, SearchResult } from "../shared/types";
 import type {} from "../shared/electronAPI";
+import { conversationDisplayTitle, formatNewChatLabel } from "./chatDisplayTitle";
 
 type Conversation = { id: string; title: string | null; createdAt: number };
+
+const SIDEBAR_CONVERSATION_PREVIEW_COUNT = 7;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -117,8 +120,22 @@ function groupConversations(conversations: Conversation[]): { groups: SidebarGro
   return { groups };
 }
 
-function formatNewChatLabel(createdAt: number): string {
-  return "New chat @ " + new Date(createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+/** Sidebar list: newest N by default; always includes the active conversation when collapsed. */
+function pickSidebarConversationsForList(
+  conversations: Conversation[],
+  listExpanded: boolean,
+  activeId: string | null
+): Conversation[] {
+  if (listExpanded || conversations.length <= SIDEBAR_CONVERSATION_PREVIEW_COUNT) {
+    return conversations;
+  }
+  const sorted = [...conversations].sort((a, b) => b.createdAt - a.createdAt);
+  const top = sorted.slice(0, SIDEBAR_CONVERSATION_PREVIEW_COUNT);
+  if (!activeId) return top;
+  if (top.some((c) => c.id === activeId)) return top;
+  const active = conversations.find((c) => c.id === activeId);
+  if (!active) return top;
+  return [...sorted.slice(0, SIDEBAR_CONVERSATION_PREVIEW_COUNT - 1), active];
 }
 
 function HighlightText({ text, range }: { text: string; range?: [number, number] }) {
@@ -144,6 +161,10 @@ export default function App() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [layout, setLayout] = useState<LayoutOptions>({ sidebar: "left", density: "comfortable" });
   const [windowSize, setWindowSize] = useState<"small" | "large">("large");
+  /** In small window mode, ignore hover/focus on the dock until the pointer re-enters or leaves (avoids stuck-open sidebar after shrink). */
+  const [sidebarPeekSuppressed, setSidebarPeekSuppressed] = useState(false);
+  /** Incremented when entering small window on chat so ChatView focuses the composer. */
+  const [focusComposerNonce, setFocusComposerNonce] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -164,6 +185,7 @@ export default function App() {
   const [activeChatProcessing, setActiveChatProcessing] = useState(false);
   /** Per-conversation refcount for async LLM thread title generation after a reply. */
   const [titleGenInFlight, setTitleGenInFlight] = useState<Record<string, number>>({});
+  const [sidebarConversationsExpanded, setSidebarConversationsExpanded] = useState(false);
 
   // Hotkey recorder — owns the background mic capture for the global shortcut path
   const hotkeyRecorder = useRecorder();
@@ -241,12 +263,30 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (windowSize !== "small") return;
+    setSidebarPeekSuppressed(true);
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest(".sidebar-dock")) {
+      active.blur();
+    }
+    if (view === "chat") {
+      setFocusComposerNonce((n) => n + 1);
+    }
+  }, [windowSize, view]);
+
+  useEffect(() => {
     window.electron.app.getVersion().then(setAppVersion).catch(() => setAppVersion(null));
   }, []);
 
   useEffect(() => {
+    const ensureCustomThemeLast = () => {
+      const el = document.getElementById("custom-theme");
+      if (el) document.head.appendChild(el);
+    };
+    ensureCustomThemeLast();
     window.electron.customization.getLayoutOptions().then(setLayout);
     window.electron.customization.getActiveTheme().then((css) => {
+      ensureCustomThemeLast();
       const el = document.getElementById("custom-theme") as HTMLStyleElement | null;
       if (el) el.textContent = css;
     });
@@ -254,6 +294,7 @@ export default function App() {
       if (p.type === "theme") {
         window.electron.customization.getActiveTheme().then((css) => {
           const el = document.getElementById("custom-theme") as HTMLStyleElement | null;
+          if (el) document.head.appendChild(el);
           if (el) el.textContent = css;
         });
       }
@@ -362,7 +403,21 @@ export default function App() {
     [conversationId, conversations]
   );
 
-  const { groups: sidebarGroups } = useMemo(() => groupConversations(conversations), [conversations]);
+  const sidebarListConversations = useMemo(
+    () => pickSidebarConversationsForList(conversations, sidebarConversationsExpanded, conversationId),
+    [conversations, sidebarConversationsExpanded, conversationId]
+  );
+  const { groups: sidebarGroups } = useMemo(
+    () => groupConversations(sidebarListConversations),
+    [sidebarListConversations]
+  );
+  const showSidebarConversationExpandControl = conversations.length > SIDEBAR_CONVERSATION_PREVIEW_COUNT;
+
+  useEffect(() => {
+    if (conversations.length <= SIDEBAR_CONVERSATION_PREVIEW_COUNT) {
+      setSidebarConversationsExpanded(false);
+    }
+  }, [conversations.length]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -445,6 +500,11 @@ export default function App() {
 
   const convById = useMemo(() => new Map(conversations.map((c) => [c.id, c])), [conversations]);
 
+  const activeChatConversation = useMemo(
+    () => (conversationId ? conversations.find((c) => c.id === conversationId) ?? null : null),
+    [conversations, conversationId]
+  );
+
   const handleChatActivityChange = useCallback((active: boolean) => {
     setActiveChatProcessing(active);
   }, []);
@@ -455,8 +515,18 @@ export default function App() {
       data-sidebar={layout.sidebar}
       data-density={layout.density}
       data-window-size={windowSize}
+      data-sidebar-peek-suppressed={windowSize === "small" && sidebarPeekSuppressed ? "true" : undefined}
     >
-      <aside className="sidebar">
+      <div
+        className="sidebar-dock"
+        onMouseEnter={() => setSidebarPeekSuppressed(false)}
+        onMouseLeave={() => setSidebarPeekSuppressed(false)}
+        onFocusCapture={() => setSidebarPeekSuppressed(false)}
+      >
+        {windowSize === "small" ? (
+          <button type="button" className="sidebar-edge-hit" aria-label="Open sidebar" />
+        ) : null}
+        <aside className="sidebar">
         {searchOpen ? (
           <div className="sidebar-search-row">
             <input
@@ -484,7 +554,7 @@ export default function App() {
           <div className="sidebar-buttons">
             <button
               type="button"
-              className="btn mr-auto sidebar-new-chat-btn"
+              className="btn sidebar-new-chat-btn"
               data-testid="sidebar-new-chat"
               aria-label="New chat"
               onClick={createNew}
@@ -504,29 +574,37 @@ export default function App() {
             <button
               type="button"
               className="btn btn-icon"
-              onClick={() => setView("tasks")}
-              aria-label="Tasks"
-            >
-              <ListTodo size={18} />
-            </button>
-            <button
-              type="button"
-              className="btn btn-icon"
-              data-testid="sidebar-settings"
-              onClick={() => setView("settings")}
-              aria-label="Settings"
-            >
-              <Settings size={18} />
-            </button>
-            <button
-              type="button"
-              className="btn btn-icon"
               onClick={async () => { const next = await window.electron.windowSize.toggle(); setWindowSize(next); }}
               aria-label={windowSize === "large" ? "Shrink window" : "Expand window"}
             >
               {windowSize === "large" ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
           </div>
+        )}
+        {!searchOpen && (
+          <nav className="sidebar-workspace" aria-label="Workspace">
+            <button
+              type="button"
+              className={`btn sidebar-workspace__btn${view === "tasks" ? " sidebar-workspace__btn--active" : ""}`}
+              onClick={() => setView("tasks")}
+              aria-label="Tasks"
+              aria-current={view === "tasks" ? "page" : undefined}
+            >
+              <ListTodo size={18} className="sidebar-workspace__icon" aria-hidden />
+              <span className="sidebar-workspace__label">Tasks</span>
+            </button>
+            <button
+              type="button"
+              className={`btn sidebar-workspace__btn${view === "settings" ? " sidebar-workspace__btn--active" : ""}`}
+              data-testid="sidebar-settings"
+              onClick={() => setView("settings")}
+              aria-label="Settings"
+              aria-current={view === "settings" ? "page" : undefined}
+            >
+              <Settings size={18} className="sidebar-workspace__icon" aria-hidden />
+              <span className="sidebar-workspace__label">Settings</span>
+            </button>
+          </nav>
         )}
         <ul className="sidebar-list">
           {searchOpen ? (
@@ -539,7 +617,7 @@ export default function App() {
                 searchResults.map((r) => (
                   <li
                     key={r.id}
-                    className={`search-result-item ${conversationId === r.id ? "active" : ""}`}
+                    className={`search-result-item ${conversationId === r.id && view === "chat" ? "active" : ""}`}
                     onClick={() => handleSearchResultClick(r.id)}
                   >
                     <span className="search-result-title">
@@ -572,12 +650,13 @@ export default function App() {
                   <ul className="sidebar-group-items">
                     {items.map((c) => {
                       const rowBusy =
+                        view === "chat" &&
                         conversationId === c.id &&
                         (activeChatProcessing || (titleGenInFlight[c.id] ?? 0) > 0);
                       return (
                         <li
                           key={c.id}
-                          className={`sidebar-item ${conversationId === c.id ? "active" : ""}`}
+                          className={`sidebar-item ${conversationId === c.id && view === "chat" ? "active" : ""}`}
                           data-testid="sidebar-conversation"
                           data-conversation-id={c.id}
                           onClick={() => { setConversationId(c.id); setView("chat"); }}
@@ -603,6 +682,33 @@ export default function App() {
                   </ul>
                 </li>
               ))}
+              {showSidebarConversationExpandControl ? (
+                <li className="sidebar-list-expand">
+                  {sidebarConversationsExpanded ? (
+                    <button
+                      type="button"
+                      className="btn sidebar-list-expand-btn"
+                      data-testid="sidebar-conversations-show-less"
+                      onClick={() => setSidebarConversationsExpanded(false)}
+                    >
+                      Show less
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn sidebar-list-expand-btn"
+                      data-testid="sidebar-conversations-show-more"
+                      aria-label={`Show all ${conversations.length} conversations`}
+                      onClick={() => setSidebarConversationsExpanded(true)}
+                    >
+                      <span className="sidebar-list-expand-label-default">Show all</span>
+                      <span className="sidebar-list-expand-label-hover" aria-hidden>
+                        Show all {conversations.length}
+                      </span>
+                    </button>
+                  )}
+                </li>
+              ) : null}
             </>
           )}
         </ul>
@@ -612,11 +718,17 @@ export default function App() {
           </div>
         ) : null}
       </aside>
+      </div>
       <main className="main">
         {view === "chat" && (
           <ChatView
             key={conversationId ?? "none"}
             conversationId={conversationId}
+            displayTitle={
+              activeChatConversation
+                ? conversationDisplayTitle(activeChatConversation.title, activeChatConversation.createdAt)
+                : ""
+            }
             onConversationCreated={loadConversations}
             pendingHotkeyText={pendingHotkeyText}
             pendingHotkeyDraftOnly={pendingHotkeyDraftOnly}
@@ -625,16 +737,13 @@ export default function App() {
               setPendingHotkeyDraftOnly(false);
             }}
             onChatActivityChange={handleChatActivityChange}
+            focusComposerNonce={focusComposerNonce}
           />
         )}
         {view === "settings" && (
-          <SettingsView
-            onBack={() => setView("chat")}
-            onImportComplete={loadConversations}
-            onStoredDataReset={onStoredDataReset}
-          />
+          <SettingsView onImportComplete={loadConversations} onStoredDataReset={onStoredDataReset} />
         )}
-        {view === "tasks" && <TasksView key={tasksRemountKey} onBack={() => setView("chat")} />}
+        {view === "tasks" && <TasksView key={tasksRemountKey} />}
       </main>
     </div>
   );

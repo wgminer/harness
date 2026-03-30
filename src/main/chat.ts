@@ -1,19 +1,19 @@
 import { ipcMain, BrowserWindow } from "electron";
 import OpenAI from "openai";
 import { getSettings } from "./settings";
-import { getMessages, getUserMemory, appendMessage } from "./memory";
+import { getMessages, getUserMemory, appendMessage, popLastUserMessage } from "./memory";
+import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import { scheduleConversationTitleRefinement } from "./conversationTitle";
 import { getProvider } from "./providers/registry";
 import { executeFileTool } from "./fileTools";
 import { executeCustomizationTool } from "./customization";
 import { executeAssistantTool, isAssistantToolName } from "./assistantTools";
-import type { ChatMessage, Settings } from "../shared/types";
+import type { ChatMessage } from "../shared/types";
+import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { HARNESS_E2E_ASSISTANT_REPLY, isHarnessE2E } from "./e2eStub";
 
-function activeChatModel(settings: Settings): string {
-  return settings.activeProvider === "ollama"
-    ? (settings.ollama?.model ?? "")
-    : (settings.openai?.model ?? "");
+function activeChatModelLabel(): string {
+  return OPENAI_CHAT_MODEL;
 }
 
 let activeAbortController: AbortController | null = null;
@@ -29,7 +29,11 @@ function getMainWindow(): BrowserWindow | null {
   return wins.length > 0 ? wins[0] : null;
 }
 
-async function buildMessageList(conversationId: string, userContent?: string): Promise<ChatMessage[]> {
+async function buildMessageList(
+  conversationId: string,
+  userContent?: string,
+  secondUserContent?: string
+): Promise<ChatMessage[]> {
   const userMemory = await getUserMemory();
   const memoryBlock =
     Object.keys(userMemory).length > 0
@@ -40,8 +44,8 @@ async function buildMessageList(conversationId: string, userContent?: string): P
       : "";
 
   const systemPrompt =
-    "Helpful assistant running in a local desktop app. Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent task list visible in a dedicated panel); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); and get_datetime (for the current date and time, optionally in a specific IANA timezone). Call them when appropriate."
-    + (memoryBlock ? "\n\n" + memoryBlock : "");
+    "Helpful assistant running in a local desktop app. Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent tagged task list visible in a dedicated panel); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); and get_datetime (for the current date and time, optionally in a specific IANA timezone). Call them when appropriate." +
+    (memoryBlock ? "\n\n" + memoryBlock : "");
 
   const history = await getMessages(conversationId);
   const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
@@ -50,6 +54,9 @@ async function buildMessageList(conversationId: string, userContent?: string): P
   }
   if (userContent) {
     messages.push({ role: "user", content: userContent });
+  }
+  if (secondUserContent) {
+    messages.push({ role: "user", content: secondUserContent });
   }
   return messages;
 }
@@ -115,7 +122,7 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
 
   if (isHarnessE2E()) {
     const win = getMainWindow();
-    const modelLabel = activeChatModel(settings);
+    const modelLabel = activeChatModelLabel();
     const synthetic = HARNESS_E2E_ASSISTANT_REPLY;
     win?.webContents.send("chat:streamChunk", conversationId, synthetic);
     win?.webContents.send("chat:streamEnd", conversationId);
@@ -126,7 +133,7 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
     return;
   }
 
-  if (settings.activeProvider === "openai" && !settings.openai?.apiKey) {
+  if (!settings.openai?.apiKey) {
     throw new Error("OpenAI API key not set. Configure it in Settings.");
   }
 
@@ -147,7 +154,7 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
     return result;
   };
 
-  const modelLabel = activeChatModel(settings);
+  const modelLabel = activeChatModelLabel();
 
   let didAppendAssistant = false;
   try {
@@ -192,7 +199,7 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
   } finally {
     activeAbortController = null;
     if (didAppendAssistant) {
-      scheduleConversationTitleRefinement(conversationId, provider);
+      scheduleConversationTitleRefinement(conversationId);
     }
   }
 }
@@ -206,6 +213,21 @@ export function registerChatHandlers(): void {
       await streamAssistantReply(conversationId, messages);
     }
   );
+
+  /** Pop last user message, then send polish instruction + that text as two user messages and stream. */
+  ipcMain.handle("chat:polishLastUser", async (_e, conversationId: string) => {
+    const transcript = await popLastUserMessage(conversationId);
+    if (transcript == null) {
+      throw new Error("No user message to polish.");
+    }
+    const instruction = DICTATION_POLISH_INSTRUCTION;
+    const t1 = Date.now();
+    const t2 = t1 + 1;
+    const messages = await buildMessageList(conversationId, instruction, transcript);
+    await appendMessage(conversationId, "user", instruction, { timestamp: t1 });
+    await appendMessage(conversationId, "user", transcript, { timestamp: t2 });
+    await streamAssistantReply(conversationId, messages);
+  });
 
   ipcMain.handle(
     "chat:generateReply",

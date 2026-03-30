@@ -1,11 +1,27 @@
-import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
+import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings } from "../shared/types";
+import type { UsageStatsSnapshot } from "../shared/usageStats";
+import { EMPTY_USAGE_STATS } from "../shared/usageStats";
 import { useScrolledHeader } from "./useScrolledHeader";
+import {
+  BODY_FONT_OPTIONS,
+  MONO_FONT_OPTIONS,
+  FONT_SIZE_OPTIONS,
+  THEME_FORM_DEFAULT,
+  buildThemeCss,
+  themeFromStoredCss,
+  normalizeColorPickerValue,
+  headingToCssValue,
+  BODY_FONT_STACKS,
+  MONO_FONT_STACKS,
+  type BodyFontId,
+  type MonoFontId,
+  type HeadingFontChoice,
+} from "./themeFonts";
 
 interface SettingsViewProps {
-  onBack: () => void;
   /** After ChatGPT import (new conversations in sidebar). */
   onImportComplete?: () => void;
   /** After full local data erase (conversations, memory file, tasks, plans). */
@@ -14,27 +30,16 @@ interface SettingsViewProps {
 
 const SAVE_DEBOUNCE_MS = 500;
 
-const OPENAI_MODELS = [
-  { value: "gpt-5.3-codex", label: "Coding" },
-  { value: "gpt-5.2", label: "General" },
-  { value: "gpt-5-mini", label: "Fast & cheap" },
-];
-
 const D = DEFAULT_SETTINGS;
 
-export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: SettingsViewProps) {
-  const [activeProvider, setActiveProvider] = useState<"openai" | "ollama">(D.activeProvider);
+export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsViewProps) {
   const [apiKey, setApiKey] = useState(D.openai!.apiKey);
-  const [model, setModel] = useState(D.openai!.model);
-  const [ollamaBaseUrl, setOllamaBaseUrl] = useState(D.ollama!.baseUrl);
-  const [ollamaModel, setOllamaModel] = useState(D.ollama!.model);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [usageStats, setUsageStats] = useState<UsageStatsSnapshot>(EMPTY_USAGE_STATS);
 
-  const [transcriptionProvider, setTranscriptionProvider] = useState<"openai" | "local">(D.transcription!.activeProvider);
-  const [parakeetUseGpu, setParakeetUseGpu] = useState(D.transcription?.parakeet?.useGpu ?? false);
-  const [parakeetFp16, setParakeetFp16] = useState(D.transcription?.parakeet?.fp16 ?? false);
+  const [cleanupEnabled, setCleanupEnabled] = useState(D.transcription?.cleanup?.enabled ?? false);
 
   const [autoSend, setAutoSend] = useState(true);
-  const [scrollOnStream, setScrollOnStream] = useState(D.chat!.scrollOnStream);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [userMemory, setUserMemory] = useState<Record<string, string>>({});
   const [newMemTitle, setNewMemTitle] = useState("");
@@ -47,6 +52,11 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
     () => typeof navigator !== "undefined" && navigator.platform.startsWith("Mac")
   );
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
+  const [themeForm, setThemeForm] = useState({ ...THEME_FORM_DEFAULT });
+  const [themeApplyBusy, setThemeApplyBusy] = useState(false);
+  const [themeApplyMessage, setThemeApplyMessage] = useState<string | null>(null);
+  const [themeApplyError, setThemeApplyError] = useState<string | null>(null);
+  const themeMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextSaveRef = useRef(true);
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
@@ -54,24 +64,28 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
   useEffect(() => {
     window.electron.settings.get().then((s) => {
       const S = s as Settings;
-      setActiveProvider(S.activeProvider ?? D.activeProvider);
       setApiKey(S.openai?.apiKey ?? D.openai!.apiKey);
-      setModel(S.openai?.model ?? D.openai!.model);
-      setOllamaBaseUrl(S.ollama?.baseUrl ?? D.ollama!.baseUrl);
-      setOllamaModel(S.ollama?.model ?? D.ollama!.model);
       setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
-      setScrollOnStream(S.chat?.scrollOnStream ?? D.chat!.scrollOnStream);
-      setTranscriptionProvider(S.transcription?.activeProvider ?? D.transcription!.activeProvider);
-      setParakeetUseGpu(S.transcription?.parakeet?.useGpu ?? D.transcription?.parakeet?.useGpu ?? false);
-      setParakeetFp16(S.transcription?.parakeet?.fp16 ?? D.transcription?.parakeet?.fp16 ?? false);
+      setCleanupEnabled(S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false);
     });
+    void window.electron.usage.getStats().then(setUsageStats);
     window.electron.memory.getUserMemory().then(setUserMemory);
+    window.electron.customization.getActiveTheme().then((css) => {
+      setThemeForm(themeFromStoredCss(css));
+    });
   }, []);
 
   useEffect(() => {
     if (!isMac) return;
     void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
   }, [isMac]);
+
+  useEffect(
+    () => () => {
+      if (themeMsgTimerRef.current) clearTimeout(themeMsgTimerRef.current);
+    },
+    []
+  );
 
   useEffect(() => {
     if (skipNextSaveRef.current) {
@@ -81,14 +95,12 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
     const timer = setTimeout(async () => {
       setSaveStatus("saving");
       await window.electron.settings.set({
-        activeProvider,
-        openai: { apiKey, model },
-        ollama: { baseUrl: ollamaBaseUrl, model: ollamaModel },
+        openai: { apiKey },
         recording: { autoSend },
-        chat: { scrollOnStream },
         transcription: {
-          activeProvider: transcriptionProvider,
-          parakeet: { useGpu: parakeetUseGpu, fp16: parakeetFp16 },
+          cleanup: {
+            enabled: cleanupEnabled,
+          },
         },
       });
       setSaveStatus("saved");
@@ -105,7 +117,7 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
         hideToastRef.current = null;
       }
     };
-  }, [activeProvider, apiKey, model, ollamaBaseUrl, ollamaModel, autoSend, scrollOnStream, transcriptionProvider, parakeetUseGpu, parakeetFp16]);
+  }, [apiKey, autoSend, cleanupEnabled]);
 
   const addMemory = async () => {
     if (!newMemTitle.trim()) return;
@@ -149,147 +161,201 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
     }
   };
 
+  const showThemeNotice = (msg: string) => {
+    if (themeMsgTimerRef.current) clearTimeout(themeMsgTimerRef.current);
+    setThemeApplyError(null);
+    setThemeApplyMessage(msg);
+    themeMsgTimerRef.current = setTimeout(() => {
+      setThemeApplyMessage(null);
+      themeMsgTimerRef.current = null;
+    }, 2200);
+  };
+
+  const applyTheme = async () => {
+    setThemeApplyBusy(true);
+    setThemeApplyError(null);
+    try {
+      await window.electron.customization.setTheme(buildThemeCss(themeForm));
+      showThemeNotice("Theme applied");
+    } catch (e) {
+      setThemeApplyMessage(null);
+      setThemeApplyError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setThemeApplyBusy(false);
+    }
+  };
+
+  const resetThemeToBuiltin = async () => {
+    setThemeApplyBusy(true);
+    setThemeApplyError(null);
+    try {
+      await window.electron.customization.setTheme("");
+      setThemeForm({ ...THEME_FORM_DEFAULT });
+      showThemeNotice("Restored built-in theme");
+    } catch (e) {
+      setThemeApplyMessage(null);
+      setThemeApplyError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setThemeApplyBusy(false);
+    }
+  };
+
+  const playgroundPreviewStyle = {
+    "--accent": themeForm.accent,
+    "--font-family": BODY_FONT_STACKS[themeForm.bodyFont],
+    "--font-mono": MONO_FONT_STACKS[themeForm.monoFont],
+    "--font-heading": headingToCssValue(themeForm.headingFont),
+    "--font-size": `${themeForm.fontSize}px`,
+    "--line-height": 1.5,
+  } as CSSProperties;
+
   return (
     <div className="settings-page">
       <header className={`settings-header ${headerScrolled ? "settings-header--scrolled" : ""}`}>
-        <button type="button" className="settings-back-btn btn" data-testid="settings-back" onClick={onBack}>
-          <ArrowLeft size={18} />
-          <span className="settings-back-label">Back</span>
-        </button>
-        <h2 className="settings-title">Settings</h2>
+        <div className="settings-header-inner">
+          <h2 className="settings-title">Settings</h2>
+        </div>
       </header>
       <div ref={scrollRef} className="settings-scroll" onScroll={onScroll}>
         <div className="settings-content">
 
           <section className="settings-group">
             <h3 className="settings-group__title">Chat model</h3>
+            <p className="settings-group__lead">
+              Paste your key from OpenAI. Chat and titles use it; voice is handled on your Mac.
+            </p>
             <div className="settings-section">
-              <label>LLM provider</label>
-              <select
-                value={activeProvider}
-                onChange={(e) => setActiveProvider(e.target.value as "openai" | "ollama")}
-              >
-                <option value="openai">OpenAI</option>
-                <option value="ollama">Ollama (local)</option>
-              </select>
+              <label htmlFor="settings-api-key">API key</label>
+              <div className="settings-api-key-row">
+                <input
+                  id="settings-api-key"
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                />
+                <button
+                  type="button"
+                  className="btn btn-icon"
+                  aria-pressed={showApiKey}
+                  aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                  title={showApiKey ? "Hide key" : "Show key"}
+                  onClick={() => setShowApiKey((v) => !v)}
+                >
+                  {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
-
-            {activeProvider === "openai" && (
-              <>
-                <div className="settings-section">
-                  <label>OpenAI API key</label>
-                  <input
-                    type="text"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="sk-..."
-                  />
+            <div className="settings-section settings-section--usage">
+              <p className="settings-group__lead settings-group__lead--tight">
+                Estimated usage recorded on this Mac (chat, titles, transcript cleanup). Parakeet runs locally; counts
+                come from its CLI and transcribed text.
+              </p>
+              <dl className="usage-stats">
+                <div className="usage-stats__row">
+                  <dt>OpenAI tokens (prompt)</dt>
+                  <dd>{usageStats.openai.promptTokens.toLocaleString()}</dd>
                 </div>
-                <div className="settings-section">
-                  <label>Model</label>
-                  <select value={model} onChange={(e) => setModel(e.target.value)}>
-                    {!OPENAI_MODELS.some((m) => m.value === model) && (
-                      <option value={model}>{model}</option>
-                    )}
-                    {OPENAI_MODELS.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label} — {m.value}
-                      </option>
-                    ))}
-                  </select>
+                <div className="usage-stats__row">
+                  <dt>OpenAI tokens (completion)</dt>
+                  <dd>{usageStats.openai.completionTokens.toLocaleString()}</dd>
                 </div>
-              </>
-            )}
-
-            {activeProvider === "ollama" && (
-              <>
-                <div className="settings-section">
-                  <label>Ollama base URL</label>
-                  <input
-                    type="text"
-                    value={ollamaBaseUrl}
-                    onChange={(e) => setOllamaBaseUrl(e.target.value)}
-                    placeholder="http://localhost:11434"
-                  />
+                <div className="usage-stats__row usage-stats__row--emph">
+                  <dt>OpenAI tokens (total)</dt>
+                  <dd>{usageStats.openai.totalTokens.toLocaleString()}</dd>
                 </div>
-                <div className="settings-section">
-                  <label>Model</label>
-                  <input
-                    type="text"
-                    value={ollamaModel}
-                    onChange={(e) => setOllamaModel(e.target.value)}
-                    placeholder="llama3"
-                  />
+                <div className="usage-stats__row">
+                  <dt>Parakeet model tokens</dt>
+                  <dd>{usageStats.parakeet.modelTokens.toLocaleString()}</dd>
                 </div>
+                <div className="usage-stats__row">
+                  <dt>Parakeet words transcribed</dt>
+                  <dd>{usageStats.parakeet.words.toLocaleString()}</dd>
+                </div>
+                <div className="usage-stats__row">
+                  <dt>Dictation sessions</dt>
+                  <dd>{usageStats.parakeet.transcriptions.toLocaleString()}</dd>
+                </div>
+              </dl>
+              {usageStats.updatedAt > 0 && (
                 <p className="settings-group__hint settings-group__hint--flush">
-                  Ollama must be running locally. Any model that supports tool calling (e.g. llama3, mistral-nemo) will work.
+                  Last updated {new Date(usageStats.updatedAt).toLocaleString()}
                 </p>
-              </>
-            )}
+              )}
+              <div className="settings-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    void window.electron.usage.openOpenAIDashboard();
+                  }}
+                >
+                  OpenAI usage &amp; billing
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    void window.electron.usage.getStats().then(setUsageStats);
+                  }}
+                >
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    if (!window.confirm("Clear OpenAI and Parakeet usage tallies on this device?")) return;
+                    void window.electron.usage.reset().then(setUsageStats);
+                  }}
+                >
+                  Reset local tallies
+                </button>
+              </div>
+            </div>
           </section>
 
           <section className="settings-group">
-            <h3 className="settings-group__title">Transcription</h3>
-            <p className="settings-group__lead">Where voice is turned into text before it reaches the chat.</p>
-            <div className="settings-section">
-              <label>Provider</label>
-              <select
-                value={transcriptionProvider}
-                onChange={(e) => setTranscriptionProvider(e.target.value as "openai" | "local")}
+            <h3 className="settings-group__title">Voice & transcription</h3>
+            <p className="settings-group__lead">
+              Spoken audio is turned into text on this device. Optional cleanup uses your API key.
+            </p>
+            <label className="settings-switch-row">
+              <input
+                id="transcriptCleanupToggle"
+                type="checkbox"
+                className="settings-switch-input"
+                checked={cleanupEnabled}
+                onChange={(e) => setCleanupEnabled(e.target.checked)}
+              />
+              <span className="settings-switch-track" aria-hidden="true">
+                <span className="settings-switch-thumb" />
+              </span>
+              <span className="settings-switch-text">Automatically tidy up dictation text</span>
+            </label>
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => window.electron.recording.openFolder()}
               >
-                <option value="openai">OpenAI Whisper</option>
-                <option value="local">Local (Parakeet)</option>
-              </select>
+                Open recordings folder
+              </button>
             </div>
-            {transcriptionProvider === "local" && (
-              <>
-                <div className="settings-toggle-row">
-                  <input
-                    id="parakeetGpuToggle"
-                    type="checkbox"
-                    checked={parakeetUseGpu}
-                    onChange={(e) => {
-                      const v = e.target.checked;
-                      setParakeetUseGpu(v);
-                      if (!v) setParakeetFp16(false);
-                    }}
-                  />
-                  <label htmlFor="parakeetGpuToggle">Use GPU (Metal on Apple Silicon)</label>
-                </div>
-                <div className="settings-toggle-row">
-                  <input
-                    id="parakeetFp16Toggle"
-                    type="checkbox"
-                    checked={parakeetFp16}
-                    onChange={(e) => setParakeetFp16(e.target.checked)}
-                    disabled={!parakeetUseGpu}
-                  />
-                  <label htmlFor="parakeetFp16Toggle">FP16 (half precision; requires GPU)</label>
-                </div>
-                <p className="settings-group__hint settings-group__hint--flush">
-                  Uses NVIDIA Parakeet TDT 0.6B via{" "}
-                  <a href="https://github.com/Frikallo/parakeet.cpp" target="_blank" rel="noreferrer">
-                    parakeet.cpp
-                  </a>
-                  . Bundled by <code>prebuild</code> when you run <code>npm run build</code>; or run <code>npm run parakeet:setup</code> alone (see BUILD.md).
-                </p>
-              </>
-            )}
           </section>
 
           {isMac && (
             <section className="settings-group">
-              <h3 className="settings-group__title">Global voice shortcut (Fn)</h3>
+              <h3 className="settings-group__title">Fn shortcut</h3>
               <p className="settings-group__lead">
-                Tap <strong>Fn</strong> once to start recording, then tap <strong>Fn</strong> again to stop and
-                transcribe. This requires{" "}
-                <strong>Accessibility</strong> for Harness (and the small <code>HarnessFnMonitor</code> helper
-                if macOS lists it separately).
+                Press <strong>Fn</strong> to start recording, press again to stop. Harness needs Accessibility; allow <code>HarnessFnMonitor</code> too if macOS lists it.
               </p>
               <p className="settings-group__hint settings-group__hint--flush">
-                After enabling, <strong>quit and reopen Harness</strong> so the Fn listener can attach. If
-                nothing happens when you press Fn, use the buttons below — macOS does not always show a prompt
-                automatically.
+                After changing permissions, quit and reopen the app. Use the buttons if macOS doesn’t prompt you.
               </p>
               <div className="settings-actions">
                 <button
@@ -303,7 +369,7 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
                     }, 800);
                   }}
                 >
-                  Show permission prompt
+                  Ask for permission
                 </button>
                 <button
                   type="button"
@@ -316,72 +382,36 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
                     }, 1500);
                   }}
                 >
-                  Open Accessibility settings
+                  Open accessibility
                 </button>
               </div>
-              {accessibilityTrusted === true ? (
-                <p className="settings-group__hint settings-group__hint--flush">
-                  Harness reports Accessibility as trusted. If Fn still does nothing, confirm{" "}
-                  <code>HarnessFnMonitor</code> is also allowed, then restart the app.
-                </p>
-              ) : (
-                <p className="settings-group__hint settings-group__hint--flush">
-                  Status: {accessibilityTrusted === false ? "not trusted yet (or helper still blocked)" : "checking…"}
-                </p>
-              )}
+              <p className="settings-group__hint settings-group__hint--flush">
+                {accessibilityTrusted === true
+                  ? "Accessibility looks good. If Fn still won’t work, restart and check both Harness and Fn Monitor."
+                  : accessibilityTrusted === false
+                    ? "Accessibility not enabled yet."
+                    : "Checking…"}
+              </p>
             </section>
           )}
 
           <section className="settings-group">
-            <h3 className="settings-group__title">Recordings folder</h3>
-            <p className="settings-group__lead">
-              Voice recordings are saved automatically to the app data folder.
-            </p>
-            <div className="settings-actions">
-              <button
-                type="button"
-                className="btn"
-                onClick={() => window.electron.recording.openFolder()}
-              >
-                Open recordings folder
-              </button>
-            </div>
-          </section>
-
-          <section className="settings-group">
-            <h3 className="settings-group__title">Chat</h3>
-            <p className="settings-group__lead">
-              While the assistant is generating a reply, keep the transcript scrolled to the bottom so new text stays in view. Turn off if you prefer to read earlier messages without the view moving.
-            </p>
-            <div className="settings-toggle-row">
-              <input
-                id="scrollOnStreamToggle"
-                data-testid="settings-scroll-on-stream"
-                type="checkbox"
-                checked={scrollOnStream}
-                onChange={(e) => setScrollOnStream(e.target.checked)}
-              />
-              <label htmlFor="scrollOnStreamToggle">Scroll as the reply streams in</label>
-            </div>
-          </section>
-
-          <section className="settings-group">
-            <h3 className="settings-group__title">Auto-send</h3>
-            <p className="settings-group__lead">
-              After a voice recording finishes in a new conversation, automatically send the transcription as a new message.
-            </p>
-            <div className="settings-toggle-row">
+            <h3 className="settings-group__title">After dictation</h3>
+            <p className="settings-group__lead">Send the transcribed message right away in a new chat.</p>
+            <label className="settings-switch-row">
               <input
                 id="autoSendToggle"
                 data-testid="settings-auto-send"
                 type="checkbox"
+                className="settings-switch-input"
                 checked={autoSend}
                 onChange={(e) => setAutoSend(e.target.checked)}
               />
-              <label htmlFor="autoSendToggle">
-                Activate auto-send
-              </label>
-            </div>
+              <span className="settings-switch-track" aria-hidden="true">
+                <span className="settings-switch-thumb" />
+              </span>
+              <span className="settings-switch-text">Auto-send</span>
+            </label>
           </section>
 
           {saveStatus !== "idle" && (
@@ -391,11 +421,9 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
           )}
 
           <section className="settings-group">
-            <h3 className="settings-group__title">Long-term memory</h3>
+            <h3 className="settings-group__title">Memory</h3>
             <p className="settings-group__lead">
-              Short facts the assistant can rely on in every chat. On each message you send, these entries are merged into the <strong>system prompt</strong> for that request (alongside the fixed assistant instructions), so whichever model you use—OpenAI or local—sees them as context for that turn.
-              Use a <strong>short label</strong> (like a filename: <code>preferred_stack</code>) and a <strong>detail</strong> line or two.
-              The label must be unique; adding again with the same label replaces the detail.
+              Stable facts the assistant can use in every conversation. Pick a short name and a one-line detail; same name updates the old entry.
             </p>
             {Object.entries(userMemory).map(([k, v]) => (
               <div key={k} className="settings-memory-row">
@@ -444,10 +472,8 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
           </section>
 
           <section className="settings-group">
-            <h3 className="settings-group__title">Import ChatGPT history</h3>
-            <p className="settings-group__lead">
-              Import from the raw unzipped ChatGPT export folder (the folder that contains <code>conversations-*.json</code> and optionally <code>shared_conversations.json</code>). Titles and order use shared_conversations when present.
-            </p>
+            <h3 className="settings-group__title">Import from ChatGPT</h3>
+            <p className="settings-group__lead">Choose the folder from an unzipped ChatGPT export.</p>
             <div className="settings-actions">
               <button
                 type="button"
@@ -480,18 +506,165 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
           </section>
 
           <section className="settings-group">
-            <h3 className="settings-group__title">Reset stored chat data</h3>
+            <h3 className="settings-group__title">{"Theme preview"}</h3>
             <p className="settings-group__lead">
-              Harness keeps data in plain JSON files under your app data folder (there is no separate database). This removes the chat-related files in the <code>memory</code> subdirectory.
+              Adjust accent, fonts (including Google Fonts loaded with the app), and base size. The preview uses
+              your current app colors; only the accent is overridden here until you apply. Apply saves your
+              overrides to the theme file (replacing any previous custom theme from this screen or tools).
             </p>
-            <p className="settings-group__hint">
-              <strong>Deletes:</strong> <code>conversations.json</code>, every <code>messages_*.json</code> transcript file,{" "}
-              <code>user_memory.json</code> (long-term facts above), <code>tasks.json</code>, and <code>plans.json</code>.
+            <div className="settings-playground">
+              <div className="settings-playground-tools settings-section">
+                <div className="settings-playground-field">
+                  <label htmlFor="theme-accent">Accent color</label>
+                  <div className="settings-playground-color-row">
+                    <input
+                      id="theme-accent"
+                      type="color"
+                      value={normalizeColorPickerValue(themeForm.accent)}
+                      onChange={(e) =>
+                        setThemeForm((f) => ({ ...f, accent: e.target.value }))
+                      }
+                      aria-label="Accent color picker"
+                    />
+                    <input
+                      type="text"
+                      value={themeForm.accent}
+                      onChange={(e) => setThemeForm((f) => ({ ...f, accent: e.target.value }))}
+                      spellCheck={false}
+                      autoComplete="off"
+                      aria-label="Accent hex"
+                    />
+                  </div>
+                </div>
+                <div className="settings-playground-field">
+                  <label htmlFor="theme-body-font">Body font</label>
+                  <select
+                    id="theme-body-font"
+                    value={themeForm.bodyFont}
+                    onChange={(e) =>
+                      setThemeForm((f) => ({ ...f, bodyFont: e.target.value as BodyFontId }))
+                    }
+                  >
+                    {BODY_FONT_OPTIONS.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="settings-playground-field">
+                  <label htmlFor="theme-heading-font">Heading font</label>
+                  <select
+                    id="theme-heading-font"
+                    value={themeForm.headingFont}
+                    onChange={(e) =>
+                      setThemeForm((f) => ({
+                        ...f,
+                        headingFont: e.target.value as HeadingFontChoice,
+                      }))
+                    }
+                  >
+                    <option value="same_body">Same as body</option>
+                    <option value="same_mono">Same as mono</option>
+                    {BODY_FONT_OPTIONS.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="settings-playground-field">
+                  <label htmlFor="theme-mono-font">Mono / button font</label>
+                  <select
+                    id="theme-mono-font"
+                    value={themeForm.monoFont}
+                    onChange={(e) =>
+                      setThemeForm((f) => ({ ...f, monoFont: e.target.value as MonoFontId }))
+                    }
+                  >
+                    {MONO_FONT_OPTIONS.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="settings-playground-field">
+                  <label htmlFor="theme-font-size">Base font size</label>
+                  <select
+                    id="theme-font-size"
+                    value={themeForm.fontSize}
+                    onChange={(e) =>
+                      setThemeForm((f) => ({
+                        ...f,
+                        fontSize: Number(e.target.value) as (typeof FONT_SIZE_OPTIONS)[number],
+                      }))
+                    }
+                  >
+                    {FONT_SIZE_OPTIONS.map((n) => (
+                      <option key={n} value={n}>
+                        {n}px
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="settings-actions settings-playground-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={themeApplyBusy}
+                    onClick={() => void applyTheme()}
+                  >
+                    {themeApplyBusy ? "Applying…" : "Apply theme"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={themeApplyBusy}
+                    onClick={() => void resetThemeToBuiltin()}
+                  >
+                    Reset to built-in
+                  </button>
+                </div>
+                {themeApplyMessage && (
+                  <p className="settings-playground-status settings-playground-status--ok" role="status">
+                    {themeApplyMessage}
+                  </p>
+                )}
+                {themeApplyError && (
+                  <p className="settings-playground-status settings-playground-status--err" role="alert">
+                    {themeApplyError}
+                  </p>
+                )}
+              </div>
+              <div className="settings-playground-canvas" style={playgroundPreviewStyle}>
+                <h4 className="settings-playground-canvas__title">Conversation title</h4>
+                <p className="settings-playground-canvas__body">
+                  This paragraph uses the body stack and size.{" "}
+                  <span className="settings-playground-canvas__accent">Accent</span> highlights links and focus.
+                </p>
+                <p className="settings-playground-canvas__muted">
+                  Secondary line — timestamps, hints, and labels often look like this.
+                </p>
+                <div className="settings-playground-canvas__panel">
+                  <span className="settings-playground-canvas__panel-label">Inset</span>
+                  <p className="settings-playground-canvas__body settings-playground-canvas__body--tight">
+                    A block on a lifted surface uses the secondary background.
+                  </p>
+                </div>
+                <button type="button" className="settings-playground-canvas__btn">
+                  Sample button
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="settings-group">
+            <h3 className="settings-group__title">Erase local data</h3>
+            <p className="settings-group__lead">
+              Removes chats, tasks, plans, and memory entries. Keeps settings, theme, and your recording files.
             </p>
-            <p className="settings-group__hint">
-              <strong>Does not delete:</strong> <code>settings.json</code> (API keys and preferences), theme/layout files, or voice recordings in <code>recordings/</code>.
-            </p>
-            <div className="settings-actions" style={{ marginTop: 12 }}>
+            <div className="settings-actions">
               {!resetConfirm ? (
                 <button
                   type="button"
@@ -499,11 +672,11 @@ export function SettingsView({ onBack, onImportComplete, onStoredDataReset }: Se
                   onClick={() => setResetConfirm(true)}
                   disabled={resetting}
                 >
-                  Erase all local data
+                  Erase…
                 </button>
               ) : (
                 <>
-                  <div className="settings-reset-prompt">Erase all of the files listed above?</div>
+                  <div className="settings-reset-prompt">Erase everything listed above?</div>
                   <button
                     type="button"
                     className="btn"

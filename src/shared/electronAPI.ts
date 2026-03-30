@@ -1,9 +1,13 @@
 import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./types";
+import type { UsageStatsSnapshot } from "./usageStats";
 
 export interface TaskItem {
   id: string;
   title: string;
-  status: string;
+  tags: string[];
+  createdAt?: number;
+  updatedAt?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TasksPayload {
@@ -34,6 +38,12 @@ export interface ElectronAPI {
     get: () => Promise<unknown>;
     set: (partial: unknown) => Promise<unknown>;
   };
+  /** Locally accumulated usage (tokens / words); not synced with provider billing. */
+  usage: {
+    getStats: () => Promise<UsageStatsSnapshot>;
+    reset: () => Promise<UsageStatsSnapshot>;
+    openOpenAIDashboard: () => Promise<void>;
+  };
   memory: {
     createConversation: () => Promise<string>;
     getConversation: (id: string) => Promise<unknown>;
@@ -62,13 +72,15 @@ export interface ElectronAPI {
   };
   tasks: {
     list: () => Promise<TasksPayload>;
-    create: (title: string, status?: string) => Promise<TasksPayload>;
-    update: (payload: { id: string; title?: string; status?: string }) => Promise<TasksPayload>;
+    create: (title: string, tags?: string[]) => Promise<TasksPayload>;
+    update: (payload: { id: string; title?: string; tags?: string[] }) => Promise<TasksPayload>;
     delete: (id: string) => Promise<TasksPayload>;
     clearCompleted: () => Promise<TasksPayload>;
   };
   chat: {
     send: (conversationId: string, content: string) => Promise<void>;
+    /** Replace last user message with polish instruction + same text, then stream. */
+    polishLastUser: (conversationId: string) => Promise<void>;
     generateReply: (conversationId: string) => Promise<void>;
     stop: () => Promise<void>;
     resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") => Promise<void>;

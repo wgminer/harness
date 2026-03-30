@@ -91,8 +91,8 @@ test("settings auto-send toggle persists", async () => {
   await expect(toggle).toBeChecked({ checked: !before });
   // Debounced save in SettingsView (500ms)
   await win.waitForTimeout(700);
-  await win.getByTestId("settings-back").click();
-  await expect(win.getByTestId("sidebar-new-chat")).toBeVisible();
+  await win.getByTestId("sidebar-new-chat").click();
+  await expect(win.getByTestId("chat-composer")).toBeVisible();
   await win.getByTestId("sidebar-settings").click();
   await expect(win.getByTestId("settings-auto-send")).toBeChecked({ checked: !before });
 });

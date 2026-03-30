@@ -4,8 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { randomUUID } from "crypto";
 import { access } from "fs/promises";
-import type { TranscriptionProvider } from "./types";
-import type { Settings } from "../../shared/types";
+import type { TranscriptionProvider, TranscriptionResult } from "./types";
 import { getParakeetBundleDir, PARAKEET_FILENAMES } from "../parakeetPaths";
 
 async function pathExists(p: string): Promise<boolean> {
@@ -56,31 +55,30 @@ function runParakeetCli(exe: string, args: string[]): Promise<{ stdout: string; 
   });
 }
 
-/**
- * Local transcription via parakeet.cpp CLI (NVIDIA Parakeet TDT 0.6B — tdt-600m).
- * Bundle layout: resources/parakeet/{parakeet,model.safetensors,vocab.txt}
- */
+/** Prefer Metal on Apple Silicon when available. */
 function defaultUseGpu(): boolean {
   return process.arch === "arm64" && process.platform === "darwin";
 }
 
-export function createParakeetTranscriptionProvider(settings: Settings): TranscriptionProvider {
-  const useGpu = settings.transcription?.parakeet?.useGpu ?? defaultUseGpu();
-  const fp16 = settings.transcription?.parakeet?.fp16 ?? false;
+/**
+ * Local transcription via parakeet.cpp CLI (NVIDIA Parakeet TDT 0.6B — tdt-600m).
+ * Bundle layout: resources/parakeet/{parakeet,model.safetensors,vocab.txt}
+ */
+export function createParakeetTranscriptionProvider(): TranscriptionProvider {
+  const useGpu = defaultUseGpu();
+  const fp16 = useGpu;
 
   return {
     id: "parakeet-local",
 
-    async transcribe(audioBuffer: ArrayBuffer): Promise<string> {
+    async transcribe(audioBuffer: ArrayBuffer): Promise<TranscriptionResult> {
       const base = getParakeetBundleDir();
       const exe = join(base, PARAKEET_FILENAMES.cli);
       const weights = join(base, PARAKEET_FILENAMES.weights);
       const vocab = join(base, PARAKEET_FILENAMES.vocab);
 
       if (!(await pathExists(exe))) {
-        throw new Error(
-          `Parakeet CLI not found at ${exe}. Run npm run parakeet:setup (see BUILD.md).`
-        );
+        throw new Error(`Parakeet CLI not found at ${exe}. Run npm run parakeet:setup (see BUILD.md).`);
       }
       if (!(await pathExists(weights)) || !(await pathExists(vocab))) {
         throw new Error(
@@ -106,12 +104,12 @@ export function createParakeetTranscriptionProvider(settings: Settings): Transcr
           throw new Error(`Parakeet failed: ${detail}`);
         }
         if (tokenCount === 0) {
-          return "";
+          return { text: "", parakeetTokens: 0 };
         }
         if (!text) {
           throw new Error(stderr.trim() || "Parakeet returned no transcript.");
         }
-        return text;
+        return { text, parakeetTokens: tokenCount };
       } finally {
         await unlink(wavPath).catch(() => {});
       }

@@ -110,10 +110,11 @@ export const TOOL_DEFINITIONS = [
         type: "object",
         properties: {
           title: { type: "string", description: "Short description of the task" },
-          status: {
-            type: "string",
-            description: "Initial status for the task",
-            enum: ["pending", "in_progress", "completed", "cancelled"],
+          tags: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Labels for the task (e.g. pending, in_progress, completed, cancelled, or custom tags like urgent). Defaults to [pending] if omitted.",
           },
           metadata: {
             type: "object",
@@ -129,16 +130,16 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "task_update",
       description:
-        "Update an existing persistent assistant task (for example, mark it completed, change the title, or attach metadata).",
+        "Update an existing persistent assistant task (for example, change tags, rename, or attach metadata). Pass tags to replace the full tag list.",
       parameters: {
         type: "object",
         properties: {
           id: { type: "string", description: "ID of the task to update (from task_list/task_create results)" },
           title: { type: "string", description: "New title, if you want to rename the task" },
-          status: {
-            type: "string",
-            description: "New status for the task",
-            enum: ["pending", "in_progress", "completed", "cancelled"],
+          tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Complete replacement tag list for the task (normalized to lowercase labels).",
           },
           metadata: {
             type: "object",
@@ -167,7 +168,8 @@ export const TOOL_DEFINITIONS = [
     type: "function" as const,
     function: {
       name: "task_clear_completed",
-      description: "Remove all tasks that are already completed or cancelled to keep the task list tidy.",
+      description:
+        "Remove all tasks tagged completed or cancelled to keep the task list tidy.",
       parameters: {
         type: "object",
         properties: {},
