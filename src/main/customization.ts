@@ -1,14 +1,20 @@
 import { ipcMain, BrowserWindow } from "electron";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
 import { app } from "electron";
 import type { LayoutOptions } from "../shared/types";
 import { DEFAULT_LAYOUT } from "../shared/types";
+import {
+  DEFAULT_THEME_SETTINGS,
+  normalizeThemeSettings,
+  themeSettingsToCss,
+  type ThemeSettings,
+} from "../shared/theme";
 
 const THEMES_DIR = "themes";
-const CUSTOM_CSS = "custom.css";
+const THEME_FILE = "theme.json";
 const LAYOUT_FILE = "layout.json";
-const MAX_CSS_SIZE = 100 * 1024; // 100KB
+const MAX_THEME_JSON = 32 * 1024;
 
 function getThemesDir(): string {
   const dir = join(app.getPath("userData"), THEMES_DIR);
@@ -16,32 +22,49 @@ function getThemesDir(): string {
   return dir;
 }
 
-function getCustomCssPath(): string {
-  return join(getThemesDir(), CUSTOM_CSS);
+function getThemePath(): string {
+  return join(getThemesDir(), THEME_FILE);
 }
 
 function getLayoutPath(): string {
   return join(app.getPath("userData"), LAYOUT_FILE);
 }
 
-function validateCss(content: string): boolean {
-  if (content.length > MAX_CSS_SIZE) return false;
-  const lower = content.toLowerCase();
-  if (lower.includes("<script") || lower.includes("javascript:")) return false;
-  return true;
+function readThemeSettings(): ThemeSettings | null {
+  const path = getThemePath();
+  if (!existsSync(path)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf-8"));
+    return normalizeThemeSettings(raw);
+  } catch {
+    return null;
+  }
 }
 
-function getActiveTheme(): string {
-  const path = getCustomCssPath();
-  if (!existsSync(path)) return "";
-  return readFileSync(path, "utf-8");
-}
-
-function setTheme(cssContent: string): void {
-  if (!validateCss(cssContent)) throw new Error("Invalid or too large CSS");
-  const path = getCustomCssPath();
-  writeFileSync(path, cssContent, "utf-8");
+function writeThemeFile(settings: ThemeSettings | null): void {
+  const path = getThemePath();
+  if (settings == null) {
+    if (existsSync(path)) unlinkSync(path);
+  } else {
+    writeFileSync(path, JSON.stringify(settings, null, 2), "utf-8");
+  }
   notifyRenderer("customization:updated", { type: "theme" });
+}
+
+function getActiveThemeCss(): string {
+  const s = readThemeSettings();
+  return s ? themeSettingsToCss(s) : "";
+}
+
+function setThemeSettings(settings: ThemeSettings | null): void {
+  if (settings == null) {
+    writeThemeFile(null);
+    return;
+  }
+  const next = normalizeThemeSettings(settings);
+  const json = JSON.stringify(next);
+  if (json.length > MAX_THEME_JSON) throw new Error("Theme data too large");
+  writeThemeFile(next);
 }
 
 function getLayoutOptions(): LayoutOptions {
@@ -76,11 +99,24 @@ function notifyRenderer(channel: string, payload: unknown): void {
   }
 }
 
+function applyThemePatch(args: Record<string, unknown>): void {
+  const current = readThemeSettings() ?? DEFAULT_THEME_SETTINGS;
+  const merged = {
+    ...current,
+    ...(typeof args.accent === "string" ? { accent: args.accent } : {}),
+    ...(args.bodyFont !== undefined ? { bodyFont: args.bodyFont } : {}),
+    ...(args.uiFont !== undefined ? { uiFont: args.uiFont } : {}),
+    ...(args.headingFont !== undefined ? { headingFont: args.headingFont } : {}),
+    ...(args.buttonFont !== undefined ? { buttonFont: args.buttonFont } : {}),
+    ...(args.fontSize !== undefined ? { fontSize: args.fontSize } : {}),
+  };
+  setThemeSettings(normalizeThemeSettings(merged));
+}
+
 export function executeCustomizationTool(name: string, args: Record<string, unknown>): string {
   try {
     if (name === "update_theme") {
-      const css = String(args.css_content ?? "");
-      setTheme(css);
+      applyThemePatch(args);
       return JSON.stringify({ ok: true, message: "Theme updated" });
     }
     if (name === "set_layout") {
@@ -97,8 +133,15 @@ export function executeCustomizationTool(name: string, args: Record<string, unkn
 }
 
 export function registerCustomizationHandlers(): void {
-  ipcMain.handle("customization:getActiveTheme", () => getActiveTheme());
-  ipcMain.handle("customization:setTheme", (_e, cssContent: string) => setTheme(cssContent));
+  ipcMain.handle("customization:getActiveTheme", () => getActiveThemeCss());
+  ipcMain.handle("customization:getThemeSettings", () => readThemeSettings() ?? DEFAULT_THEME_SETTINGS);
+  ipcMain.handle("customization:setThemeSettings", (_e, settings: unknown) => {
+    if (settings === null) {
+      setThemeSettings(null);
+      return;
+    }
+    setThemeSettings(normalizeThemeSettings(settings));
+  });
   ipcMain.handle("customization:getLayoutOptions", () => getLayoutOptions());
   ipcMain.handle("customization:setLayout", (_e, options: Partial<LayoutOptions>) => setLayout(options));
 }

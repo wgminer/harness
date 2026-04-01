@@ -84,9 +84,11 @@ function countWords(text: string): number {
   return t.split(/\s+/).length;
 }
 
-/** Call after a successful local transcription (Parakeet + optional cleanup). */
+/** Call after a successful local transcription (Parakeet + optional cleanup). Skips tally when transcript is empty. */
 export function recordParakeetTranscription(text: string, modelTokens: number | null | undefined): void {
-  const words = countWords(text);
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  const words = countWords(trimmed);
   enqueue(async () => {
     const s = await load();
     s.parakeet.transcriptions += 1;

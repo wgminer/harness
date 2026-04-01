@@ -20,6 +20,18 @@ export function normalizeTags(input: unknown): string[] {
 
 const LEGACY_STATUSES = new Set(["pending", "in_progress", "completed", "cancelled"]);
 
+/** Tags shown in the Tasks UI (excludes workflow/status labels). */
+export function taskTagsWithoutLegacyStatus(tags: string[]): string[] {
+  return normalizeTags(tags).filter((t) => !LEGACY_STATUSES.has(t));
+}
+
+/** Merge edited custom tags with existing status tags (pending, completed, etc.). */
+export function mergeCustomTaskTags(existingTags: string[], customTags: string[]): string[] {
+  const norm = normalizeTags(existingTags);
+  const legacy = norm.filter((t) => LEGACY_STATUSES.has(t));
+  return normalizeTags([...legacy, ...customTags]);
+}
+
 export function tagsFromLegacyStatus(status: unknown): string[] | null {
   if (typeof status !== "string") return null;
   const s = status.trim().toLowerCase();

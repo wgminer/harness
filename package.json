@@ -13,6 +13,7 @@
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && node scripts/dist-mac.js",
     "dist:mac:replace": "npm run dist:mac -- --replace",
+    "verify:mac-trust": "node scripts/verify-mac-trust.js",
     "icon:icns": "node build/make-icns.js",
     "parakeet:setup": "node scripts/setup-parakeet.js",
     "build:fn-monitor": "bash scripts/build-fn-monitor.sh",

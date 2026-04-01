@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight, ListTodo, Square, SquareCheck, Trash2, X } from "lucide-react";
 import type { TaskItem, TasksPayload } from "../shared/electronAPI";
-import { normalizeTags, taskIsDone, toggleCompletedTag } from "../shared/taskTags";
+import {
+  mergeCustomTaskTags,
+  normalizeTags,
+  taskIsDone,
+  taskTagsWithoutLegacyStatus,
+  toggleCompletedTag,
+} from "../shared/taskTags";
 import { useScrolledHeader } from "./useScrolledHeader";
+import { Modal } from "./Modal";
 
 function TagChips({ tags, className }: { tags: string[]; className?: string }) {
   if (tags.length === 0) return null;
@@ -27,6 +34,7 @@ function TaskRow({
   onOpen: (t: TaskItem) => void;
 }) {
   const tags = normalizeTags(t.tags);
+  const displayTags = taskTagsWithoutLegacyStatus(tags);
   const done = taskIsDone(tags);
   return (
     <li className="tasks-row">
@@ -45,7 +53,7 @@ function TaskRow({
       </button>
       <button type="button" className="tasks-row-body" onClick={() => onOpen(t)}>
         <div className={`tasks-row-title ${done ? "tasks-row-title--done" : ""}`}>{t.title}</div>
-        <TagChips tags={tags} className="tasks-row-tags" />
+        <TagChips tags={displayTags} className="tasks-row-tags" />
       </button>
     </li>
   );
@@ -109,7 +117,7 @@ export function TasksView() {
     if (!title) return;
     setCreating(true);
     try {
-      const payload = await window.electron.tasks.create(title, ["pending"]);
+      const payload = await window.electron.tasks.create(title, []);
       refreshFromPayload(payload);
       setNewTitle("");
     } finally {
@@ -134,7 +142,7 @@ export function TasksView() {
   const openModal = (t: TaskItem) => {
     setModalTask(t);
     setModalTitle(t.title);
-    setModalTags(normalizeTags(t.tags));
+    setModalTags(taskTagsWithoutLegacyStatus(t.tags));
     setTagInput("");
     requestAnimationFrame(() => tagFieldRef.current?.focus());
   };
@@ -177,7 +185,7 @@ export function TasksView() {
     if (!trimmed) return;
     setModalSaving(true);
     try {
-      const tags = modalTags.length > 0 ? modalTags : ["pending"];
+      const tags = mergeCustomTaskTags(modalTask.tags, modalTags);
       const payload = await window.electron.tasks.update({
         id: modalTask.id,
         title: trimmed,
@@ -316,108 +324,85 @@ export function TasksView() {
         </div>
       </div>
 
-      {modalTask && (
-        <div
-          className="tasks-modal-backdrop"
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeModal();
-          }}
-        >
-          <div
-            className="tasks-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="tasks-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="tasks-modal-header">
-              <h3 id="tasks-modal-title" className="tasks-modal-heading">
-                Edit task
-              </h3>
+      <Modal
+        open={modalTask != null}
+        onClose={closeModal}
+        title="Edit task"
+        closeDisabled={modalSaving}
+        variant="scrollable"
+        footerClassName="app-modal-footer--spread"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-cancel"
+              onClick={() => void deleteFromModal()}
+              disabled={modalSaving}
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
+            <div className="app-modal-footer-actions">
+              <button type="button" className="btn" onClick={closeModal} disabled={modalSaving}>
+                Cancel
+              </button>
               <button
                 type="button"
-                className="btn btn-icon tasks-modal-close"
-                onClick={closeModal}
-                disabled={modalSaving}
-                aria-label="Close"
+                className="btn btn-primary"
+                onClick={() => void saveModal()}
+                disabled={modalSaving || !modalTitle.trim()}
               >
-                <X size={18} />
+                {modalSaving ? "Saving…" : "Save"}
               </button>
             </div>
-            <div className="tasks-modal-body">
-              <label htmlFor="tasks-modal-title-input">Title</label>
-              <textarea
-                id="tasks-modal-title-input"
-                className="tasks-textarea tasks-textarea--modal"
-                rows={5}
-                value={modalTitle}
-                onChange={(e) => setModalTitle(e.target.value)}
-              />
-              <label htmlFor="tasks-modal-tags-input">Tags</label>
-              <p className="tasks-modal-hint">Press Enter to add. Underscores show as spaces in the list.</p>
-              <div className="tasks-tag-field">
-                <div className="tasks-tag-editor">
-                  {modalTags.map((tag) => (
-                    <span key={tag} className="tasks-tag tasks-tag--editable">
-                      {tag.replace(/_/g, " ")}
-                      <button
-                        type="button"
-                        className="tasks-tag-remove"
-                        onClick={() => removeModalTag(tag)}
-                        disabled={modalSaving}
-                        aria-label={`Remove tag ${tag}`}
-                      >
-                        <X size={12} strokeWidth={2.5} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <input
-                  ref={tagFieldRef}
-                  id="tasks-modal-tags-input"
-                  type="text"
-                  className="tasks-tags-input"
-                  value={tagInput}
-                  placeholder="e.g. in progress, urgent"
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addModalTagFromInput();
-                    }
-                  }}
-                  disabled={modalSaving}
-                />
-              </div>
-            </div>
-            <div className="tasks-modal-footer">
-              <button
-                type="button"
-                className="btn btn-cancel"
-                onClick={() => void deleteFromModal()}
-                disabled={modalSaving}
-              >
-                <Trash2 size={14} />
-                Delete
-              </button>
-              <div className="tasks-modal-footer-actions">
-                <button type="button" className="btn" onClick={closeModal} disabled={modalSaving}>
-                  Cancel
-                </button>
+          </>
+        }
+      >
+        <label htmlFor="tasks-modal-title-input">Title</label>
+        <textarea
+          id="tasks-modal-title-input"
+          className="tasks-textarea tasks-textarea--modal"
+          rows={5}
+          value={modalTitle}
+          onChange={(e) => setModalTitle(e.target.value)}
+        />
+        <label htmlFor="tasks-modal-tags-input">Tags</label>
+        <p className="tasks-modal-hint">Press Enter to add. Underscores show as spaces in the list.</p>
+        <div className="tasks-tag-field">
+          <div className="tasks-tag-editor">
+            {modalTags.map((tag) => (
+              <span key={tag} className="tasks-tag tasks-tag--editable">
+                {tag.replace(/_/g, " ")}
                 <button
                   type="button"
-                  className="btn btn-primary"
-                  onClick={() => void saveModal()}
-                  disabled={modalSaving || !modalTitle.trim()}
+                  className="tasks-tag-remove"
+                  onClick={() => removeModalTag(tag)}
+                  disabled={modalSaving}
+                  aria-label={`Remove tag ${tag}`}
                 >
-                  {modalSaving ? "Saving…" : "Save"}
+                  <X size={12} strokeWidth={2.5} />
                 </button>
-              </div>
-            </div>
+              </span>
+            ))}
           </div>
+          <input
+            ref={tagFieldRef}
+            id="tasks-modal-tags-input"
+            type="text"
+            className="tasks-tags-input"
+            value={tagInput}
+            placeholder="e.g. in progress, urgent"
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addModalTagFromInput();
+              }
+            }}
+            disabled={modalSaving}
+          />
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

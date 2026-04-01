@@ -108,6 +108,7 @@ Set these environment variables, then run the build. You can put them in a `.env
 | `APPLE_ID` | Your Apple ID email |
 | `APPLE_APP_SPECIFIC_PASSWORD` | The app-specific password from step 4 |
 | `APPLE_TEAM_ID` | Your Team ID from step 5 |
+| `REQUIRE_NOTARIZE` | Set to `1` or `true` to **fail the build** if notarization credentials are missing (instead of skipping with a warning). `npm run release` sets this automatically. |
 
 Example (replace with your values):
 
@@ -131,8 +132,27 @@ Equivalent: `npm run dist:mac -- --replace` (the dedicated script avoids the ext
 
 Quit Harness if it is running before replacing, so the copy can succeed.
 
-- If you **omit** the `APPLE_*` variables, the app will still be **signed**; the build will skip notarization and print a warning. The app will run but users may see Gatekeeper warnings.
-- If you **set** all of them, the build will sign and then notarize the app. After notarization, the DMG/zip is ready to distribute.
+- If you **omit** the `APPLE_*` variables, the app will still be **signed** (when `CSC_*` is set); the build will skip notarization and print a warning. Other Macs often see Gatekeeper **“unverified”** or **“cannot be opened”** until users override security — **do not ship** builds made this way.
+- If you **set** all `APPLE_*` variables, the build will sign and then notarize the app. After notarization, the DMG/zip is ready to distribute.
+- **`npm run release`** sets `REQUIRE_NOTARIZE=1`, so a missing `APPLE_*` configuration **fails the build** instead of producing a skipped-notarization artifact.
+
+---
+
+## 7. Verify the build before distributing
+
+On the Mac where you built (or on CI, this runs automatically after pack), confirm the app is signed, passes Gatekeeper, and has a **stapled** notarization ticket:
+
+```bash
+npm run verify:mac-trust
+```
+
+This looks for `dist/mac-universal/Harness.app`, `dist/mac-arm64/Harness.app`, or `dist/mac/Harness.app`. To check a specific bundle:
+
+```bash
+npm run verify:mac-trust -- /path/to/Harness.app
+```
+
+**Only share the DMG/ZIP** from a build where `verify:mac-trust` passes. If another computer still shows a warning, compare that machine’s copy against a fresh download: re-download; don’t copy `.app` over AirDrop without the full zip/dmg flow if quarantine attributes differ.
 
 Outputs (for Mac) are under:
 
@@ -144,11 +164,15 @@ You can double‑click `Harness.app` in `dist/mac-*` or the DMG to install and o
 
 ---
 
-## 8. Automated distribution website (GitHub Releases + Pages)
+## 8. Simple distribution flow (checked-in DMG + Pages)
 
-This repo can publish a DMG download website automatically from tags.
+This project ships one DMG file directly from the repo:
 
-### One-command release
+- `site/downloads/harness-latest.dmg`
+
+The GitHub Pages download button links to that exact file.
+
+### Quick release command
 
 Run:
 
@@ -156,46 +180,26 @@ Run:
 npm run release
 ```
 
-The command:
+This command:
 
 1. Verifies your git working tree is clean.
-2. Asks whether this is a `patch`, `minor`, or `major` release.
-3. Shows current -> next version and asks for confirmation (`Continue? y/N`).
-4. Runs `npm run dist:mac`.
-5. Runs `npm version <type>` to create the version commit and `vX.Y.Z` tag.
-6. Pushes commit + tag to GitHub.
+2. Builds `dist:mac` with **`REQUIRE_NOTARIZE=1`**.
+3. Copies the newest `dist/*.dmg` to `site/downloads/harness-latest.dmg`.
+4. Prints the git commands to commit and push the DMG.
 
-Pushing the tag triggers GitHub Actions to build release assets and deploy the download site.
+### Manual checklist
 
-### GitHub Actions workflows
-
-- `.github/workflows/release.yml`: on tag push (`v*`), builds mac artifacts and publishes DMG/ZIP to GitHub Releases.
-- `.github/workflows/pages.yml`: reads the latest release DMG metadata and deploys `site/` to GitHub Pages.
-
-### Required GitHub secrets
-
-Set these repository secrets so the release workflow can sign/notarize:
-
-- `CSC_LINK`
-- `CSC_KEY_PASSWORD`
-- `APPLE_ID`
-- `APPLE_APP_SPECIFIC_PASSWORD`
-- `APPLE_TEAM_ID`
+1. Build locally (`npm run dist:mac`) with your signing/notarization env vars set.
+2. Verify notarization and Gatekeeper trust (`npm run verify:mac-trust`).
+3. Copy your built DMG to `site/downloads/harness-latest.dmg` (or run `npm run release` to do this copy step automatically).
+4. Commit and push the updated DMG.
+5. Confirm the site button downloads `harness-latest.dmg`.
 
 ### GitHub Pages setup
 
 1. In GitHub repo settings, open **Pages**.
 2. Set **Source** to **GitHub Actions**.
-3. Run a release (`npm run release`) or manually run the **Deploy Download Site** workflow once.
-
-### Manual fallback
-
-If needed, you can still tag and push manually:
-
-```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
+3. The `Deploy Download Site` workflow publishes whenever `site/` changes on `main` (or you can run it manually).
 
 ---
 
@@ -211,6 +215,9 @@ Update `author` and `description` in `package.json` as needed.
 ---
 
 ## Troubleshooting
+
+- **“Unverified developer” / Gatekeeper on another Mac**  
+  The artifact was likely **not notarized** (notarization was skipped because `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` were not all set at build time). Rebuild with those variables set and run `npm run verify:mac-trust` on the produced `.app`. If verification passes but users still see warnings, ensure they are installing from your **DMG or ZIP**, not a manually copied `.app` missing quarantine clearing.
 
 - **“No identity found” / signing fails**  
   Ensure `CSC_LINK` points to the `.p12` and `CSC_KEY_PASSWORD` is correct. If you have multiple Developer ID certs, set `CSC_NAME` to the exact name in Keychain.

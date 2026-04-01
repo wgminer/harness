@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require("node:child_process");
-const { createInterface } = require("node:readline/promises");
-const { stdin, stdout } = require("node:process");
-
-const RELEASE_TYPES = ["patch", "minor", "major"];
+const fs = require("node:fs");
+const path = require("node:path");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -31,25 +29,16 @@ function capture(command, args, options = {}) {
   return (result.stdout || "").trim();
 }
 
-function bumpVersion(version, releaseType) {
-  const parts = version.split(".").map((part) => Number(part));
-  if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
-    throw new Error(`Unsupported version format: ${version}`);
+function getDistDmgs() {
+  const distDir = path.resolve(process.cwd(), "dist");
+  if (!fs.existsSync(distDir)) {
+    return [];
   }
 
-  let [major, minor, patch] = parts;
-  if (releaseType === "major") {
-    major += 1;
-    minor = 0;
-    patch = 0;
-  } else if (releaseType === "minor") {
-    minor += 1;
-    patch = 0;
-  } else {
-    patch += 1;
-  }
-
-  return `${major}.${minor}.${patch}`;
+  return fs
+    .readdirSync(distDir)
+    .filter((name) => name.toLowerCase().endsWith(".dmg"))
+    .map((name) => path.join(distDir, name));
 }
 
 function ensureCleanWorkingTree() {
@@ -62,61 +51,46 @@ function ensureCleanWorkingTree() {
   }
 }
 
-async function chooseReleaseType(rl) {
-  const answer = (
-    await rl.question("Release type (patch/minor/major): ")
-  ).trim().toLowerCase();
-  if (!RELEASE_TYPES.includes(answer)) {
-    console.error("Invalid release type. Choose patch, minor, or major.");
+function main() {
+  ensureCleanWorkingTree();
+  const version = capture("node", ["-p", "require('./package.json').version"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    cwd: process.cwd(),
+  });
+
+  console.log("Building macOS distribution (notarization required)...");
+  run("npm", ["run", "dist:mac"], {
+    env: { ...process.env, REQUIRE_NOTARIZE: "1" },
+  });
+
+  const dmgs = getDistDmgs();
+  if (dmgs.length === 0) {
+    console.error("No DMG file found in dist/ after build.");
     process.exit(1);
   }
-  return answer;
+
+  const sourceDmg = dmgs.sort((a, b) => {
+    const aMtime = fs.statSync(a).mtimeMs;
+    const bMtime = fs.statSync(b).mtimeMs;
+    return bMtime - aMtime;
+  })[0];
+
+  const downloadsDir = path.resolve(process.cwd(), "site", "downloads");
+  fs.mkdirSync(downloadsDir, { recursive: true });
+  const targetDmg = path.join(downloadsDir, "harness-latest.dmg");
+  fs.copyFileSync(sourceDmg, targetDmg);
+
+  console.log(`Copied ${path.basename(sourceDmg)} -> site/downloads/harness-latest.dmg`);
+  console.log("Next steps:");
+  console.log("  1) npm run verify:mac-trust");
+  console.log("  2) git add site/downloads/harness-latest.dmg");
+  console.log(`  3) git commit -m "release macOS dmg v${version}"`);
+  console.log("  4) git push origin main");
 }
 
-async function confirm(rl, message) {
-  const answer = (await rl.question(`${message} `)).trim().toLowerCase();
-  return answer === "y" || answer === "yes";
-}
-
-async function main() {
-  ensureCleanWorkingTree();
-
-  const rl = createInterface({ input: stdin, output: stdout });
-  try {
-    const currentVersion = capture("node", ["-p", "require('./package.json').version"], {
-      stdio: ["ignore", "pipe", "pipe"],
-      cwd: process.cwd(),
-    });
-    const releaseType = await chooseReleaseType(rl);
-    const nextVersion = bumpVersion(currentVersion, releaseType);
-    const nextTag = `v${nextVersion}`;
-
-    console.log(`Current version: ${currentVersion}`);
-    console.log(`Next version: ${nextVersion}`);
-
-    const proceed = await confirm(rl, "Continue? (y/N)");
-    if (!proceed) {
-      console.log("Release cancelled.");
-      process.exit(0);
-    }
-
-    console.log("Building macOS distribution...");
-    run("npm", ["run", "dist:mac"]);
-
-    console.log(`Bumping version (${releaseType}) and creating tag ${nextTag}...`);
-    run("npm", ["version", releaseType]);
-
-    console.log("Pushing commit and tag...");
-    run("git", ["push", "origin", "HEAD"]);
-    run("git", ["push", "origin", nextTag]);
-
-    console.log(`Release ${nextTag} pushed. GitHub Actions will publish artifacts and update the download site.`);
-  } finally {
-    rl.close();
-  }
-}
-
-main().catch((error) => {
+try {
+  main();
+} catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
-});
+}

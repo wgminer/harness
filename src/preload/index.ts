@@ -120,7 +120,8 @@ contextBridge.exposeInMainWorld("electron", {
   },
   customization: {
     getActiveTheme: () => ipcRenderer.invoke("customization:getActiveTheme"),
-    setTheme: (cssContent: string) => ipcRenderer.invoke("customization:setTheme", cssContent),
+    getThemeSettings: () => ipcRenderer.invoke("customization:getThemeSettings"),
+    setThemeSettings: (settings: unknown) => ipcRenderer.invoke("customization:setThemeSettings", settings),
     getLayoutOptions: () => ipcRenderer.invoke("customization:getLayoutOptions"),
     setLayout: (options: unknown) => ipcRenderer.invoke("customization:setLayout", options),
     onUpdated: (cb: (payload: { type: string }) => void) => {

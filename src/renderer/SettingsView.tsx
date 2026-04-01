@@ -5,21 +5,17 @@ import type { Settings } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import { EMPTY_USAGE_STATS } from "../shared/usageStats";
 import { useScrolledHeader } from "./useScrolledHeader";
+import { Modal } from "./Modal";
 import {
-  BODY_FONT_OPTIONS,
-  MONO_FONT_OPTIONS,
+  DEFAULT_THEME_SETTINGS,
+  FONTS,
   FONT_SIZE_OPTIONS,
-  THEME_FORM_DEFAULT,
-  buildThemeCss,
-  themeFromStoredCss,
   normalizeColorPickerValue,
-  headingToCssValue,
-  BODY_FONT_STACKS,
-  MONO_FONT_STACKS,
-  type BodyFontId,
-  type MonoFontId,
-  type HeadingFontChoice,
-} from "./themeFonts";
+  themePreviewStyleVars,
+  type FontId,
+  type HeadingBinding,
+  type ThemeSettings,
+} from "../shared/theme";
 
 interface SettingsViewProps {
   /** After ChatGPT import (new conversations in sidebar). */
@@ -42,6 +38,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [autoSend, setAutoSend] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [userMemory, setUserMemory] = useState<Record<string, string>>({});
+  const [memoryModalOpen, setMemoryModalOpen] = useState(false);
   const [newMemTitle, setNewMemTitle] = useState("");
   const [newMemDetail, setNewMemDetail] = useState("");
   const [importStatus, setImportStatus] = useState<{ imported: number; errors: string[] } | null>(null);
@@ -52,7 +49,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     () => typeof navigator !== "undefined" && navigator.platform.startsWith("Mac")
   );
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
-  const [themeForm, setThemeForm] = useState({ ...THEME_FORM_DEFAULT });
+  const [themeForm, setThemeForm] = useState<ThemeSettings>({ ...DEFAULT_THEME_SETTINGS });
   const [themeApplyBusy, setThemeApplyBusy] = useState(false);
   const [themeApplyMessage, setThemeApplyMessage] = useState<string | null>(null);
   const [themeApplyError, setThemeApplyError] = useState<string | null>(null);
@@ -70,9 +67,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     });
     void window.electron.usage.getStats().then(setUsageStats);
     window.electron.memory.getUserMemory().then(setUserMemory);
-    window.electron.customization.getActiveTheme().then((css) => {
-      setThemeForm(themeFromStoredCss(css));
-    });
+    window.electron.customization.getThemeSettings().then(setThemeForm);
   }, []);
 
   useEffect(() => {
@@ -119,12 +114,17 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     };
   }, [apiKey, autoSend, cleanupEnabled]);
 
+  const closeMemoryModal = () => {
+    setMemoryModalOpen(false);
+    setNewMemTitle("");
+    setNewMemDetail("");
+  };
+
   const addMemory = async () => {
     if (!newMemTitle.trim()) return;
     await window.electron.memory.setUserMemory(newMemTitle.trim(), newMemDetail.trim());
     setUserMemory(await window.electron.memory.getUserMemory());
-    setNewMemTitle("");
-    setNewMemDetail("");
+    closeMemoryModal();
   };
 
   const deleteMemoryEntry = async (key: string) => {
@@ -175,7 +175,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     setThemeApplyBusy(true);
     setThemeApplyError(null);
     try {
-      await window.electron.customization.setTheme(buildThemeCss(themeForm));
+      await window.electron.customization.setThemeSettings(themeForm);
       showThemeNotice("Theme applied");
     } catch (e) {
       setThemeApplyMessage(null);
@@ -189,8 +189,8 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     setThemeApplyBusy(true);
     setThemeApplyError(null);
     try {
-      await window.electron.customization.setTheme("");
-      setThemeForm({ ...THEME_FORM_DEFAULT });
+      await window.electron.customization.setThemeSettings(null);
+      setThemeForm({ ...DEFAULT_THEME_SETTINGS });
       showThemeNotice("Restored built-in theme");
     } catch (e) {
       setThemeApplyMessage(null);
@@ -200,14 +200,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     }
   };
 
-  const playgroundPreviewStyle = {
-    "--accent": themeForm.accent,
-    "--font-family": BODY_FONT_STACKS[themeForm.bodyFont],
-    "--font-mono": MONO_FONT_STACKS[themeForm.monoFont],
-    "--font-heading": headingToCssValue(themeForm.headingFont),
-    "--font-size": `${themeForm.fontSize}px`,
-    "--line-height": 1.5,
-  } as CSSProperties;
+  const playgroundPreviewStyle = themePreviewStyleVars(themeForm) as CSSProperties;
 
   return (
     <div className="settings-page">
@@ -250,73 +243,6 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                 </button>
               </div>
             </div>
-            <div className="settings-section settings-section--usage">
-              <p className="settings-group__lead settings-group__lead--tight">
-                Estimated usage recorded on this Mac (chat, titles, transcript cleanup). Parakeet runs locally; counts
-                come from its CLI and transcribed text.
-              </p>
-              <dl className="usage-stats">
-                <div className="usage-stats__row">
-                  <dt>OpenAI tokens (prompt)</dt>
-                  <dd>{usageStats.openai.promptTokens.toLocaleString()}</dd>
-                </div>
-                <div className="usage-stats__row">
-                  <dt>OpenAI tokens (completion)</dt>
-                  <dd>{usageStats.openai.completionTokens.toLocaleString()}</dd>
-                </div>
-                <div className="usage-stats__row usage-stats__row--emph">
-                  <dt>OpenAI tokens (total)</dt>
-                  <dd>{usageStats.openai.totalTokens.toLocaleString()}</dd>
-                </div>
-                <div className="usage-stats__row">
-                  <dt>Parakeet model tokens</dt>
-                  <dd>{usageStats.parakeet.modelTokens.toLocaleString()}</dd>
-                </div>
-                <div className="usage-stats__row">
-                  <dt>Parakeet words transcribed</dt>
-                  <dd>{usageStats.parakeet.words.toLocaleString()}</dd>
-                </div>
-                <div className="usage-stats__row">
-                  <dt>Dictation sessions</dt>
-                  <dd>{usageStats.parakeet.transcriptions.toLocaleString()}</dd>
-                </div>
-              </dl>
-              {usageStats.updatedAt > 0 && (
-                <p className="settings-group__hint settings-group__hint--flush">
-                  Last updated {new Date(usageStats.updatedAt).toLocaleString()}
-                </p>
-              )}
-              <div className="settings-actions">
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    void window.electron.usage.openOpenAIDashboard();
-                  }}
-                >
-                  OpenAI usage &amp; billing
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    void window.electron.usage.getStats().then(setUsageStats);
-                  }}
-                >
-                  Refresh
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    if (!window.confirm("Clear OpenAI and Parakeet usage tallies on this device?")) return;
-                    void window.electron.usage.reset().then(setUsageStats);
-                  }}
-                >
-                  Reset local tallies
-                </button>
-              </div>
-            </div>
           </section>
 
           <section className="settings-group">
@@ -324,6 +250,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             <p className="settings-group__lead">
               Spoken audio is turned into text on this device. Optional cleanup uses your API key.
             </p>
+            
             <label className="settings-switch-row">
               <input
                 id="transcriptCleanupToggle"
@@ -337,14 +264,27 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               </span>
               <span className="settings-switch-text">Automatically tidy up dictation text</span>
             </label>
-            <div className="settings-actions">
-              <button
-                type="button"
-                className="btn"
-                onClick={() => window.electron.recording.openFolder()}
-              >
-                Open recordings folder
-              </button>
+            <div className="settings-section settings-section--usage">
+              <dl className="usage-stats">
+                <div className="usage-stats__row">
+                  <dt>Parakeet words transcribed</dt>
+                  <dd>{usageStats.parakeet.words.toLocaleString()}</dd>
+                </div>
+                <div className="usage-stats__row">
+                  <dt>Dictation sessions</dt>
+                  <dd>{usageStats.parakeet.transcriptions.toLocaleString()}</dd>
+                </div>
+              </dl>
+
+              <div className="settings-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => window.electron.recording.openFolder()}
+                >
+                  Show Recordings
+                </button>
+              </div>
             </div>
           </section>
 
@@ -442,7 +382,40 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                 </button>
               </div>
             ))}
-            <div className="settings-section settings-section--inline settings-memory-add">
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="btn"
+                data-testid="settings-add-memory"
+                onClick={() => setMemoryModalOpen(true)}
+              >
+                Add memory
+              </button>
+            </div>
+          </section>
+
+          <Modal
+            open={memoryModalOpen}
+            onClose={closeMemoryModal}
+            title="Add memory"
+            data-testid="settings-memory-modal"
+            footer={
+              <>
+                <button type="button" className="btn" onClick={closeMemoryModal}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void addMemory()}
+                  disabled={!newMemTitle.trim()}
+                >
+                  Save
+                </button>
+              </>
+            }
+          >
+            <div className="settings-memory-modal-stack">
               <label className="settings-memory-field">
                 <span className="settings-memory-field__label">Label</span>
                 <input
@@ -450,26 +423,23 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                   placeholder="e.g. timezone"
                   value={newMemTitle}
                   onChange={(e) => setNewMemTitle(e.target.value)}
-                  className="settings-input--key"
+                  className="app-modal-input"
                   autoComplete="off"
                 />
               </label>
-              <label className="settings-memory-field settings-memory-field--grow">
+              <label className="settings-memory-field">
                 <span className="settings-memory-field__label">Detail</span>
                 <input
                   type="text"
                   placeholder="What to remember"
                   value={newMemDetail}
                   onChange={(e) => setNewMemDetail(e.target.value)}
-                  className="settings-input--value"
+                  className="app-modal-input"
                   autoComplete="off"
                 />
               </label>
-              <button type="button" className="btn" onClick={addMemory}>
-                Save
-              </button>
             </div>
-          </section>
+          </Modal>
 
           <section className="settings-group">
             <h3 className="settings-group__title">Import from ChatGPT</h3>
@@ -510,7 +480,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             <p className="settings-group__lead">
               Adjust accent, fonts (including Google Fonts loaded with the app), and base size. The preview uses
               your current app colors; only the accent is overridden here until you apply. Apply saves your
-              overrides to the theme file (replacing any previous custom theme from this screen or tools).
+              overrides to your saved theme (replacing any previous custom theme from this screen or tools).
             </p>
             <div className="settings-playground">
               <div className="settings-playground-tools settings-section">
@@ -542,10 +512,10 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                     id="theme-body-font"
                     value={themeForm.bodyFont}
                     onChange={(e) =>
-                      setThemeForm((f) => ({ ...f, bodyFont: e.target.value as BodyFontId }))
+                      setThemeForm((f) => ({ ...f, bodyFont: e.target.value as FontId }))
                     }
                   >
-                    {BODY_FONT_OPTIONS.map((o) => (
+                    {FONTS.map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.label}
                       </option>
@@ -560,13 +530,13 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                     onChange={(e) =>
                       setThemeForm((f) => ({
                         ...f,
-                        headingFont: e.target.value as HeadingFontChoice,
+                        headingFont: e.target.value as HeadingBinding,
                       }))
                     }
                   >
-                    <option value="same_body">Same as body</option>
-                    <option value="same_mono">Same as mono</option>
-                    {BODY_FONT_OPTIONS.map((o) => (
+                    <option value="body">Same as body</option>
+                    <option value="ui">Same as UI font</option>
+                    {FONTS.map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.label}
                       </option>
@@ -574,15 +544,36 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                   </select>
                 </div>
                 <div className="settings-playground-field">
-                  <label htmlFor="theme-mono-font">Mono / button font</label>
+                  <label htmlFor="theme-button-font">Button font</label>
                   <select
-                    id="theme-mono-font"
-                    value={themeForm.monoFont}
+                    id="theme-button-font"
+                    value={themeForm.buttonFont}
                     onChange={(e) =>
-                      setThemeForm((f) => ({ ...f, monoFont: e.target.value as MonoFontId }))
+                      setThemeForm((f) => ({
+                        ...f,
+                        buttonFont: e.target.value as HeadingBinding,
+                      }))
                     }
                   >
-                    {MONO_FONT_OPTIONS.map((o) => (
+                    <option value="body">Same as body</option>
+                    <option value="ui">Same as UI font</option>
+                    {FONTS.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="settings-playground-field">
+                  <label htmlFor="theme-ui-font">UI font</label>
+                  <select
+                    id="theme-ui-font"
+                    value={themeForm.uiFont}
+                    onChange={(e) =>
+                      setThemeForm((f) => ({ ...f, uiFont: e.target.value as FontId }))
+                    }
+                  >
+                    {FONTS.map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.label}
                       </option>

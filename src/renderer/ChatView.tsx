@@ -1,8 +1,16 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
-import type { UIEvent } from "react";
-import { Copy, Check, Mic, Square, Loader2, X } from "lucide-react";
+import type { UIEvent, CSSProperties } from "react";
+import {
+  Copy,
+  Check,
+  Mic,
+  Square,
+  Loader2,
+  X,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Modal } from "./Modal";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
@@ -79,32 +87,8 @@ function toolLabel(name: string): string {
   return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
-/** Secondary line for tool cards (e.g. task title after create/update). */
-function toolCallDetail(toolName: string, payload: unknown): string | null {
-  if (payload == null || typeof payload !== "object") return null;
-  const p = payload as Record<string, unknown>;
-
-  if (p.pending === true && p.args && typeof p.args === "object") {
-    const args = p.args as Record<string, unknown>;
-    if (toolName === "task_update" && typeof args.title === "string" && args.title.trim()) {
-      return args.title.trim();
-    }
-    return null;
-  }
-  if (p.cancelled === true) return null;
-
-  if (toolName === "task_create" || toolName === "task_update") {
-    if (typeof p.error === "string" && p.error) return p.error;
-    const ids = p.affectedIds as string[] | undefined;
-    const tasks = p.tasks as Array<{ id: string; title: string }> | undefined;
-    if (ids?.length && Array.isArray(tasks)) {
-      const id = ids[0];
-      const t = tasks.find((x) => x.id === id);
-      if (t?.title) return t.title;
-    }
-  }
-
-  return null;
+function toolIcon() {
+  return <Check size={12} aria-hidden />;
 }
 
 function CopyButton({ content, messageIndex, copiedIndex, onCopied }: { content: string; messageIndex: number; copiedIndex: number | null; onCopied: (i: number | null) => void }) {
@@ -132,8 +116,8 @@ function CopyButton({ content, messageIndex, copiedIndex, onCopied }: { content:
 }
 
 const SCROLL_TOP_THRESHOLD = 24;
-/** Inset when pinning the active user turn to the top of the chat scrollport. */
-const USER_TURN_PIN_PADDING = 6;
+/** Extra space below messages so the last lines clear the sticky composer. */
+const BOTTOM_SPACER_BEYOND_COMPOSER_PX = 48;
 
 type VoiceState = "idle" | "recording" | "processing";
 
@@ -176,11 +160,12 @@ export function ChatView({
 
   /** Tool calls for the assistant turn currently being streamed; shown inline and then stored on the message when stream ends. */
   const [currentTurnToolCalls, setCurrentTurnToolCalls] = useState<ToolCallDisplay[]>([]);
-  const userTurnAnchorRef = useRef<HTMLDivElement | null>(null);
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   const streamingContentRef = useRef("");
   const currentTurnToolCallsRef = useRef<ToolCallDisplay[]>([]);
+  const [bottomSpacerPx, setBottomSpacerPx] = useState(200);
 
   const toggleUserCardExpanded = useCallback((index: number) => {
     setExpandedUserCards((prev) => {
@@ -197,7 +182,6 @@ export function ChatView({
   useEffect(() => {
     currentTurnToolCallsRef.current = currentTurnToolCalls;
   }, [currentTurnToolCalls]);
-
   useEffect(() => {
     streamingMetaRef.current = streamingMeta;
   }, [streamingMeta]);
@@ -299,25 +283,6 @@ export function ChatView({
         ]
       : messages;
 
-  /** Pin the last user message to the top of `.chat-scroll`; assistant streams below without further scrolling. */
-  useLayoutEffect(() => {
-    if (!sending) return;
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== "user") return;
-    const container = chatAreaRef.current;
-    const anchor = userTurnAnchorRef.current;
-    if (!container || !anchor) return;
-    const pin = () => {
-      const cR = container.getBoundingClientRect();
-      const aR = anchor.getBoundingClientRect();
-      const nextTop = container.scrollTop + (aR.top - cR.top) - USER_TURN_PIN_PADDING;
-      container.scrollTop = Math.max(0, nextTop);
-    };
-    pin();
-    const id = requestAnimationFrame(pin);
-    return () => cancelAnimationFrame(id);
-  }, [sending, messages]);
-
   useLayoutEffect(() => {
     const next = new Set<number>();
     displayMessages.forEach((m, i) => {
@@ -330,6 +295,28 @@ export function ChatView({
       prev.size !== next.size || [...prev].some((n) => !next.has(n)) ? next : prev
     );
   }, [displayMessages, expandedUserCards]);
+
+  useLayoutEffect(() => {
+    const composer = composerRef.current;
+    const chatArea = chatAreaRef.current;
+    if (!composer || !chatArea) return;
+    const update = () => {
+      const composerHeight = Math.ceil(composer.getBoundingClientRect().height);
+      const measured = composerHeight + BOTTOM_SPACER_BEYOND_COMPOSER_PX;
+      setBottomSpacerPx((prev) => (prev !== measured ? measured : prev));
+    };
+    update();
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(update);
+      ro.observe(composer);
+    }
+    window.addEventListener("resize", update);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   useEffect(() => {
     const unsubChunk = window.electron.chat.onStreamChunk((cid, chunk) => {
@@ -623,18 +610,13 @@ export function ChatView({
     !streamingContent;
   const showPolishInStrip = showReplyActions && polishHintAfterDictation;
 
-  const userTurnAnchorIndex =
-    sending && messages.length > 0 && messages[messages.length - 1].role === "user"
-      ? messages.length - 1
-      : -1;
-
   return (
     <div
       ref={chatAreaRef}
       className="chat-scroll"
       data-scrolled={hasScrolled || undefined}
-      data-sending={sending || undefined}
       onScroll={onChatAreaScroll}
+      style={{ "--chat-bottom-spacer": `${bottomSpacerPx}px` } as CSSProperties}
     >
       {hasScrolled && (
         <button
@@ -663,11 +645,7 @@ export function ChatView({
             const hasToolCalls = isAssistant && m.toolCalls && m.toolCalls.length > 0;
 
             return (
-              <div
-                key={i}
-                ref={i === userTurnAnchorIndex ? userTurnAnchorRef : undefined}
-                className={`message-block ${m.role}`}
-              >
+              <div key={i} className={`message-block ${m.role}`}>
                 <div className="content">
                   {m.role === "user" ? (
                     <div className={`message-user-card${expandedUserCards.has(i) ? " message-user-card--expanded" : ""}`}>
@@ -692,16 +670,11 @@ export function ChatView({
                           {m.toolCalls!.map((call, j) => {
                             const p = call.payload as { pending?: boolean } | undefined;
                             const isPending = !!p?.pending;
-                            const detail = toolCallDetail(call.toolName, call.payload);
                             return (
                               <div key={j} className="tool-card-row">
+                                <span className="tool-card-icon">{toolIcon()}</span>
                                 <div className="tool-card-row-text">
                                   <span className="tool-card-label">{toolLabel(call.toolName)}</span>
-                                  {detail ? (
-                                    <span className="tool-card-detail" title={detail}>
-                                      {detail}
-                                    </span>
-                                  ) : null}
                                 </div>
                                 {isPending && (
                                   <span className="tool-card-actions">
@@ -783,7 +756,7 @@ export function ChatView({
           )}
         </div>
       </div>
-      <div className="input-container input-container--sticky" data-testid="chat-composer">
+      <div ref={composerRef} className="input-container input-container--sticky" data-testid="chat-composer">
         {voiceError && (
           <div className="voice-error">{voiceError}</div>
         )}
@@ -871,73 +844,48 @@ export function ChatView({
         </div>
       </div>
 
-      {titleModalOpen && (
-        <div
-          className="chat-title-modal-backdrop"
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !titleSaving) setTitleModalOpen(false);
+      <Modal
+        open={titleModalOpen}
+        onClose={() => setTitleModalOpen(false)}
+        title="Conversation title"
+        closeDisabled={titleSaving}
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-cancel"
+              onClick={() => setTitleModalOpen(false)}
+              disabled={titleSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void saveConversationTitle()}
+              disabled={titleSaving || !titleDraft.trim()}
+            >
+              Save
+            </button>
+          </>
+        }
+      >
+        <label htmlFor="chat-title-modal-input">Title</label>
+        <input
+          id="chat-title-modal-input"
+          type="text"
+          className="app-modal-input"
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void saveConversationTitle();
+            }
           }}
-        >
-          <div
-            className="chat-title-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="chat-title-modal-heading"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="chat-title-modal-header">
-              <h3 id="chat-title-modal-heading" className="chat-title-modal-heading">
-                Conversation title
-              </h3>
-              <button
-                type="button"
-                className="btn btn-icon chat-title-modal-close"
-                onClick={() => !titleSaving && setTitleModalOpen(false)}
-                disabled={titleSaving}
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="chat-title-modal-body">
-              <label htmlFor="chat-title-modal-input">Title</label>
-              <input
-                id="chat-title-modal-input"
-                type="text"
-                className="chat-title-modal-input"
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void saveConversationTitle();
-                  }
-                }}
-                autoFocus
-              />
-            </div>
-            <div className="chat-title-modal-footer">
-              <button
-                type="button"
-                className="btn btn-cancel"
-                onClick={() => setTitleModalOpen(false)}
-                disabled={titleSaving}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => void saveConversationTitle()}
-                disabled={titleSaving || !titleDraft.trim()}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          autoFocus
+        />
+      </Modal>
     </div>
   );
 }

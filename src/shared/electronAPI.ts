@@ -1,4 +1,5 @@
 import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./types";
+import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
 
 export interface TaskItem {
@@ -92,8 +93,10 @@ export interface ElectronAPI {
     onTitleGenerationEnded: (cb: (conversationId: string) => void) => () => void;
   };
   customization: {
+    /** CSS from persisted theme (empty when using built-in base.css only). */
     getActiveTheme: () => Promise<string>;
-    setTheme: (css: string) => Promise<void>;
+    getThemeSettings: () => Promise<ThemeSettings>;
+    setThemeSettings: (settings: ThemeSettings | null) => Promise<void>;
     getLayoutOptions: () => Promise<LayoutOptions>;
     setLayout: (o: Partial<LayoutOptions>) => Promise<void>;
     onUpdated: (cb: (p: { type: string }) => void) => () => void;

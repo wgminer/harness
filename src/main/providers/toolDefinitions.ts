@@ -1,3 +1,5 @@
+import { FONT_IDS_FOR_SCHEMA, FONT_SIZE_OPTIONS, HEADING_BINDING_ENUM } from "../../shared/theme";
+
 export const TOOL_DEFINITIONS = [
   {
     type: "function" as const,
@@ -66,11 +68,30 @@ export const TOOL_DEFINITIONS = [
     type: "function" as const,
     function: {
       name: "update_theme",
-      description: "Update the app theme with custom CSS. Call when theme, colors, or appearance are requested.",
+      description:
+        "Update the app theme (accent, fonts, base size). Omit fields you do not want to change. Call when colors, typography, or appearance are requested.",
       parameters: {
         type: "object",
-        properties: { css_content: { type: "string", description: "Valid CSS to apply as overlay" } },
-        required: ["css_content"],
+        properties: {
+          accent: { type: "string", description: "Accent color as #RGB or #RRGGBB hex" },
+          bodyFont: { type: "string", enum: FONT_IDS_FOR_SCHEMA, description: "Main reading text font id" },
+          uiFont: { type: "string", enum: FONT_IDS_FOR_SCHEMA, description: "Chrome / sidebar controls font id" },
+          headingFont: {
+            type: "string",
+            enum: HEADING_BINDING_ENUM,
+            description: "Section titles: 'body' or 'ui' to match those, or a font id",
+          },
+          buttonFont: {
+            type: "string",
+            enum: HEADING_BINDING_ENUM,
+            description: "Button labels: 'body' or 'ui' to match those, or a font id",
+          },
+          fontSize: {
+            type: "number",
+            enum: [...FONT_SIZE_OPTIONS],
+            description: "Base UI font size in px",
+          },
+        },
       },
     },
   },

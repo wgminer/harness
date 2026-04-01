@@ -10,7 +10,7 @@ export interface UsageStatsSnapshot {
     modelTokens: number;
     /** Sum of whitespace-separated words in successful transcripts. */
     words: number;
-    /** Number of completed transcriptions (after Parakeet succeeded). */
+    /** Successful non-empty transcriptions (one per completed Parakeet run with text). */
     transcriptions: number;
   };
   /** Last time a counter was updated (ms since epoch). */

@@ -2,7 +2,12 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./base.css";
-import { GOOGLE_FONTS_HREF } from "./themeFonts";
+import "./modal.css";
+import "./sidebar.css";
+import "./chat.css";
+import "./settings.css";
+import "./tasks.css";
+import { GOOGLE_FONTS_HREF } from "../shared/theme";
 
 /* Vite injects base.css before this runs; keep custom theme *after* all bundled CSS so :root overrides apply. */
 const googleFonts = document.createElement("link");

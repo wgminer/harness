@@ -1,10 +1,12 @@
 name: Deploy Download Site
 
 on:
-  workflow_run:
-    workflows: ["Release DMG"]
-    types:
-      - completed
+  push:
+    branches:
+      - main
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -18,52 +20,10 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Build release metadata for site
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require("node:fs");
-            const path = require("node:path");
-
-            let payload = {
-              hasRelease: false,
-              message: "No release with a DMG asset found yet.",
-            };
-
-            try {
-              const release = await github.rest.repos.getLatestRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-              });
-              const dmgAsset = (release.data.assets || []).find((asset) =>
-                asset.name && asset.name.endsWith(".dmg"),
-              );
-
-              if (dmgAsset) {
-                payload = {
-                  hasRelease: true,
-                  version: release.data.tag_name,
-                  publishedAt: release.data.published_at,
-                  downloadUrl: dmgAsset.browser_download_url,
-                  fileName: dmgAsset.name,
-                };
-              }
-            } catch (error) {
-              payload = {
-                hasRelease: false,
-                message: "Unable to fetch latest release metadata.",
-                error: String(error.message || error),
-              };
-            }
-
-            const outPath = path.join(process.cwd(), "site", "release.json");
-            fs.writeFileSync(outPath, JSON.stringify(payload, null, 2));
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
