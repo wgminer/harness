@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require("node:child_process");
-const fs = require("node:fs");
-const path = require("node:path");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -29,18 +27,6 @@ function capture(command, args, options = {}) {
   return (result.stdout || "").trim();
 }
 
-function getDistDmgs() {
-  const distDir = path.resolve(process.cwd(), "dist");
-  if (!fs.existsSync(distDir)) {
-    return [];
-  }
-
-  return fs
-    .readdirSync(distDir)
-    .filter((name) => name.toLowerCase().endsWith(".dmg"))
-    .map((name) => path.join(distDir, name));
-}
-
 function ensureCleanWorkingTree() {
   const porcelain = capture("git", ["status", "--porcelain"], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -63,27 +49,9 @@ function main() {
     env: { ...process.env, REQUIRE_NOTARIZE: "1" },
   });
 
-  const dmgs = getDistDmgs();
-  if (dmgs.length === 0) {
-    console.error("No DMG file found in dist/ after build.");
-    process.exit(1);
-  }
-
-  const sourceDmg = dmgs.sort((a, b) => {
-    const aMtime = fs.statSync(a).mtimeMs;
-    const bMtime = fs.statSync(b).mtimeMs;
-    return bMtime - aMtime;
-  })[0];
-
-  const downloadsDir = path.resolve(process.cwd(), "site", "downloads");
-  fs.mkdirSync(downloadsDir, { recursive: true });
-  const targetDmg = path.join(downloadsDir, "harness-latest.dmg");
-  fs.copyFileSync(sourceDmg, targetDmg);
-
-  console.log(`Copied ${path.basename(sourceDmg)} -> site/downloads/harness-latest.dmg`);
-  console.log("Next steps:");
+  console.log("Next steps (dist:mac copies the DMG to site/downloads/harness.dmg):");
   console.log("  1) npm run verify:mac-trust");
-  console.log("  2) git add site/downloads/harness-latest.dmg");
+  console.log("  2) git add site/downloads/harness.dmg");
   console.log(`  3) git commit -m "release macOS dmg v${version}"`);
   console.log("  4) git push origin main");
 }

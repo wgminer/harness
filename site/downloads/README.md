@@ -1,5 +1,5 @@
-Place the latest distributable DMG in this folder as:
+After `npm run dist:mac`, `scripts/dist-mac.js` copies the built DMG from `dist/` here as:
 
-- `harness-latest.dmg`
+- `harness.dmg`
 
-The download page links directly to `./downloads/harness-latest.dmg`.
+The download page links to `./downloads/harness.dmg`. Commit this file when you ship.

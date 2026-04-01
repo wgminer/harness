@@ -54,6 +54,33 @@ if (r.status !== 0) {
   process.exit(r.status ?? 1);
 }
 
+/** Copy the newest top-level dist/*.dmg into site/downloads/harness.dmg for GitHub Pages. */
+function copyDmgToSiteDownloads() {
+  const distDir = path.join(root, "dist");
+  if (!fs.existsSync(distDir)) {
+    return;
+  }
+  const dmgs = fs
+    .readdirSync(distDir)
+    .filter((name) => name.toLowerCase().endsWith(".dmg"))
+    .map((name) => path.join(distDir, name));
+  if (dmgs.length === 0) {
+    return;
+  }
+  const sourceDmg = dmgs.sort(
+    (a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs
+  )[0];
+  const downloadsDir = path.join(root, "site", "downloads");
+  fs.mkdirSync(downloadsDir, { recursive: true });
+  const target = path.join(downloadsDir, "harness.dmg");
+  fs.copyFileSync(sourceDmg, target);
+  console.log(
+    `Copied ${path.basename(sourceDmg)} -> site/downloads/harness.dmg (Pages download)`
+  );
+}
+
+copyDmgToSiteDownloads();
+
 if (replace) {
   const appPath = findBuiltApp();
   if (!appPath) {

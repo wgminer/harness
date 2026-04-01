@@ -18,6 +18,7 @@
     "parakeet:setup": "node scripts/setup-parakeet.js",
     "build:fn-monitor": "bash scripts/build-fn-monitor.sh",
     "release": "node scripts/release.js",
+    "site": "npx --yes serve site -l 8080",
     "test": "vitest run",
     "test:e2e": "electron-vite build && playwright test",
     "test:e2e:ui": "electron-vite build && playwright test --ui"

@@ -156,7 +156,7 @@ npm run verify:mac-trust -- /path/to/Harness.app
 
 Outputs (for Mac) are under:
 
-- `dist/harness-vx.x.x-mac.dmg` – installer (`harness` comes from `package.json` `name`; `v` matches `version`)
+- `dist/harness-vx.x.x-mac.dmg` – installer (`harness` comes from `package.json` `name`; `v` matches `version`; a copy is also written to `site/downloads/harness.dmg` for the download page)
 - `dist/harness-vx.x.x-mac.zip` – zip of the app (e.g. for auto-updates)
 - `dist/mac-arm64/Harness.app` (and/or `mac/` for Intel) – the app bundle (Dock/Finder title is **Harness**; the semantic version still comes from `package.json` and is shown in the app UI)
 
@@ -168,7 +168,7 @@ You can double‑click `Harness.app` in `dist/mac-*` or the DMG to install and o
 
 This project ships one DMG file directly from the repo:
 
-- `site/downloads/harness-latest.dmg`
+- `site/downloads/harness.dmg`
 
 The GitHub Pages download button links to that exact file.
 
@@ -184,16 +184,16 @@ This command:
 
 1. Verifies your git working tree is clean.
 2. Builds `dist:mac` with **`REQUIRE_NOTARIZE=1`**.
-3. Copies the newest `dist/*.dmg` to `site/downloads/harness-latest.dmg`.
+3. `dist:mac` already copies the newest `dist/*.dmg` to `site/downloads/harness.dmg`.
 4. Prints the git commands to commit and push the DMG.
 
 ### Manual checklist
 
 1. Build locally (`npm run dist:mac`) with your signing/notarization env vars set.
 2. Verify notarization and Gatekeeper trust (`npm run verify:mac-trust`).
-3. Copy your built DMG to `site/downloads/harness-latest.dmg` (or run `npm run release` to do this copy step automatically).
+3. Ensure `site/downloads/harness.dmg` is updated (every `npm run dist:mac` refreshes it).
 4. Commit and push the updated DMG.
-5. Confirm the site button downloads `harness-latest.dmg`.
+5. Confirm the site button downloads `harness.dmg`.
 
 ### GitHub Pages setup
 
