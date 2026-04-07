@@ -24,6 +24,7 @@
     "test:e2e:ui": "electron-vite build && playwright test --ui"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "lucide-react": "^0.575.0",
     "openai": "^4.73.0",
     "react": "^18.3.1",
