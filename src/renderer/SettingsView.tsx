@@ -13,7 +13,6 @@ import {
   normalizeColorPickerValue,
   themePreviewStyleVars,
   type FontId,
-  type HeadingBinding,
   type ThemeSettings,
 } from "../shared/theme";
 
@@ -478,7 +477,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
           <section className="settings-group">
             <h3 className="settings-group__title">{"Theme preview"}</h3>
             <p className="settings-group__lead">
-              Adjust accent, fonts (including Google Fonts loaded with the app), and base size. The preview uses
+              Adjust accent, font (including Google Fonts loaded with the app), and base size. The preview uses
               your current app colors; only the accent is overridden here until you apply. Apply saves your
               overrides to your saved theme (replacing any previous custom theme from this screen or tools).
             </p>
@@ -507,70 +506,12 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                   </div>
                 </div>
                 <div className="settings-playground-field">
-                  <label htmlFor="theme-body-font">Body font</label>
+                  <label htmlFor="theme-font">Font</label>
                   <select
-                    id="theme-body-font"
-                    value={themeForm.bodyFont}
+                    id="theme-font"
+                    value={themeForm.font}
                     onChange={(e) =>
-                      setThemeForm((f) => ({ ...f, bodyFont: e.target.value as FontId }))
-                    }
-                  >
-                    {FONTS.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="settings-playground-field">
-                  <label htmlFor="theme-heading-font">Heading font</label>
-                  <select
-                    id="theme-heading-font"
-                    value={themeForm.headingFont}
-                    onChange={(e) =>
-                      setThemeForm((f) => ({
-                        ...f,
-                        headingFont: e.target.value as HeadingBinding,
-                      }))
-                    }
-                  >
-                    <option value="body">Same as body</option>
-                    <option value="ui">Same as UI font</option>
-                    {FONTS.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="settings-playground-field">
-                  <label htmlFor="theme-button-font">Button font</label>
-                  <select
-                    id="theme-button-font"
-                    value={themeForm.buttonFont}
-                    onChange={(e) =>
-                      setThemeForm((f) => ({
-                        ...f,
-                        buttonFont: e.target.value as HeadingBinding,
-                      }))
-                    }
-                  >
-                    <option value="body">Same as body</option>
-                    <option value="ui">Same as UI font</option>
-                    {FONTS.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="settings-playground-field">
-                  <label htmlFor="theme-ui-font">UI font</label>
-                  <select
-                    id="theme-ui-font"
-                    value={themeForm.uiFont}
-                    onChange={(e) =>
-                      setThemeForm((f) => ({ ...f, uiFont: e.target.value as FontId }))
+                      setThemeForm((f) => ({ ...f, font: e.target.value as FontId }))
                     }
                   >
                     {FONTS.map((o) => (

@@ -1,4 +1,4 @@
-/* Default: dark mode; Roboto for reading text and chrome (--font-family / --font-ui).
+/* Default: dark mode; Roboto for app typography (--font-family).
    User theme overrides live in #custom-theme (moved after bundled CSS in main.tsx). */
 :root {
   color-scheme: dark;
@@ -14,10 +14,6 @@
   --btn-shadow: none;
   --btn-shadow-hover: none;
   --font-family: "Roboto", system-ui, sans-serif;
-  --font-ui: "Roboto", system-ui, sans-serif;
-  /** Page/section/modal titles and chat pane title. Defaults to UI font. */
-  --font-heading: var(--font-ui);
-  --font-button: var(--font-ui);
   --font-size: 14px;
   --space-unit: 8px;
   --sidebar-control-hover-bg: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
@@ -82,7 +78,7 @@ hr {
 
 /* Buttons – single source of truth for all app buttons */
 .btn {
-  font-family: var(--font-button);
+  font-family: var(--font-family);
   font-size: 13px;
   height: var(--input-height);
   min-height: var(--input-height);
@@ -163,7 +159,7 @@ hr {
 .sidebar-search-input,
 .settings-section input:not([type="checkbox"]):not([type="radio"]),
 .settings-section select {
-  font-family: var(--font-ui);
+  font-family: var(--font-family);
   font-size: 13px;
   height: var(--input-height);
   padding: 0 10px;

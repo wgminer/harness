@@ -4,9 +4,6 @@
 
 export const FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16, 18] as const;
 
-/** Inherit body (--font-family) or UI (--font-ui), or pin to a specific face. */
-export type HeadingBinding = "body" | "ui" | FontId;
-
 const GOOGLE_QUERY_PARTS = [
   "Inter:wght@400;500;600;700",
   "Open+Sans:wght@400;600;700",
@@ -85,11 +82,6 @@ export function parseFontId(v: unknown): FontId | undefined {
   return typeof v === "string" && isFontId(v) ? v : undefined;
 }
 
-export function parseHeadingBinding(v: unknown): HeadingBinding | undefined {
-  if (v === "body" || v === "ui") return v;
-  return parseFontId(v);
-}
-
 function parseHexAccent(raw: string | undefined): string | null {
   if (!raw) return null;
   const m = raw.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
@@ -104,19 +96,13 @@ export function normalizeColorPickerValue(hex: string): string {
 
 export type ThemeSettings = {
   accent: string;
-  bodyFont: FontId;
-  uiFont: FontId;
-  headingFont: HeadingBinding;
-  buttonFont: HeadingBinding;
+  font: FontId;
   fontSize: (typeof FONT_SIZE_OPTIONS)[number];
 };
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   accent: "#f2ff00",
-  bodyFont: "roboto",
-  uiFont: "roboto",
-  headingFont: "ui",
-  buttonFont: "ui",
+  font: "roboto",
   fontSize: 14,
 };
 
@@ -136,33 +122,30 @@ export function normalizeThemeSettings(input: unknown): ThemeSettings {
 
   const accent = typeof o.accent === "string" ? parseHexAccent(o.accent) : null;
 
-  const headingFont = parseHeadingBinding(o.headingFont);
-  const buttonFont = parseHeadingBinding(o.buttonFont);
+  // Legacy compatibility: older theme files may store per-surface font fields.
+  const legacyBodyFont = parseFontId(o.bodyFont);
+  const legacyUiFont = parseFontId(o.uiFont);
+  const legacyHeadingFont = parseFontId(o.headingFont);
+  const legacyButtonFont = parseFontId(o.buttonFont);
+  const legacyFont =
+    parseFontId(o.font) ??
+    legacyBodyFont ??
+    legacyUiFont ??
+    legacyHeadingFont ??
+    legacyButtonFont;
 
   return {
     accent: accent ?? d.accent,
-    bodyFont: parseFontId(o.bodyFont) ?? d.bodyFont,
-    uiFont: parseFontId(o.uiFont) ?? d.uiFont,
-    headingFont: headingFont ?? d.headingFont,
-    buttonFont: buttonFont ?? d.buttonFont,
+    font: legacyFont ?? d.font,
     fontSize: parseFontSizePx(o.fontSize) ?? d.fontSize,
   };
-}
-
-function headingToCssVar(binding: HeadingBinding): string {
-  if (binding === "body") return "var(--font-family)";
-  if (binding === "ui") return "var(--font-ui)";
-  return FONT_STACKS[binding];
 }
 
 export function themeSettingsToCss(settings: ThemeSettings): string {
   const s = normalizeThemeSettings(settings);
   return `:root {
   --accent: ${s.accent.trim()};
-  --font-family: ${FONT_STACKS[s.bodyFont]};
-  --font-ui: ${FONT_STACKS[s.uiFont]};
-  --font-heading: ${headingToCssVar(s.headingFont)};
-  --font-button: ${headingToCssVar(s.buttonFont)};
+  --font-family: ${FONT_STACKS[s.font]};
   --font-size: ${s.fontSize}px;
 }`;
 }
@@ -172,10 +155,7 @@ export function themePreviewStyleVars(settings: ThemeSettings): Record<string, s
   const s = normalizeThemeSettings(settings);
   return {
     "--accent": s.accent.trim(),
-    "--font-family": FONT_STACKS[s.bodyFont],
-    "--font-ui": FONT_STACKS[s.uiFont],
-    "--font-heading": headingToCssVar(s.headingFont),
-    "--font-button": headingToCssVar(s.buttonFont),
+    "--font-family": FONT_STACKS[s.font],
     "--font-size": `${s.fontSize}px`,
     "--line-height": "1.5",
   };
@@ -183,6 +163,3 @@ export function themePreviewStyleVars(settings: ThemeSettings): Record<string, s
 
 /** Valid font ids for tool / API schemas. */
 export const FONT_IDS_FOR_SCHEMA: string[] = [...FONTS.map((f) => f.id)];
-
-/** headingFont / buttonFont: inherit body, inherit ui, or any font id. */
-export const HEADING_BINDING_ENUM: string[] = ["body", "ui", ...FONT_IDS_FOR_SCHEMA];

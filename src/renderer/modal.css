@@ -37,7 +37,7 @@
 
 .app-modal-heading {
   margin: 0;
-  font-family: var(--font-heading);
+  font-family: var(--font-family);
   font-size: 15px;
   font-weight: 600;
 }
@@ -62,7 +62,7 @@
 }
 
 .app-modal-body select {
-  font-family: var(--font-ui);
+  font-family: var(--font-family);
   font-size: 14px;
   width: 100%;
   height: var(--input-height);

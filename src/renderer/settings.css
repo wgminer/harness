@@ -41,7 +41,7 @@
 }
 
 .settings-title {
-  font-family: var(--font-heading);
+  font-family: var(--font-family);
   font-size: 16px;
   font-weight: 600;
   margin: 0;
@@ -72,7 +72,7 @@
 }
 
 .settings-group__title {
-  font-family: var(--font-heading);
+  font-family: var(--font-family);
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 8px;
@@ -363,7 +363,7 @@
 }
 
 .settings-section--inline input:not([type="checkbox"]):not([type="radio"]) {
-  font-family: var(--font-ui);
+  font-family: var(--font-family);
   font-size: 14px;
   height: var(--input-height);
   padding: 0 10px;
@@ -423,7 +423,7 @@
 }
 
 .settings-section textarea {
-  font-family: var(--font-ui);
+  font-family: var(--font-family);
   font-size: 13px;
   line-height: 1.45;
   width: 100%;
@@ -546,7 +546,7 @@
 }
 
 .settings-playground-canvas__title {
-  font-family: var(--font-heading);
+  font-family: var(--font-family);
   font-size: calc(var(--font-size) * 1.12);
   font-weight: 600;
   color: var(--fg);
@@ -589,7 +589,7 @@
 
 .settings-playground-canvas__panel-label {
   display: block;
-  font-family: var(--font-ui);
+  font-family: var(--font-family);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -598,7 +598,7 @@
 }
 
 .settings-playground-canvas__btn {
-  font-family: var(--font-ui);
+  font-family: var(--font-family);
   font-size: 13px;
   line-height: 1.2;
   display: inline-flex;

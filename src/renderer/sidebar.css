@@ -253,7 +253,7 @@
 }
 
 .sidebar-workspace__label {
-  font-family: var(--font-ui);
+  font-family: var(--font-family);
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;

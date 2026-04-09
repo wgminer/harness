@@ -1,4 +1,4 @@
-import { FONT_IDS_FOR_SCHEMA, FONT_SIZE_OPTIONS, HEADING_BINDING_ENUM } from "../../shared/theme";
+import { FONT_IDS_FOR_SCHEMA, FONT_SIZE_OPTIONS } from "../../shared/theme";
 
 export const TOOL_DEFINITIONS = [
   {
@@ -74,18 +74,7 @@ export const TOOL_DEFINITIONS = [
         type: "object",
         properties: {
           accent: { type: "string", description: "Accent color as #RGB or #RRGGBB hex" },
-          bodyFont: { type: "string", enum: FONT_IDS_FOR_SCHEMA, description: "Main reading text font id" },
-          uiFont: { type: "string", enum: FONT_IDS_FOR_SCHEMA, description: "Chrome / sidebar controls font id" },
-          headingFont: {
-            type: "string",
-            enum: HEADING_BINDING_ENUM,
-            description: "Section titles: 'body' or 'ui' to match those, or a font id",
-          },
-          buttonFont: {
-            type: "string",
-            enum: HEADING_BINDING_ENUM,
-            description: "Button labels: 'body' or 'ui' to match those, or a font id",
-          },
+          font: { type: "string", enum: FONT_IDS_FOR_SCHEMA, description: "Global app font id" },
           fontSize: {
             type: "number",
             enum: [...FONT_SIZE_OPTIONS],

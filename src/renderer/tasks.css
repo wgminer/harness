@@ -6,7 +6,7 @@
   width: 100%;
   margin: 0 0 8px;
   padding: 0;
-  font-family: var(--font-heading);
+  font-family: var(--font-family);
   font-size: 14px;
   font-weight: 600;
   color: var(--fg);
@@ -41,7 +41,7 @@
 
 .tasks-textarea,
 .tasks-modal-body textarea {
-  font-family: var(--font-ui);
+  font-family: var(--font-family);
   font-size: 13px;
   line-height: 1.45;
   width: 100%;
@@ -218,7 +218,7 @@
 }
 
 .tasks-tags-input {
-  font-family: var(--font-ui);
+  font-family: var(--font-family);
   font-size: 14px;
   width: 100%;
   height: var(--input-height);

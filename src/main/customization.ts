@@ -104,10 +104,7 @@ function applyThemePatch(args: Record<string, unknown>): void {
   const merged = {
     ...current,
     ...(typeof args.accent === "string" ? { accent: args.accent } : {}),
-    ...(args.bodyFont !== undefined ? { bodyFont: args.bodyFont } : {}),
-    ...(args.uiFont !== undefined ? { uiFont: args.uiFont } : {}),
-    ...(args.headingFont !== undefined ? { headingFont: args.headingFont } : {}),
-    ...(args.buttonFont !== undefined ? { buttonFont: args.buttonFont } : {}),
+    ...(args.font !== undefined ? { font: args.font } : {}),
     ...(args.fontSize !== undefined ? { fontSize: args.fontSize } : {}),
   };
   setThemeSettings(normalizeThemeSettings(merged));
