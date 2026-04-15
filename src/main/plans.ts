@@ -1,16 +1,12 @@
 import { ipcMain } from "electron";
-import { readFile, writeFile, access } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import type { Plan } from "../shared/types";
 import { getMemoryDir, PLANS_FILE } from "./memory";
-import { generateId } from "./utils";
+import { generateId, fileExists } from "./utils";
 
 function getPlansPath(): string {
   return join(getMemoryDir(), PLANS_FILE);
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try { await access(path); return true; } catch { return false; }
 }
 
 async function loadPlans(): Promise<Record<string, Plan>> {

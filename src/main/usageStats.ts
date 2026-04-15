@@ -1,22 +1,14 @@
 import { app, ipcMain, shell } from "electron";
-import { readFile, writeFile, access } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import type { CompletionUsage } from "openai/resources/completions";
 import { EMPTY_USAGE_STATS, type UsageStatsSnapshot } from "../shared/usageStats";
+import { fileExists } from "./utils";
 
 const USAGE_FILE = "usage-stats.json";
 
 function getPath(): string {
   return join(app.getPath("userData"), USAGE_FILE);
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function normalize(raw: Record<string, unknown> | null): UsageStatsSnapshot {
