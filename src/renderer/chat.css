@@ -271,7 +271,7 @@
 
 .chat-scroll-top:hover {
   opacity: 1;
-  color: var(--accent-readable);
+  color: var(--fg-muted);
 }
 
 .message-block-footer {
@@ -342,7 +342,7 @@
 }
 
 .message-copy-btn:hover {
-  color: var(--accent-readable);
+  color: var(--fg-muted);
   background: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
   box-shadow: var(--btn-shadow-hover);
 }
@@ -379,7 +379,7 @@
 }
 
 .chat-pane-header .chat-pane-title.btn:hover:not(:disabled) {
-  color: var(--accent-readable);
+  color: var(--fg-muted);
   background: color-mix(in srgb, var(--fg) 8%, transparent);
   box-shadow: none;
 }
@@ -405,7 +405,7 @@
 }
 
 .btn-chat-secondary:hover {
-  color: var(--accent-readable);
+  color: var(--fg);
   background: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
   box-shadow: var(--btn-shadow-hover);
 }
@@ -543,7 +543,7 @@
 }
 
 .voice-save-link:hover:not(:disabled) {
-  color: var(--fg);
+  color: var(--fg-muted);
   background: color-mix(in srgb, var(--fg) 6%, var(--bg-secondary));
   box-shadow: var(--btn-shadow);
 }

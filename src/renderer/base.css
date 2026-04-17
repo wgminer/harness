@@ -112,7 +112,7 @@ hr {
 }
 
 .btn:hover:not(:disabled) {
-  color: var(--accent-readable);
+  color: var(--fg);
   background: color-mix(in srgb, var(--fg) 10%, var(--bg));
   box-shadow: var(--btn-shadow-hover);
 }
