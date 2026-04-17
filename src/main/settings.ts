@@ -34,6 +34,11 @@ function parseSettings(data: Record<string, unknown>): Settings {
     (typeof searchRaw?.tavilyApiKey === "string" ? searchRaw.tavilyApiKey : null) ??
     D.search!.tavilyApiKey;
 
+  const weatherRaw = data.weather as Record<string, unknown> | undefined;
+  const defaultZip =
+    (typeof weatherRaw?.defaultZip === "string" ? weatherRaw.defaultZip : null) ??
+    D.weather!.defaultZip;
+
   return {
     version: D.version,
     openai: {
@@ -41,6 +46,9 @@ function parseSettings(data: Record<string, unknown>): Settings {
     },
     search: {
       tavilyApiKey,
+    },
+    weather: {
+      defaultZip,
     },
     recording: {
       autoSend:
@@ -73,6 +81,8 @@ export async function setSettings(partial: Partial<Settings>): Promise<Settings>
     ...current,
     ...partial,
     openai: partial.openai ? { ...current.openai, ...partial.openai } : current.openai,
+    search: partial.search ? { ...current.search, ...partial.search } : current.search,
+    weather: partial.weather ? { ...current.weather, ...partial.weather } : current.weather,
     recording: partial.recording ? { ...current.recording, ...partial.recording } : current.recording,
     transcription: partial.transcription
       ? {
