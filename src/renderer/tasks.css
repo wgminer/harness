@@ -17,7 +17,7 @@
 }
 
 .tasks-section-heading:hover {
-  color: var(--accent);
+  color: var(--accent-readable);
 }
 
 .tasks-section-heading:focus-visible {
@@ -115,7 +115,7 @@
 }
 
 .tasks-check-icon--on {
-  color: var(--accent);
+  color: var(--accent-readable);
 }
 
 .tasks-row-body {
@@ -133,7 +133,7 @@
 }
 
 .tasks-row-body:hover .tasks-row-title {
-  color: var(--accent);
+  color: var(--accent-readable);
 }
 
 .tasks-row-title {
