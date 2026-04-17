@@ -575,7 +575,7 @@
 }
 
 .settings-playground-canvas__accent {
-  color: var(--accent);
+  color: var(--accent-readable);
   font-weight: 600;
 }
 
@@ -619,6 +619,6 @@
 }
 
 .settings-playground-canvas__btn:hover {
-  color: var(--accent);
+  color: var(--accent-readable);
   background: color-mix(in srgb, var(--fg) 10%, var(--bg));
 }
