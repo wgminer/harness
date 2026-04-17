@@ -1,6 +1,6 @@
 export type Conversation = { id: string; title: string | null; createdAt: number };
 
-export type View = "chat" | "settings" | "tasks";
+export type View = "chat" | "settings" | "tasks" | "writing";
 
 export const SIDEBAR_PREVIEW_COUNT_DEFAULT = 7;
 export const SIDEBAR_PREVIEW_COUNT_MIN = 3;

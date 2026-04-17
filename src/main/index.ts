@@ -10,6 +10,7 @@ import { registerCustomizationHandlers } from "./customization";
 import { registerFileToolsHandlers } from "./fileTools";
 import { registerAssistantToolsHandlers } from "./assistantTools";
 import { registerPlansHandlers } from "./plans";
+import { registerWritingHandlers } from "./writing";
 import { registerRecordingHandlers } from "./recording";
 import { registerGlobalFnRecording } from "./globalRecordingMain";
 import { registerSystemHandlers } from "./systemHandlers";
@@ -134,6 +135,7 @@ app.whenReady().then(() => {
   registerCustomizationHandlers();
   registerFileToolsHandlers();
   registerAssistantToolsHandlers();
+  registerWritingHandlers();
   registerRecordingHandlers();
   registerSystemHandlers();
 
