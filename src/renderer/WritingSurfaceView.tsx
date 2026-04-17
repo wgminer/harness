@@ -36,11 +36,22 @@ function formatUpdatedAt(ms: number): string {
   });
 }
 
+function formatBranchStamp(ms: number): string {
+  const d = new Date(ms);
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function WritingSurfaceView() {
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const [draft, setDraft] = useState<string>("");
   const [savedContent, setSavedContent] = useState<string>("");
   const [updatedAt, setUpdatedAt] = useState<number>(0);
+  const [previewMode, setPreviewMode] = useState<"split" | "hidden">("split");
   const [status, setStatus] = useState<Status>({ kind: "loading" });
   const savedToastTimerRef = useRef<number | null>(null);
 
@@ -67,6 +78,18 @@ export function WritingSurfaceView() {
   }, [load]);
 
   const dirty = draft !== savedContent;
+
+  const createNewNote = useCallback(() => {
+    setDraft("");
+    setStatus({ kind: "idle" });
+  }, []);
+
+  const createBranchDraft = useCallback(() => {
+    const stamp = formatBranchStamp(Date.now());
+    const content = draft.trim().length > 0 ? draft.trim() : "_New desk note branch._";
+    setDraft(`## Branch · ${stamp}\n\n${content}\n`);
+    setStatus({ kind: "idle" });
+  }, [draft]);
 
   const save = useCallback(async () => {
     if (!dirty) return;
@@ -106,7 +129,7 @@ export function WritingSurfaceView() {
         <div className="settings-header-inner">
           <div className="settings-header-title-row">
             <NotebookPen size={18} />
-            <h2 className="settings-title">Writing</h2>
+            <h2 className="settings-title">Desk</h2>
           </div>
           <div className="writing-surface__header-actions">
             <span className="writing-surface__meta" title="Last saved">
@@ -120,14 +143,29 @@ export function WritingSurfaceView() {
                       ? "Unsaved changes"
                       : `Saved · ${formatUpdatedAt(updatedAt)}`}
             </span>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => void load()}
-              disabled={status.kind === "loading" || status.kind === "saving"}
-              title="Reload from disk (discards local edits)"
-            >
-              Reload
+            <div className="writing-surface__preview-controls" role="group" aria-label="Preview display mode">
+              <button
+                type="button"
+                className={`btn${previewMode === "split" ? " btn-primary" : ""}`}
+                onClick={() => setPreviewMode("split")}
+                aria-pressed={previewMode === "split"}
+              >
+                Side by Side
+              </button>
+              <button
+                type="button"
+                className={`btn${previewMode === "hidden" ? " btn-primary" : ""}`}
+                onClick={() => setPreviewMode("hidden")}
+                aria-pressed={previewMode === "hidden"}
+              >
+                Hide Preview
+              </button>
+            </div>
+            <button type="button" className="btn" onClick={createBranchDraft} disabled={status.kind === "saving"}>
+              Branch
+            </button>
+            <button type="button" className="btn" onClick={createNewNote} disabled={status.kind === "saving"}>
+              New
             </button>
             <button
               type="button"
@@ -141,31 +179,33 @@ export function WritingSurfaceView() {
         </div>
       </header>
       <div ref={scrollRef} className="settings-scroll writing-surface__scroll" onScroll={onScroll}>
-        <div className="writing-surface__panes">
+        <div className={`writing-surface__panes writing-surface__panes--${previewMode}`}>
           <div className="writing-surface__pane writing-surface__pane--editor">
             <textarea
               className="writing-surface__editor"
               data-testid="writing-editor"
-              aria-label="Writing surface markdown editor"
+              aria-label="Desk markdown editor"
               placeholder={
                 status.kind === "loading"
                   ? "Loading…"
-                  : "Write markdown here. The assistant can read and update this doc via the doc_* tools."
+                  : "Capture an object-like desk note here. Save to persist this version."
               }
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               spellCheck
             />
           </div>
-          <div className="writing-surface__pane writing-surface__pane--preview">
-            {draft.trim().length === 0 ? (
-              <p className="writing-surface__empty">Preview will appear here.</p>
-            ) : (
-              <div className="writing-surface__preview">
-                <MarkdownContent content={draft} />
-              </div>
-            )}
-          </div>
+          {previewMode === "split" ? (
+            <div className="writing-surface__pane writing-surface__pane--preview">
+              {draft.trim().length === 0 ? (
+                <p className="writing-surface__empty">Preview will appear here.</p>
+              ) : (
+                <div className="writing-surface__preview">
+                  <MarkdownContent content={draft} />
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

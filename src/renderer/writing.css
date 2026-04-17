@@ -17,12 +17,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .writing-surface__meta {
   font-size: 12px;
   color: var(--fg-muted);
   margin-right: 4px;
+}
+
+.writing-surface__preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .writing-surface__scroll {
@@ -50,6 +57,14 @@
 
 .writing-surface__pane--editor {
   border-right: 1px solid var(--border);
+}
+
+.writing-surface__panes--hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.writing-surface__panes--hidden .writing-surface__pane--editor {
+  border-right: none;
 }
 
 .writing-surface__editor {
