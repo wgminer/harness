@@ -133,6 +133,11 @@ contextBridge.exposeInMainWorld("electron", {
   fileTools: {
     getAllowedRoots: () => ipcRenderer.invoke("fileTools:getAllowedRoots"),
   },
+  writing: {
+    read: () => ipcRenderer.invoke("writing:read") as Promise<{ content: string; updatedAt: number }>,
+    write: (content: string) =>
+      ipcRenderer.invoke("writing:write", content) as Promise<{ content: string; updatedAt: number }>,
+  },
   recording: {
     requestMicrophoneAccess: () =>
       ipcRenderer.invoke("recording:requestMicrophoneAccess") as Promise<boolean>,
