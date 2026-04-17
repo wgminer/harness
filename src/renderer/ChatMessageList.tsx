@@ -102,7 +102,7 @@ export function ChatMessageList({
                       {expandedUserCards.has(i) ? (
                         <>
                           <ChevronUp strokeWidth={2} size={18} aria-hidden />
-                          <span className="message-user-card__toggle-text">Show less</span>
+                          <span className="message-user-card__toggle-text">Close</span>
                         </>
                       ) : (
                         <ChevronDown strokeWidth={2} size={18} aria-hidden />
