@@ -1,8 +1,8 @@
 import { ipcMain } from "electron";
-import { readFile, writeFile, access } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { getUserMemory, setUserMemory, searchConversations, getMemoryDir, TASKS_FILE } from "./memory";
-import { generateId } from "./utils";
+import { generateId, fileExists } from "./utils";
 import type { SearchResult } from "../shared/types";
 import {
   coerceTaskTags,
@@ -44,10 +44,6 @@ interface MemorySearchPayload {
 
 function getTasksFilePath(): string {
   return join(getMemoryDir(), TASKS_FILE);
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try { await access(path); return true; } catch { return false; }
 }
 
 function migrateRawTask(raw: unknown): TaskItem | null {
