@@ -1,6 +1,6 @@
 # Harness Roadmap
 
-Living document. History tracks what shipped; Upcoming tracks what's next. Rewritten periodically as priorities shift.
+Living document. **Completed** records what shipped; **v0.5** is the active plan for the next release; **Post v0.5** holds the longer backlog. Rewritten periodically as priorities shift.
 
 ---
 
@@ -35,28 +35,66 @@ Living document. History tracks what shipped; Upcoming tracks what's next. Rewri
 
 ---
 
-## Upcoming
+## v0.5.0 — planned release
 
-### Near-term
+Target: iterate on real usage from 0.4.x — clearer shell layout, better scaling, one new external tool, and a concrete direction for mobile — without boiling the ocean.
 
-- **More providers** — Add Anthropic (Claude) and Google (Gemini) to the provider registry so all major APIs are a Settings toggle away.
-- **Agent / autonomous mode** — Persistent, multi-step agent that can run plans (file work, web search, shell commands) across conversations with a human-in-the-loop approval step before destructive actions.
-- **Semantic memory** — Upgrade long-term memory from flat key/value to a local vector store with similarity retrieval so the assistant surfaces relevant past context automatically.
+### Layout, scaling, and shell
 
-### Medium-term
+- **Viewport-aware UI scaling** — As the window (or embedded web surface) grows, typography and/or layout should scale or breathe so the app does not feel like a fixed-width column floating in empty space. Likely: fluid max-width, stepped or clamp-based font sizing, and/or CSS variables tied to breakpoints — exact approach TBD.
+- **Sidebar behavior** — Revisit open/close animation, focus traps, and affordances so the side menu feels predictable and lightweight rather than distracting.
+- **Chat page structure** — Rebuild the main chat layout with a clearer hierarchy: scroll regions, sticky composer, and stable heights so long conversations do not fight the viewport. Address current pain around **conversation column height** and streaming-era CSS quirks in one pass.
 
-- **Telegram integration** — Connect to Telegram as an interface so Harness is reachable from mobile without a dedicated app.
-- **Backup / sync** — Lightweight system to back up or sync conversations, memory, and settings across machines (local network, iCloud, or file-based).
-- **Richer task management** — Due dates, priority levels, and task-to-conversation links on top of the existing status tracking.
-- **Model parameter overrides** — Per-model temperature, max tokens, and top-p sliders editable in the Settings UI.
-- **Auto-update** — Electron `autoUpdater` wired up so shipped builds can pull new versions without a manual reinstall.
+### Tools
 
-### Longer-term
+- **Weather** — Add an assistant-callable weather tool backed by a **free or very cheap** HTTP API (candidates: [Open-Meteo](https://open-meteo.com/) — no API key for non-commercial use; or national/municipal free tiers). Keep the tool input/output small and obvious (e.g. location + short forecast summary).
 
-- **Plugin / tool registry** — A first-class way to install or write new tool sets (e.g. calendar, browser control, code execution sandbox) without modifying core source.
-- **Windows and Linux builds** — Electron already supports it; needs CI, signing, and installer testing for each platform.
-- **Conversation sharing / export** — Export individual conversations to Markdown or JSON; optionally generate a shareable read-only link.
+### Mobile direction (companion, not parity)
+
+- **iOS (or cross-platform shell)** — Aim for something **extremely simple**: mobile chat + Q&A against the same mental model as desktop, not feature parity.
+- **Audio** — Prefer **voice-to-text** (or OS dictation) feeding normal chat, plus standard LLM calls — not a full duplicate of desktop recording/transcription unless it stays trivial to maintain.
+
+### Themes (carryover from ongoing polish)
+
+- **Accent on dark backgrounds** — Introduce a derived accent token (e.g. softened or mixed toward foreground) for links and chips so saturated user accents remain readable on dark UI.
+
+### Design questions to settle (may drive spikes, not necessarily full builds in 0.5)
+
+These stay **easy to explain in one paragraph** each; implementation can trail.
+
+- **Writing surface tool** — A durable, **markdown-only** document the model and user can write to over time — minimal schema, explicit save semantics, separate from ephemeral chat.
+- **Conversation links + memory** — How conversations reference each other; how long-term memory is refreshed (on demand vs scheduled vs nightly scan). Prefer a small number of clear rules over a black box.
+
+### Explicitly not in this roadmap doc
+
+- **Multi-location development and testing workflows** — Worked separately alongside the **Devon LLM** setup; not tracked here.
 
 ---
 
-*Last updated: 2026-03-22*
+## Post v0.5 — backlog
+
+Pulled forward from earlier planning; order is not commitment.
+
+### Near-term
+
+- **More providers** — Anthropic (Claude) and Google (Gemini) in the provider registry.
+- **Agent / autonomous mode** — Persistent multi-step agent with human-in-the-loop approval before destructive actions.
+- **Semantic memory** — Local vector store + similarity retrieval on top of or beside key/value memory.
+
+### Medium-term
+
+- **Telegram integration** — Harness reachable from mobile without a dedicated app (may overlap with iOS direction; revisit when mobile plan firms up).
+- **Backup / sync** — Conversations, memory, settings across machines (local network, iCloud, or file-based).
+- **Richer task management** — Due dates, priority, task-to-conversation links.
+- **Model parameter overrides** — Temperature, max tokens, top-p in Settings.
+- **Auto-update** — Electron `autoUpdater` for shipped builds.
+
+### Longer-term
+
+- **Plugin / tool registry** — Install or author tool sets without forking core.
+- **Windows and Linux builds** — CI, signing, installers.
+- **Conversation sharing / export** — Markdown/JSON export; optional read-only links.
+
+---
+
+*Last updated: 2026-04-17*
