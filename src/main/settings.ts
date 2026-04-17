@@ -1,9 +1,10 @@
 import { ipcMain } from "electron";
-import { readFile, writeFile, access } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { app } from "electron";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings } from "../shared/types";
+import { fileExists } from "./utils";
 
 const SETTINGS_FILE = "settings.json";
 
@@ -11,15 +12,6 @@ const D = DEFAULT_SETTINGS;
 
 function getSettingsPath(): string {
   return join(app.getPath("userData"), SETTINGS_FILE);
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function parseTranscription(raw: Record<string, unknown> | undefined): NonNullable<Settings["transcription"]> {

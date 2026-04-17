@@ -4,7 +4,6 @@ import { join, resolve } from "path";
 import { app } from "electron";
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
-const ALLOWED_ROOTS_KEY = "file_tools_allowed_roots";
 
 function getAllowedRoots(): string[] {
   const userData = app.getPath("userData");

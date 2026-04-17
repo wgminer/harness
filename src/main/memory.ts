@@ -1,11 +1,11 @@
 import { ipcMain } from "electron";
-import { readFile, writeFile, access, mkdir, unlink } from "fs/promises";
+import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { app } from "electron";
 import type { AppendMessageMeta, ChatMessage, SearchResult } from "../shared/types";
 import { notifyConversationTitleUpdated } from "./titleEvents";
-import { generateId } from "./utils";
+import { generateId, fileExists } from "./utils";
 
 const MEMORY_DIR = "memory";
 const CONVERSATIONS_FILE = "conversations.json";
@@ -38,10 +38,6 @@ interface MessageRecord {
   model?: string;
 }
 
-
-async function fileExists(path: string): Promise<boolean> {
-  try { await access(path); return true; } catch { return false; }
-}
 
 async function loadConversations(): Promise<Record<string, ConversationMeta>> {
   const path = join(getMemoryDir(), CONVERSATIONS_FILE);
