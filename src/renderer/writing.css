@@ -31,7 +31,6 @@
   align-items: center;
   gap: 6px;
 }
-
 .writing-surface__scroll {
   /* The panes own the overflow internally; keep outer scroll container tidy. */
   display: flex;
@@ -66,7 +65,6 @@
 .writing-surface__panes--hidden .writing-surface__pane--editor {
   border-right: none;
 }
-
 .writing-surface__editor {
   flex: 1;
   width: 100%;

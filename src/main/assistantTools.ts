@@ -10,6 +10,8 @@ import {
   tagsFromLegacyStatus,
   taskIsClearable,
 } from "../shared/taskTags";
+import { getSettings } from "./settings";
+import { getWeatherForZip } from "./weather";
 import { executeDocTool } from "./writing";
 
 export interface TaskItem {
@@ -336,6 +338,23 @@ function getDatetime(args: Record<string, unknown>): Record<string, string | num
   return { epoch_ms, utc_iso, timezone, offset, local_iso, formatted };
 }
 
+async function fetchWeather(args: Record<string, unknown>): Promise<unknown> {
+  const argZip = typeof args.zip === "string" ? args.zip.trim() : "";
+  let zip = argZip;
+  if (!zip) {
+    const settings = await getSettings();
+    zip = settings.weather?.defaultZip?.trim() ?? "";
+  }
+  if (!zip) {
+    return {
+      error: "No ZIP provided and no default ZIP is set. Add one in Settings → Weather.",
+    };
+  }
+  const daysRaw = typeof args.days === "number" ? args.days : Number.parseInt(String(args.days ?? ""), 10);
+  const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(7, Math.floor(daysRaw)) : 3;
+  return getWeatherForZip(zip, days);
+}
+
 export function isAssistantToolName(name: string): boolean {
   return [
     "task_list",
@@ -347,6 +366,7 @@ export function isAssistantToolName(name: string): boolean {
     "memory_list_facts",
     "memory_search_conversations",
     "get_datetime",
+    "get_weather",
     "doc_read",
     "doc_write",
     "doc_append",
@@ -373,6 +393,8 @@ export async function executeAssistantTool(name: string, args: Record<string, un
       return JSON.stringify(await searchMemoryConversations(args));
     case "get_datetime":
       return JSON.stringify(getDatetime(args));
+    case "get_weather":
+      return JSON.stringify(await fetchWeather(args));
     case "doc_read":
     case "doc_write":
     case "doc_append":

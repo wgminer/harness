@@ -9,6 +9,15 @@
   --fg-muted: #9aa4af;
   --border: #30363d;
   --accent: #f2ff00;
+  /**
+   * Readable variant of --accent for use as *text color* on app backgrounds
+   * (--bg / --bg-secondary / --bg-elevated). Pulled 30% toward --fg in oklab so
+   * that dark or low-chroma accents still clear the WCAG AA threshold on dark
+   * surfaces, while vivid accents (like the default yellow) are effectively
+   * unchanged. Use this for links / hover text / accent spans. For borders,
+   * outlines, and backgrounds, keep using --accent.
+   */
+  --accent-readable: color-mix(in oklab, var(--accent) 70%, var(--fg));
   --danger: #c0392b;
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   --btn-shadow: none;
@@ -103,7 +112,7 @@ hr {
 }
 
 .btn:hover:not(:disabled) {
-  color: var(--accent);
+  color: var(--fg);
   background: color-mix(in srgb, var(--fg) 10%, var(--bg));
   box-shadow: var(--btn-shadow-hover);
 }
