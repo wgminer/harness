@@ -1,0 +1,149 @@
+/**
+ * Writing surface styles — minimal first draft.
+ *
+ * Reuses `.settings-page` / `.settings-header` / `.settings-scroll` for layout
+ * and header chrome so the view feels consistent with Tasks and Settings.
+ * Everything below is scoped under `.writing-surface` so future design work
+ * can restyle without touching settings.
+ */
+
+.writing-surface .settings-header-inner {
+  max-width: none;
+  padding: 0 16px;
+  justify-content: space-between;
+}
+
+.writing-surface__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.writing-surface__meta {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-right: 4px;
+}
+
+.writing-surface__preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.writing-surface__scroll {
+  /* The panes own the overflow internally; keep outer scroll container tidy. */
+  display: flex;
+  min-height: 0;
+}
+
+.writing-surface__panes {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+}
+
+.writing-surface__pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.writing-surface__pane--editor {
+  border-right: 1px solid var(--border);
+}
+
+.writing-surface__panes--hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.writing-surface__panes--hidden .writing-surface__pane--editor {
+  border-right: none;
+}
+.writing-surface__editor {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  padding: 20px 24px;
+  background: var(--bg);
+  color: var(--fg);
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.writing-surface__editor:focus {
+  outline: none;
+}
+
+.writing-surface__pane--preview {
+  background: var(--bg-secondary);
+  overflow-y: auto;
+}
+
+.writing-surface__preview {
+  padding: 20px 24px;
+  font-family: var(--font-family);
+  font-size: 14px;
+  line-height: var(--line-height-message);
+  color: var(--fg);
+  max-width: var(--content-width);
+  margin: 0 auto;
+}
+
+.writing-surface__preview h1,
+.writing-surface__preview h2,
+.writing-surface__preview h3 {
+  line-height: 1.3;
+  margin: 1.2em 0 0.4em;
+}
+
+.writing-surface__preview h1:first-child,
+.writing-surface__preview h2:first-child,
+.writing-surface__preview h3:first-child,
+.writing-surface__preview p:first-child {
+  margin-top: 0;
+}
+
+.writing-surface__preview p {
+  margin: 0 0 0.8em;
+}
+
+.writing-surface__preview code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+.writing-surface__preview pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.writing-surface__empty {
+  margin: 20px 24px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+/* Stack vertically in small windows so neither pane becomes unreadable. */
+.app[data-window-size="small"] .writing-surface__panes {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.app[data-window-size="small"] .writing-surface__pane--editor {
+  border-right: none;
+  border-bottom: 1px solid var(--border);
+}
