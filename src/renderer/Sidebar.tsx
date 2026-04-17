@@ -273,11 +273,11 @@ export function Sidebar({
               className={`btn sidebar-workspace__btn${view === "writing" ? " sidebar-workspace__btn--active" : ""}`}
               data-testid="sidebar-writing"
               onClick={() => onViewChange("writing")}
-              aria-label="Desk"
+              aria-label="Writing"
               aria-current={view === "writing" ? "page" : undefined}
             >
               <NotebookPen size={18} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">Desk</span>
+              <span className="sidebar-workspace__label">Writing</span>
             </button>
             <button
               type="button"

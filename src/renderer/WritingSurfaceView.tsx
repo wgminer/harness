@@ -45,7 +45,6 @@ function formatBranchStamp(ms: number): string {
     minute: "2-digit",
   });
 }
-
 export function WritingSurfaceView() {
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const [draft, setDraft] = useState<string>("");
@@ -86,11 +85,10 @@ export function WritingSurfaceView() {
 
   const createBranchDraft = useCallback(() => {
     const stamp = formatBranchStamp(Date.now());
-    const content = draft.trim().length > 0 ? draft.trim() : "_New desk note branch._";
+    const content = draft.trim().length > 0 ? draft.trim() : "_New writing branch._";
     setDraft(`## Branch · ${stamp}\n\n${content}\n`);
     setStatus({ kind: "idle" });
   }, [draft]);
-
   const save = useCallback(async () => {
     if (!dirty) return;
     setStatus({ kind: "saving" });
@@ -129,7 +127,7 @@ export function WritingSurfaceView() {
         <div className="settings-header-inner">
           <div className="settings-header-title-row">
             <NotebookPen size={18} />
-            <h2 className="settings-title">Desk</h2>
+            <h2 className="settings-title">Writing</h2>
           </div>
           <div className="writing-surface__header-actions">
             <span className="writing-surface__meta" title="Last saved">
@@ -143,6 +141,15 @@ export function WritingSurfaceView() {
                       ? "Unsaved changes"
                       : `Saved · ${formatUpdatedAt(updatedAt)}`}
             </span>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void load()}
+              disabled={status.kind === "loading" || status.kind === "saving"}
+              title="Reload from disk (discards local edits)"
+            >
+              Reload
+            </button>
             <div className="writing-surface__preview-controls" role="group" aria-label="Preview display mode">
               <button
                 type="button"
@@ -161,6 +168,15 @@ export function WritingSurfaceView() {
                 Hide Preview
               </button>
             </div>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void load()}
+              disabled={status.kind === "loading" || status.kind === "saving"}
+              title="Reload from disk (discards local edits)"
+            >
+              Reload
+            </button>
             <button type="button" className="btn" onClick={createBranchDraft} disabled={status.kind === "saving"}>
               Branch
             </button>
@@ -184,11 +200,11 @@ export function WritingSurfaceView() {
             <textarea
               className="writing-surface__editor"
               data-testid="writing-editor"
-              aria-label="Desk markdown editor"
+              aria-label="Writing surface markdown editor"
               placeholder={
                 status.kind === "loading"
                   ? "Loading…"
-                  : "Capture an object-like desk note here. Save to persist this version."
+                  : "Write markdown here. The assistant can read and update this doc via the doc_* tools."
               }
               value={draft}
               onChange={(e) => setDraft(e.target.value)}

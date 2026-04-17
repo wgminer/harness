@@ -231,6 +231,28 @@ export const TOOL_DEFINITIONS = [
   {
     type: "function" as const,
     function: {
+      name: "get_weather",
+      description:
+        "Get current conditions and a short daily forecast for a US ZIP code. Temperatures in °F, wind in mph, precipitation in inches. If the user does not specify a location, call this with no arguments to use their Settings default ZIP.",
+      parameters: {
+        type: "object",
+        properties: {
+          zip: {
+            type: "string",
+            description:
+              "Optional US ZIP code (5 digits). Omit to use the user's default ZIP from Settings.",
+          },
+          days: {
+            type: "number",
+            description: "Number of forecast days to include (1–7). Defaults to 3.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "doc_read",
       description:
         "Read the current writing surface (a single persistent markdown document separate from the chat). Returns { content, updatedAt }. Use this before editing so you append to what is actually there.",

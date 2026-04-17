@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import {
   type Message,
   type ToolCallDisplay,
@@ -75,18 +75,38 @@ export function ChatMessageList({
           <div key={i} className={`message-block ${m.role}`}>
             <div className="content">
               {m.role === "user" ? (
-                <div className={`message-user-card${expandedUserCards.has(i) ? " message-user-card--expanded" : ""}`}>
+                <div
+                  className={`message-user-card${expandedUserCards.has(i) ? " message-user-card--expanded" : ""}${
+                    overflowedUserCards.has(i) && !expandedUserCards.has(i)
+                      ? " message-user-card--overlay-toggle"
+                      : ""
+                  }`}
+                >
+                  {overflowedUserCards.has(i) && !expandedUserCards.has(i) ? (
+                    <div className="message-user-card__fade" aria-hidden />
+                  ) : null}
                   <div className="message-user-card__content" ref={(el) => { userCardContentRefs.current[i] = el; }}>
                     {m.content ? <MarkdownContent content={m.content} /> : null}
                   </div>
                   {(expandedUserCards.has(i) || overflowedUserCards.has(i)) && (
                     <button
                       type="button"
-                      className="message-user-card__toggle"
+                      className={`message-user-card__toggle${
+                        expandedUserCards.has(i) ? " message-user-card__toggle--less" : ""
+                      }`}
                       onClick={() => toggleUserCardExpanded(i)}
                       aria-expanded={expandedUserCards.has(i)}
+                      aria-label={expandedUserCards.has(i) ? undefined : "Show more"}
+                      title={expandedUserCards.has(i) ? undefined : "Show more"}
                     >
-                      {expandedUserCards.has(i) ? "Show less" : "Show more"}
+                      {expandedUserCards.has(i) ? (
+                        <>
+                          <ChevronUp strokeWidth={2} size={18} aria-hidden />
+                          <span className="message-user-card__toggle-text">Close</span>
+                        </>
+                      ) : (
+                        <ChevronDown strokeWidth={2} size={18} aria-hidden />
+                      )}
                     </button>
                   )}
                 </div>

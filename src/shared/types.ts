@@ -46,6 +46,11 @@ export interface Settings {
   search?: {
     tavilyApiKey: string;
   };
+  /** Defaults for the `get_weather` assistant tool. */
+  weather?: {
+    /** US ZIP used when the model does not pass one explicitly. */
+    defaultZip: string;
+  };
 }
 
 export interface SearchResult {
@@ -91,5 +96,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   search: {
     tavilyApiKey: "",
+  },
+  weather: {
+    defaultZip: "12528",
   },
 };
