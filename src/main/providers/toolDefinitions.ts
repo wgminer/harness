@@ -231,6 +231,54 @@ export const TOOL_DEFINITIONS = [
   {
     type: "function" as const,
     function: {
+      name: "doc_read",
+      description:
+        "Read the current writing surface (a single persistent markdown document separate from the chat). Returns { content, updatedAt }. Use this before editing so you append to what is actually there.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "doc_write",
+      description:
+        "Replace the entire writing surface with the given markdown content. Destructive — prefer doc_append for additions. Use when the user asks to rewrite / restart / clear the doc, or when you have a freshly assembled full draft.",
+      parameters: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "New full markdown body for the document. Pass an empty string to clear.",
+          },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "doc_append",
+      description:
+        "Append markdown to the end of the writing surface (with a blank line separator if needed). Use this for additive edits like 'add a section', 'write a paragraph about X to the doc', 'jot this down'.",
+      parameters: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "Markdown to append to the end of the document.",
+          },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "get_datetime",
       description:
         "Get the current date and time from the app host (accurate clock). Use for scheduling, what day or time it is, or answering questions in a specific IANA timezone (e.g. America/New_York, Europe/London, Asia/Tokyo).",

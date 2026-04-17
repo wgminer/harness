@@ -10,6 +10,7 @@ import {
   tagsFromLegacyStatus,
   taskIsClearable,
 } from "../shared/taskTags";
+import { executeDocTool } from "./writing";
 
 export interface TaskItem {
   id: string;
@@ -346,6 +347,9 @@ export function isAssistantToolName(name: string): boolean {
     "memory_list_facts",
     "memory_search_conversations",
     "get_datetime",
+    "doc_read",
+    "doc_write",
+    "doc_append",
   ].includes(name);
 }
 
@@ -369,6 +373,10 @@ export async function executeAssistantTool(name: string, args: Record<string, un
       return JSON.stringify(await searchMemoryConversations(args));
     case "get_datetime":
       return JSON.stringify(getDatetime(args));
+    case "doc_read":
+    case "doc_write":
+    case "doc_append":
+      return JSON.stringify(await executeDocTool(name, args));
     default:
       return JSON.stringify({ error: `Unknown assistant tool: ${name}` });
   }

@@ -53,6 +53,9 @@ export function toolLabel(name: string): string {
     memory_list_facts: "Listed memories",
     memory_search_conversations: "Searched history",
     get_datetime: "Checked date & time",
+    doc_read: "Read writing surface",
+    doc_write: "Rewrote writing surface",
+    doc_append: "Appended to writing surface",
   };
   return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }

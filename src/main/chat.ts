@@ -44,7 +44,7 @@ async function buildMessageList(
       : "";
 
   const systemPrompt =
-    "Helpful assistant running in a local desktop app. Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent tagged task list visible in a dedicated panel); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); and get_datetime (for the current date and time, optionally in a specific IANA timezone). Call them when appropriate." +
+    "Helpful assistant running in a local desktop app. Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent tagged task list visible in a dedicated panel); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); and doc_read, doc_write, doc_append (for a single persistent markdown writing surface separate from the chat — prefer doc_append over doc_write for additive edits, and doc_read before editing). Call them when appropriate." +
     (memoryBlock ? "\n\n" + memoryBlock : "");
 
   const history = await getMessages(conversationId);

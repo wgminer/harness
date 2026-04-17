@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChatView } from "./ChatView";
 import { SettingsView } from "./SettingsView";
 import { TasksView } from "./TasksView";
+import { WritingSurfaceView } from "./WritingSurfaceView";
 import { Sidebar } from "./Sidebar";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
@@ -319,6 +320,7 @@ export default function App() {
           <SettingsView onImportComplete={loadConversations} onStoredDataReset={onStoredDataReset} />
         )}
         {view === "tasks" && <TasksView key={tasksRemountKey} />}
+        {view === "writing" && <WritingSurfaceView />}
       </main>
     </div>
   );
