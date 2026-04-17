@@ -35,6 +35,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [cleanupEnabled, setCleanupEnabled] = useState(D.transcription?.cleanup?.enabled ?? false);
 
   const [autoSend, setAutoSend] = useState(true);
+  const [weatherZip, setWeatherZip] = useState(D.weather!.defaultZip);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [userMemory, setUserMemory] = useState<Record<string, string>>({});
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
@@ -63,6 +64,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
       setApiKey(S.openai?.apiKey ?? D.openai!.apiKey);
       setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
       setCleanupEnabled(S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false);
+      setWeatherZip(S.weather?.defaultZip ?? D.weather!.defaultZip);
     });
     void window.electron.usage.getStats().then(setUsageStats);
     window.electron.memory.getUserMemory().then(setUserMemory);
@@ -96,6 +98,9 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             enabled: cleanupEnabled,
           },
         },
+        weather: {
+          defaultZip: weatherZip.trim(),
+        },
       });
       setSaveStatus("saved");
       if (hideToastRef.current) clearTimeout(hideToastRef.current);
@@ -111,7 +116,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
         hideToastRef.current = null;
       }
     };
-  }, [apiKey, autoSend, cleanupEnabled]);
+  }, [apiKey, autoSend, cleanupEnabled, weatherZip]);
 
   const closeMemoryModal = () => {
     setMemoryModalOpen(false);
@@ -351,6 +356,29 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               </span>
               <span className="settings-switch-text">Auto-send</span>
             </label>
+          </section>
+
+          <section className="settings-group">
+            <h3 className="settings-group__title">Weather</h3>
+            <p className="settings-group__lead">
+              Default US ZIP used by the <code>get_weather</code> tool when the assistant does not specify a location.
+              Powered by Open-Meteo (no API key).
+            </p>
+            <div className="settings-section">
+              <label htmlFor="settings-weather-zip">Default ZIP</label>
+              <input
+                id="settings-weather-zip"
+                data-testid="settings-weather-zip"
+                type="text"
+                value={weatherZip}
+                onChange={(e) => setWeatherZip(e.target.value)}
+                placeholder="12528"
+                inputMode="numeric"
+                autoComplete="postal-code"
+                spellCheck={false}
+                maxLength={5}
+              />
+            </div>
           </section>
 
           {saveStatus !== "idle" && (
