@@ -104,6 +104,11 @@ export interface ElectronAPI {
   fileTools: {
     getAllowedRoots: () => Promise<string[]>;
   };
+  /** Single persistent markdown writing surface, separate from chat. */
+  writing: {
+    read: () => Promise<{ content: string; updatedAt: number }>;
+    write: (content: string) => Promise<{ content: string; updatedAt: number }>;
+  };
   recording: {
     requestMicrophoneAccess: () => Promise<boolean>;
     saveWav: (data: ArrayBuffer) => Promise<{ path: string }>;

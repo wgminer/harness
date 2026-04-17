@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Settings, Maximize2, Minimize2, Plus, Search, X, ListTodo, Loader2 } from "lucide-react";
+import { Settings, Maximize2, Minimize2, NotebookPen, Plus, Search, X, ListTodo, Loader2 } from "lucide-react";
 import type { SearchResult } from "../shared/types";
 import { formatNewChatLabel } from "./chatDisplayTitle";
 import {
@@ -267,6 +267,17 @@ export function Sidebar({
             >
               <ListTodo size={18} className="sidebar-workspace__icon" aria-hidden />
               <span className="sidebar-workspace__label">Tasks</span>
+            </button>
+            <button
+              type="button"
+              className={`btn sidebar-workspace__btn${view === "writing" ? " sidebar-workspace__btn--active" : ""}`}
+              data-testid="sidebar-writing"
+              onClick={() => onViewChange("writing")}
+              aria-label="Writing"
+              aria-current={view === "writing" ? "page" : undefined}
+            >
+              <NotebookPen size={18} className="sidebar-workspace__icon" aria-hidden />
+              <span className="sidebar-workspace__label">Writing</span>
             </button>
             <button
               type="button"
