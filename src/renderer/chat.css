@@ -97,6 +97,19 @@
   margin-top: 0;
   width: 100%;
   justify-content: center;
+  color: var(--fg);
+  opacity: 0.38;
+  transition: opacity 0.15s ease;
+}
+
+.message-user-card__toggle--less:hover,
+.message-user-card__toggle--less:focus-visible {
+  color: var(--fg);
+  opacity: 0.68;
+}
+
+.message-user-card__toggle--less:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--fg) 32%, transparent);
 }
 
 .message-user-card__toggle--less .message-user-card__toggle-text {
@@ -417,6 +430,7 @@
   margin: 0 auto;
   border: 1px solid var(--border);
   border-bottom: none;
+  border-radius: 8px 8px 0 0;
 }
 
 .chat-input {
