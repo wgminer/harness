@@ -1,49 +1,168 @@
 /**
  * Writing surface styles — minimal first draft.
  *
- * Reuses `.settings-page` / `.settings-header` / `.settings-scroll` for layout
- * and header chrome so the view feels consistent with Tasks and Settings.
+ * Reuses `.settings-page` / `.settings-scroll` for layout and keeps writing
+ * controls as a compact floating cluster to maximize editor space.
  * Everything below is scoped under `.writing-surface` so future design work
  * can restyle without touching settings.
  */
 
-.writing-surface .settings-header-inner {
-  max-width: none;
-  padding: 0 16px;
-  justify-content: space-between;
+.writing-surface {
+  position: relative;
 }
 
-.writing-surface__header-actions {
-  display: flex;
+.writing-surface__floating-actions {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--bg-secondary) 90%, transparent);
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  backdrop-filter: blur(5px);
+}
+
+.writing-surface__floating-btn {
+  padding: 0;
+}
+
+.writing-surface__save-btn {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .writing-surface__meta {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--fg-muted);
-  margin-right: 4px;
+  margin-right: 2px;
 }
 
-.writing-surface__preview-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 .writing-surface__scroll {
   /* The panes own the overflow internally; keep outer scroll container tidy. */
   display: flex;
   min-height: 0;
+  padding-top: 0;
+}
+
+.writing-surface__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-height: 0;
+}
+
+.writing-surface__workspace--history-open {
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 
 .writing-surface__panes {
   flex: 1;
   min-height: 0;
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0;
   width: 100%;
+}
+
+.writing-surface__history {
+  border-left: 1px solid var(--border);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.writing-surface__history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.writing-surface__history-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.writing-surface__history-count {
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.writing-surface__history-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.writing-surface__history-list {
+  list-style: none;
+  margin: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.writing-surface__history-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.writing-surface__history-main {
+  min-width: 0;
+}
+
+.writing-surface__history-time {
+  font-size: 12px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.writing-surface__history-summary {
+  font-size: 12px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.writing-surface__history-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.writing-surface__history-note {
+  margin: 0;
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--fg-muted);
 }
 
 .writing-surface__pane {
@@ -56,6 +175,7 @@
 
 .writing-surface__pane--editor {
   border-right: 1px solid var(--border);
+  background: var(--bg);
 }
 
 .writing-surface__panes--hidden {
@@ -65,11 +185,15 @@
 .writing-surface__panes--hidden .writing-surface__pane--editor {
   border-right: none;
 }
+
 .writing-surface__editor {
   flex: 1;
   width: 100%;
+  max-width: min(700px, var(--content-width));
+  height: 100%;
+  margin: 0 auto;
   min-height: 0;
-  padding: 20px 24px;
+  padding: 12px 24px 20px;
   background: var(--bg);
   color: var(--fg);
   border: none;
@@ -91,7 +215,7 @@
 }
 
 .writing-surface__preview {
-  padding: 20px 24px;
+  padding: 12px 24px 20px;
   font-family: var(--font-family);
   font-size: 14px;
   line-height: var(--line-height-message);
@@ -132,7 +256,7 @@
 }
 
 .writing-surface__empty {
-  margin: 20px 24px;
+  margin: 12px 24px;
   color: var(--fg-muted);
   font-size: 13px;
 }
@@ -146,4 +270,18 @@
 .app[data-window-size="small"] .writing-surface__pane--editor {
   border-right: none;
   border-bottom: 1px solid var(--border);
+}
+
+.app[data-window-size="small"] .writing-surface__workspace--history-open {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 220px;
+}
+
+.app[data-window-size="small"] .writing-surface__history {
+  border-left: none;
+  border-top: 1px solid var(--border);
+}
+
+.app[data-window-size="small"] .writing-surface__meta {
+  display: none;
 }

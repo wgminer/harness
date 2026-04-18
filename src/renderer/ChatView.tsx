@@ -1,18 +1,15 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
-import type { UIEvent, CSSProperties } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
-import { ChatMessageList } from "./ChatMessageList";
-import { ChatComposer } from "./ChatComposer";
 import { ChatTitleModal } from "./ChatTitleModal";
+import { ChatSurface } from "./ChatSurface";
+import { chatAreaMetrics, devLogChatScroll } from "./chatScrollUtils";
 import {
   type Message,
   type ToolCallDisplay,
   type VoiceState,
-  SCROLL_TOP_THRESHOLD,
-  BOTTOM_SPACER_BEYOND_COMPOSER_PX,
 } from "./chatHelpers";
 
 interface ChatViewProps {
@@ -46,7 +43,6 @@ export function ChatView({
   const [streamingContent, setStreamingContent] = useState("");
   const [sending, setSending] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [hasScrolled, setHasScrolled] = useState(false);
   const [activeChatModel, setActiveChatModel] = useState("");
   const [streamingMeta, setStreamingMeta] = useState<{ model: string; startedAt: number } | null>(null);
   const streamingMetaRef = useRef<{ model: string; startedAt: number } | null>(null);
@@ -71,7 +67,32 @@ export function ChatView({
   const composerRef = useRef<HTMLDivElement>(null);
   const streamingContentRef = useRef("");
   const currentTurnToolCallsRef = useRef<ToolCallDisplay[]>([]);
-  const [bottomSpacerPx, setBottomSpacerPx] = useState(200);
+  const [alignLatestUserMessageRequestId, setAlignLatestUserMessageRequestId] = useState(0);
+
+  const requestAlignLatestUserMessage = useCallback(() => {
+    setAlignLatestUserMessageRequestId((prev) => prev + 1);
+  }, []);
+
+  const beginAssistantTurn = useCallback(
+    (opts?: {
+      alignLatestUserMessage?: boolean;
+      scrollEvent?: string;
+      scrollDetails?: Record<string, unknown>;
+    }) => {
+      setSending(true);
+      setStreamingContent("");
+      setCurrentTurnToolCalls([]);
+      if (opts?.scrollEvent) {
+        devLogChatScroll("chat-scroll", opts.scrollEvent, {
+          ...opts.scrollDetails,
+          ...chatAreaMetrics(chatAreaRef.current),
+        });
+      }
+      if (opts?.alignLatestUserMessage) requestAlignLatestUserMessage();
+      setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
+    },
+    [requestAlignLatestUserMessage]
+  );
 
   useEffect(() => {
     streamingContentRef.current = streamingContent;
@@ -122,6 +143,7 @@ export function ChatView({
     setPolishHintAfterDictation(false);
     setStreamingMeta(null);
     setTitleModalOpen(false);
+    setAlignLatestUserMessageRequestId(0);
 
     let cancelled = false;
     window.electron.memory.getMessages(conversationId).then((list) => {
@@ -166,28 +188,6 @@ export function ChatView({
         ]
       : messages;
 
-  useLayoutEffect(() => {
-    const composer = composerRef.current;
-    const chatArea = chatAreaRef.current;
-    if (!composer || !chatArea) return;
-    const update = () => {
-      const composerHeight = Math.ceil(composer.getBoundingClientRect().height);
-      const measured = composerHeight + BOTTOM_SPACER_BEYOND_COMPOSER_PX;
-      setBottomSpacerPx((prev) => (prev !== measured ? measured : prev));
-    };
-    update();
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(update);
-      ro.observe(composer);
-    }
-    window.addEventListener("resize", update);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-
   useEffect(() => {
     const unsubChunk = window.electron.chat.onStreamChunk((cid, chunk) => {
       if (cid === conversationId) setStreamingContent((prev) => prev + chunk);
@@ -222,16 +222,6 @@ export function ChatView({
       unsubEnd();
     };
   }, [conversationId]);
-
-  const onChatAreaScroll = useCallback((_e: UIEvent<HTMLDivElement>) => {
-    const el = chatAreaRef.current;
-    if (!el) return;
-    setHasScrolled(el.scrollTop > SCROLL_TOP_THRESHOLD);
-  }, []);
-
-  const scrollToTop = useCallback(() => {
-    chatAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, []);
 
   const handleToolConfirm = useCallback(
     async (tc: ToolCallDisplay, action: "proceed" | "cancel") => {
@@ -278,12 +268,15 @@ export function ChatView({
       if (!text.trim() || !conversationId || sending) return;
       if (opts?.fromDictation) setPolishHintAfterDictation(true);
       else setPolishHintAfterDictation(false);
-      setSending(true);
-      setStreamingContent("");
-      setCurrentTurnToolCalls([]);
-      const userTs = Date.now();
-      setMessages((prev) => [...prev, { role: "user", content: text, timestamp: userTs }]);
-      setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
+      beginAssistantTurn({
+        alignLatestUserMessage: true,
+        scrollEvent: "send-text-start",
+        scrollDetails: {
+          textLength: text.length,
+          fromDictation: !!opts?.fromDictation,
+        },
+      });
+      setMessages((prev) => [...prev, { role: "user", content: text, timestamp: Date.now() }]);
       try {
         await window.electron.chat.send(conversationId, text);
         onConversationCreated();
@@ -293,7 +286,7 @@ export function ChatView({
         setSending(false);
       }
     },
-    [conversationId, sending, onConversationCreated]
+    [beginAssistantTurn, conversationId, sending, onConversationCreated]
   );
 
   /** Post-strip polish: replace last user dictation with instruction + same text, then stream. */
@@ -306,15 +299,15 @@ export function ChatView({
     const t1 = Date.now();
     const t2 = t1 + 1;
     const transcript = last.content;
-    setSending(true);
-    setStreamingContent("");
-    setCurrentTurnToolCalls([]);
+    beginAssistantTurn({
+      alignLatestUserMessage: true,
+      scrollEvent: "polish-start",
+    });
     setMessages((prev) => [
       ...prev.slice(0, -1),
       { role: "user", content: instruction, timestamp: t1 },
       { role: "user", content: transcript, timestamp: t2 },
     ]);
-    setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
     try {
       await window.electron.chat.polishLastUser(conversationId);
       onConversationCreated();
@@ -334,7 +327,7 @@ export function ChatView({
         );
       });
     }
-  }, [conversationId, sending, messages, onConversationCreated]);
+  }, [beginAssistantTurn, conversationId, sending, messages, onConversationCreated]);
 
   const send = useCallback(async () => {
     const text = input.trim();
@@ -345,10 +338,7 @@ export function ChatView({
 
   const generateReply = useCallback(async () => {
     if (!conversationId || sending) return;
-    setSending(true);
-    setStreamingContent("");
-    setCurrentTurnToolCalls([]);
-    setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
+    beginAssistantTurn();
     try {
       await window.electron.chat.generateReply(conversationId);
       onConversationCreated();
@@ -357,7 +347,7 @@ export function ChatView({
       setStreamingMeta(null);
       setSending(false);
     }
-  }, [conversationId, sending, onConversationCreated]);
+  }, [beginAssistantTurn, conversationId, sending, onConversationCreated]);
 
   // Stable ref so the pendingHotkeyText effect always calls the latest sendText without it being a dep
   const sendTextRef = useRef(sendText);
@@ -452,74 +442,53 @@ export function ChatView({
 
   if (!conversationId) {
     return (
-      <div className="chat-area" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--fg-muted)" }}>
-        <div className="chat-area-inner" style={{ textAlign: "center" }}>
-          Select a conversation or create a new one.
+      <div className="chat-scroll chat-scroll--placeholder">
+        <div className="chat-area">
+          <div className="chat-area-inner">Select a conversation or create a new one.</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div
-      ref={chatAreaRef}
-      className="chat-scroll"
-      data-scrolled={hasScrolled || undefined}
-      onScroll={onChatAreaScroll}
-      style={{ "--chat-bottom-spacer": `${bottomSpacerPx}px` } as CSSProperties}
-    >
-      {hasScrolled && (
-        <button
-          type="button"
-          className="chat-scroll-top"
-          onClick={scrollToTop}
-          aria-label="Scroll to top"
-        >
-          Top
-        </button>
-      )}
-      <header className="chat-pane-header">
-        <button
-          type="button"
-          className="btn chat-pane-title"
-          onClick={openTitleModal}
-          title="Edit title"
-        >
-          {displayTitle}
-        </button>
-      </header>
-      <div className="chat-area">
-        <div className="chat-area-inner" data-testid="chat-messages">
-          <ChatMessageList
-            displayMessages={displayMessages}
-            copiedIndex={copiedIndex}
-            onCopied={setCopiedIndex}
-            streamingContent={streamingContent}
-            sending={sending}
-            polishHintAfterDictation={polishHintAfterDictation}
-            onToolConfirm={handleToolConfirm}
-            onPolish={polishLastUserFromStrip}
-            onGenerateReply={generateReply}
-          />
-        </div>
-      </div>
-      <div ref={composerRef} className="input-container input-container--sticky" data-testid="chat-composer">
-        <ChatComposer
-          input={input}
-          onInputChange={setInput}
-          onSend={send}
-          onStop={() => window.electron.chat.stop()}
-          sending={sending}
-          voiceState={voiceState}
-          voiceError={voiceError}
-          recordingMs={recordingMs}
-          onStartRecording={startRecording}
-          onStopRecording={stopAndTranscribe}
-          onCancelRecording={cancelRecording}
-          focusComposerNonce={focusComposerNonce}
-        />
-      </div>
-
+    <>
+      <ChatSurface
+        chatAreaRef={chatAreaRef}
+        composerRef={composerRef}
+        headerContent={(
+          <button
+            type="button"
+            className="btn chat-pane-title"
+            onClick={openTitleModal}
+            title="Edit title"
+          >
+            {displayTitle}
+          </button>
+        )}
+        displayMessages={displayMessages}
+        copiedIndex={copiedIndex}
+        onCopied={setCopiedIndex}
+        streamingContent={streamingContent}
+        sending={sending}
+        polishHintAfterDictation={polishHintAfterDictation}
+        onToolConfirm={handleToolConfirm}
+        onPolish={polishLastUserFromStrip}
+        onGenerateReply={generateReply}
+        input={input}
+        onInputChange={setInput}
+        onSend={send}
+        onStop={() => void window.electron.chat.stop()}
+        voiceState={voiceState}
+        voiceError={voiceError}
+        recordingMs={recordingMs}
+        onStartRecording={startRecording}
+        onStopRecording={stopAndTranscribe}
+        onCancelRecording={cancelRecording}
+        focusComposerNonce={focusComposerNonce}
+        messagesTestId="chat-messages"
+        composerTestId="chat-composer"
+        alignLatestUserMessageRequestId={alignLatestUserMessageRequestId}
+      />
       <ChatTitleModal
         open={titleModalOpen}
         onClose={() => setTitleModalOpen(false)}
@@ -528,6 +497,6 @@ export function ChatView({
         onSave={() => void saveConversationTitle()}
         saving={titleSaving}
       />
-    </div>
+    </>
   );
 }

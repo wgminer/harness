@@ -108,6 +108,9 @@ export interface ElectronAPI {
   writing: {
     read: () => Promise<{ content: string; updatedAt: number }>;
     write: (content: string) => Promise<{ content: string; updatedAt: number }>;
+    listCheckpoints: () => Promise<{ id: string; content: string; createdAt: number }[]>;
+    createCheckpoint: (content: string) => Promise<{ id: string; content: string; createdAt: number }[]>;
+    deleteCheckpoint: (id: string) => Promise<{ id: string; content: string; createdAt: number }[]>;
   };
   recording: {
     requestMicrophoneAccess: () => Promise<boolean>;

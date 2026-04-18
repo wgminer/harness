@@ -222,7 +222,7 @@ export function Sidebar({
               onClick={closeSearch}
               aria-label="Close search"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
         ) : (
@@ -234,7 +234,7 @@ export function Sidebar({
               aria-label="New chat"
               onClick={onNewChat}
             >
-              <Plus size={18} className="sidebar-new-chat-icon" aria-hidden />
+              <Plus size={16} className="sidebar-new-chat-icon" aria-hidden />
               <span className="sidebar-new-chat-label">New</span>
             </button>
             <button
@@ -244,7 +244,7 @@ export function Sidebar({
               onClick={() => setSearchOpen(true)}
               aria-label="Search conversations"
             >
-              <Search size={18} />
+              <Search size={16} />
             </button>
             <button
               type="button"
@@ -252,7 +252,7 @@ export function Sidebar({
               onClick={onWindowSizeToggle}
               aria-label={windowSize === "large" ? "Shrink window" : "Expand window"}
             >
-              {windowSize === "large" ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+              {windowSize === "large" ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
           </div>
         )}
@@ -265,7 +265,7 @@ export function Sidebar({
               aria-label="Tasks"
               aria-current={view === "tasks" ? "page" : undefined}
             >
-              <ListTodo size={18} className="sidebar-workspace__icon" aria-hidden />
+              <ListTodo size={16} className="sidebar-workspace__icon" aria-hidden />
               <span className="sidebar-workspace__label">Tasks</span>
             </button>
             <button
@@ -273,11 +273,11 @@ export function Sidebar({
               className={`btn sidebar-workspace__btn${view === "writing" ? " sidebar-workspace__btn--active" : ""}`}
               data-testid="sidebar-writing"
               onClick={() => onViewChange("writing")}
-              aria-label="Writing"
+              aria-label="Desk"
               aria-current={view === "writing" ? "page" : undefined}
             >
-              <NotebookPen size={18} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">Writing</span>
+              <NotebookPen size={16} className="sidebar-workspace__icon" aria-hidden />
+              <span className="sidebar-workspace__label">Desk</span>
             </button>
             <button
               type="button"
@@ -287,7 +287,7 @@ export function Sidebar({
               aria-label="Settings"
               aria-current={view === "settings" ? "page" : undefined}
             >
-              <Settings size={18} className="sidebar-workspace__icon" aria-hidden />
+              <Settings size={16} className="sidebar-workspace__icon" aria-hidden />
               <span className="sidebar-workspace__label">Settings</span>
             </button>
           </nav>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
-import { Eye, EyeOff, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Settings as SettingsIcon, Trash2 } from "lucide-react";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
@@ -210,7 +210,10 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     <div className="settings-page">
       <header className={`settings-header ${headerScrolled ? "settings-header--scrolled" : ""}`}>
         <div className="settings-header-inner">
-          <h2 className="settings-title">Settings</h2>
+          <div className="settings-header-title-row">
+            <SettingsIcon size={18} />
+            <h2 className="settings-title">Settings</h2>
+          </div>
         </div>
       </header>
       <div ref={scrollRef} className="settings-scroll" onScroll={onScroll}>

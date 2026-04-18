@@ -72,7 +72,12 @@ export function ChatMessageList({
         const hasToolCalls = isAssistant && m.toolCalls && m.toolCalls.length > 0;
 
         return (
-          <div key={i} className={`message-block ${m.role}`}>
+          <div
+            key={i}
+            className={`message-block ${m.role}`}
+            data-message-role={m.role}
+            data-message-ts={m.timestamp != null ? String(m.timestamp) : undefined}
+          >
             <div className="content">
               {m.role === "user" ? (
                 <div
