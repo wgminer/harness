@@ -137,6 +137,12 @@ contextBridge.exposeInMainWorld("electron", {
     read: () => ipcRenderer.invoke("writing:read") as Promise<{ content: string; updatedAt: number }>,
     write: (content: string) =>
       ipcRenderer.invoke("writing:write", content) as Promise<{ content: string; updatedAt: number }>,
+    listCheckpoints: () =>
+      ipcRenderer.invoke("writing:checkpoints:list") as Promise<{ id: string; content: string; createdAt: number }[]>,
+    createCheckpoint: (content: string) =>
+      ipcRenderer.invoke("writing:checkpoints:create", content) as Promise<{ id: string; content: string; createdAt: number }[]>,
+    deleteCheckpoint: (id: string) =>
+      ipcRenderer.invoke("writing:checkpoints:delete", id) as Promise<{ id: string; content: string; createdAt: number }[]>,
   },
   recording: {
     requestMicrophoneAccess: () =>

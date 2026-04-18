@@ -154,6 +154,7 @@ export default function App() {
     setConversationId(id);
     setConversations((prev) => [{ id, title: null, createdAt: Date.now() }, ...prev]);
     setView("chat");
+    setFocusComposerNonce((n) => n + 1);
   }, []);
 
   useEffect(() => {
@@ -219,6 +220,7 @@ export default function App() {
               targetId = await window.electron.memory.createConversation();
               setConversations((prev) => [{ id: targetId!, title: null, createdAt: Date.now() }, ...prev]);
               setConversationId(targetId);
+              setFocusComposerNonce((n) => n + 1);
             }
             setView("chat");
             setPendingHotkeyDraftOnly(false);
@@ -231,6 +233,7 @@ export default function App() {
             setConversations((prev) => [{ id: newId, title: voiceTitle, createdAt: Date.now() }, ...prev]);
             setConversationId(newId);
             setView("chat");
+            setFocusComposerNonce((n) => n + 1);
             void loadConversations();
           }
         }

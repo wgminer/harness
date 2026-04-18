@@ -8,6 +8,24 @@
   flex-direction: column;
 }
 
+/* Empty / placeholder panes (no conversation selected): same flex contract as an active chat */
+.chat-scroll.chat-scroll--placeholder {
+  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+}
+
+.chat-scroll.chat-scroll--placeholder .chat-area {
+  flex: 0 1 auto;
+  display: flex;
+  justify-content: center;
+}
+
+.chat-scroll.chat-scroll--placeholder .chat-area-inner {
+  text-align: center;
+}
+
 .chat-area {
   flex: 1;
   min-width: 0;
@@ -16,8 +34,6 @@
 .chat-area-inner {
   max-width: var(--content-width);
   margin: 0 auto;
-  /* Base room above sticky composer. */
-  /* padding-bottom: var(--chat-bottom-spacer, 360px); */
 }
 
 .message-block .content {
@@ -428,6 +444,7 @@
   width: 100%;
   max-width: min(700px, var(--content-width));
   margin: 0 auto;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
