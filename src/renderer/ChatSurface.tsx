@@ -3,13 +3,12 @@ import type { ReactNode, RefObject, UIEvent } from "react";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessageList } from "./ChatMessageList";
 import {
-  BOTTOM_SPACER_BEYOND_COMPOSER_PX,
   SCROLL_TOP_THRESHOLD,
   type Message,
   type ToolCallDisplay,
   type VoiceState,
 } from "./chatHelpers";
-import { alignLatestUserMessageToTop, chatAreaMetrics, devLogChatScroll } from "./chatScrollUtils";
+import { useChatScroll } from "./chatScrollUtils";
 
 interface ChatSurfaceProps {
   chatAreaRef: RefObject<HTMLDivElement | null>;
@@ -38,8 +37,7 @@ interface ChatSurfaceProps {
   focusComposerNonce?: number;
   messagesTestId: string;
   composerTestId: string;
-  alignLatestUserMessageRequestId: number;
-  scrollDebugPrefix?: string;
+  sendTick: number;
 }
 
 export function ChatSurface({
@@ -69,22 +67,18 @@ export function ChatSurface({
   focusComposerNonce,
   messagesTestId,
   composerTestId,
-  alignLatestUserMessageRequestId,
-  scrollDebugPrefix,
+  sendTick,
 }: ChatSurfaceProps) {
   const [hasScrolled, setHasScrolled] = useState(false);
-  const [bottomSpacerPx, setBottomSpacerPx] = useState(200);
-  const [tailRoomPx, setTailRoomPx] = useState(280);
-  const lastHandledAlignRequestIdRef = useRef(0);
-  const chatAreaInnerPaddingBottomPx = bottomSpacerPx + tailRoomPx;
+  const messagesInnerRef = useRef<HTMLDivElement>(null);
 
-  const logScope = scrollDebugPrefix ?? "chat-scroll";
-  const logScrollDebug = useCallback(
-    (event: string, details: Record<string, unknown> = {}) => {
-      devLogChatScroll(logScope, event, details);
-    },
-    [logScope]
-  );
+  const { slackPx } = useChatScroll({
+    chatAreaRef,
+    innerRef: messagesInnerRef,
+    composerRef,
+    sendTick,
+    sending,
+  });
 
   const onChatAreaScroll = useCallback((_e: UIEvent<HTMLDivElement>) => {
     const el = chatAreaRef.current;
@@ -95,75 +89,6 @@ export function ChatSurface({
   const scrollToTop = useCallback(() => {
     chatAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [chatAreaRef]);
-
-  useLayoutEffect(() => {
-    const composer = composerRef.current;
-    const chatArea = chatAreaRef.current;
-    if (!composer || !chatArea) return;
-    const update = () => {
-      const composerHeight = Math.ceil(composer.getBoundingClientRect().height);
-      const measured = composerHeight + BOTTOM_SPACER_BEYOND_COMPOSER_PX;
-      setBottomSpacerPx((prev) => (prev !== measured ? measured : prev));
-      const chatAreaHeight = Math.ceil(chatArea.getBoundingClientRect().height);
-      const responsiveTailRoom = Math.round(Math.max(220, Math.min(520, chatAreaHeight * 0.55)));
-      setTailRoomPx((prev) => (prev !== responsiveTailRoom ? responsiveTailRoom : prev));
-    };
-    update();
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(update);
-      ro.observe(composer);
-    }
-    window.addEventListener("resize", update);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, [chatAreaRef, composerRef]);
-
-  // Align on explicit request ids from parent; chunk streaming does not trigger this effect.
-  useLayoutEffect(() => {
-    if (
-      alignLatestUserMessageRequestId < 1 ||
-      alignLatestUserMessageRequestId === lastHandledAlignRequestIdRef.current
-    ) {
-      return;
-    }
-    const chatArea = chatAreaRef.current;
-    if (!chatArea) return;
-    lastHandledAlignRequestIdRef.current = alignLatestUserMessageRequestId;
-    const alignLatestUserMessage = (phase: "layout" | "raf") => {
-      const result = alignLatestUserMessageToTop(chatArea);
-      if (!result.aligned) {
-        logScrollDebug("align-skip", {
-          phase,
-          requestId: alignLatestUserMessageRequestId,
-          reason: result.skippedReason ?? "unknown",
-          ...chatAreaMetrics(chatArea),
-        });
-        return false;
-      }
-      logScrollDebug("align-before-scroll", {
-        phase,
-        requestId: alignLatestUserMessageRequestId,
-        targetTop: result.targetTop,
-        userTopDelta: result.userTopDelta,
-        ...chatAreaMetrics(chatArea),
-      });
-      logScrollDebug("align-after-scroll", {
-        phase,
-        requestId: alignLatestUserMessageRequestId,
-        currentScrollTop: chatArea.scrollTop,
-        targetTop: result.targetTop,
-      });
-      return true;
-    };
-    alignLatestUserMessage("layout");
-    const rafId = requestAnimationFrame(() => alignLatestUserMessage("raf"));
-    return () => {
-      cancelAnimationFrame(rafId);
-    };
-  }, [alignLatestUserMessageRequestId, chatAreaRef, logScrollDebug]);
 
   useLayoutEffect(() => {
     if (focusComposerNonce == null || focusComposerNonce < 1) return;
@@ -192,9 +117,10 @@ export function ChatSurface({
       </header>
       <div className="chat-area">
         <div
+          ref={messagesInnerRef}
           className="chat-area-inner"
           data-testid={messagesTestId}
-          style={{ paddingBottom: `${chatAreaInnerPaddingBottomPx}px` }}
+          style={{ paddingBottom: `${slackPx}px` }}
         >
           <ChatMessageList
             displayMessages={displayMessages}

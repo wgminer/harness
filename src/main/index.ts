@@ -15,6 +15,9 @@ import { registerRecordingHandlers } from "./recording";
 import { registerGlobalFnRecording } from "./globalRecordingMain";
 import { registerSystemHandlers } from "./systemHandlers";
 import { importFromFolder } from "./importChatGPT";
+import {
+  WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
+} from "../shared/windowLayout";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -87,7 +90,7 @@ function createWindow() {
 function isSmallSize(): boolean {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   const [w] = mainWindow.getSize();
-  return w <= SMALL_WIDTH;
+  return w <= WINDOW_SMALL_PRESET_MAX_WIDTH_PX;
 }
 
 ipcMain.handle("app:getVersion", () => app.getVersion());

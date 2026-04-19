@@ -262,26 +262,26 @@
 }
 
 /* Stack vertically in small windows so neither pane becomes unreadable. */
-.app[data-window-size="small"] .writing-surface__panes {
+.app[data-compact-layout="true"] .writing-surface__panes {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.app[data-window-size="small"] .writing-surface__pane--editor {
+.app[data-compact-layout="true"] .writing-surface__pane--editor {
   border-right: none;
   border-bottom: 1px solid var(--border);
 }
 
-.app[data-window-size="small"] .writing-surface__workspace--history-open {
+.app[data-compact-layout="true"] .writing-surface__workspace--history-open {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) 220px;
 }
 
-.app[data-window-size="small"] .writing-surface__history {
+.app[data-compact-layout="true"] .writing-surface__history {
   border-left: none;
   border-top: 1px solid var(--border);
 }
 
-.app[data-window-size="small"] .writing-surface__meta {
+.app[data-compact-layout="true"] .writing-surface__meta {
   display: none;
 }

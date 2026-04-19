@@ -10,13 +10,14 @@ import type { LayoutOptions, Plan } from "../shared/types";
 import type {} from "../shared/electronAPI";
 import { conversationDisplayTitle } from "./chatDisplayTitle";
 import type { Conversation, View } from "./sidebarUtils";
+import { useViewportLayout } from "./useViewportLayout";
 
 export default function App() {
   const [view, setView] = useState<View>("chat");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [layout, setLayout] = useState<LayoutOptions>({ sidebar: "left", density: "comfortable" });
-  const [windowSize, setWindowSize] = useState<"small" | "large">("large");
+  const { compactLayout, presetSmall } = useViewportLayout();
   /** In small window mode, ignore hover/focus on the dock until the pointer re-enters or leaves. */
   const [sidebarPeekSuppressed, setSidebarPeekSuppressed] = useState(false);
   /** Incremented when entering small window on chat so ChatView focuses the composer. */
@@ -102,12 +103,13 @@ export default function App() {
     loadPlans();
   }, [loadPlans]);
 
+  /** Initial window focus should land in the chat composer, not the sidebar search toggle. */
   useEffect(() => {
-    window.electron.windowSize.get().then(setWindowSize);
+    setFocusComposerNonce((n) => n + 1);
   }, []);
 
   useEffect(() => {
-    if (windowSize !== "small") return;
+    if (!compactLayout) return;
     setSidebarPeekSuppressed(true);
     const active = document.activeElement;
     if (active instanceof HTMLElement && active.closest(".sidebar-dock")) {
@@ -116,7 +118,7 @@ export default function App() {
     if (view === "chat") {
       setFocusComposerNonce((n) => n + 1);
     }
-  }, [windowSize, view]);
+  }, [compactLayout, view]);
 
   useEffect(() => {
     window.electron.app.getVersion().then(setAppVersion).catch(() => setAppVersion(null));
@@ -169,8 +171,7 @@ export default function App() {
   }, [createNew]);
 
   const handleWindowSizeToggle = useCallback(async () => {
-    const next = await window.electron.windowSize.toggle();
-    setWindowSize(next);
+    await window.electron.windowSize.toggle();
   }, []);
 
   const handleConversationDelete = useCallback(async (id: string) => {
@@ -279,8 +280,9 @@ export default function App() {
       className="app"
       data-sidebar={layout.sidebar}
       data-density={layout.density}
-      data-window-size={windowSize}
-      data-sidebar-peek-suppressed={windowSize === "small" && sidebarPeekSuppressed ? "true" : undefined}
+      data-window-size={presetSmall ? "small" : "large"}
+      data-compact-layout={compactLayout ? "true" : undefined}
+      data-sidebar-peek-suppressed={compactLayout && sidebarPeekSuppressed ? "true" : undefined}
     >
       <Sidebar
         conversations={conversations}
@@ -290,7 +292,8 @@ export default function App() {
         onConversationSelect={setConversationId}
         onConversationDelete={handleConversationDelete}
         onNewChat={createNew}
-        windowSize={windowSize}
+        compactLayout={compactLayout}
+        windowPresetSmall={presetSmall}
         onWindowSizeToggle={handleWindowSizeToggle}
         sidebarPeekSuppressed={sidebarPeekSuppressed}
         onSidebarPeekChange={setSidebarPeekSuppressed}

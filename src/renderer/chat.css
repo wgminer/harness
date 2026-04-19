@@ -34,6 +34,7 @@
 .chat-area-inner {
   max-width: var(--content-width);
   margin: 0 auto;
+  transition: padding-bottom 120ms linear;
 }
 
 .message-block .content {
