@@ -22,7 +22,10 @@ interface SidebarProps {
   onConversationSelect: (id: string) => void;
   onConversationDelete: (id: string) => void;
   onNewChat: () => void;
-  windowSize: "small" | "large";
+  /** Sidebar off-canvas / edge hit target (viewport-based). */
+  compactLayout: boolean;
+  /** Matches main-process small preset width for shrink/expand toggle icon. */
+  windowPresetSmall: boolean;
   onWindowSizeToggle: () => void;
   sidebarPeekSuppressed: boolean;
   onSidebarPeekChange: (suppressed: boolean) => void;
@@ -54,7 +57,8 @@ export function Sidebar({
   onConversationSelect,
   onConversationDelete,
   onNewChat,
-  windowSize,
+  compactLayout,
+  windowPresetSmall,
   onWindowSizeToggle,
   sidebarPeekSuppressed,
   onSidebarPeekChange,
@@ -68,6 +72,8 @@ export function Sidebar({
   const [searchLoading, setSearchLoading] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchButtonRef = useRef<HTMLButtonElement>(null);
+  /** Avoid focusing the search toggle on mount — composer should receive initial focus. */
+  const prevSearchOpenRef = useRef<boolean | undefined>(undefined);
 
   const [sidebarConversationsExpanded, setSidebarConversationsExpanded] = useState(false);
   const [sidebarConversationPreviewCount, setSidebarConversationPreviewCount] = useState(loadSidebarPreviewCount);
@@ -105,9 +111,10 @@ export function Sidebar({
   useEffect(() => {
     if (searchOpen) {
       searchInputRef.current?.focus();
-    } else {
+    } else if (prevSearchOpenRef.current === true) {
       searchButtonRef.current?.focus();
     }
+    prevSearchOpenRef.current = searchOpen;
   }, [searchOpen]);
 
   const closeSearch = useCallback(() => {
@@ -198,7 +205,7 @@ export function Sidebar({
       onMouseLeave={() => onSidebarPeekChange(false)}
       onFocusCapture={() => onSidebarPeekChange(false)}
     >
-      {windowSize === "small" ? (
+      {compactLayout ? (
         <button type="button" className="sidebar-edge-hit" aria-label="Open sidebar" />
       ) : null}
       <aside className="sidebar">
@@ -250,9 +257,9 @@ export function Sidebar({
               type="button"
               className="btn btn-icon"
               onClick={onWindowSizeToggle}
-              aria-label={windowSize === "large" ? "Shrink window" : "Expand window"}
+              aria-label={windowPresetSmall ? "Expand window" : "Shrink window"}
             >
-              {windowSize === "large" ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              {windowPresetSmall ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
             </button>
           </div>
         )}

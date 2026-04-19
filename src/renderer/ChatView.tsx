@@ -5,7 +5,6 @@ import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import { ChatTitleModal } from "./ChatTitleModal";
 import { ChatSurface } from "./ChatSurface";
-import { chatAreaMetrics, devLogChatScroll } from "./chatScrollUtils";
 import {
   type Message,
   type ToolCallDisplay,
@@ -67,31 +66,21 @@ export function ChatView({
   const composerRef = useRef<HTMLDivElement>(null);
   const streamingContentRef = useRef("");
   const currentTurnToolCallsRef = useRef<ToolCallDisplay[]>([]);
-  const [alignLatestUserMessageRequestId, setAlignLatestUserMessageRequestId] = useState(0);
+  const [sendTick, setSendTick] = useState(0);
 
-  const requestAlignLatestUserMessage = useCallback(() => {
-    setAlignLatestUserMessageRequestId((prev) => prev + 1);
+  const bumpSendTick = useCallback(() => {
+    setSendTick((prev) => prev + 1);
   }, []);
 
   const beginAssistantTurn = useCallback(
-    (opts?: {
-      alignLatestUserMessage?: boolean;
-      scrollEvent?: string;
-      scrollDetails?: Record<string, unknown>;
-    }) => {
+    (opts?: { alignLatestUserMessage?: boolean }) => {
       setSending(true);
       setStreamingContent("");
       setCurrentTurnToolCalls([]);
-      if (opts?.scrollEvent) {
-        devLogChatScroll("chat-scroll", opts.scrollEvent, {
-          ...opts.scrollDetails,
-          ...chatAreaMetrics(chatAreaRef.current),
-        });
-      }
-      if (opts?.alignLatestUserMessage) requestAlignLatestUserMessage();
+      if (opts?.alignLatestUserMessage) bumpSendTick();
       setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
     },
-    [requestAlignLatestUserMessage]
+    [bumpSendTick]
   );
 
   useEffect(() => {
@@ -143,7 +132,7 @@ export function ChatView({
     setPolishHintAfterDictation(false);
     setStreamingMeta(null);
     setTitleModalOpen(false);
-    setAlignLatestUserMessageRequestId(0);
+    setSendTick(0);
 
     let cancelled = false;
     window.electron.memory.getMessages(conversationId).then((list) => {
@@ -270,11 +259,6 @@ export function ChatView({
       else setPolishHintAfterDictation(false);
       beginAssistantTurn({
         alignLatestUserMessage: true,
-        scrollEvent: "send-text-start",
-        scrollDetails: {
-          textLength: text.length,
-          fromDictation: !!opts?.fromDictation,
-        },
       });
       setMessages((prev) => [...prev, { role: "user", content: text, timestamp: Date.now() }]);
       try {
@@ -301,7 +285,6 @@ export function ChatView({
     const transcript = last.content;
     beginAssistantTurn({
       alignLatestUserMessage: true,
-      scrollEvent: "polish-start",
     });
     setMessages((prev) => [
       ...prev.slice(0, -1),
@@ -487,7 +470,7 @@ export function ChatView({
         focusComposerNonce={focusComposerNonce}
         messagesTestId="chat-messages"
         composerTestId="chat-composer"
-        alignLatestUserMessageRequestId={alignLatestUserMessageRequestId}
+        sendTick={sendTick}
       />
       <ChatTitleModal
         open={titleModalOpen}

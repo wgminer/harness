@@ -89,7 +89,5 @@ export function CopyButton({ content, messageIndex, copiedIndex, onCopied }: { c
 }
 
 export const SCROLL_TOP_THRESHOLD = 24;
-/** Extra space below messages so the last lines clear the sticky composer. */
-export const BOTTOM_SPACER_BEYOND_COMPOSER_PX = 48;
 
 export type VoiceState = "idle" | "recording" | "processing";
