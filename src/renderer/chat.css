@@ -80,7 +80,6 @@
   background: var(--bg-elevated);
   border-radius: 8px;
   padding: 10px 14px;
-  border: 1px solid var(--border);
   line-height: var(--line-height-message);
 }
 
