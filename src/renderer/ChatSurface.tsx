@@ -8,11 +8,11 @@ import {
   type ToolCallDisplay,
   type VoiceState,
 } from "./chatHelpers";
-import { useChatScroll } from "./chatScrollUtils";
+import { useFollowChatLiveEdge } from "./chatLiveScroll";
 
 interface ChatSurfaceProps {
-  chatAreaRef: RefObject<HTMLDivElement | null>;
-  composerRef: RefObject<HTMLDivElement | null>;
+  chatAreaRef: RefObject<HTMLDivElement>;
+  composerRef: RefObject<HTMLDivElement>;
   headerContent: ReactNode;
   headerClassName?: string;
   displayMessages: Message[];
@@ -37,7 +37,6 @@ interface ChatSurfaceProps {
   focusComposerNonce?: number;
   messagesTestId: string;
   composerTestId: string;
-  sendTick: number;
 }
 
 export function ChatSurface({
@@ -67,18 +66,42 @@ export function ChatSurface({
   focusComposerNonce,
   messagesTestId,
   composerTestId,
-  sendTick,
 }: ChatSurfaceProps) {
   const [hasScrolled, setHasScrolled] = useState(false);
-  const messagesInnerRef = useRef<HTMLDivElement>(null);
+  const chatMessagesContentRef = useRef<HTMLDivElement>(null);
+  const chatPaneRef = useRef<HTMLDivElement>(null);
 
-  const { slackPx } = useChatScroll({
-    chatAreaRef,
-    innerRef: messagesInnerRef,
-    composerRef,
-    sendTick,
+  useFollowChatLiveEdge({
+    scrollRef: chatAreaRef,
     sending,
+    streamingContent,
+    messageCount: displayMessages.length,
   });
+
+  /** Keep scroll padding in sync with the overlay composer height (textarea auto-grow, errors). */
+  useLayoutEffect(() => {
+    const pane = chatPaneRef.current;
+    const dock = composerRef.current;
+    if (!pane || !dock) return;
+
+    const sync = () => {
+      const h = Math.ceil(dock.getBoundingClientRect().height);
+      pane.style.setProperty("--chat-composer-dock-height", `${h}px`);
+    };
+
+    sync();
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(sync);
+      ro.observe(dock);
+    }
+
+    window.addEventListener("resize", sync);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", sync);
+    };
+  }, [composerRef]);
 
   const onChatAreaScroll = useCallback((_e: UIEvent<HTMLDivElement>) => {
     const el = chatAreaRef.current;
@@ -95,33 +118,32 @@ export function ChatSurface({
     composerRef.current?.querySelector<HTMLTextAreaElement>(".chat-input")?.focus();
   }, [composerRef, focusComposerNonce]);
 
+  /*
+   * `.chat-pane` is `position: relative`. `.chat-scroll` fills it and scrolls; bottom padding matches
+   * the overlay `.chat-composer-dock` via `--chat-composer-dock-height`.
+   */
   return (
-    <div
-      ref={chatAreaRef}
-      className="chat-scroll"
-      data-scrolled={hasScrolled || undefined}
-      onScroll={onChatAreaScroll}
-    >
-      {hasScrolled && (
-        <button
-          type="button"
-          className="chat-scroll-top"
-          onClick={scrollToTop}
-          aria-label="Scroll to top"
-        >
-          Top
-        </button>
-      )}
-      <header className={headerClassName ? `chat-pane-header ${headerClassName}` : "chat-pane-header"}>
-        {headerContent}
-      </header>
-      <div className="chat-area">
-        <div
-          ref={messagesInnerRef}
-          className="chat-area-inner"
-          data-testid={messagesTestId}
-          style={{ paddingBottom: `${slackPx}px` }}
-        >
+    <div ref={chatPaneRef} className="chat-pane">
+      <div
+        ref={chatAreaRef}
+        className="chat-scroll"
+        data-scrolled={hasScrolled || undefined}
+        onScroll={onChatAreaScroll}
+      >
+        {hasScrolled && (
+          <button
+            type="button"
+            className="chat-scroll-top"
+            onClick={scrollToTop}
+            aria-label="Scroll to top"
+          >
+            Top
+          </button>
+        )}
+        <header className={headerClassName ? `chat-pane-header ${headerClassName}` : "chat-pane-header"}>
+          {headerContent}
+        </header>
+        <div ref={chatMessagesContentRef} className="chat-area-inner" data-testid={messagesTestId}>
           <ChatMessageList
             displayMessages={displayMessages}
             copiedIndex={copiedIndex}
@@ -135,7 +157,13 @@ export function ChatSurface({
           />
         </div>
       </div>
-      <div ref={composerRef} className="input-container input-container--sticky" data-testid={composerTestId}>
+      <div
+        ref={composerRef}
+        className="chat-composer-dock"
+        data-testid={composerTestId}
+        role="group"
+        aria-label="Message composer"
+      >
         <ChatComposer
           input={input}
           onInputChange={onInputChange}

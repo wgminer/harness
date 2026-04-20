@@ -66,22 +66,13 @@ export function ChatView({
   const composerRef = useRef<HTMLDivElement>(null);
   const streamingContentRef = useRef("");
   const currentTurnToolCallsRef = useRef<ToolCallDisplay[]>([]);
-  const [sendTick, setSendTick] = useState(0);
 
-  const bumpSendTick = useCallback(() => {
-    setSendTick((prev) => prev + 1);
+  const beginAssistantTurn = useCallback(() => {
+    setSending(true);
+    setStreamingContent("");
+    setCurrentTurnToolCalls([]);
+    setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
   }, []);
-
-  const beginAssistantTurn = useCallback(
-    (opts?: { alignLatestUserMessage?: boolean }) => {
-      setSending(true);
-      setStreamingContent("");
-      setCurrentTurnToolCalls([]);
-      if (opts?.alignLatestUserMessage) bumpSendTick();
-      setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
-    },
-    [bumpSendTick]
-  );
 
   useEffect(() => {
     streamingContentRef.current = streamingContent;
@@ -132,7 +123,6 @@ export function ChatView({
     setPolishHintAfterDictation(false);
     setStreamingMeta(null);
     setTitleModalOpen(false);
-    setSendTick(0);
 
     let cancelled = false;
     window.electron.memory.getMessages(conversationId).then((list) => {
@@ -257,9 +247,7 @@ export function ChatView({
       if (!text.trim() || !conversationId || sending) return;
       if (opts?.fromDictation) setPolishHintAfterDictation(true);
       else setPolishHintAfterDictation(false);
-      beginAssistantTurn({
-        alignLatestUserMessage: true,
-      });
+      beginAssistantTurn();
       setMessages((prev) => [...prev, { role: "user", content: text, timestamp: Date.now() }]);
       try {
         await window.electron.chat.send(conversationId, text);
@@ -283,9 +271,7 @@ export function ChatView({
     const t1 = Date.now();
     const t2 = t1 + 1;
     const transcript = last.content;
-    beginAssistantTurn({
-      alignLatestUserMessage: true,
-    });
+    beginAssistantTurn();
     setMessages((prev) => [
       ...prev.slice(0, -1),
       { role: "user", content: instruction, timestamp: t1 },
@@ -425,8 +411,8 @@ export function ChatView({
 
   if (!conversationId) {
     return (
-      <div className="chat-scroll chat-scroll--placeholder">
-        <div className="chat-area">
+      <div className="chat-pane">
+        <div className="chat-scroll chat-scroll--placeholder">
           <div className="chat-area-inner">Select a conversation or create a new one.</div>
         </div>
       </div>
@@ -470,7 +456,6 @@ export function ChatView({
         focusComposerNonce={focusComposerNonce}
         messagesTestId="chat-messages"
         composerTestId="chat-composer"
-        sendTick={sendTick}
       />
       <ChatTitleModal
         open={titleModalOpen}

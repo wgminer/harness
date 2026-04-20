@@ -293,7 +293,7 @@ export function TasksView() {
         </div>
       </div>
 
-      <div className="input-container input-container--sticky" data-testid="tasks-composer">
+      <div className="tasks-composer-dock" data-testid="tasks-composer">
         <div className="chat-composer-inner">
           <textarea
             ref={newTaskInputRef}

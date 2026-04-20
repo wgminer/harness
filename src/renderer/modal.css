@@ -38,7 +38,7 @@
 .app-modal-heading {
   margin: 0;
   font-family: var(--font-family);
-  font-size: 15px;
+  font-size: calc(var(--font-size) * 15 / 14);
   font-weight: 600;
 }
 
@@ -57,13 +57,13 @@
 .app-modal-body label {
   display: block;
   color: var(--fg-muted);
-  font-size: 12px;
+  font-size: calc(var(--font-size) * 12 / 14);
   margin-bottom: 2px;
 }
 
 .app-modal-body select {
   font-family: var(--font-family);
-  font-size: 14px;
+  font-size: var(--font-size);
   width: 100%;
   height: var(--input-height);
   padding: 0 10px;
@@ -79,7 +79,7 @@
 
 .app-modal-input {
   font-family: var(--font-family);
-  font-size: 14px;
+  font-size: var(--font-size);
   width: 100%;
   height: var(--input-height);
   padding: 0 10px;
@@ -116,7 +116,10 @@
 }
 
 .app-modal-footer .btn-cancel {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
+}
+
+.app-modal-close svg {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
 }

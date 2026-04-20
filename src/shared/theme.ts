@@ -102,7 +102,7 @@ export type ThemeSettings = {
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   accent: "#f2ff00",
-  font: "roboto",
+  font: "inter",
   fontSize: 14,
 };
 

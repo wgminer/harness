@@ -7,7 +7,7 @@
   margin: 0 0 8px;
   padding: 0;
   font-family: var(--font-family);
-  font-size: 14px;
+  font-size: var(--font-size);
   font-weight: 600;
   color: var(--fg);
   background: none;
@@ -27,6 +27,8 @@
 
 .tasks-section-caret {
   flex-shrink: 0;
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
   color: var(--fg-muted);
   transition: transform 0.15s ease;
 }
@@ -42,7 +44,7 @@
 .tasks-textarea,
 .tasks-modal-body textarea {
   font-family: var(--font-family);
-  font-size: 13px;
+  font-size: calc(var(--font-size) * 13 / 14);
   line-height: 1.45;
   width: 100%;
   max-width: 400px;
@@ -81,7 +83,7 @@
 
 .tasks-section-lead {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--font-size) * 13 / 14);
   line-height: 1.45;
   color: var(--fg-muted);
 }
@@ -112,6 +114,8 @@
 
 .tasks-check-icon {
   display: block;
+  width: var(--icon-size-xl);
+  height: var(--icon-size-xl);
 }
 
 .tasks-check-icon--on {
@@ -137,7 +141,7 @@
 }
 
 .tasks-row-title {
-  font-size: 14px;
+  font-size: var(--font-size);
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
@@ -158,7 +162,7 @@
 .tasks-tag {
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: calc(var(--font-size) * 11 / 14);
   line-height: 1.2;
   padding: 2px 8px;
   border-radius: 999px;
@@ -199,7 +203,7 @@
 
 .tasks-modal-hint {
   margin: 0;
-  font-size: 11px;
+  font-size: calc(var(--font-size) * 11 / 14);
   color: var(--fg-muted);
   line-height: 1.35;
 }
@@ -219,7 +223,7 @@
 
 .tasks-tags-input {
   font-family: var(--font-family);
-  font-size: 14px;
+  font-size: var(--font-size);
   width: 100%;
   height: var(--input-height);
   padding: 0 10px;
@@ -232,4 +236,30 @@
 .tasks-tags-input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.tasks-tag-remove svg {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+.app-modal-footer--spread .btn-cancel svg {
+  width: var(--icon-size-compact);
+  height: var(--icon-size-compact);
+}
+
+/* Bottom task composer — transparent shell; glass on `.chat-composer-inner`. */
+.tasks-composer-dock {
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  bottom: 0;
+  flex-shrink: 0;
+  z-index: 1;
+  width: 100%;
+  background: transparent;
+}
+
+.tasks-composer-dock .chat-input {
+  font-size: var(--font-size);
 }

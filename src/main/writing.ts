@@ -22,12 +22,12 @@ import { ipcMain } from "electron";
 import { randomUUID } from "crypto";
 import { readFile, stat, writeFile } from "fs/promises";
 import { join } from "path";
+import { MAX_WRITING_CHECKPOINTS } from "../shared/writing";
 import { getMemoryDir } from "./memory";
 import { fileExists } from "./utils";
 
 const DOC_FILE = "writing.md";
 const CHECKPOINTS_FILE = "writing-checkpoints.json";
-const MAX_CHECKPOINTS = 20;
 
 export interface WritingDocSnapshot {
   /** Markdown body. Always a string, "" when no doc has been written yet. */
@@ -105,7 +105,7 @@ export async function listCheckpoints(): Promise<WritingCheckpoint[]> {
       })
       .filter((entry): entry is WritingCheckpoint => entry != null)
       .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, MAX_CHECKPOINTS);
+      .slice(0, MAX_WRITING_CHECKPOINTS);
   } catch {
     return [];
   }
@@ -113,7 +113,7 @@ export async function listCheckpoints(): Promise<WritingCheckpoint[]> {
 
 async function writeCheckpoints(next: WritingCheckpoint[]): Promise<void> {
   const path = getCheckpointsPath();
-  await writeFile(path, JSON.stringify(next.slice(0, MAX_CHECKPOINTS), null, 2), "utf-8");
+  await writeFile(path, JSON.stringify(next.slice(0, MAX_WRITING_CHECKPOINTS), null, 2), "utf-8");
 }
 
 export async function createCheckpoint(content: string): Promise<WritingCheckpoint[]> {

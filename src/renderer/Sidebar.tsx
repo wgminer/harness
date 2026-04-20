@@ -1,15 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Settings, Maximize2, Minimize2, NotebookPen, Plus, Search, X, ListTodo, Loader2 } from "lucide-react";
+import { Settings, Minimize2, Plus, Search, SquarePen, X, ListTodo, Loader2 } from "lucide-react";
 import type { SearchResult } from "../shared/types";
 import { formatNewChatLabel } from "./chatDisplayTitle";
 import {
   type Conversation,
   type View,
   type SidebarGroup,
-  SIDEBAR_PREVIEW_ROW_PX,
-  SIDEBAR_PREVIEW_STORAGE_KEY,
-  clampSidebarPreviewCount,
-  loadSidebarPreviewCount,
+  SIDEBAR_MORE_INCREMENT,
+  SIDEBAR_PREVIEW_COUNT_DEFAULT,
   groupConversations,
   pickSidebarConversationsForList,
 } from "./sidebarUtils";
@@ -22,13 +20,9 @@ interface SidebarProps {
   onConversationSelect: (id: string) => void;
   onConversationDelete: (id: string) => void;
   onNewChat: () => void;
-  /** Sidebar off-canvas / edge hit target (viewport-based). */
-  compactLayout: boolean;
-  /** Matches main-process small preset width for shrink/expand toggle icon. */
+  /** When true (compact window), shrink control is hidden — no in-app expand control. */
   windowPresetSmall: boolean;
   onWindowSizeToggle: () => void;
-  sidebarPeekSuppressed: boolean;
-  onSidebarPeekChange: (suppressed: boolean) => void;
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
   appVersion: string | null;
@@ -57,11 +51,8 @@ export function Sidebar({
   onConversationSelect,
   onConversationDelete,
   onNewChat,
-  compactLayout,
   windowPresetSmall,
   onWindowSizeToggle,
-  sidebarPeekSuppressed,
-  onSidebarPeekChange,
   activeChatProcessing,
   titleGenInFlight,
   appVersion,
@@ -75,20 +66,7 @@ export function Sidebar({
   /** Avoid focusing the search toggle on mount — composer should receive initial focus. */
   const prevSearchOpenRef = useRef<boolean | undefined>(undefined);
 
-  const [sidebarConversationsExpanded, setSidebarConversationsExpanded] = useState(false);
-  const [sidebarConversationPreviewCount, setSidebarConversationPreviewCount] = useState(loadSidebarPreviewCount);
-  const sidebarPreviewCountRef = useRef(sidebarConversationPreviewCount);
-  const [sidebarExpandRowPointerDown, setSidebarExpandRowPointerDown] = useState(false);
-  const sidebarPreviewDragRef = useRef<{
-    pointerId: number;
-    startY: number;
-    startCount: number;
-    countChanged: boolean;
-  } | null>(null);
-
-  useEffect(() => {
-    sidebarPreviewCountRef.current = sidebarConversationPreviewCount;
-  }, [sidebarConversationPreviewCount]);
+  const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_PREVIEW_COUNT_DEFAULT);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -131,64 +109,10 @@ export function Sidebar({
     [onConversationSelect, onViewChange, closeSearch]
   );
 
-  useEffect(() => {
-    if (conversations.length <= sidebarConversationPreviewCount) {
-      setSidebarConversationsExpanded(false);
-    }
-  }, [conversations.length, sidebarConversationPreviewCount]);
-
-  const onSidebarPreviewResizePointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
-    if (e.button !== 0) return;
-    sidebarPreviewDragRef.current = {
-      pointerId: e.pointerId,
-      startY: e.clientY,
-      startCount: sidebarPreviewCountRef.current,
-      countChanged: false,
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setSidebarExpandRowPointerDown(true);
-  }, []);
-
-  const onSidebarPreviewResizePointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
-    const d = sidebarPreviewDragRef.current;
-    if (!d || e.pointerId !== d.pointerId) return;
-    const dy = e.clientY - d.startY;
-    const next = clampSidebarPreviewCount(d.startCount + Math.round(dy / SIDEBAR_PREVIEW_ROW_PX));
-    if (next !== sidebarPreviewCountRef.current) {
-      d.countChanged = true;
-      sidebarPreviewCountRef.current = next;
-      setSidebarConversationPreviewCount(next);
-    }
-  }, []);
-
-  const onSidebarPreviewResizePointerUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
-    setSidebarExpandRowPointerDown(false);
-    const d = sidebarPreviewDragRef.current;
-    if (!d || e.pointerId !== d.pointerId) return;
-    sidebarPreviewDragRef.current = null;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      // ignore
-    }
-    if (d.countChanged) {
-      try {
-        localStorage.setItem(SIDEBAR_PREVIEW_STORAGE_KEY, String(sidebarPreviewCountRef.current));
-      } catch {
-        // ignore
-      }
-    }
-  }, []);
-
   const sidebarListConversations = useMemo(
     () =>
-      pickSidebarConversationsForList(
-        conversations,
-        sidebarConversationsExpanded,
-        conversationId,
-        sidebarConversationPreviewCount
-      ),
-    [conversations, sidebarConversationsExpanded, conversationId, sidebarConversationPreviewCount]
+      pickSidebarConversationsForList(conversations, conversationId, sidebarVisibleLimit),
+    [conversations, conversationId, sidebarVisibleLimit]
   );
 
   const { groups: sidebarGroups } = useMemo(
@@ -196,18 +120,14 @@ export function Sidebar({
     [sidebarListConversations]
   );
 
-  const showSidebarConversationExpandControl = conversations.length > sidebarConversationPreviewCount;
+  const showSidebarMoreControl = sidebarListConversations.length < conversations.length;
+
+  const onSidebarShowMore = useCallback(() => {
+    setSidebarVisibleLimit((n) => Math.min(conversations.length, n + SIDEBAR_MORE_INCREMENT));
+  }, [conversations.length]);
 
   return (
-    <div
-      className="sidebar-dock"
-      onMouseEnter={() => onSidebarPeekChange(false)}
-      onMouseLeave={() => onSidebarPeekChange(false)}
-      onFocusCapture={() => onSidebarPeekChange(false)}
-    >
-      {compactLayout ? (
-        <button type="button" className="sidebar-edge-hit" aria-label="Open sidebar" />
-      ) : null}
+    <div className="sidebar-dock">
       <aside className="sidebar">
         {searchOpen ? (
           <div className="sidebar-search-row">
@@ -253,14 +173,6 @@ export function Sidebar({
             >
               <Search size={16} />
             </button>
-            <button
-              type="button"
-              className="btn btn-icon"
-              onClick={onWindowSizeToggle}
-              aria-label={windowPresetSmall ? "Expand window" : "Shrink window"}
-            >
-              {windowPresetSmall ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-            </button>
           </div>
         )}
         {!searchOpen && (
@@ -283,7 +195,7 @@ export function Sidebar({
               aria-label="Desk"
               aria-current={view === "writing" ? "page" : undefined}
             >
-              <NotebookPen size={16} className="sidebar-workspace__icon" aria-hidden />
+              <SquarePen size={16} className="sidebar-workspace__icon" aria-hidden />
               <span className="sidebar-workspace__label">Desk</span>
             </button>
             <button
@@ -375,60 +287,44 @@ export function Sidebar({
                   </ul>
                 </li>
               ))}
-              {showSidebarConversationExpandControl ? (
+              {showSidebarMoreControl ? (
                 <li className="sidebar-list-expand">
                   <div className="sidebar-list-expand-row">
-                    {!sidebarConversationsExpanded ? (
-                      <>
-                        <span
-                          className={`sidebar-list-expand-drag${sidebarExpandRowPointerDown ? " sidebar-list-expand-drag--pressed" : ""}`}
-                          tabIndex={0}
-                          title="Drag up or down to change how many conversations are listed in the preview"
-                          aria-label="Drag vertically to change how many conversations appear before expanding the list"
-                          onPointerDown={onSidebarPreviewResizePointerDown}
-                          onPointerMove={onSidebarPreviewResizePointerMove}
-                          onPointerUp={onSidebarPreviewResizePointerUp}
-                          onPointerCancel={onSidebarPreviewResizePointerUp}
-                        >
-                          Drag
-                        </span>
-                        <span className="sidebar-list-expand-sep" aria-hidden="true">
-                          ·
-                        </span>
-                      </>
-                    ) : null}
-                    {sidebarConversationsExpanded ? (
-                      <button
-                        type="button"
-                        className="btn sidebar-list-expand-btn"
-                        data-testid="sidebar-conversations-show-less"
-                        aria-label="Show fewer conversations — collapse to preview"
-                        onClick={() => setSidebarConversationsExpanded(false)}
-                      >
-                        Less
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn sidebar-list-expand-btn"
-                        data-testid="sidebar-conversations-show-more"
-                        aria-label={`Show all ${conversations.length} conversations`}
-                        onClick={() => setSidebarConversationsExpanded(true)}
-                      >
-                        More
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="btn sidebar-list-expand-btn"
+                      data-testid="sidebar-conversations-show-more"
+                      aria-label={`Show ${SIDEBAR_MORE_INCREMENT} more conversations`}
+                      onClick={onSidebarShowMore}
+                    >
+                      More
+                    </button>
                   </div>
                 </li>
               ) : null}
             </>
           )}
         </ul>
-        {appVersion != null && appVersion !== "" ? (
-          <div className="sidebar-version" title={`Harness ${appVersion}`}>
-            v{appVersion}
+        <div className="sidebar-footer">
+          <div className="sidebar-footer__meta">
+            {appVersion != null && appVersion !== "" ? (
+              <span className="sidebar-version" title={`Harness ${appVersion}`}>
+                v{appVersion}
+              </span>
+            ) : null}
           </div>
-        ) : null}
+          {!windowPresetSmall ? (
+            <button
+              type="button"
+              className="btn btn-icon sidebar-footer__window-toggle"
+              onClick={onWindowSizeToggle}
+              aria-label="Shrink window"
+              title="Shrink window"
+            >
+              <Minimize2 size={14} />
+            </button>
+          ) : null}
+        </div>
       </aside>
     </div>
   );

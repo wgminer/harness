@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, History, PanelRightClose, PanelRightOpen, Redo2, RotateCcw, Trash2, Undo2 } from "lucide-react";
+import { MAX_WRITING_CHECKPOINTS } from "../shared/writing";
 import { MarkdownContent } from "./chatHelpers";
 
 type Status =
@@ -231,7 +232,9 @@ export function WritingSurfaceView() {
                   <History size={14} />
                   Save History
                 </span>
-                <span className="writing-surface__history-count">{saveHistory.length}/20</span>
+                <span className="writing-surface__history-count">
+                  {saveHistory.length}/{MAX_WRITING_CHECKPOINTS}
+                </span>
               </div>
               {saveHistory.length === 0 ? (
                 <p className="writing-surface__history-empty">No saves yet. Save to create history.</p>
