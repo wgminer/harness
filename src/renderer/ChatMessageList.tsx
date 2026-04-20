@@ -65,126 +65,134 @@ export function ChatMessageList({
     !streamingContent;
   const showPolishInStrip = showReplyActions && polishHintAfterDictation;
 
+  const n = displayMessages.length;
+
   return (
     <>
-      {displayMessages.map((m, i) => {
-        const isAssistant = m.role === "assistant";
-        const hasToolCalls = isAssistant && m.toolCalls && m.toolCalls.length > 0;
+      <div className="chat-messages-stack">
+        {displayMessages
+          .slice()
+          .reverse()
+          .map((m, ri) => {
+            const i = n - 1 - ri;
+            const isAssistant = m.role === "assistant";
+            const hasToolCalls = isAssistant && m.toolCalls && m.toolCalls.length > 0;
 
-        return (
-          <div
-            key={i}
-            className={`message-block ${m.role}`}
-            data-message-role={m.role}
-            data-message-ts={m.timestamp != null ? String(m.timestamp) : undefined}
-          >
-            <div className="content">
-              {m.role === "user" ? (
-                <div
-                  className={`message-user-card${expandedUserCards.has(i) ? " message-user-card--expanded" : ""}${
-                    overflowedUserCards.has(i) && !expandedUserCards.has(i)
-                      ? " message-user-card--overlay-toggle"
-                      : ""
-                  }`}
-                >
-                  {overflowedUserCards.has(i) && !expandedUserCards.has(i) ? (
-                    <div className="message-user-card__fade" aria-hidden />
-                  ) : null}
-                  <div className="message-user-card__content" ref={(el) => { userCardContentRefs.current[i] = el; }}>
-                    {m.content ? <MarkdownContent content={m.content} /> : null}
-                  </div>
-                  {(expandedUserCards.has(i) || overflowedUserCards.has(i)) && (
-                    <button
-                      type="button"
-                      className={`message-user-card__toggle${
-                        expandedUserCards.has(i) ? " message-user-card__toggle--less" : ""
+            return (
+              <div
+                key={i}
+                className={`message-block ${m.role}`}
+                data-message-role={m.role}
+                data-message-ts={m.timestamp != null ? String(m.timestamp) : undefined}
+              >
+                <div className="content">
+                  {m.role === "user" ? (
+                    <div
+                      className={`message-user-card${expandedUserCards.has(i) ? " message-user-card--expanded" : ""}${
+                        overflowedUserCards.has(i) && !expandedUserCards.has(i)
+                          ? " message-user-card--overlay-toggle"
+                          : ""
                       }`}
-                      onClick={() => toggleUserCardExpanded(i)}
-                      aria-expanded={expandedUserCards.has(i)}
-                      aria-label={expandedUserCards.has(i) ? undefined : "Show more"}
-                      title={expandedUserCards.has(i) ? undefined : "Show more"}
                     >
-                      {expandedUserCards.has(i) ? (
-                        <>
-                          <ChevronUp strokeWidth={2} size={18} aria-hidden />
-                          <span className="message-user-card__toggle-text">Close</span>
-                        </>
-                      ) : (
-                        <ChevronDown strokeWidth={2} size={18} aria-hidden />
+                      {overflowedUserCards.has(i) && !expandedUserCards.has(i) ? (
+                        <div className="message-user-card__fade" aria-hidden />
+                      ) : null}
+                      <div className="message-user-card__content" ref={(el) => { userCardContentRefs.current[i] = el; }}>
+                        {m.content ? <MarkdownContent content={m.content} /> : null}
+                      </div>
+                      {(expandedUserCards.has(i) || overflowedUserCards.has(i)) && (
+                        <button
+                          type="button"
+                          className={`message-user-card__toggle${
+                            expandedUserCards.has(i) ? " message-user-card__toggle--less" : ""
+                          }`}
+                          onClick={() => toggleUserCardExpanded(i)}
+                          aria-expanded={expandedUserCards.has(i)}
+                          aria-label={expandedUserCards.has(i) ? undefined : "Show more"}
+                          title={expandedUserCards.has(i) ? undefined : "Show more"}
+                        >
+                          {expandedUserCards.has(i) ? (
+                            <>
+                              <ChevronUp strokeWidth={2} size={18} aria-hidden />
+                              <span className="message-user-card__toggle-text">Close</span>
+                            </>
+                          ) : (
+                            <ChevronDown strokeWidth={2} size={18} aria-hidden />
+                          )}
+                        </button>
                       )}
-                    </button>
+                    </div>
+                  ) : (
+                    <>
+                      {hasToolCalls && (
+                        <div className="tool-card">
+                          {m.toolCalls!.map((call, j) => {
+                            const p = call.payload as { pending?: boolean } | undefined;
+                            const isPending = !!p?.pending;
+                            return (
+                              <div key={j} className="tool-card-row">
+                                <span className="tool-card-icon">{toolIcon()}</span>
+                                <div className="tool-card-row-text">
+                                  <span className="tool-card-label">{toolLabel(call.toolName)}</span>
+                                </div>
+                                {isPending && (
+                                  <span className="tool-card-actions">
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm"
+                                      onClick={() => onToolConfirm(call, "proceed")}
+                                    >
+                                      Proceed
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm"
+                                      onClick={() => onToolConfirm(call, "cancel")}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {m.content ? <MarkdownContent content={m.content} /> : null}
+                    </>
                   )}
                 </div>
-              ) : (
-                <>
-                  {hasToolCalls && (
-                    <div className="tool-card">
-                      {m.toolCalls!.map((call, j) => {
-                        const p = call.payload as { pending?: boolean } | undefined;
-                        const isPending = !!p?.pending;
-                        return (
-                          <div key={j} className="tool-card-row">
-                            <span className="tool-card-icon">{toolIcon()}</span>
-                            <div className="tool-card-row-text">
-                              <span className="tool-card-label">{toolLabel(call.toolName)}</span>
-                            </div>
-                            {isPending && (
-                              <span className="tool-card-actions">
-                                <button
-                                  type="button"
-                                  className="btn btn-sm"
-                                  onClick={() => onToolConfirm(call, "proceed")}
-                                >
-                                  Proceed
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-sm"
-                                  onClick={() => onToolConfirm(call, "cancel")}
-                                >
-                                  Cancel
-                                </button>
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {m.content ? <MarkdownContent content={m.content} /> : null}
-                </>
-              )}
-            </div>
-            <div className="message-block-footer">
-              <div className="message-block-meta">
-                {m.role === "user" ? (
-                  <>
-                    <span>You</span>
-                    <span className="message-block-meta-sep" aria-hidden="true">
-                      ·
-                    </span>
-                    <span className="message-block-meta-time">{formatMessageTime(m.timestamp!)}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="message-block-meta-model">{m.model}</span>
-                    <span className="message-block-meta-sep" aria-hidden="true">
-                      ·
-                    </span>
-                    <span className="message-block-meta-time">{formatMessageTime(m.timestamp!)}</span>
-                  </>
-                )}
+                <div className="message-block-footer">
+                  <div className="message-block-meta">
+                    {m.role === "user" ? (
+                      <>
+                        <span>You</span>
+                        <span className="message-block-meta-sep" aria-hidden="true">
+                          ·
+                        </span>
+                        <span className="message-block-meta-time">{formatMessageTime(m.timestamp!)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="message-block-meta-model">{m.model}</span>
+                        <span className="message-block-meta-sep" aria-hidden="true">
+                          ·
+                        </span>
+                        <span className="message-block-meta-time">{formatMessageTime(m.timestamp!)}</span>
+                      </>
+                    )}
+                  </div>
+                  <CopyButton
+                    content={m.content}
+                    messageIndex={i}
+                    copiedIndex={copiedIndex}
+                    onCopied={onCopied}
+                  />
+                </div>
               </div>
-              <CopyButton
-                content={m.content}
-                messageIndex={i}
-                copiedIndex={copiedIndex}
-                onCopied={onCopied}
-              />
-            </div>
-          </div>
-        );
-      })}
+            );
+          })}
+      </div>
       {showReplyActions && (
         <div className="chat-secondary-actions">
           {sending ? (

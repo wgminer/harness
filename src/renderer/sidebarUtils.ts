@@ -2,28 +2,10 @@ export type Conversation = { id: string; title: string | null; createdAt: number
 
 export type View = "chat" | "settings" | "tasks" | "writing";
 
+/** Initial number of conversations shown before using "More". */
 export const SIDEBAR_PREVIEW_COUNT_DEFAULT = 7;
-export const SIDEBAR_PREVIEW_COUNT_MIN = 3;
-export const SIDEBAR_PREVIEW_COUNT_MAX = 50;
-/** Pixels of vertical drag per ±1 preview item (larger = less sensitive). */
-export const SIDEBAR_PREVIEW_ROW_PX = 35;
-export const SIDEBAR_PREVIEW_STORAGE_KEY = "harness.sidebarConversationPreviewCount";
-
-export function clampSidebarPreviewCount(n: number): number {
-  return Math.min(SIDEBAR_PREVIEW_COUNT_MAX, Math.max(SIDEBAR_PREVIEW_COUNT_MIN, Math.round(n)));
-}
-
-export function loadSidebarPreviewCount(): number {
-  try {
-    const raw = localStorage.getItem(SIDEBAR_PREVIEW_STORAGE_KEY);
-    if (raw == null) return SIDEBAR_PREVIEW_COUNT_DEFAULT;
-    const parsed = parseInt(raw, 10);
-    if (!Number.isFinite(parsed)) return SIDEBAR_PREVIEW_COUNT_DEFAULT;
-    return clampSidebarPreviewCount(parsed);
-  } catch {
-    return SIDEBAR_PREVIEW_COUNT_DEFAULT;
-  }
-}
+/** Each "More" click adds this many conversations to the sidebar list. */
+export const SIDEBAR_MORE_INCREMENT = 20;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -131,14 +113,13 @@ export function groupConversations(conversations: Conversation[]): { groups: Sid
   return { groups };
 }
 
-/** Sidebar list: newest N by default; always includes the active conversation when collapsed. */
+/** Sidebar list: newest N by default; always includes the active conversation when not showing all. */
 export function pickSidebarConversationsForList(
   conversations: Conversation[],
-  listExpanded: boolean,
   activeId: string | null,
   previewCount: number
 ): Conversation[] {
-  if (listExpanded || conversations.length <= previewCount) {
+  if (conversations.length <= previewCount) {
     return conversations;
   }
   const sorted = [...conversations].sort((a, b) => b.createdAt - a.createdAt);

@@ -1,14 +1,10 @@
 import { useState, useEffect } from "react";
-import { LAYOUT_COMPACT_MAX_WIDTH_PX, WINDOW_SMALL_PRESET_MAX_WIDTH_PX } from "../shared/windowLayout";
+import { WINDOW_SMALL_PRESET_MAX_WIDTH_PX } from "../shared/windowLayout";
 
-export function useViewportLayout(): { compactLayout: boolean; presetSmall: boolean } {
-  const read = () => {
-    const w = window.innerWidth;
-    return {
-      compactLayout: w <= LAYOUT_COMPACT_MAX_WIDTH_PX,
-      presetSmall: w <= WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
-    };
-  };
+export function useViewportLayout(): { presetSmall: boolean } {
+  const read = () => ({
+    presetSmall: window.innerWidth <= WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
+  });
 
   const [state, setState] = useState(read);
 

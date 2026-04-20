@@ -17,9 +17,7 @@ export default function App() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [layout, setLayout] = useState<LayoutOptions>({ sidebar: "left", density: "comfortable" });
-  const { compactLayout, presetSmall } = useViewportLayout();
-  /** In small window mode, ignore hover/focus on the dock until the pointer re-enters or leaves. */
-  const [sidebarPeekSuppressed, setSidebarPeekSuppressed] = useState(false);
+  const { presetSmall } = useViewportLayout();
   /** Incremented when entering small window on chat so ChatView focuses the composer. */
   const [focusComposerNonce, setFocusComposerNonce] = useState(0);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -107,18 +105,6 @@ export default function App() {
   useEffect(() => {
     setFocusComposerNonce((n) => n + 1);
   }, []);
-
-  useEffect(() => {
-    if (!compactLayout) return;
-    setSidebarPeekSuppressed(true);
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && active.closest(".sidebar-dock")) {
-      active.blur();
-    }
-    if (view === "chat") {
-      setFocusComposerNonce((n) => n + 1);
-    }
-  }, [compactLayout, view]);
 
   useEffect(() => {
     window.electron.app.getVersion().then(setAppVersion).catch(() => setAppVersion(null));
@@ -276,14 +262,7 @@ export default function App() {
   void expandedPlanId;
 
   return (
-    <div
-      className="app"
-      data-sidebar={layout.sidebar}
-      data-density={layout.density}
-      data-window-size={presetSmall ? "small" : "large"}
-      data-compact-layout={compactLayout ? "true" : undefined}
-      data-sidebar-peek-suppressed={compactLayout && sidebarPeekSuppressed ? "true" : undefined}
-    >
+    <div className="app" data-sidebar={layout.sidebar}>
       <Sidebar
         conversations={conversations}
         conversationId={conversationId}
@@ -292,11 +271,8 @@ export default function App() {
         onConversationSelect={setConversationId}
         onConversationDelete={handleConversationDelete}
         onNewChat={createNew}
-        compactLayout={compactLayout}
         windowPresetSmall={presetSmall}
         onWindowSizeToggle={handleWindowSizeToggle}
-        sidebarPeekSuppressed={sidebarPeekSuppressed}
-        onSidebarPeekChange={setSidebarPeekSuppressed}
         activeChatProcessing={activeChatProcessing}
         titleGenInFlight={titleGenInFlight}
         appVersion={appVersion}

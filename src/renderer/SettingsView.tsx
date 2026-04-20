@@ -31,6 +31,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [apiKey, setApiKey] = useState(D.openai!.apiKey);
   const [showApiKey, setShowApiKey] = useState(false);
   const [usageStats, setUsageStats] = useState<UsageStatsSnapshot>(EMPTY_USAGE_STATS);
+  const [switchAnimationsReady, setSwitchAnimationsReady] = useState(false);
 
   const [cleanupEnabled, setCleanupEnabled] = useState(D.transcription?.cleanup?.enabled ?? false);
 
@@ -59,16 +60,31 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
 
   useEffect(() => {
-    window.electron.settings.get().then((s) => {
-      const S = s as Settings;
-      setApiKey(S.openai?.apiKey ?? D.openai!.apiKey);
-      setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
-      setCleanupEnabled(S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false);
-      setWeatherZip(S.weather?.defaultZip ?? D.weather!.defaultZip);
-    });
+    let cancelled = false;
+    const enableSwitchAnimations = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) setSwitchAnimationsReady(true);
+        });
+      });
+    };
+    void window.electron.settings
+      .get()
+      .then((s) => {
+        if (cancelled) return;
+        const S = s as Settings;
+        setApiKey(S.openai?.apiKey ?? D.openai!.apiKey);
+        setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
+        setCleanupEnabled(S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false);
+        setWeatherZip(S.weather?.defaultZip ?? D.weather!.defaultZip);
+      })
+      .finally(enableSwitchAnimations);
     void window.electron.usage.getStats().then(setUsageStats);
     window.electron.memory.getUserMemory().then(setUserMemory);
     window.electron.customization.getThemeSettings().then(setThemeForm);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -258,7 +274,9 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               Spoken audio is turned into text on this device. Optional cleanup uses your API key.
             </p>
             
-            <label className="settings-switch-row">
+            <label
+              className={`settings-switch-row${switchAnimationsReady ? "" : " settings-switch-row--static"}`}
+            >
               <input
                 id="transcriptCleanupToggle"
                 type="checkbox"
@@ -345,7 +363,9 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
           <section className="settings-group">
             <h3 className="settings-group__title">After dictation</h3>
             <p className="settings-group__lead">Send the transcribed message right away in a new chat.</p>
-            <label className="settings-switch-row">
+            <label
+              className={`settings-switch-row${switchAnimationsReady ? "" : " settings-switch-row--static"}`}
+            >
               <input
                 id="autoSendToggle"
                 data-testid="settings-auto-send"

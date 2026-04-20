@@ -1,4 +1,18 @@
-/* Chat: one scroll container so the input can stick to the bottom */
+/*
+ * Chat column: `.chat-pane` holds `--chat-composer-dock-height`. `.chat-scroll` is the scrollport only
+ * (no bottom padding here — flex + padding on overflow nodes is unreliable). Composer clearance is a
+ * flex spacer `::after` on `.chat-area-inner` so scrollHeight includes the overlay gap.
+ */
+.chat-pane {
+  --chat-composer-dock-height: 140px;
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
 .chat-scroll {
   flex: 1;
   min-height: 0;
@@ -16,25 +30,41 @@
   color: var(--fg-muted);
 }
 
-.chat-scroll.chat-scroll--placeholder .chat-area {
+.chat-scroll.chat-scroll--placeholder .chat-area-inner {
   flex: 0 1 auto;
   display: flex;
   justify-content: center;
-}
-
-.chat-scroll.chat-scroll--placeholder .chat-area-inner {
   text-align: center;
 }
 
-.chat-area {
+/* Transcript column: max-width + flex growth (replaces former chat-area → chat-area-inner chain). */
+.chat-area-inner {
   flex: 1;
   min-width: 0;
-}
-
-.chat-area-inner {
+  min-height: 0;
   max-width: var(--content-width);
   margin: 0 auto;
-  transition: padding-bottom 120ms linear;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Reserve scroll extent for the overlay composer (avoids padding-bottom on `.chat-scroll`). */
+.chat-scroll:not(.chat-scroll--placeholder) .chat-area-inner::after {
+  content: "";
+  flex-shrink: 0;
+  height: var(--chat-composer-dock-height);
+  pointer-events: none;
+}
+
+/* Newest messages sit near the composer; history extends upward without manual scroll math. */
+.chat-messages-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-unit) 0;
 }
 
 .message-block .content {
@@ -263,10 +293,9 @@
 }
 
 .btn-sm {
-  font-size: 11px;
+  font-size: calc(var(--font-size) * 11 / 14);
   padding: 2px 8px;
   height: 24px;
-  min-height: 24px;
 }
 
 .chat-scroll-top {
@@ -390,9 +419,8 @@
   background: transparent;
   box-shadow: none;
   height: 28px;
-  min-height: 28px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: calc(var(--font-size) * 12 / 14);
 }
 
 .chat-pane-header .chat-pane-title.btn:hover:not(:disabled) {
@@ -411,7 +439,7 @@
 }
 
 .btn-chat-secondary {
-  font-size: 12px;
+  font-size: calc(var(--font-size) * 12 / 14);
   padding: 4px 12px;
   border-radius: 6px;
   color: var(--fg);
@@ -427,28 +455,55 @@
   box-shadow: var(--btn-shadow-hover);
 }
 
-/* Input: stacked layout */
-.input-container {
+/* Chat composer dock — transparent shell; glass lives on `.chat-composer-inner`. */
+.chat-composer-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-secondary);
-}
-
-.input-container--sticky {
-  position: sticky;
-  bottom: 0;
-  flex-shrink: 0;
-  z-index: 1;
+  width: 100%;
+  margin: 0;
+  z-index: 3;
+  pointer-events: auto;
+  background: transparent;
 }
 
 .chat-composer-inner {
   width: 100%;
   max-width: min(700px, var(--content-width));
   margin: 0 auto;
-  background: var(--bg);
-  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
   border-bottom: none;
   border-radius: 8px 8px 0 0;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in oklab, var(--fg) 9%, transparent) 0%,
+      transparent 42%
+    ),
+    color-mix(in oklab, var(--bg-elevated) 58%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.45);
+  backdrop-filter: blur(16px) saturate(1.45);
+  border: 1px solid color-mix(in oklab, var(--border) 68%, transparent);
+  border-bottom: none;
+  box-shadow:
+    0 -10px 36px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
+}
+
+/* `var()` is invalid in `@media`; size container on `.main` so this can use `--content-width` (same moment as viewport ≤ `--layout-viewport-max` when sidebar is fixed width). */
+@container main (max-width: calc(600px)) {
+  .chat-composer-inner {
+    max-width: none;
+    border-radius: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+  }
 }
 
 .chat-input {

@@ -32,7 +32,6 @@
 }
 
 .writing-surface__save-btn {
-  min-height: 28px;
   padding: 0 9px;
   font-size: 12px;
   line-height: 1;
@@ -261,27 +260,29 @@
   font-size: 13px;
 }
 
-/* Stack vertically in small windows so neither pane becomes unreadable. */
-.app[data-compact-layout="true"] .writing-surface__panes {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-}
+/* Stack vertically at narrow widths so neither pane becomes unreadable. */
+@media (max-width: 768px) {
+  .writing-surface__panes {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
 
-.app[data-compact-layout="true"] .writing-surface__pane--editor {
-  border-right: none;
-  border-bottom: 1px solid var(--border);
-}
+  .writing-surface__pane--editor {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
 
-.app[data-compact-layout="true"] .writing-surface__workspace--history-open {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) 220px;
-}
+  .writing-surface__workspace--history-open {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 220px;
+  }
 
-.app[data-compact-layout="true"] .writing-surface__history {
-  border-left: none;
-  border-top: 1px solid var(--border);
-}
+  .writing-surface__history {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
 
-.app[data-compact-layout="true"] .writing-surface__meta {
-  display: none;
+  .writing-surface__meta {
+    display: none;
+  }
 }
