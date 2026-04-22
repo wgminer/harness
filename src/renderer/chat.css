@@ -389,7 +389,7 @@
 
 .message-copy-btn:hover {
   color: var(--fg-muted);
-  background: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
+  background: var(--sidebar-control-hover-bg);
   box-shadow: var(--btn-shadow-hover);
 }
 
@@ -415,18 +415,18 @@
 
 .chat-pane-header .chat-pane-title.btn {
   font-family: var(--font-family);
-  color: var(--fg-muted);
-  background: transparent;
-  box-shadow: none;
-  height: 28px;
-  padding: 0 10px;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg-secondary));
+  box-shadow: var(--btn-shadow);
+  height: 30px;
+  padding: 0 12px;
   font-size: calc(var(--font-size) * 12 / 14);
 }
 
 .chat-pane-header .chat-pane-title.btn:hover:not(:disabled) {
-  color: var(--fg-muted);
-  background: color-mix(in srgb, var(--fg) 8%, transparent);
-  box-shadow: none;
+  color: var(--fg);
+  background: var(--sidebar-control-hover-bg);
+  box-shadow: var(--btn-shadow-hover);
 }
 
 .chat-secondary-actions {
@@ -440,19 +440,31 @@
 
 .btn-chat-secondary {
   font-size: calc(var(--font-size) * 12 / 14);
-  padding: 4px 12px;
-  border-radius: 6px;
-  color: var(--fg);
-  border: none;
-  cursor: pointer;
-  box-shadow: var(--btn-shadow);
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  padding: 0 12px;
+  height: 30px;
 }
 
-.btn-chat-secondary:hover {
+.chat-pane-btn {
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg-secondary));
   color: var(--fg);
-  background: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
+  box-shadow: var(--btn-shadow);
+}
+
+.chat-pane-btn:hover:not(:disabled) {
+  background: var(--sidebar-control-hover-bg);
+  color: var(--fg);
   box-shadow: var(--btn-shadow-hover);
+}
+
+.chat-pane-btn.chat-pane-btn--danger {
+  background: color-mix(in srgb, var(--danger) 72%, var(--bg-secondary));
+  color: #fff;
+  gap: 4px;
+}
+
+.chat-pane-btn.chat-pane-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 84%, #000);
+  color: #fff;
 }
 
 /* Chat composer dock — transparent shell; glass lives on `.chat-composer-inner`. */
@@ -527,7 +539,7 @@
 }
 
 .input-actions .btn:not(.btn-icon) {
-  padding: 0 14px;
+  padding: 0 12px;
 }
 
 .input-actions-stop {
@@ -543,7 +555,7 @@
 }
 
 .voice-btn {
-  color: var(--fg-muted);
+  color: var(--fg);
   transition: color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
