@@ -113,6 +113,10 @@ ipcMain.handle("window:toggleSize", (): "small" | "large" => {
 });
 
 ipcMain.handle("memory:importFromChatGPTFolder", async () => {
+  const e2eImportDir = process.env.HARNESS_E2E_IMPORT_DIR;
+  if (e2eImportDir) {
+    return importFromFolder(e2eImportDir);
+  }
   const win = BrowserWindow.getAllWindows()[0] ?? null;
   const result = await dialog.showOpenDialog(win ?? undefined, { properties: ["openDirectory"] });
   if (result.canceled || result.filePaths.length === 0) {

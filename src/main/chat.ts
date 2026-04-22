@@ -10,7 +10,7 @@ import { executeCustomizationTool } from "./customization";
 import { executeAssistantTool, isAssistantToolName } from "./assistantTools";
 import type { ChatMessage } from "../shared/types";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
-import { HARNESS_E2E_ASSISTANT_REPLY, isHarnessE2E } from "./e2eStub";
+import { HARNESS_E2E_ASSISTANT_REPLY, getHarnessE2EStreamDelayMs, isHarnessE2E } from "./e2eStub";
 
 function activeChatModelLabel(): string {
   return OPENAI_CHAT_MODEL;
@@ -27,6 +27,16 @@ const pendingGatedTools = new Map<
 function getMainWindow(): BrowserWindow | null {
   const wins = BrowserWindow.getAllWindows();
   return wins.length > 0 ? wins[0] : null;
+}
+
+function splitIntoWordChunks(content: string): string[] {
+  const parts = content.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return [content];
+  return parts.map((word, idx) => (idx < parts.length - 1 ? `${word} ` : word));
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function buildMessageList(
@@ -124,12 +134,29 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
     const win = getMainWindow();
     const modelLabel = activeChatModelLabel();
     const synthetic = HARNESS_E2E_ASSISTANT_REPLY;
-    win?.webContents.send("chat:streamChunk", conversationId, synthetic);
+    const streamDelayMs = getHarnessE2EStreamDelayMs();
+    activeAbortController = new AbortController();
+    let emitted = "";
+    if (streamDelayMs <= 0) {
+      emitted = synthetic;
+      win?.webContents.send("chat:streamChunk", conversationId, synthetic);
+    } else {
+      for (const chunk of splitIntoWordChunks(synthetic)) {
+        if (activeAbortController.signal.aborted) break;
+        emitted += chunk;
+        win?.webContents.send("chat:streamChunk", conversationId, chunk);
+        await wait(streamDelayMs);
+      }
+    }
     win?.webContents.send("chat:streamEnd", conversationId);
-    await appendMessage(conversationId, "assistant", synthetic, {
-      timestamp: Date.now(),
-      model: modelLabel,
-    });
+    if (emitted) {
+      await appendMessage(conversationId, "assistant", emitted, {
+        timestamp: Date.now(),
+        model: modelLabel,
+      });
+      scheduleConversationTitleRefinement(conversationId);
+    }
+    activeAbortController = null;
     return;
   }
 

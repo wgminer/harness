@@ -1,0 +1,34 @@
+[
+  {
+    "id": "chatgpt-sample-1",
+    "title": "Fixture Conversation",
+    "create_time": 1710000000,
+    "current_node": "n3",
+    "mapping": {
+      "n1": {
+        "parent": null,
+        "children": ["n2"],
+        "message": {
+          "author": { "role": "user" },
+          "content": { "parts": ["Hello from fixture"] }
+        }
+      },
+      "n2": {
+        "parent": "n1",
+        "children": ["n3"],
+        "message": {
+          "author": { "role": "assistant" },
+          "content": { "parts": ["Hi from fixture"] }
+        }
+      },
+      "n3": {
+        "parent": "n2",
+        "children": [],
+        "message": {
+          "author": { "role": "user" },
+          "content": { "parts": ["Latest branch content"] }
+        }
+      }
+    }
+  }
+]

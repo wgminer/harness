@@ -20,6 +20,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
+  padding: 0 16px;
 }
 
 /* Empty / placeholder panes (no conversation selected): same flex contract as an active chat */
@@ -463,6 +464,7 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  padding: 0 16px;
   margin: 0;
   z-index: 3;
   pointer-events: auto;
@@ -493,16 +495,6 @@
   box-shadow:
     0 -10px 36px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
-}
-
-/* `var()` is invalid in `@media`; size container on `.main` so this can use `--content-width` (same moment as viewport ≤ `--layout-viewport-max` when sidebar is fixed width). */
-@container main (max-width: calc(600px)) {
-  .chat-composer-inner {
-    max-width: none;
-    border-radius: 0;
-    border-left-width: 0;
-    border-right-width: 0;
-  }
 }
 
 .chat-input {

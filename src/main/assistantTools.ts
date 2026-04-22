@@ -49,6 +49,10 @@ function getTasksFilePath(): string {
   return join(getMemoryDir(), TASKS_FILE);
 }
 
+function getTasksFilePathIn(memoryDir: string): string {
+  return join(memoryDir, TASKS_FILE);
+}
+
 function migrateRawTask(raw: unknown): TaskItem | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -70,8 +74,8 @@ function migrateRawTask(raw: unknown): TaskItem | null {
   };
 }
 
-async function loadTasks(): Promise<TaskState> {
-  const path = getTasksFilePath();
+export async function loadTasksIn(memoryDir: string): Promise<TaskState> {
+  const path = getTasksFilePathIn(memoryDir);
   if (!(await fileExists(path))) return { tasks: [] };
   try {
     const raw = await readFile(path, "utf-8");
@@ -87,7 +91,7 @@ async function loadTasks(): Promise<TaskState> {
     const tasks = rows.map(migrateRawTask).filter((t): t is TaskItem => t !== null);
     const state: TaskState = { tasks };
     if (needsLegacyRewrite && tasks.length > 0) {
-      await saveTasks(state);
+      await saveTasksIn(memoryDir, state);
     }
     return state;
   } catch {
@@ -96,8 +100,110 @@ async function loadTasks(): Promise<TaskState> {
   return { tasks: [] };
 }
 
+async function loadTasks(): Promise<TaskState> {
+  return loadTasksIn(getMemoryDir());
+}
+
+export async function saveTasksIn(memoryDir: string, state: TaskState): Promise<void> {
+  await writeFile(getTasksFilePathIn(memoryDir), JSON.stringify({ tasks: state.tasks }, null, 2), "utf-8");
+}
+
 async function saveTasks(state: TaskState): Promise<void> {
-  await writeFile(getTasksFilePath(), JSON.stringify({ tasks: state.tasks }, null, 2), "utf-8");
+  await saveTasksIn(getMemoryDir(), state);
+}
+
+export type TaskAction =
+  | { kind: "list" }
+  | { kind: "create"; args: Record<string, unknown> }
+  | { kind: "update"; args: Record<string, unknown> }
+  | { kind: "delete"; args: Record<string, unknown> }
+  | { kind: "clear_completed" };
+
+export function applyTaskAction(
+  state: TaskState,
+  action: TaskAction,
+  nowMs = Date.now(),
+  idFactory: () => string = () => generateId("task")
+): TasksPayload {
+  const nextState: TaskState = { tasks: [...state.tasks] };
+
+  if (action.kind === "list") {
+    return { ...nextState, lastAction: "list" };
+  }
+
+  if (action.kind === "create") {
+    const title = String(action.args.title ?? "").trim();
+    const metadata =
+      (action.args.metadata && typeof action.args.metadata === "object"
+        ? (action.args.metadata as Record<string, unknown>)
+        : undefined) ?? undefined;
+    if (!title) {
+      return { ...nextState, lastAction: "create", error: "Task title is required" };
+    }
+    let tags = normalizeTags(action.args.tags);
+    if (tags.length === 0 && typeof action.args.status === "string") {
+      const fromStatus = tagsFromLegacyStatus(action.args.status);
+      if (fromStatus) tags = fromStatus;
+    }
+    if (tags.length === 0) tags = ["pending"];
+    const task: TaskItem = {
+      id: idFactory(),
+      title,
+      tags,
+      createdAt: nowMs,
+      updatedAt: nowMs,
+      ...(metadata ? { metadata } : {}),
+    };
+    nextState.tasks.push(task);
+    return { ...nextState, lastAction: "create", affectedIds: [task.id] };
+  }
+
+  if (action.kind === "update") {
+    const id = String(action.args.id ?? "").trim();
+    if (!id) return { ...nextState, lastAction: "update", error: "Task id is required" };
+    const idx = nextState.tasks.findIndex((t) => t.id === id);
+    if (idx === -1) return { ...nextState, lastAction: "update", error: `Task not found: ${id}` };
+
+    const existing = nextState.tasks[idx];
+    const next: TaskItem = { ...existing, updatedAt: nowMs };
+    if (typeof action.args.title === "string") {
+      const title = action.args.title.trim();
+      if (title) next.title = title;
+    }
+    if (action.args.tags !== undefined && Array.isArray(action.args.tags)) {
+      next.tags = normalizeTags(action.args.tags);
+      if (next.tags.length === 0) next.tags = ["pending"];
+    } else if (typeof action.args.status === "string") {
+      const fromStatus = tagsFromLegacyStatus(action.args.status);
+      if (fromStatus) next.tags = fromStatus;
+    }
+    if (action.args.metadata && typeof action.args.metadata === "object") {
+      const metaPatch = action.args.metadata as Record<string, unknown>;
+      next.metadata = { ...(next.metadata ?? {}), ...metaPatch };
+    }
+    nextState.tasks[idx] = next;
+    return { ...nextState, lastAction: "update", affectedIds: [id] };
+  }
+
+  if (action.kind === "delete") {
+    const id = String(action.args.id ?? "").trim();
+    if (!id) return { ...nextState, lastAction: "delete", error: "Task id is required" };
+    const before = nextState.tasks.length;
+    nextState.tasks = nextState.tasks.filter((t) => t.id !== id);
+    if (nextState.tasks.length === before) {
+      return { ...nextState, lastAction: "delete", error: `Task not found: ${id}` };
+    }
+    return { ...nextState, lastAction: "delete", affectedIds: [id] };
+  }
+
+  const remaining: TaskItem[] = [];
+  const removedIds: string[] = [];
+  for (const t of nextState.tasks) {
+    if (taskIsClearable(t.tags)) removedIds.push(t.id);
+    else remaining.push(t);
+  }
+  nextState.tasks = remaining;
+  return { ...nextState, lastAction: "clear_completed", affectedIds: removedIds };
 }
 
 export async function listTasks(): Promise<TasksPayload> {
@@ -106,149 +212,31 @@ export async function listTasks(): Promise<TasksPayload> {
 }
 
 export async function createTask(args: Record<string, unknown>): Promise<TasksPayload> {
-  const title = String(args.title ?? "").trim();
-  const metadata = (args.metadata && typeof args.metadata === "object" ? (args.metadata as Record<string, unknown>) : undefined) ?? undefined;
-
-  if (!title) {
-    const state = await loadTasks();
-    return {
-      ...state,
-      lastAction: "create",
-      error: "Task title is required",
-    };
-  }
-
-  const now = Date.now();
   const state = await loadTasks();
-  let tags = normalizeTags(args.tags);
-  if (tags.length === 0 && typeof args.status === "string") {
-    const fromStatus = tagsFromLegacyStatus(args.status);
-    if (fromStatus) tags = fromStatus;
-  }
-  if (tags.length === 0) tags = ["pending"];
-
-  const task: TaskItem = {
-    id: generateId("task"),
-    title,
-    tags,
-    createdAt: now,
-    updatedAt: now,
-    ...(metadata ? { metadata } : {}),
-  };
-
-  state.tasks.push(task);
-  await saveTasks(state);
-
-  return {
-    ...state,
-    lastAction: "create",
-    affectedIds: [task.id],
-  };
+  const payload = applyTaskAction(state, { kind: "create", args }, Date.now());
+  if (!payload.error) await saveTasks({ tasks: payload.tasks });
+  return payload;
 }
 
 export async function updateTask(args: Record<string, unknown>): Promise<TasksPayload> {
-  const id = String(args.id ?? "").trim();
-  if (!id) {
-    const state = await loadTasks();
-    return {
-      ...state,
-      lastAction: "update",
-      error: "Task id is required",
-    };
-  }
-
   const state = await loadTasks();
-  const idx = state.tasks.findIndex((t) => t.id === id);
-  if (idx === -1) {
-    return {
-      ...state,
-      lastAction: "update",
-      error: `Task not found: ${id}`,
-    };
-  }
-
-  const existing = state.tasks[idx];
-  const next: TaskItem = { ...existing, updatedAt: Date.now() };
-
-  if (typeof args.title === "string") {
-    const title = args.title.trim();
-    if (title) next.title = title;
-  }
-
-  if (args.tags !== undefined && Array.isArray(args.tags)) {
-    next.tags = normalizeTags(args.tags);
-    if (next.tags.length === 0) next.tags = ["pending"];
-  } else if (typeof args.status === "string") {
-    const fromStatus = tagsFromLegacyStatus(args.status);
-    if (fromStatus) next.tags = fromStatus;
-  }
-
-  if (args.metadata && typeof args.metadata === "object") {
-    const metaPatch = args.metadata as Record<string, unknown>;
-    next.metadata = { ...(next.metadata ?? {}), ...metaPatch };
-  }
-
-  state.tasks[idx] = next;
-  await saveTasks(state);
-
-  return {
-    ...state,
-    lastAction: "update",
-    affectedIds: [id],
-  };
+  const payload = applyTaskAction(state, { kind: "update", args }, Date.now());
+  if (!payload.error) await saveTasks({ tasks: payload.tasks });
+  return payload;
 }
 
 export async function deleteTask(args: Record<string, unknown>): Promise<TasksPayload> {
-  const id = String(args.id ?? "").trim();
-  if (!id) {
-    const state = await loadTasks();
-    return {
-      ...state,
-      lastAction: "delete",
-      error: "Task id is required",
-    };
-  }
-
   const state = await loadTasks();
-  const before = state.tasks.length;
-  state.tasks = state.tasks.filter((t) => t.id !== id);
-  const after = state.tasks.length;
-
-  if (before === after) {
-    return {
-      ...state,
-      lastAction: "delete",
-      error: `Task not found: ${id}`,
-    };
-  }
-
-  await saveTasks(state);
-
-  return {
-    ...state,
-    lastAction: "delete",
-    affectedIds: [id],
-  };
+  const payload = applyTaskAction(state, { kind: "delete", args }, Date.now());
+  if (!payload.error) await saveTasks({ tasks: payload.tasks });
+  return payload;
 }
 
 export async function clearCompletedTasks(): Promise<TasksPayload> {
   const state = await loadTasks();
-  const remaining: TaskItem[] = [];
-  const removedIds: string[] = [];
-  for (const t of state.tasks) {
-    if (taskIsClearable(t.tags)) {
-      removedIds.push(t.id);
-    } else {
-      remaining.push(t);
-    }
-  }
-  state.tasks = remaining;
-  await saveTasks(state);
-  return {
-    ...state,
-    lastAction: "clear_completed",
-    affectedIds: removedIds,
-  };
+  const payload = applyTaskAction(state, { kind: "clear_completed" }, Date.now());
+  await saveTasks({ tasks: payload.tasks });
+  return payload;
 }
 
 async function setMemoryFact(args: Record<string, unknown>): Promise<MemoryFactsPayload> {

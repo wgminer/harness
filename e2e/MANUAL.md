@@ -1,6 +1,17 @@
 # Manual checks (not covered by Playwright)
 
-Automated E2E uses `HARNESS_E2E=1` with a dedicated user data dir (see `src/main/e2eBootstrap.ts`). It does **not** validate OS-level behavior.
+Automated E2E uses `HARNESS_E2E=1` with a dedicated user data dir (see `src/main/e2eBootstrap.ts`) and now covers:
+
+- core chat send and deterministic stream rendering
+- chat persistence across relaunch
+- conversation delete safety
+- settings persistence (`autoSend`, weather ZIP)
+- tasks add flow
+- stop-mid-stream data-loss guard
+- writing surface persistence and save-history round-trip
+- ChatGPT import dedupe (fixture-driven)
+
+It still does **not** validate OS-level behavior.
 
 ## Global Fn recording (macOS only)
 
