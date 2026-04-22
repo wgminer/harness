@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight, ListTodo, Square, SquareCheck, Trash2, X } from "lucide-react";
 import type { TaskItem, TasksPayload } from "../shared/electronAPI";
 import {
@@ -74,6 +74,8 @@ export function TasksView() {
   const tagFieldRef = useRef<HTMLInputElement>(null);
   const [activeOpen, setActiveOpen] = useState(true);
   const [completedOpen, setCompletedOpen] = useState(false);
+  const tasksPaneRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -103,6 +105,30 @@ export function TasksView() {
         setLoading(false);
       }
     })();
+  }, []);
+
+  useLayoutEffect(() => {
+    const pane = tasksPaneRef.current;
+    const dock = composerRef.current;
+    if (!pane || !dock) return;
+
+    const sync = () => {
+      const h = Math.ceil(dock.getBoundingClientRect().height);
+      pane.style.setProperty("--tasks-composer-dock-height", `${h}px`);
+    };
+
+    sync();
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(sync);
+      ro.observe(dock);
+    }
+
+    window.addEventListener("resize", sync);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", sync);
+    };
   }, []);
 
   const refreshFromPayload = (payload: unknown) => {
@@ -213,7 +239,7 @@ export function TasksView() {
   const completedTasks = tasks.filter((t) => taskIsDone(normalizeTags(t.tags)));
 
   return (
-    <div className="settings-page">
+    <div ref={tasksPaneRef} className="settings-page tasks-page">
       <header className={`settings-header ${headerScrolled ? "settings-header--scrolled" : ""}`}>
         <div className="settings-header-inner">
           <div className="settings-header-title-row">
@@ -222,8 +248,8 @@ export function TasksView() {
           </div>
         </div>
       </header>
-      <div ref={scrollRef} className="settings-scroll" onScroll={onScroll}>
-        <div className="settings-content">
+      <div ref={scrollRef} className="settings-scroll tasks-scroll" onScroll={onScroll}>
+        <div className="settings-content tasks-content">
           <div className="settings-section">
             <button
               type="button"
@@ -293,7 +319,7 @@ export function TasksView() {
         </div>
       </div>
 
-      <div className="tasks-composer-dock" data-testid="tasks-composer">
+      <div ref={composerRef} className="tasks-composer-dock" data-testid="tasks-composer">
         <div className="chat-composer-inner">
           <textarea
             ref={newTaskInputRef}

@@ -291,5 +291,5 @@ hr {
 }
 
 .message-block {
-  padding: calc(var(--space-unit) * 2) 16px;
+  /* padding: calc(var(--space-unit) * 2) 16px; */
 }

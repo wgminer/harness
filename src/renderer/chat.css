@@ -62,10 +62,10 @@
 .chat-messages-stack {
   display: flex;
   flex-direction: column-reverse;
-  gap: 12px;
+  gap: 16px;
   width: 100%;
   box-sizing: border-box;
-  padding: var(--space-unit) 0;
+  padding: var(--space-unit) 0 calc(var(--space-unit) * 2);
 }
 
 .message-block .content {
@@ -399,7 +399,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 14px 16px;
+  padding: 12px 16px;
 }
 
 /* Title control: compact text button, transparent until hover */

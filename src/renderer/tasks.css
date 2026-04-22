@@ -1,4 +1,17 @@
 /* Tasks view */
+.tasks-page {
+  --tasks-composer-dock-height: 116px;
+  position: relative;
+}
+
+.tasks-page .tasks-content::after {
+  content: "";
+  display: block;
+  flex-shrink: 0;
+  height: var(--tasks-composer-dock-height);
+  pointer-events: none;
+}
+
 .tasks-section-heading {
   display: flex;
   align-items: center;
@@ -252,11 +265,14 @@
 .tasks-composer-dock {
   display: flex;
   flex-direction: column;
-  position: sticky;
+  position: absolute;
+  left: 0;
+  right: 0;
   bottom: 0;
   flex-shrink: 0;
-  z-index: 1;
+  z-index: 3;
   width: 100%;
+  padding: 0 16px;
   background: transparent;
 }
 
