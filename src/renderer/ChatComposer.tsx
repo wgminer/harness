@@ -77,7 +77,7 @@ export function ChatComposer({
             {voiceState === "idle" && (
               <button
                 type="button"
-                className="btn btn-icon voice-btn"
+                className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn"
                 onClick={onStartRecording}
                 disabled={sending}
                 title="Record voice message"
@@ -90,7 +90,7 @@ export function ChatComposer({
               <>
                 <button
                   type="button"
-                  className="btn btn-icon voice-btn voice-btn--recording"
+                  className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn voice-btn--recording"
                   onClick={onStopRecording}
                   title="Stop recording"
                   aria-label="Stop recording"
@@ -112,7 +112,7 @@ export function ChatComposer({
           {voiceState !== "idle" ? (
             <button
               type="button"
-              className="btn btn-cancel"
+              className="btn chat-pane-btn chat-pane-btn--danger"
               onClick={onCancelRecording}
               title="Cancel recording"
             >
@@ -120,13 +120,13 @@ export function ChatComposer({
               Cancel
             </button>
           ) : sending ? (
-            <button type="button" className="btn input-actions-stop" onClick={onStop}>
+            <button type="button" className="btn chat-pane-btn input-actions-stop" onClick={onStop}>
               Stop
             </button>
           ) : (
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn chat-pane-btn"
               data-testid="chat-send"
               onMouseDown={(e) => e.preventDefault()}
               onClick={onSend}
