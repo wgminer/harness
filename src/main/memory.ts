@@ -19,6 +19,23 @@ export function getMemoryDir(): string {
   return dir;
 }
 
+function ensureDir(memoryDir: string): string {
+  if (!existsSync(memoryDir)) mkdirSync(memoryDir, { recursive: true });
+  return memoryDir;
+}
+
+function getConversationsPath(memoryDir: string): string {
+  return join(memoryDir, CONVERSATIONS_FILE);
+}
+
+export function getMessagesPathIn(memoryDir: string, conversationId: string): string {
+  return join(memoryDir, `messages_${conversationId.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`);
+}
+
+function getUserMemoryPath(memoryDir: string): string {
+  return join(memoryDir, USER_MEMORY_FILE);
+}
+
 /** Stored per-conversation; optional isFromChatGPT/chatgptId used for ChatGPT import dedupe. */
 export type ConversationTitleSource = "auto" | "user" | "imported";
 
@@ -39,45 +56,77 @@ interface MessageRecord {
 }
 
 
-async function loadConversations(): Promise<Record<string, ConversationMeta>> {
-  const path = join(getMemoryDir(), CONVERSATIONS_FILE);
+export async function loadConversationsIn(memoryDir: string): Promise<Record<string, ConversationMeta>> {
+  const path = getConversationsPath(ensureDir(memoryDir));
   if (!(await fileExists(path))) return {};
   return JSON.parse(await readFile(path, "utf-8"));
 }
 
+async function loadConversations(): Promise<Record<string, ConversationMeta>> {
+  return loadConversationsIn(getMemoryDir());
+}
+
+export async function saveConversationsIn(memoryDir: string, conv: Record<string, ConversationMeta>): Promise<void> {
+  const path = getConversationsPath(ensureDir(memoryDir));
+  await writeFile(path, JSON.stringify(conv, null, 2), "utf-8");
+}
+
 async function saveConversations(conv: Record<string, ConversationMeta>): Promise<void> {
-  await writeFile(join(getMemoryDir(), CONVERSATIONS_FILE), JSON.stringify(conv, null, 2), "utf-8");
+  await saveConversationsIn(getMemoryDir(), conv);
 }
 
 function getMessagesPath(conversationId: string): string {
-  return join(getMemoryDir(), `messages_${conversationId.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`);
+  return getMessagesPathIn(getMemoryDir(), conversationId);
 }
 
-async function loadMessages(conversationId: string): Promise<MessageRecord[]> {
-  const path = getMessagesPath(conversationId);
+export async function loadMessagesIn(memoryDir: string, conversationId: string): Promise<MessageRecord[]> {
+  const path = getMessagesPathIn(ensureDir(memoryDir), conversationId);
   if (!(await fileExists(path))) return [];
   const data = JSON.parse(await readFile(path, "utf-8"));
   return Array.isArray(data) ? data : [];
 }
 
-async function saveMessages(conversationId: string, messages: MessageRecord[]): Promise<void> {
-  await writeFile(getMessagesPath(conversationId), JSON.stringify(messages, null, 2), "utf-8");
+async function loadMessages(conversationId: string): Promise<MessageRecord[]> {
+  return loadMessagesIn(getMemoryDir(), conversationId);
 }
 
-async function createConversation(): Promise<string> {
+export async function saveMessagesIn(
+  memoryDir: string,
+  conversationId: string,
+  messages: MessageRecord[]
+): Promise<void> {
+  await writeFile(getMessagesPathIn(ensureDir(memoryDir), conversationId), JSON.stringify(messages, null, 2), "utf-8");
+}
+
+async function saveMessages(conversationId: string, messages: MessageRecord[]): Promise<void> {
+  await saveMessagesIn(getMemoryDir(), conversationId, messages);
+}
+
+export async function createConversationIn(memoryDir: string): Promise<string> {
   const id = generateId("conv");
-  const conv = await loadConversations();
+  const conv = await loadConversationsIn(memoryDir);
   conv[id] = { title: null, createdAt: Date.now() };
-  await saveConversations(conv);
-  await saveMessages(id, []);
+  await saveConversationsIn(memoryDir, conv);
+  await saveMessagesIn(memoryDir, id, []);
   return id;
 }
 
-async function getConversation(id: string): Promise<{ id: string; title: string | null; createdAt: number } | null> {
-  const conv = await loadConversations();
+async function createConversation(): Promise<string> {
+  return createConversationIn(getMemoryDir());
+}
+
+export async function getConversationIn(
+  memoryDir: string,
+  id: string
+): Promise<{ id: string; title: string | null; createdAt: number } | null> {
+  const conv = await loadConversationsIn(memoryDir);
   const c = conv[id];
   if (!c) return null;
   return { id, title: c.title, createdAt: c.createdAt };
+}
+
+async function getConversation(id: string): Promise<{ id: string; title: string | null; createdAt: number } | null> {
+  return getConversationIn(getMemoryDir(), id);
 }
 
 export async function getConversationMetaForId(conversationId: string): Promise<ConversationMeta | null> {
@@ -86,12 +135,31 @@ export async function getConversationMetaForId(conversationId: string): Promise<
   return c ? { ...c } : null;
 }
 
-export async function patchConversationMeta(conversationId: string, patch: Partial<ConversationMeta>): Promise<void> {
-  const conv = await loadConversations();
+export async function patchConversationMetaIn(
+  memoryDir: string,
+  conversationId: string,
+  patch: Partial<ConversationMeta>
+): Promise<void> {
+  const conv = await loadConversationsIn(memoryDir);
   const c = conv[conversationId];
   if (!c) return;
   Object.assign(c, patch);
-  await saveConversations(conv);
+  await saveConversationsIn(memoryDir, conv);
+}
+
+export async function patchConversationMeta(conversationId: string, patch: Partial<ConversationMeta>): Promise<void> {
+  return patchConversationMetaIn(getMemoryDir(), conversationId, patch);
+}
+
+export async function setConversationTitleIn(
+  memoryDir: string,
+  conversationId: string,
+  title: string,
+  source: ConversationTitleSource = "user"
+): Promise<void> {
+  const trimmed = title.trim();
+  if (!trimmed) return;
+  await patchConversationMetaIn(memoryDir, conversationId, { title: trimmed, titleSource: source });
 }
 
 async function setConversationTitle(
@@ -99,29 +167,31 @@ async function setConversationTitle(
   title: string,
   source: ConversationTitleSource = "user"
 ): Promise<void> {
-  const trimmed = title.trim();
-  if (!trimmed) return;
-  await patchConversationMeta(conversationId, { title: trimmed, titleSource: source });
+  return setConversationTitleIn(getMemoryDir(), conversationId, title, source);
 }
 
 /** Placeholder title for voice-dictation threads; `titleSource: "auto"` so LLM refinement can replace it. */
 export async function setVoiceDictationTitle(conversationId: string): Promise<string> {
   const time = new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const title = `Dictation @ ${time}`;
-  await patchConversationMeta(conversationId, { title, titleSource: "auto" });
+  await patchConversationMetaIn(getMemoryDir(), conversationId, { title, titleSource: "auto" });
   notifyConversationTitleUpdated(conversationId);
   return title;
 }
 
-async function listConversations(): Promise<{ id: string; title: string | null; createdAt: number }[]> {
-  const conv = await loadConversations();
+export async function listConversationsIn(memoryDir: string): Promise<{ id: string; title: string | null; createdAt: number }[]> {
+  const conv = await loadConversationsIn(memoryDir);
   return Object.entries(conv)
     .map(([id, c]) => ({ id, title: c.title, createdAt: c.createdAt }))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-async function getExistingChatgptIds(): Promise<string[]> {
-  const conv = await loadConversations();
+async function listConversations(): Promise<{ id: string; title: string | null; createdAt: number }[]> {
+  return listConversationsIn(getMemoryDir());
+}
+
+export async function getExistingChatgptIdsIn(memoryDir: string): Promise<string[]> {
+  const conv = await loadConversationsIn(memoryDir);
   const ids: string[] = [];
   for (const c of Object.values(conv)) {
     if (c.isFromChatGPT === true && typeof c.chatgptId === "string" && c.chatgptId) {
@@ -131,6 +201,10 @@ async function getExistingChatgptIds(): Promise<string[]> {
   return ids;
 }
 
+async function getExistingChatgptIds(): Promise<string[]> {
+  return getExistingChatgptIdsIn(getMemoryDir());
+}
+
 export interface ImportConversationItem {
   title: string | null;
   createdAt: number;
@@ -138,8 +212,11 @@ export interface ImportConversationItem {
   chatgptId?: string;
 }
 
-async function importConversations(items: ImportConversationItem[]): Promise<{ imported: number; ids: string[] }> {
-  const conv = await loadConversations();
+export async function importConversationsIn(
+  memoryDir: string,
+  items: ImportConversationItem[]
+): Promise<{ imported: number; ids: string[] }> {
+  const conv = await loadConversationsIn(memoryDir);
   const ids: string[] = [];
   for (const item of items) {
     const id = generateId("conv");
@@ -154,30 +231,38 @@ async function importConversations(items: ImportConversationItem[]): Promise<{ i
     }
     conv[id] = meta;
     const messages: MessageRecord[] = item.messages.map((m) => ({ role: m.role, content: m.content }));
-    await saveMessages(id, messages);
+    await saveMessagesIn(memoryDir, id, messages);
     ids.push(id);
   }
-  await saveConversations(conv);
+  await saveConversationsIn(memoryDir, conv);
   return { imported: ids.length, ids };
 }
 
-async function deleteConversation(conversationId: string): Promise<void> {
-  const conv = await loadConversations();
+async function importConversations(items: ImportConversationItem[]): Promise<{ imported: number; ids: string[] }> {
+  return importConversationsIn(getMemoryDir(), items);
+}
+
+export async function deleteConversationIn(memoryDir: string, conversationId: string): Promise<void> {
+  const conv = await loadConversationsIn(memoryDir);
   if (!(conversationId in conv)) return;
   delete conv[conversationId];
-  await saveConversations(conv);
-  const messagesPath = getMessagesPath(conversationId);
+  await saveConversationsIn(memoryDir, conv);
+  const messagesPath = getMessagesPathIn(memoryDir, conversationId);
   if (await fileExists(messagesPath)) await unlink(messagesPath);
 }
 
-async function resetStoredData(): Promise<void> {
-  const dir = getMemoryDir();
-  const conv = await loadConversations();
+async function deleteConversation(conversationId: string): Promise<void> {
+  return deleteConversationIn(getMemoryDir(), conversationId);
+}
+
+export async function resetStoredDataIn(memoryDir: string): Promise<void> {
+  const dir = ensureDir(memoryDir);
+  const conv = await loadConversationsIn(memoryDir);
   for (const id of Object.keys(conv)) {
-    const path = getMessagesPath(id);
+    const path = getMessagesPathIn(memoryDir, id);
     if (await fileExists(path)) await unlink(path);
   }
-  await saveConversations({});
+  await saveConversationsIn(memoryDir, {});
 
   const userMemPath = join(dir, USER_MEMORY_FILE);
   if (await fileExists(userMemPath)) await unlink(userMemPath);
@@ -189,8 +274,12 @@ async function resetStoredData(): Promise<void> {
   if (await fileExists(plansPath)) await unlink(plansPath);
 }
 
-async function getMessages(conversationId: string): Promise<ChatMessage[]> {
-  const rows = await loadMessages(conversationId);
+async function resetStoredData(): Promise<void> {
+  return resetStoredDataIn(getMemoryDir());
+}
+
+export async function getMessagesIn(memoryDir: string, conversationId: string): Promise<ChatMessage[]> {
+  const rows = await loadMessagesIn(memoryDir, conversationId);
   return rows.map((r) => {
     const msg: ChatMessage = { role: r.role as ChatMessage["role"], content: r.content };
     if (r.toolCalls?.length) msg.toolCalls = r.toolCalls;
@@ -200,13 +289,37 @@ async function getMessages(conversationId: string): Promise<ChatMessage[]> {
   });
 }
 
+async function getMessages(conversationId: string): Promise<ChatMessage[]> {
+  return getMessagesIn(getMemoryDir(), conversationId);
+}
+
 /** Removes the last message if it is from the user; returns its content, or null. */
-export async function popLastUserMessage(conversationId: string): Promise<string | null> {
-  const rows = await loadMessages(conversationId);
+export async function popLastUserMessageIn(memoryDir: string, conversationId: string): Promise<string | null> {
+  const rows = await loadMessagesIn(memoryDir, conversationId);
   if (rows.length === 0 || rows[rows.length - 1].role !== "user") return null;
   const content = rows[rows.length - 1].content;
-  await saveMessages(conversationId, rows.slice(0, -1));
+  await saveMessagesIn(memoryDir, conversationId, rows.slice(0, -1));
   return content;
+}
+
+export async function popLastUserMessage(conversationId: string): Promise<string | null> {
+  return popLastUserMessageIn(getMemoryDir(), conversationId);
+}
+
+export async function appendMessageIn(
+  memoryDir: string,
+  conversationId: string,
+  role: ChatMessage["role"],
+  content: string,
+  options?: AppendMessageMeta
+): Promise<void> {
+  const messages = await loadMessagesIn(memoryDir, conversationId);
+  const record: MessageRecord = { role, content };
+  if (options?.toolCalls?.length) record.toolCalls = options.toolCalls;
+  if (typeof options?.timestamp === "number") record.timestamp = options.timestamp;
+  if (typeof options?.model === "string" && options.model) record.model = options.model;
+  messages.push(record);
+  await saveMessagesIn(memoryDir, conversationId, messages);
 }
 
 async function appendMessage(
@@ -215,35 +328,37 @@ async function appendMessage(
   content: string,
   options?: AppendMessageMeta
 ): Promise<void> {
-  const messages = await loadMessages(conversationId);
-  const record: MessageRecord = { role, content };
-  if (options?.toolCalls?.length) record.toolCalls = options.toolCalls;
-  if (typeof options?.timestamp === "number") record.timestamp = options.timestamp;
-  if (typeof options?.model === "string" && options.model) record.model = options.model;
-  messages.push(record);
-  await saveMessages(conversationId, messages);
+  return appendMessageIn(getMemoryDir(), conversationId, role, content, options);
 }
 
-async function getUserMemory(): Promise<Record<string, string>> {
-  const path = join(getMemoryDir(), USER_MEMORY_FILE);
+export async function getUserMemoryIn(memoryDir: string): Promise<Record<string, string>> {
+  const path = getUserMemoryPath(ensureDir(memoryDir));
   if (!(await fileExists(path))) return {};
   const data = JSON.parse(await readFile(path, "utf-8"));
   return typeof data === "object" && data !== null ? data : {};
 }
 
-async function setUserMemory(key: string, value: string): Promise<void> {
-  const mem = await getUserMemory();
-  mem[key] = value;
-  await writeFile(join(getMemoryDir(), USER_MEMORY_FILE), JSON.stringify(mem, null, 2), "utf-8");
+async function getUserMemory(): Promise<Record<string, string>> {
+  return getUserMemoryIn(getMemoryDir());
 }
 
-async function deleteUserMemoryKey(key: string): Promise<void> {
+export async function setUserMemoryIn(memoryDir: string, key: string, value: string): Promise<void> {
+  const mem = await getUserMemoryIn(memoryDir);
+  mem[key] = value;
+  await writeFile(getUserMemoryPath(ensureDir(memoryDir)), JSON.stringify(mem, null, 2), "utf-8");
+}
+
+async function setUserMemory(key: string, value: string): Promise<void> {
+  return setUserMemoryIn(getMemoryDir(), key, value);
+}
+
+export async function deleteUserMemoryKeyIn(memoryDir: string, key: string): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) return;
-  const mem = await getUserMemory();
+  const mem = await getUserMemoryIn(memoryDir);
   if (!(trimmed in mem)) return;
   delete mem[trimmed];
-  const path = join(getMemoryDir(), USER_MEMORY_FILE);
+  const path = getUserMemoryPath(ensureDir(memoryDir));
   if (Object.keys(mem).length === 0) {
     if (await fileExists(path)) await unlink(path);
   } else {
@@ -251,11 +366,19 @@ async function deleteUserMemoryKey(key: string): Promise<void> {
   }
 }
 
+async function deleteUserMemoryKey(key: string): Promise<void> {
+  return deleteUserMemoryKeyIn(getMemoryDir(), key);
+}
+
 const SNIPPET_CHARS_BEFORE = 80;
 const SNIPPET_CHARS_AFTER = 120;
 const SNIPPET_MAX_LINES = 3;
 
-function extractSnippet(content: string, queryLower: string, matchIndex: number): { snippet: string; snippetMatchRange: [number, number] } {
+export function extractSnippet(
+  content: string,
+  queryLower: string,
+  matchIndex: number
+): { snippet: string; snippetMatchRange: [number, number] } {
   const windowStart = Math.max(0, matchIndex - SNIPPET_CHARS_BEFORE);
   const matchEndInContent = matchIndex + queryLower.length;
   const windowEnd = Math.min(content.length, matchEndInContent + SNIPPET_CHARS_AFTER);
@@ -287,11 +410,11 @@ function extractSnippet(content: string, queryLower: string, matchIndex: number)
   return { snippet, snippetMatchRange: [clampedStart, clampedEnd] };
 }
 
-async function searchConversations(query: string): Promise<SearchResult[]> {
+export async function searchConversationsIn(memoryDir: string, query: string): Promise<SearchResult[]> {
   const raw = query.trim();
   const q = raw.toLowerCase();
   if (!q) return [];
-  const conv = await loadConversations();
+  const conv = await loadConversationsIn(memoryDir);
   const results: SearchResult[] = [];
   for (const [id, { title, createdAt }] of Object.entries(conv)) {
     const titleStr = title ?? "";
@@ -301,7 +424,7 @@ async function searchConversations(query: string): Promise<SearchResult[]> {
       const idx = titleStr.toLowerCase().indexOf(q);
       titleMatchRange = [idx, idx + q.length];
     }
-    const messages = await loadMessages(id);
+    const messages = await loadMessagesIn(memoryDir, id);
     let snippet = "";
     let snippetMatchRange: [number, number] = [-1, -1];
     let contentMatched = false;
@@ -335,6 +458,10 @@ async function searchConversations(query: string): Promise<SearchResult[]> {
   }
   results.sort((a, b) => b.createdAt - a.createdAt);
   return results;
+}
+
+async function searchConversations(query: string): Promise<SearchResult[]> {
+  return searchConversationsIn(getMemoryDir(), query);
 }
 
 export function registerMemoryHandlers(): void {

@@ -9,23 +9,39 @@ function getPlansPath(): string {
   return join(getMemoryDir(), PLANS_FILE);
 }
 
-async function loadPlans(): Promise<Record<string, Plan>> {
-  const path = getPlansPath();
+function getPlansPathIn(memoryDir: string): string {
+  return join(memoryDir, PLANS_FILE);
+}
+
+export async function loadPlansIn(memoryDir: string): Promise<Record<string, Plan>> {
+  const path = getPlansPathIn(memoryDir);
   if (!(await fileExists(path))) return {};
   const data = JSON.parse(await readFile(path, "utf-8"));
   return typeof data === "object" && data !== null ? data : {};
 }
 
-async function savePlans(plans: Record<string, Plan>): Promise<void> {
-  await writeFile(getPlansPath(), JSON.stringify(plans, null, 2), "utf-8");
+async function loadPlans(): Promise<Record<string, Plan>> {
+  return loadPlansIn(getMemoryDir());
 }
 
-async function listPlans(): Promise<Plan[]> {
-  const plans = await loadPlans();
+export async function savePlansIn(memoryDir: string, plans: Record<string, Plan>): Promise<void> {
+  await writeFile(getPlansPathIn(memoryDir), JSON.stringify(plans, null, 2), "utf-8");
+}
+
+async function savePlans(plans: Record<string, Plan>): Promise<void> {
+  await savePlansIn(getMemoryDir(), plans);
+}
+
+export async function listPlansIn(memoryDir: string): Promise<Plan[]> {
+  const plans = await loadPlansIn(memoryDir);
   return Object.values(plans).sort((a, b) => b.createdAt - a.createdAt);
 }
 
-async function createPlan(title: string, description: string): Promise<Plan> {
+async function listPlans(): Promise<Plan[]> {
+  return listPlansIn(getMemoryDir());
+}
+
+export async function createPlanIn(memoryDir: string, title: string, description: string): Promise<Plan> {
   const id = generateId("plan");
   const plan: Plan = {
     id,
@@ -34,48 +50,80 @@ async function createPlan(title: string, description: string): Promise<Plan> {
     conversationIds: [],
     createdAt: Date.now(),
   };
-  const plans = await loadPlans();
+  const plans = await loadPlansIn(memoryDir);
   plans[id] = plan;
-  await savePlans(plans);
+  await savePlansIn(memoryDir, plans);
   return plan;
 }
 
-async function updatePlan(planId: string, updates: { title?: string; description?: string }): Promise<Plan | null> {
-  const plans = await loadPlans();
+async function createPlan(title: string, description: string): Promise<Plan> {
+  return createPlanIn(getMemoryDir(), title, description);
+}
+
+export async function updatePlanIn(
+  memoryDir: string,
+  planId: string,
+  updates: { title?: string; description?: string }
+): Promise<Plan | null> {
+  const plans = await loadPlansIn(memoryDir);
   const plan = plans[planId];
   if (!plan) return null;
   if (updates.title !== undefined) plan.title = updates.title;
   if (updates.description !== undefined) plan.description = updates.description;
-  await savePlans(plans);
+  await savePlansIn(memoryDir, plans);
   return plan;
 }
 
-async function deletePlan(planId: string): Promise<void> {
-  const plans = await loadPlans();
+async function updatePlan(planId: string, updates: { title?: string; description?: string }): Promise<Plan | null> {
+  return updatePlanIn(getMemoryDir(), planId, updates);
+}
+
+export async function deletePlanIn(memoryDir: string, planId: string): Promise<void> {
+  const plans = await loadPlansIn(memoryDir);
   if (planId in plans) {
     delete plans[planId];
-    await savePlans(plans);
+    await savePlansIn(memoryDir, plans);
   }
 }
 
-async function addConversationToPlan(planId: string, conversationId: string): Promise<Plan | null> {
-  const plans = await loadPlans();
+async function deletePlan(planId: string): Promise<void> {
+  return deletePlanIn(getMemoryDir(), planId);
+}
+
+export async function addConversationToPlanIn(
+  memoryDir: string,
+  planId: string,
+  conversationId: string
+): Promise<Plan | null> {
+  const plans = await loadPlansIn(memoryDir);
   const plan = plans[planId];
   if (!plan) return null;
   if (!plan.conversationIds.includes(conversationId)) {
     plan.conversationIds.push(conversationId);
-    await savePlans(plans);
+    await savePlansIn(memoryDir, plans);
   }
   return plan;
 }
 
-async function removeConversationFromPlan(planId: string, conversationId: string): Promise<Plan | null> {
-  const plans = await loadPlans();
+async function addConversationToPlan(planId: string, conversationId: string): Promise<Plan | null> {
+  return addConversationToPlanIn(getMemoryDir(), planId, conversationId);
+}
+
+export async function removeConversationFromPlanIn(
+  memoryDir: string,
+  planId: string,
+  conversationId: string
+): Promise<Plan | null> {
+  const plans = await loadPlansIn(memoryDir);
   const plan = plans[planId];
   if (!plan) return null;
   plan.conversationIds = plan.conversationIds.filter((id) => id !== conversationId);
-  await savePlans(plans);
+  await savePlansIn(memoryDir, plans);
   return plan;
+}
+
+async function removeConversationFromPlan(planId: string, conversationId: string): Promise<Plan | null> {
+  return removeConversationFromPlanIn(getMemoryDir(), planId, conversationId);
 }
 
 export function registerPlansHandlers(): void {

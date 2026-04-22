@@ -20,6 +20,9 @@
     "release": "node scripts/release.js",
     "site": "npx --yes serve site -l 8080",
     "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:all": "npm run test && npm run test:e2e",
     "test:e2e": "electron-vite build && playwright test",
     "test:e2e:ui": "electron-vite build && playwright test --ui"
   },

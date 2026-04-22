@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import { readdirSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, statSync } from "fs";
-import { join, resolve } from "path";
+import { sep, resolve } from "path";
 import { app } from "electron";
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
@@ -12,16 +12,19 @@ function getAllowedRoots(): string[] {
   return [userData, home, desktop];
 }
 
-function isPathAllowed(filePath: string): boolean {
+export function isPathAllowed(filePath: string, allowedRoots: string[]): boolean {
   const resolved = resolve(filePath);
-  const roots = getAllowedRoots();
-  return roots.some((root) => resolved === root || resolved.startsWith(root + join.sep));
+  return allowedRoots.some((root) => resolved === root || resolved.startsWith(root + sep));
+}
+
+function isPathAllowedForApp(filePath: string): boolean {
+  return isPathAllowed(filePath, getAllowedRoots());
 }
 
 function listDirectory(pathArg: string): string {
   try {
     const resolved = resolve(pathArg);
-    if (!isPathAllowed(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
+    if (!isPathAllowedForApp(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
     if (!existsSync(resolved)) return JSON.stringify({ error: "Path does not exist" });
     const stat = statSync(resolved);
     if (!stat.isDirectory()) return JSON.stringify({ error: "Not a directory" });
@@ -36,7 +39,7 @@ function listDirectory(pathArg: string): string {
 function readFile(pathArg: string): string {
   try {
     const resolved = resolve(pathArg);
-    if (!isPathAllowed(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
+    if (!isPathAllowedForApp(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
     if (!existsSync(resolved)) return JSON.stringify({ error: "File does not exist" });
     const stat = statSync(resolved);
     if (stat.isDirectory()) return JSON.stringify({ error: "Is a directory" });
@@ -51,7 +54,7 @@ function readFile(pathArg: string): string {
 function writeFile(pathArg: string, content: string): string {
   try {
     const resolved = resolve(pathArg);
-    if (!isPathAllowed(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
+    if (!isPathAllowedForApp(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
     writeFileSync(resolved, content, "utf-8");
     return JSON.stringify({ ok: true });
   } catch (err) {
@@ -62,7 +65,7 @@ function writeFile(pathArg: string, content: string): string {
 function deleteFile(pathArg: string): string {
   try {
     const resolved = resolve(pathArg);
-    if (!isPathAllowed(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
+    if (!isPathAllowedForApp(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
     if (!existsSync(resolved)) return JSON.stringify({ error: "Path does not exist" });
     const stat = statSync(resolved);
     if (stat.isDirectory()) return JSON.stringify({ error: "Call delete_directory for directories" });
@@ -76,7 +79,7 @@ function deleteFile(pathArg: string): string {
 function createDirectory(pathArg: string): string {
   try {
     const resolved = resolve(pathArg);
-    if (!isPathAllowed(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
+    if (!isPathAllowedForApp(resolved)) return JSON.stringify({ error: "Path not under allowed roots" });
     if (existsSync(resolved)) return JSON.stringify({ error: "Already exists" });
     mkdirSync(resolved, { recursive: true });
     return JSON.stringify({ ok: true });

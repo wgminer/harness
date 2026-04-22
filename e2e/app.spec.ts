@@ -1,10 +1,6 @@
-import path from "node:path";
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import type { ElectronApplication, Page } from "@playwright/test";
-
-// Electron npm package resolves to the OS binary path (not the `electron` API).
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const electronBinary = require("electron") as string;
+import { launchHarness } from "./helpers";
 
 const HARNESS_E2E_REPLY = "Harness E2E assistant reply.";
 const HARNESS_E2E_TRANSCRIBE = "Harness E2E transcribed text.";
@@ -14,16 +10,7 @@ test.describe.configure({ mode: "serial" });
 let electronApp: ElectronApplication;
 
 test.beforeAll(async () => {
-  const mainJs = path.join(process.cwd(), "out/main/index.js");
-  electronApp = await electron.launch({
-    executablePath: electronBinary,
-    args: [mainJs],
-    env: {
-      ...process.env,
-      HARNESS_E2E: "1",
-    },
-    cwd: process.cwd(),
-  });
+  electronApp = await launchHarness();
 });
 
 test.afterAll(async () => {
@@ -83,11 +70,11 @@ test("settings auto-send toggle persists", async () => {
   const toggle = win.getByTestId("settings-auto-send");
   await expect(toggle).toBeVisible();
   const before = await toggle.isChecked();
-  if (before) {
-    await toggle.click();
-  } else {
-    await toggle.click();
-  }
+  await win.evaluate(() => {
+    const el = document.querySelector<HTMLInputElement>('[data-testid="settings-auto-send"]');
+    if (!el) throw new Error("settings-auto-send missing");
+    el.click();
+  });
   await expect(toggle).toBeChecked({ checked: !before });
   // Debounced save in SettingsView (500ms)
   await win.waitForTimeout(700);

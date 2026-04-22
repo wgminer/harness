@@ -15,7 +15,7 @@ function isValidRole(r: unknown): r is MessageRole {
   return r === "user" || r === "assistant" || r === "system";
 }
 
-function parseChatGPTConversation(conv: unknown): ParsedConversation | null {
+export function parseChatGPTConversation(conv: unknown): ParsedConversation | null {
   if (conv == null || typeof conv !== "object") return null;
   const o = conv as Record<string, unknown>;
   const id = (o.id ?? o.conversation_id) as string | undefined;
@@ -109,7 +109,7 @@ function parseChatGPTConversation(conv: unknown): ParsedConversation | null {
   return { id, title, createdAt, messages };
 }
 
-function parseChatGPTFile(buffer: string): ParsedConversation[] {
+export function parseChatGPTFile(buffer: string): ParsedConversation[] {
   let data: unknown;
   try {
     data = JSON.parse(buffer);
@@ -134,7 +134,9 @@ interface SharedConversationEntry {
 }
 
 /** Load shared_conversations.json from the folder if present (raw unzipped ChatGPT export). Returns map of conversation_id -> { title, orderIndex }. */
-function loadSharedConversations(folderPath: string): Map<string, { title: string | null; orderIndex: number }> {
+export function loadSharedConversations(
+  folderPath: string
+): Map<string, { title: string | null; orderIndex: number }> {
   const path = join(folderPath, "shared_conversations.json");
   try {
     const raw = readFileSync(path, "utf-8");

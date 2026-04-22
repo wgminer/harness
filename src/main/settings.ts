@@ -14,6 +14,10 @@ function getSettingsPath(): string {
   return join(app.getPath("userData"), SETTINGS_FILE);
 }
 
+export function getSettingsPathForUserData(userDataDir: string): string {
+  return join(userDataDir, SETTINGS_FILE);
+}
+
 function parseTranscription(raw: Record<string, unknown> | undefined): NonNullable<Settings["transcription"]> {
   const c = raw?.cleanup as Record<string, unknown> | undefined;
   return {
@@ -24,7 +28,7 @@ function parseTranscription(raw: Record<string, unknown> | undefined): NonNullab
 }
 
 /** Accept legacy settings.json and normalize to the current schema. */
-function parseSettings(data: Record<string, unknown>): Settings {
+export function parseSettings(data: Record<string, unknown>): Settings {
   const openaiRaw = data.openai as Record<string, unknown> | undefined;
   const apiKey =
     (typeof openaiRaw?.apiKey === "string" ? openaiRaw.apiKey : null) ?? D.openai!.apiKey;
@@ -60,15 +64,22 @@ function parseSettings(data: Record<string, unknown>): Settings {
   };
 }
 
-async function loadSettings(): Promise<Settings> {
-  const path = getSettingsPath();
+export async function loadSettingsFromPath(path: string): Promise<Settings> {
   if (!(await fileExists(path))) return { ...D };
   const raw = await readFile(path, "utf-8");
   return parseSettings(JSON.parse(raw));
 }
 
+async function loadSettings(): Promise<Settings> {
+  return loadSettingsFromPath(getSettingsPath());
+}
+
+export async function saveSettingsToPath(path: string, settings: Settings): Promise<void> {
+  await writeFile(path, JSON.stringify(settings, null, 2), "utf-8");
+}
+
 async function saveSettings(settings: Settings): Promise<void> {
-  await writeFile(getSettingsPath(), JSON.stringify(settings, null, 2), "utf-8");
+  await saveSettingsToPath(getSettingsPath(), settings);
 }
 
 export async function getSettings(): Promise<Settings> {

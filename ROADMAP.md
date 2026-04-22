@@ -6,6 +6,12 @@ Living document. **Completed** records what shipped; **v0.5** is the active plan
 
 ## Completed
 
+### 2026-04-21 — Test coverage expansion (unit + e2e)
+
+- **Unit coverage upgrade** — Added broad Vitest coverage for persistence and data-loss-sensitive modules (`memory`, `writing`, `plans`, `settings`, `assistantTools` task reducer paths, ChatGPT import parsing, file-tools path safety) plus renderer/shared utility tests.
+- **E2E flow coverage upgrade** — Expanded Playwright coverage for core UX and data durability: chat persistence across relaunch, conversation delete safety, settings/task flows, stream abort behavior, writing surface checkpoint persistence, and fixture-driven ChatGPT import dedupe.
+- **Testability refactors** — Added `*In(dir)` pure-storage entry points across main-process persistence modules so tests can run against temp dirs without Electron bootstrapping.
+
 ### 2026-03-22 — Tray assets, recorder UX & typed bridge
 
 - **Tray & app icon** — Idle and recording tray PNGs (`resources/icon-tray*.png`, including `@2x`), plus an updated `build/icon.icns` so the Dock and menu bar stay consistent with product branding.
@@ -37,7 +43,7 @@ Living document. **Completed** records what shipped; **v0.5** is the active plan
 
 ## v0.5.0 — planned release
 
-Target: iterate on real usage from 0.4.x — clearer shell layout, better scaling, one new external tool, and a concrete direction for mobile — without boiling the ocean.
+Target: iterate on real usage from 0.4.x — clearer shell layout, better scaling, one new external tool, and a concrete direction for mobile and backlog capture — without boiling the ocean.
 
 ### Layout, scaling, and shell
 
@@ -53,6 +59,14 @@ Target: iterate on real usage from 0.4.x — clearer shell layout, better scalin
 
 - **iOS (or cross-platform shell)** — Aim for something **extremely simple**: mobile chat + Q&A against the same mental model as desktop, not feature parity.
 - **Audio** — Prefer **voice-to-text** (or OS dictation) feeding normal chat, plus standard LLM calls — not a full duplicate of desktop recording/transcription unless it stays trivial to maintain.
+- **Capture-first UX** — Mobile should optimize for "capture now, organize later": one-tap voice/text capture that lands in a backlog inbox without losing ideas.
+
+### Product direction (tool for thought, not just chat)
+
+- **SaaS consolidation** — Harness should progressively absorb daily SaaS workflows (notes, tasks, lightweight planning, assistant chats, and simple automation) into one personal system.
+- **Trust-first control surface** — Assume low trust in external LLM providers: explicit provider routing, local-first defaults, and clear controls over what data leaves the device.
+- **Backlog as the center** — Treat backlog/inbox as a first-class primitive shared across desktop and mobile; captured ideas become triageable work items before they become tasks or projects.
+- **Backburner continuity** — Keep the "Backburner" concept as a capture/backlog mode inside Harness so prior mental models and project naming still map cleanly.
 
 ### Themes (carryover from ongoing polish)
 
@@ -77,14 +91,18 @@ Pulled forward from earlier planning; order is not commitment.
 
 ### Near-term
 
+- **Automated test suite & CI (follow-up)** — Core unit/e2e expansion is now in place; next step is CI hardening (lint, TypeScript checks, and Playwright in PR workflows) so regressions are caught automatically before merge.
 - **More providers** — Anthropic (Claude) and Google (Gemini) in the provider registry.
 - **Agent / autonomous mode** — Persistent multi-step agent with human-in-the-loop approval before destructive actions.
 - **Semantic memory** — Local vector store + similarity retrieval on top of or beside key/value memory.
+- **Backlog pipeline** — Unified capture inbox with quick-add, triage states, and promotion into tasks, conversations, or plans.
+- **Workflow automation primitives** — Minimal, inspectable automations (rules/triggers/actions) that can run on backlog items without introducing a heavyweight external orchestrator.
 
 ### Medium-term
 
 - **Telegram integration** — Harness reachable from mobile without a dedicated app (may overlap with iOS direction; revisit when mobile plan firms up).
 - **Backup / sync** — Conversations, memory, settings across machines (local network, iCloud, or file-based).
+- **Simple sync backend (non-realtime)** — A lightweight backend or sync protocol that keeps Harness state aligned across devices on a schedule or explicit sync (not live realtime). Include a minimal UI to inspect and resolve conflicts when the same records diverge. Expect automated tests for sync semantics, merge rules, and conflict handling.
 - **Richer task management** — Due dates, priority, task-to-conversation links.
 - **Model parameter overrides** — Temperature, max tokens, top-p in Settings.
 - **Auto-update** — Electron `autoUpdater` for shipped builds.
@@ -97,4 +115,4 @@ Pulled forward from earlier planning; order is not commitment.
 
 ---
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-04-21*
