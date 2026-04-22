@@ -185,7 +185,12 @@ export function Sidebar({
               aria-current={view === "tasks" ? "page" : undefined}
             >
               <ListTodo size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">Tasks</span>
+              <span className="sidebar-workspace__label">
+                <span>Tasks</span>
+                <span className="sidebar-workspace__wip-tag" aria-hidden>
+                  WIP
+                </span>
+              </span>
             </button>
             <button
               type="button"
@@ -196,7 +201,12 @@ export function Sidebar({
               aria-current={view === "writing" ? "page" : undefined}
             >
               <SquarePen size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">Desk</span>
+              <span className="sidebar-workspace__label">
+                <span>Desk</span>
+                <span className="sidebar-workspace__wip-tag" aria-hidden>
+                  WIP
+                </span>
+              </span>
             </button>
             <button
               type="button"

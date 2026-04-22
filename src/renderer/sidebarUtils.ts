@@ -3,7 +3,7 @@ export type Conversation = { id: string; title: string | null; createdAt: number
 export type View = "chat" | "settings" | "tasks" | "writing";
 
 /** Initial number of conversations shown before using "More". */
-export const SIDEBAR_PREVIEW_COUNT_DEFAULT = 7;
+export const SIDEBAR_PREVIEW_COUNT_DEFAULT = 20;
 /** Each "More" click adds this many conversations to the sidebar list. */
 export const SIDEBAR_MORE_INCREMENT = 20;
 

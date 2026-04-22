@@ -192,7 +192,7 @@
   height: 100%;
   margin: 0 auto;
   min-height: 0;
-  padding: 12px 24px 20px;
+  padding: 16px 16px 20px;
   background: var(--bg);
   color: var(--fg);
   border: none;

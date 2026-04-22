@@ -242,11 +242,27 @@
 }
 
 .sidebar-workspace__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-family);
   font-size: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar-workspace__wip-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: calc(var(--font-size) * 10 / 14);
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
 }
 
 .sidebar-workspace__btn:hover:not(:disabled) .sidebar-workspace__icon {
