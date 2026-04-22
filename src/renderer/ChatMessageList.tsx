@@ -203,11 +203,11 @@ export function ChatMessageList({
           ) : (
             <>
               {showPolishInStrip && (
-                <button type="button" className="btn btn-chat-secondary" onClick={onPolish}>
+                <button type="button" className="btn btn-chat-secondary chat-pane-btn" onClick={onPolish}>
                   Polish
                 </button>
               )}
-              <button type="button" className="btn btn-chat-secondary" onClick={onGenerateReply}>
+              <button type="button" className="btn btn-chat-secondary chat-pane-btn" onClick={onGenerateReply}>
                 Reply
               </button>
             </>
