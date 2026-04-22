@@ -1,0 +1,125 @@
+/* Shared modal shell — use with Modal.tsx */
+
+.app-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: color-mix(in srgb, var(--bg) 40%, #000 60%);
+}
+
+.app-modal {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+.app-modal--scrollable {
+  max-height: min(90vh, 560px);
+}
+
+.app-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-modal-heading {
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: calc(var(--font-size) * 15 / 14);
+  font-weight: 600;
+}
+
+.app-modal-close {
+  flex-shrink: 0;
+}
+
+.app-modal-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.app-modal-body label {
+  display: block;
+  color: var(--fg-muted);
+  font-size: calc(var(--font-size) * 12 / 14);
+  margin-bottom: 2px;
+}
+
+.app-modal-body select {
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  width: 100%;
+  height: var(--input-height);
+  padding: 0 10px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.app-modal-body select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.app-modal-input {
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  width: 100%;
+  height: var(--input-height);
+  padding: 0 10px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.app-modal-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.app-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.app-modal-footer--spread {
+  justify-content: space-between;
+}
+
+.app-modal-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.app-modal-footer .btn-cancel {
+  gap: 6px;
+}
+
+.app-modal-close svg {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+}

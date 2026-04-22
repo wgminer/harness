@@ -1,0 +1,295 @@
+/* Default: dark mode; Inter for app typography (--font-family).
+   User theme overrides live in #custom-theme (moved after bundled CSS in main.tsx). */
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-elevated: #21262d;
+  --fg: #e6edf3;
+  --fg-muted: #9aa4af;
+  --border: #30363d;
+  --accent: #f2ff00;
+  /**
+   * Readable variant of --accent for use as *text color* on app backgrounds
+   * (--bg / --bg-secondary / --bg-elevated). Pulled 30% toward --fg in oklab so
+   * that dark or low-chroma accents still clear the WCAG AA threshold on dark
+   * surfaces, while vivid accents (like the default yellow) are effectively
+   * unchanged. Use this for links / hover text / accent spans. For borders,
+   * outlines, and backgrounds, keep using --accent.
+   */
+  --accent-readable: color-mix(in oklab, var(--accent) 70%, var(--fg));
+  --danger: #c0392b;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --btn-shadow: none;
+  --btn-shadow-hover: none;
+  --font-family: "Inter", system-ui, sans-serif;
+  --font-size: 14px;
+  /**
+   * Lucide / toolbar icons: scale with theme base font (defaults match 14px base —
+   * 12–20px mappings via --icon-size-*).
+   */
+  --icon-size-md: calc(var(--font-size) * 16 / 14);
+  --icon-size-compact: var(--font-size);
+  --icon-size-xs: calc(var(--font-size) * 11 / 14);
+  --icon-size-sm: calc(var(--font-size) * 12 / 14);
+  --icon-size-lg: calc(var(--font-size) * 18 / 14);
+  --icon-size-xl: calc(var(--font-size) * 20 / 14);
+  --space-unit: 8px;
+  --sidebar-control-hover-bg: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
+  --sidebar-control-active-hover-bg: color-mix(in srgb, var(--fg) 14%, var(--bg-secondary));
+  --input-height: 36px;
+  --line-height: 1.5;
+  --line-height-message: 1.7;
+  /** Sidebar column; keep in sync with `.sidebar` rules. */
+  --sidebar-width: 280px;
+  /** Primary reading column (chat messages, settings, tasks body). Overridden on `.app`. */
+  --content-width: 600px;
+  /** Sidebar + content (viewport width when main column ≈ `--content-width` with sidebar open). Not usable in `@media` — CSS does not resolve `var()` there. */
+  --layout-viewport-max: calc(var(--sidebar-width) + var(--content-width));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+html {
+  overflow: hidden;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Easier to see what is selected when dragging to copy (esp. on dark backgrounds). */
+::selection {
+  background: color-mix(in srgb, var(--accent) 38%, var(--fg-muted) 22%);
+  color: var(--bg);
+}
+
+.message-block .content,
+.message-block .content * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.message-block .content button {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tool-card-label,
+.tool-card-detail {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* Buttons – single source of truth for all app buttons */
+.btn {
+  font-family: var(--font-family);
+  font-size: calc(var(--font-size) * 13 / 14);
+  height: var(--input-height);
+  background: color-mix(in srgb, var(--fg) 12%, var(--bg));
+  color: var(--fg);
+  border: none;
+  border-radius: 4px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--btn-shadow);
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sidebar .btn {
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg-secondary));
+}
+
+.btn:hover:not(:disabled) {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 10%, var(--bg));
+  box-shadow: var(--btn-shadow-hover);
+}
+
+.sidebar .btn:hover:not(:disabled) {
+  background: var(--sidebar-control-hover-bg);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  padding: 0 14px;
+  font-size: var(--font-size);
+}
+
+.btn-cancel {
+  padding: 0 14px;
+  font-size: var(--font-size);
+  gap: 4px;
+  background: var(--danger);
+  color: #fff;
+  box-shadow: var(--btn-shadow);
+}
+
+.btn-cancel:hover {
+  background: color-mix(in srgb, var(--danger) 85%, #000);
+  color: #fff;
+  box-shadow: var(--btn-shadow-hover);
+}
+
+/* Single icon-only button: 36×36 */
+.btn-icon {
+  width: var(--input-height);
+  flex-shrink: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Shared input base */
+.input-base,
+.sidebar-search-input,
+.settings-section input:not([type="checkbox"]):not([type="radio"]),
+.settings-section select {
+  font-family: var(--font-family);
+  font-size: calc(var(--font-size) * 13 / 14);
+  height: var(--input-height);
+  padding: 0 10px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.input-base::placeholder,
+.sidebar-search-input::placeholder {
+  color: var(--fg-muted);
+}
+
+.input-base:focus,
+.sidebar-search-input:focus,
+.settings-section input:not([type="checkbox"]):not([type="radio"]):focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Shared list-item base */
+.list-item-base,
+.sidebar-item,
+.search-result-item {
+  padding: 6px 12px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.list-item-base:hover,
+.sidebar-item:hover,
+.search-result-item:hover {
+  background: var(--bg);
+}
+
+.list-item-base.active,
+.sidebar-item.active,
+.search-result-item.active {
+  border-left-color: var(--accent);
+  background: var(--bg);
+}
+
+/* Layout */
+.app {
+  position: relative;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  /* Fluid type and reading width: scale up on large viewports, tighten when compact. */
+  /* font-size: clamp(13px, 0.3vw + 12px, 16px); */
+  /* --content-width: min(72ch, min(960px, 94vw)); */
+}
+
+/* Narrow viewport (768px): sidebar hidden; type and column width tighten. */
+@media (max-width: 768px) {
+  .app {
+    /* font-size: clamp(12px, 2.6vw, 14px); */
+    /* --content-width: min(72ch, calc(100vw - 16px)); */
+  }
+
+  .sidebar-dock {
+    flex: 0 0 0;
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .sidebar {
+    display: none;
+  }
+}
+
+.sidebar-dock {
+  display: flex;
+}
+
+.app[data-sidebar="right"] .sidebar-dock {
+  order: 2;
+}
+
+.app[data-sidebar="right"] .main {
+  order: 1;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+}
+
+.app[data-sidebar="right"] .sidebar {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-secondary);
+  container-type: inline-size;
+  container-name: main;
+}
+
+.message-block {
+  padding: calc(var(--space-unit) * 2) 16px;
+}
