@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: harness-personal-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: API_SECRET_KEY
+        sync: false
+      - key: DB_PATH
+        value: /var/data/personal-api.sqlite
