@@ -1,0 +1,425 @@
+import { ipcMain } from "electron";
+import { readFile, writeFile } from "fs/promises";
+import { join } from "path";
+import { getUserMemory, setUserMemory, searchConversations, getMemoryDir, TASKS_FILE } from "./memory";
+import { generateId, fileExists } from "./utils";
+import type { SearchResult } from "../shared/types";
+import {
+  coerceTaskTags,
+  normalizeTags,
+  tagsFromLegacyStatus,
+  taskIsClearable,
+} from "../shared/taskTags";
+import { getSettings } from "./settings";
+import { getWeatherForZip } from "./weather";
+import { executeDocTool } from "./writing";
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
+  metadata?: Record<string, unknown>;
+}
+
+interface TaskState {
+  tasks: TaskItem[];
+}
+
+interface TasksPayload extends TaskState {
+  lastAction: "list" | "create" | "update" | "delete" | "clear_completed";
+  affectedIds?: string[];
+  error?: string;
+}
+
+interface MemoryFactsPayload {
+  lastAction: "set_fact" | "list_facts";
+  memory: Record<string, string>;
+  key?: string;
+}
+
+interface MemorySearchPayload {
+  lastAction: "search_conversations";
+  query: string;
+  results: SearchResult[];
+}
+
+function getTasksFilePath(): string {
+  return join(getMemoryDir(), TASKS_FILE);
+}
+
+function migrateRawTask(raw: unknown): TaskItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const id = String(r.id ?? "").trim();
+  const title = String(r.title ?? "").trim();
+  if (!id || !title) return null;
+  const createdAt = typeof r.createdAt === "number" ? r.createdAt : Date.now();
+  const updatedAt = typeof r.updatedAt === "number" ? r.updatedAt : createdAt;
+  const tags = coerceTaskTags(r);
+  const metadata =
+    r.metadata && typeof r.metadata === "object" ? (r.metadata as Record<string, unknown>) : undefined;
+  return {
+    id,
+    title,
+    tags,
+    createdAt,
+    updatedAt,
+    ...(metadata ? { metadata } : {}),
+  };
+}
+
+async function loadTasks(): Promise<TaskState> {
+  const path = getTasksFilePath();
+  if (!(await fileExists(path))) return { tasks: [] };
+  try {
+    const raw = await readFile(path, "utf-8");
+    const parsed = JSON.parse(raw);
+    const rows: unknown[] = Array.isArray(parsed?.tasks)
+      ? parsed.tasks
+      : Array.isArray(parsed)
+        ? parsed
+        : [];
+    const needsLegacyRewrite = rows.some(
+      (r) => !!r && typeof r === "object" && "status" in (r as Record<string, unknown>)
+    );
+    const tasks = rows.map(migrateRawTask).filter((t): t is TaskItem => t !== null);
+    const state: TaskState = { tasks };
+    if (needsLegacyRewrite && tasks.length > 0) {
+      await saveTasks(state);
+    }
+    return state;
+  } catch {
+    // If the file is corrupt, start fresh
+  }
+  return { tasks: [] };
+}
+
+async function saveTasks(state: TaskState): Promise<void> {
+  await writeFile(getTasksFilePath(), JSON.stringify({ tasks: state.tasks }, null, 2), "utf-8");
+}
+
+export async function listTasks(): Promise<TasksPayload> {
+  const state = await loadTasks();
+  return { ...state, lastAction: "list" };
+}
+
+export async function createTask(args: Record<string, unknown>): Promise<TasksPayload> {
+  const title = String(args.title ?? "").trim();
+  const metadata = (args.metadata && typeof args.metadata === "object" ? (args.metadata as Record<string, unknown>) : undefined) ?? undefined;
+
+  if (!title) {
+    const state = await loadTasks();
+    return {
+      ...state,
+      lastAction: "create",
+      error: "Task title is required",
+    };
+  }
+
+  const now = Date.now();
+  const state = await loadTasks();
+  let tags = normalizeTags(args.tags);
+  if (tags.length === 0 && typeof args.status === "string") {
+    const fromStatus = tagsFromLegacyStatus(args.status);
+    if (fromStatus) tags = fromStatus;
+  }
+  if (tags.length === 0) tags = ["pending"];
+
+  const task: TaskItem = {
+    id: generateId("task"),
+    title,
+    tags,
+    createdAt: now,
+    updatedAt: now,
+    ...(metadata ? { metadata } : {}),
+  };
+
+  state.tasks.push(task);
+  await saveTasks(state);
+
+  return {
+    ...state,
+    lastAction: "create",
+    affectedIds: [task.id],
+  };
+}
+
+export async function updateTask(args: Record<string, unknown>): Promise<TasksPayload> {
+  const id = String(args.id ?? "").trim();
+  if (!id) {
+    const state = await loadTasks();
+    return {
+      ...state,
+      lastAction: "update",
+      error: "Task id is required",
+    };
+  }
+
+  const state = await loadTasks();
+  const idx = state.tasks.findIndex((t) => t.id === id);
+  if (idx === -1) {
+    return {
+      ...state,
+      lastAction: "update",
+      error: `Task not found: ${id}`,
+    };
+  }
+
+  const existing = state.tasks[idx];
+  const next: TaskItem = { ...existing, updatedAt: Date.now() };
+
+  if (typeof args.title === "string") {
+    const title = args.title.trim();
+    if (title) next.title = title;
+  }
+
+  if (args.tags !== undefined && Array.isArray(args.tags)) {
+    next.tags = normalizeTags(args.tags);
+    if (next.tags.length === 0) next.tags = ["pending"];
+  } else if (typeof args.status === "string") {
+    const fromStatus = tagsFromLegacyStatus(args.status);
+    if (fromStatus) next.tags = fromStatus;
+  }
+
+  if (args.metadata && typeof args.metadata === "object") {
+    const metaPatch = args.metadata as Record<string, unknown>;
+    next.metadata = { ...(next.metadata ?? {}), ...metaPatch };
+  }
+
+  state.tasks[idx] = next;
+  await saveTasks(state);
+
+  return {
+    ...state,
+    lastAction: "update",
+    affectedIds: [id],
+  };
+}
+
+export async function deleteTask(args: Record<string, unknown>): Promise<TasksPayload> {
+  const id = String(args.id ?? "").trim();
+  if (!id) {
+    const state = await loadTasks();
+    return {
+      ...state,
+      lastAction: "delete",
+      error: "Task id is required",
+    };
+  }
+
+  const state = await loadTasks();
+  const before = state.tasks.length;
+  state.tasks = state.tasks.filter((t) => t.id !== id);
+  const after = state.tasks.length;
+
+  if (before === after) {
+    return {
+      ...state,
+      lastAction: "delete",
+      error: `Task not found: ${id}`,
+    };
+  }
+
+  await saveTasks(state);
+
+  return {
+    ...state,
+    lastAction: "delete",
+    affectedIds: [id],
+  };
+}
+
+export async function clearCompletedTasks(): Promise<TasksPayload> {
+  const state = await loadTasks();
+  const remaining: TaskItem[] = [];
+  const removedIds: string[] = [];
+  for (const t of state.tasks) {
+    if (taskIsClearable(t.tags)) {
+      removedIds.push(t.id);
+    } else {
+      remaining.push(t);
+    }
+  }
+  state.tasks = remaining;
+  await saveTasks(state);
+  return {
+    ...state,
+    lastAction: "clear_completed",
+    affectedIds: removedIds,
+  };
+}
+
+async function setMemoryFact(args: Record<string, unknown>): Promise<MemoryFactsPayload> {
+  const key = String(args.key ?? "").trim();
+  const value = String(args.value ?? "").trim();
+
+  if (!key) {
+    const current = await getUserMemory();
+    return {
+      lastAction: "set_fact",
+      memory: current,
+      key,
+    };
+  }
+
+  await setUserMemory(key, value);
+  const memory = await getUserMemory();
+  return {
+    lastAction: "set_fact",
+    memory,
+    key,
+  };
+}
+
+async function listMemoryFacts(): Promise<MemoryFactsPayload> {
+  const memory = await getUserMemory();
+  return {
+    lastAction: "list_facts",
+    memory,
+  };
+}
+
+async function searchMemoryConversations(args: Record<string, unknown>): Promise<MemorySearchPayload> {
+  const query = String(args.query ?? "").trim();
+  const results = query ? await searchConversations(query) : [];
+  return {
+    lastAction: "search_conversations",
+    query,
+    results,
+  };
+}
+
+function getDatetime(args: Record<string, unknown>): Record<string, string | number> {
+  const now = new Date();
+  const requested = String(args.timezone ?? "").trim();
+  let timezone: string;
+  try {
+    if (requested) {
+      new Intl.DateTimeFormat("en-US", { timeZone: requested }).format(now);
+      timezone = requested;
+    } else {
+      timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+  } catch {
+    return { error: `Invalid timezone: ${requested}` };
+  }
+
+  const utc_iso = now.toISOString();
+  const epoch_ms = now.getTime();
+
+  const offsetFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    timeZoneName: "longOffset",
+  });
+  const offset =
+    offsetFormatter.formatToParts(now).find((p) => p.type === "timeZoneName")?.value ?? "";
+
+  const calParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (t: string) => calParts.find((p) => p.type === t)?.value ?? "";
+  const local_iso = `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`;
+
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    timeZone: timezone,
+    dateStyle: "full",
+    timeStyle: "long",
+  }).format(now);
+
+  return { epoch_ms, utc_iso, timezone, offset, local_iso, formatted };
+}
+
+async function fetchWeather(args: Record<string, unknown>): Promise<unknown> {
+  const argZip = typeof args.zip === "string" ? args.zip.trim() : "";
+  let zip = argZip;
+  if (!zip) {
+    const settings = await getSettings();
+    zip = settings.weather?.defaultZip?.trim() ?? "";
+  }
+  if (!zip) {
+    return {
+      error: "No ZIP provided and no default ZIP is set. Add one in Settings → Weather.",
+    };
+  }
+  const daysRaw = typeof args.days === "number" ? args.days : Number.parseInt(String(args.days ?? ""), 10);
+  const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(7, Math.floor(daysRaw)) : 3;
+  return getWeatherForZip(zip, days);
+}
+
+export function isAssistantToolName(name: string): boolean {
+  return [
+    "task_list",
+    "task_create",
+    "task_update",
+    "task_delete",
+    "task_clear_completed",
+    "memory_set_fact",
+    "memory_list_facts",
+    "memory_search_conversations",
+    "get_datetime",
+    "get_weather",
+    "doc_read",
+    "doc_write",
+    "doc_append",
+  ].includes(name);
+}
+
+export async function executeAssistantTool(name: string, args: Record<string, unknown>): Promise<string> {
+  switch (name) {
+    case "task_list":
+      return JSON.stringify(await listTasks());
+    case "task_create":
+      return JSON.stringify(await createTask(args));
+    case "task_update":
+      return JSON.stringify(await updateTask(args));
+    case "task_delete":
+      return JSON.stringify(await deleteTask(args));
+    case "task_clear_completed":
+      return JSON.stringify(await clearCompletedTasks());
+    case "memory_set_fact":
+      return JSON.stringify(await setMemoryFact(args));
+    case "memory_list_facts":
+      return JSON.stringify(await listMemoryFacts());
+    case "memory_search_conversations":
+      return JSON.stringify(await searchMemoryConversations(args));
+    case "get_datetime":
+      return JSON.stringify(getDatetime(args));
+    case "get_weather":
+      return JSON.stringify(await fetchWeather(args));
+    case "doc_read":
+    case "doc_write":
+    case "doc_append":
+      return JSON.stringify(await executeDocTool(name, args));
+    default:
+      return JSON.stringify({ error: `Unknown assistant tool: ${name}` });
+  }
+}
+
+export function registerAssistantToolsHandlers(): void {
+  ipcMain.handle("tasks:list", () => listTasks());
+  ipcMain.handle(
+    "tasks:create",
+    (_e, title: string, tags?: string[]) =>
+      createTask({ title, tags })
+  );
+  ipcMain.handle(
+    "tasks:update",
+    (_e, payload: { id: string; title?: string; tags?: string[] }) =>
+      updateTask(payload as Record<string, unknown>)
+  );
+  ipcMain.handle(
+    "tasks:delete",
+    (_e, id: string) =>
+      deleteTask({ id })
+  );
+  ipcMain.handle("tasks:clearCompleted", () => clearCompletedTasks());
+}

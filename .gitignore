@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 
+# Legacy Harness (v1 web app); keep ignored if stray file remains locally
 firebase.js
 
 # Editor directories and files
@@ -24,3 +25,33 @@ firebase.js
 *.njsproj
 *.sln
 *.sw?
+
+import
+import_v2
+.env
+out
+*.tsbuildinfo
+
+# Playwright / E2E
+.e2e-user-data/
+test-results/
+playwright-report/
+playwright/.cache/
+e2e/.auth/
+e2e/screenshots/
+e2e/videos/
+e2e/traces/
+
+# Parakeet setup (prebuild / npm run parakeet:setup)
+build/parakeet-cpp/
+build/parakeet-cache/
+build/parakeet-venv/
+resources/parakeet/*
+!resources/parakeet/.gitkeep
+
+# Built on macOS via npm run build:fn-monitor
+resources/HarnessFnMonitor
+
+# Swift Package build artifacts
+native/**/.build/
+native/**/.swiftpm/
