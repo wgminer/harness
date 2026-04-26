@@ -5,6 +5,7 @@ import "./base.css";
 import "./modal.css";
 import "./sidebar.css";
 import "./chat.css";
+import "./workspaceShell.css";
 import "./settings.css";
 import "./tasks.css";
 import "./notes.css";

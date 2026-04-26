@@ -7,19 +7,17 @@ import { getSettings } from "./settings";
 import { getTranscriptionProvider } from "./providers/transcriptionRegistry";
 import { HARNESS_E2E_TRANSCRIBE_TEXT, isHarnessE2E } from "./e2eStub";
 import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
+import { DEFAULT_SETTINGS } from "../shared/types";
 import { recordOpenAIUsage, recordParakeetTranscription } from "./usageStats";
-
-const DEFAULT_TRANSCRIPT_CLEANUP_INSTRUCTIONS =
-  "Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Keep proper nouns and technical terms unchanged. Do not add new information.";
 
 function getRecordingsDir(): string {
   return join(app.getPath("userData"), "recordings");
 }
 
-async function runTranscriptCleanup(text: string, apiKey: string): Promise<string> {
+async function runTranscriptCleanup(text: string, apiKey: string, userInstructions: string): Promise<string> {
   const systemPrompt =
     "You are an expert transcript editor for dictation text. Rewrite the transcript to remove filler words, verbal stumbles, and false starts while preserving meaning. Improve punctuation and readability. Do not add new facts. Keep proper nouns and technical terms intact. Return only the cleaned transcript text.\n\nAdditional user instructions:\n" +
-    DEFAULT_TRANSCRIPT_CLEANUP_INSTRUCTIONS;
+    userInstructions;
 
   const client = new OpenAI({ apiKey });
   const completion = await client.chat.completions.create(
@@ -104,7 +102,9 @@ export function registerRecordingHandlers(): void {
         return { text };
       }
       try {
-        const cleaned = await runTranscriptCleanup(text, key);
+        const cleanupPrompt =
+          settings.transcription?.cleanup?.prompt?.trim() || DEFAULT_SETTINGS.transcription!.cleanup!.prompt;
+        const cleaned = await runTranscriptCleanup(text, key, cleanupPrompt);
         return { text: cleaned };
       } catch (err) {
         console.warn("Transcript cleanup failed; returning original transcript.", err);

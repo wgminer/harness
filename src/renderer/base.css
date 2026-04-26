@@ -112,6 +112,7 @@ hr {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   cursor: pointer;
   box-shadow: var(--btn-shadow);
   transition:
@@ -152,7 +153,6 @@ hr {
 .btn-cancel {
   padding: 0 14px;
   font-size: var(--font-size);
-  gap: 4px;
   background: var(--danger);
   color: #fff;
   box-shadow: var(--btn-shadow);

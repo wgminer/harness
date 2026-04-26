@@ -104,9 +104,8 @@ export function Sidebar({
     (id: string) => {
       onConversationSelect(id);
       onViewChange("chat");
-      closeSearch();
     },
-    [onConversationSelect, onViewChange, closeSearch]
+    [onConversationSelect, onViewChange]
   );
 
   const sidebarListConversations = useMemo(

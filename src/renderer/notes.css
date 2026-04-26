@@ -56,12 +56,12 @@
   height: var(--icon-size-xs);
 }
 
-.notes-surface .settings-header-title-row {
+.notes-surface .workspace-header-title-row {
   flex: 1;
   min-width: 0;
 }
 
-.notes-surface .settings-title {
+.notes-surface .workspace-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
