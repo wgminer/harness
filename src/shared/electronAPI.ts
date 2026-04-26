@@ -1,6 +1,7 @@
 import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./types";
 import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
+import type { WritingNote, WritingNoteSummary } from "./writing";
 
 export interface TaskItem {
   id: string;
@@ -104,13 +105,13 @@ export interface ElectronAPI {
   fileTools: {
     getAllowedRoots: () => Promise<string[]>;
   };
-  /** Single persistent markdown writing surface, separate from chat. */
+  /** Multi-note Desk surface, separate from chat conversations. */
   writing: {
-    read: () => Promise<{ content: string; updatedAt: number }>;
-    write: (content: string) => Promise<{ content: string; updatedAt: number }>;
-    listCheckpoints: () => Promise<{ id: string; content: string; createdAt: number }[]>;
-    createCheckpoint: (content: string) => Promise<{ id: string; content: string; createdAt: number }[]>;
-    deleteCheckpoint: (id: string) => Promise<{ id: string; content: string; createdAt: number }[]>;
+    listNotes: () => Promise<WritingNoteSummary[]>;
+    createNote: (title?: string) => Promise<WritingNote>;
+    readNote: (id: string) => Promise<WritingNote | null>;
+    saveNote: (id: string, content: string) => Promise<WritingNote>;
+    deleteNote: (id: string) => Promise<WritingNoteSummary[]>;
   };
   recording: {
     requestMicrophoneAccess: () => Promise<boolean>;

@@ -1,288 +1,155 @@
-/**
- * Writing surface styles — minimal first draft.
- *
- * Reuses `.settings-page` / `.settings-scroll` for layout and keeps writing
- * controls as a compact floating cluster to maximize editor space.
- * Everything below is scoped under `.writing-surface` so future design work
- * can restyle without touching settings.
- */
-
 .writing-surface {
-  position: relative;
-}
-
-.writing-surface__floating-actions {
-  position: absolute;
-  left: 50%;
-  bottom: 10px;
-  transform: translateX(-50%);
-  z-index: 3;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  border-radius: 10px;
-  background: color-mix(in oklab, var(--bg-secondary) 90%, transparent);
-  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
-  backdrop-filter: blur(5px);
-}
-
-.writing-surface__floating-btn {
-  padding: 0;
-}
-
-.writing-surface__save-btn {
-  padding: 0 9px;
-  font-size: 12px;
-  line-height: 1;
-}
-
-.writing-surface__meta {
-  font-size: 11px;
-  color: var(--fg-muted);
-  margin-right: 2px;
+  min-height: 0;
 }
 
 .writing-surface__scroll {
-  /* The panes own the overflow internally; keep outer scroll container tidy. */
   display: flex;
   min-height: 0;
   padding-top: 0;
 }
 
 .writing-surface__workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
   width: 100%;
   min-height: 0;
 }
 
-.writing-surface__workspace--history-open {
-  grid-template-columns: minmax(0, 1fr) 320px;
-}
-
-.writing-surface__panes {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0;
-  width: 100%;
-}
-
-.writing-surface__history {
-  border-left: 1px solid var(--border);
+.writing-surface__sidebar {
+  width: 260px;
+  border-right: 1px solid var(--border);
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-.writing-surface__history-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
+.writing-surface__sidebar-header {
+  padding: 10px;
   border-bottom: 1px solid var(--border);
 }
 
-.writing-surface__history-title {
-  display: inline-flex;
-  align-items: center;
+.writing-surface__new-note {
+  width: 100%;
+  justify-content: center;
   gap: 6px;
-  font-size: 12px;
-  color: var(--fg-muted);
 }
 
-.writing-surface__history-count {
-  font-size: 12px;
-  color: var(--fg-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.writing-surface__history-empty {
-  margin: 0;
-  padding: 12px;
-  color: var(--fg-muted);
-  font-size: 12px;
-}
-
-.writing-surface__history-list {
+.writing-surface__notes {
   list-style: none;
   margin: 0;
-  padding: 10px 12px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   overflow-y: auto;
   min-height: 0;
 }
 
-.writing-surface__history-item {
+.writing-surface__note-item {
+  width: 100%;
   border: 1px solid var(--border);
-  border-radius: 6px;
   background: var(--bg);
+  color: var(--fg);
+  border-radius: 8px;
+  text-align: left;
   padding: 8px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
 }
 
-.writing-surface__history-main {
-  min-width: 0;
+.writing-surface__note-item.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 45%, transparent);
 }
 
-.writing-surface__history-time {
-  font-size: 12px;
-  color: var(--fg);
-  font-variant-numeric: tabular-nums;
-}
-
-.writing-surface__history-summary {
-  font-size: 12px;
-  color: var(--fg-muted);
+.writing-surface__note-title {
+  font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 220px;
 }
 
-.writing-surface__history-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.writing-surface__history-note {
-  margin: 0;
-  border-top: 1px solid var(--border);
-  padding: 10px 12px;
-  font-size: 12px;
+.writing-surface__note-time {
+  font-size: 11px;
   color: var(--fg-muted);
 }
 
-.writing-surface__pane {
+.writing-surface__editor-pane {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.writing-surface__toolbar {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.writing-surface__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.writing-surface__meta strong {
+  color: var(--fg);
+  font-size: 13px;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.writing-surface__pane--editor {
-  border-right: 1px solid var(--border);
-  background: var(--bg);
-}
-
-.writing-surface__panes--hidden {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.writing-surface__panes--hidden .writing-surface__pane--editor {
-  border-right: none;
+.writing-surface__save-btn {
+  gap: 6px;
 }
 
 .writing-surface__editor {
   flex: 1;
-  width: 100%;
-  max-width: min(700px, var(--content-width));
-  height: 100%;
-  margin: 0 auto;
   min-height: 0;
-  padding: 16px 16px 20px;
-  background: var(--bg);
-  color: var(--fg);
+  width: 100%;
   border: none;
   outline: none;
   resize: none;
+  padding: 16px;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.55;
-  tab-size: 2;
-}
-
-.writing-surface__editor:focus {
-  outline: none;
-}
-
-.writing-surface__pane--preview {
-  background: var(--bg-secondary);
-  overflow-y: auto;
-}
-
-.writing-surface__preview {
-  padding: 12px 24px 20px;
-  font-family: var(--font-family);
-  font-size: 14px;
-  line-height: var(--line-height-message);
-  color: var(--fg);
-  max-width: var(--content-width);
-  margin: 0 auto;
-}
-
-.writing-surface__preview h1,
-.writing-surface__preview h2,
-.writing-surface__preview h3 {
-  line-height: 1.3;
-  margin: 1.2em 0 0.4em;
-}
-
-.writing-surface__preview h1:first-child,
-.writing-surface__preview h2:first-child,
-.writing-surface__preview h3:first-child,
-.writing-surface__preview p:first-child {
-  margin-top: 0;
-}
-
-.writing-surface__preview p {
-  margin: 0 0 0.8em;
-}
-
-.writing-surface__preview code {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12.5px;
-}
-
-.writing-surface__preview pre {
   background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  color: var(--fg);
+}
+
+.writing-surface__error {
+  margin: 0;
   padding: 10px 12px;
-  overflow-x: auto;
+  font-size: 12px;
+  color: var(--danger, #d04747);
 }
 
-.writing-surface__empty {
-  margin: 12px 24px;
-  color: var(--fg-muted);
-  font-size: 13px;
-}
-
-/* Stack vertically at narrow widths so neither pane becomes unreadable. */
 @media (max-width: 768px) {
-  .writing-surface__panes {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  .writing-surface__workspace {
+    flex-direction: column;
   }
 
-  .writing-surface__pane--editor {
+  .writing-surface__sidebar {
+    width: 100%;
     border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .writing-surface__workspace--history-open {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) 220px;
-  }
-
-  .writing-surface__history {
-    border-left: none;
     border-top: 1px solid var(--border);
+    max-height: 190px;
   }
 
-  .writing-surface__meta {
+  .writing-surface__meta span {
     display: none;
   }
 }

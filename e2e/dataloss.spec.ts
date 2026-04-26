@@ -70,7 +70,7 @@ test("chatgpt import is deduped on rerun", async () => {
   expect(second.imported).toBe(0);
 });
 
-test("chat turn flow keeps focus and aligns second user message", async () => {
+test("chat turn flow keeps focus and follows live edge", async () => {
   const win = await page();
   await win.getByTestId("sidebar-new-chat").click();
 
@@ -84,9 +84,13 @@ test("chat turn flow keeps focus and aligns second user message", async () => {
   await input.press("Enter");
   await expect(win.getByRole("button", { name: "Stop" })).toBeVisible({ timeout: 5_000 });
 
-  const secondUserBox = await win.locator('.message-block.user', { hasText: "second turn" }).first().boundingBox();
-  expect(secondUserBox).not.toBeNull();
-  expect(secondUserBox!.y).toBeLessThanOrEqual(120);
+  const isNearBottom = await win.evaluate(() => {
+    const scroll = document.querySelector(".chat-scroll") as HTMLDivElement | null;
+    if (!scroll) return false;
+    const distance = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+    return distance <= 48;
+  });
+  expect(isNearBottom).toBe(true);
 
   await expect(win.getByRole("button", { name: "Stop" })).toBeHidden({ timeout: 10_000 });
   await expect.poll(() => win.evaluate(() => document.activeElement?.getAttribute("data-testid"))).toBe("chat-input");
@@ -95,4 +99,29 @@ test("chat turn flow keeps focus and aligns second user message", async () => {
   await Promise.all([input.press("Enter"), input.press("Enter")]);
   await expect(win.getByRole("button", { name: "Stop" })).toBeHidden({ timeout: 10_000 });
   await expect(win.locator(".message-block.user", { hasText: "dedupe send" })).toHaveCount(1);
+});
+
+test("chat scroll clearance tracks composer height", async () => {
+  const win = await page();
+  await win.getByTestId("sidebar-new-chat").click();
+
+  const input = win.getByTestId("chat-input");
+  for (let i = 0; i < 8; i += 1) {
+    await input.fill(`message ${i} ` + "x ".repeat(50));
+    await input.press("Enter");
+    await expect(win.getByRole("button", { name: "Stop" })).toBeVisible({ timeout: 5_000 });
+    await expect(win.getByRole("button", { name: "Stop" })).toBeHidden({ timeout: 10_000 });
+  }
+
+  const layoutOk = await win.evaluate(() => {
+    const scroll = document.querySelector(".chat-scroll") as HTMLDivElement | null;
+    const composer = document.querySelector('[data-testid="chat-composer"]');
+    if (!scroll || !composer) return false;
+    const paddingBottom = Number.parseFloat(window.getComputedStyle(scroll).paddingBottom || "0");
+    const composerHeight = composer.getBoundingClientRect().height;
+    const liveEdgeDistance = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+    return paddingBottom >= composerHeight && liveEdgeDistance <= 64;
+  });
+  expect(layoutOk).toBe(true);
+  await expect(win.getByText("Harness E2E assistant reply.").last()).toBeVisible();
 });

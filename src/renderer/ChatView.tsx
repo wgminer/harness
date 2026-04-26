@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import { audioFileToWav } from "./audioFileToWav";
@@ -11,13 +11,7 @@ import {
   type ToolCallDisplay,
   type VoiceState,
 } from "./chatHelpers";
-import {
-  calculateBottomSpacerPx,
-  computeScrollTopForMessage,
-  isAlignedToTopOffset,
-  shouldApplyTurnUpdate,
-  shouldAutoScrollUserMessage,
-} from "./chatTurnFlow";
+import { shouldApplyTurnUpdate } from "./chatTurnFlow";
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -45,15 +39,8 @@ export function ChatView({
   onChatActivityChange,
   focusComposerNonce,
 }: ChatViewProps) {
-  const TOP_OFFSET_PX = 16;
-  const ALIGN_TOLERANCE_PX = 1;
-  const MAX_NODE_WAIT_RAFS = 24;
-  const MAX_ALIGN_RAFS = 8;
-
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [bottomSpacerPx, setBottomSpacerPx] = useState(0);
-  const [activeUserMessageId, setActiveUserMessageId] = useState<string | null>(null);
   const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<string | null>(null);
   const [isTurnPending, setIsTurnPending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -87,7 +74,6 @@ export function ChatView({
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const messagesRef = useRef<Message[]>([]);
   const nextMessageIdRef = useRef(0);
   const turnIdRef = useRef(0);
@@ -140,7 +126,6 @@ export function ChatView({
     setIsTurnPending(false);
     setIsStreaming(false);
     setActiveAssistantMessageId(null);
-    setActiveUserMessageId(null);
     setStreamingMeta(null);
     requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
@@ -162,79 +147,6 @@ export function ChatView({
     setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
     return { turnId: nextTurnId, signal: streamAbortRef.current.signal };
   }, []);
-
-  const waitForMessageNode = useCallback(async (messageId: string, signal: AbortSignal): Promise<HTMLDivElement | null> => {
-    for (let i = 0; i < MAX_NODE_WAIT_RAFS; i += 1) {
-      if (signal.aborted) return null;
-      const found = messageRefs.current.get(messageId);
-      if (found) return found;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    }
-    return messageRefs.current.get(messageId) ?? null;
-  }, []);
-
-  const computeSpacer = useCallback((userId: string, assistantId: string | null) => {
-    const viewportHeight = chatAreaRef.current?.clientHeight ?? 0;
-    const composerHeight = composerRef.current?.getBoundingClientRect().height ?? 0;
-    const userHeight = messageRefs.current.get(userId)?.getBoundingClientRect().height ?? 0;
-    const assistantHeight = assistantId ? messageRefs.current.get(assistantId)?.getBoundingClientRect().height ?? 0 : 0;
-    const spacer = calculateBottomSpacerPx({ viewportHeight, composerHeight, userHeight, assistantHeight });
-    setBottomSpacerPx((prev) => (Math.abs(prev - spacer) < 0.5 ? prev : spacer));
-  }, []);
-
-  const alignMessageToTop = useCallback(async (messageId: string, signal: AbortSignal) => {
-    const scrollEl = chatAreaRef.current;
-    const node = messageRefs.current.get(messageId);
-    if (!scrollEl || !node || signal.aborted) return;
-
-    const nodeRect = node.getBoundingClientRect();
-    const targetTop = computeScrollTopForMessage({
-      scrollTop: scrollEl.scrollTop,
-      messageTopInContainer: nodeRect.top,
-      topOffset: TOP_OFFSET_PX,
-    });
-    scrollEl.scrollTo({ top: Math.max(0, targetTop) });
-
-    for (let i = 0; i < MAX_ALIGN_RAFS; i += 1) {
-      if (signal.aborted) return;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      const nextNode = messageRefs.current.get(messageId);
-      if (!nextNode) return;
-      const nextRect = nextNode.getBoundingClientRect();
-      const messageTopInContainer = nextRect.top;
-      if (isAlignedToTopOffset({
-        messageTopInContainer,
-        topOffset: TOP_OFFSET_PX,
-        tolerancePx: ALIGN_TOLERANCE_PX,
-      })) {
-        return;
-      }
-      const retryTarget = computeScrollTopForMessage({
-        scrollTop: scrollEl.scrollTop,
-        messageTopInContainer,
-        topOffset: TOP_OFFSET_PX,
-      });
-      scrollEl.scrollTo({ top: Math.max(0, retryTarget) });
-    }
-  }, []);
-
-  const runLayoutPass = useCallback(
-    async (args: { userId: string; assistantId: string | null; shouldScroll: boolean; signal: AbortSignal; turnId: number }) => {
-      const userNode = await waitForMessageNode(args.userId, args.signal);
-      if (!userNode || !isTurnCurrent(args.turnId, args.signal)) return;
-      if (args.assistantId) {
-        await waitForMessageNode(args.assistantId, args.signal);
-        if (!isTurnCurrent(args.turnId, args.signal)) return;
-      }
-      computeSpacer(args.userId, args.assistantId);
-      if (args.shouldScroll) {
-        await alignMessageToTop(args.userId, args.signal);
-        if (!isTurnCurrent(args.turnId, args.signal)) return;
-      }
-      computeSpacer(args.userId, args.assistantId);
-    },
-    [alignMessageToTop, computeSpacer, isTurnCurrent, waitForMessageNode]
-  );
 
   const applyAssistantChunk = useCallback((assistantId: string, updater: (prev: string) => string) => {
     setMessages((prev) =>
@@ -282,7 +194,6 @@ export function ChatView({
       streamAbortRef.current = null;
       activeTurnIdRef.current = null;
       setMessages([]);
-      setBottomSpacerPx(0);
       return;
     }
 
@@ -291,8 +202,6 @@ export function ChatView({
     activeTurnIdRef.current = null;
     void window.electron.chat.stop().catch(() => {});
     setMessages([]);
-    setBottomSpacerPx(0);
-    setActiveUserMessageId(null);
     setActiveAssistantMessageId(null);
     setIsTurnPending(false);
     setIsStreaming(false);
@@ -427,23 +336,13 @@ export function ChatView({
       else setPolishHintAfterDictation(false);
 
       const { turnId, signal } = beginNewTurn();
-      const existingUserMessageCount = messagesRef.current.filter((message) => message.role === "user").length;
-      const shouldScroll = shouldAutoScrollUserMessage(existingUserMessageCount);
       const userMessageId = makeMessageId("user");
       const assistantMessageId = makeMessageId("assistant");
-      setActiveUserMessageId(userMessageId);
       setActiveAssistantMessageId(null);
       setMessages((prev) => [
         ...prev,
         { id: userMessageId, role: "user", content: text, timestamp: Date.now() },
       ]);
-      await runLayoutPass({
-        userId: userMessageId,
-        assistantId: null,
-        shouldScroll,
-        signal,
-        turnId,
-      });
       if (!isTurnCurrent(turnId, signal)) return;
 
       setActiveAssistantMessageId(assistantMessageId);
@@ -458,14 +357,6 @@ export function ChatView({
           timestamp: Date.now(),
         },
       ]);
-
-      await runLayoutPass({
-        userId: userMessageId,
-        assistantId: assistantMessageId,
-        shouldScroll: false,
-        signal,
-        turnId,
-      });
       if (!isTurnCurrent(turnId, signal)) return;
 
       setIsTurnPending(false);
@@ -494,37 +385,12 @@ export function ChatView({
       isTurnCurrent,
       makeMessageId,
       onConversationCreated,
-      runLayoutPass,
     ]
   );
 
-  useLayoutEffect(() => {
-    if (!activeUserMessageId) return;
-    computeSpacer(activeUserMessageId, activeAssistantMessageId);
-  }, [activeAssistantMessageId, activeUserMessageId, computeSpacer, messages]);
-
-  useEffect(() => {
-    if (!activeUserMessageId) return;
-    const area = chatAreaRef.current;
-    const composer = composerRef.current;
-    if (!area || !composer || typeof ResizeObserver === "undefined") return;
-    const recompute = () => computeSpacer(activeUserMessageId, activeAssistantMessageId);
-    const observer = new ResizeObserver(recompute);
-    observer.observe(area);
-    observer.observe(composer);
-    window.addEventListener("resize", recompute);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", recompute);
-    };
-  }, [activeAssistantMessageId, activeUserMessageId, computeSpacer]);
-
   const onMessageRef = useCallback((id: string, node: HTMLDivElement | null) => {
-    if (node) {
-      messageRefs.current.set(id, node);
-      return;
-    }
-    messageRefs.current.delete(id);
+    void id;
+    void node;
   }, []);
 
   /** Post-strip polish: replace last user dictation with instruction + same text, then stream. */
@@ -541,20 +407,12 @@ export function ChatView({
     const instructionId = makeMessageId("user");
     const transcriptId = makeMessageId("user");
     const assistantMessageId = makeMessageId("assistant");
-    setActiveUserMessageId(transcriptId);
     setActiveAssistantMessageId(null);
     setMessages((prev) => [
       ...prev.slice(0, -1),
       { id: instructionId, role: "user", content: instruction, timestamp: t1 },
       { id: transcriptId, role: "user", content: transcript, timestamp: t2 },
     ]);
-    await runLayoutPass({
-      userId: transcriptId,
-      assistantId: null,
-      shouldScroll: false,
-      signal,
-      turnId,
-    });
     if (!isTurnCurrent(turnId, signal)) return;
     setActiveAssistantMessageId(assistantMessageId);
     setMessages((prev) => [
@@ -568,13 +426,6 @@ export function ChatView({
         timestamp: Date.now(),
       },
     ]);
-    await runLayoutPass({
-      userId: transcriptId,
-      assistantId: assistantMessageId,
-      shouldScroll: false,
-      signal,
-      turnId,
-    });
     if (!isTurnCurrent(turnId, signal)) return;
     setIsTurnPending(false);
     setIsStreaming(true);
@@ -604,7 +455,7 @@ export function ChatView({
         );
       });
     }
-  }, [applyAssistantChunk, beginNewTurn, completeTurn, conversationId, isTurnCurrent, makeMessageId, onConversationCreated, runLayoutPass]);
+  }, [applyAssistantChunk, beginNewTurn, completeTurn, conversationId, isTurnCurrent, makeMessageId, onConversationCreated]);
 
   const send = useCallback(async () => {
     if (attachmentTranscribing) return;
@@ -656,7 +507,6 @@ export function ChatView({
       [...messagesRef.current]
         .reverse()
         .find((message) => message.role === "user")?.id ?? null;
-    setActiveUserMessageId(latestUserId);
     setActiveAssistantMessageId(assistantMessageId);
     setMessages((prev) => [
       ...prev,
@@ -669,16 +519,7 @@ export function ChatView({
         timestamp: Date.now(),
       },
     ]);
-    if (latestUserId) {
-      await runLayoutPass({
-        userId: latestUserId,
-        assistantId: assistantMessageId,
-        shouldScroll: false,
-        signal,
-        turnId,
-      });
-      if (!isTurnCurrent(turnId, signal)) return;
-    }
+    void latestUserId;
     setIsTurnPending(false);
     setIsStreaming(true);
     try {
@@ -695,7 +536,7 @@ export function ChatView({
       applyAssistantChunk(assistantMessageId, () => errorText);
       completeTurn(turnId);
     }
-  }, [applyAssistantChunk, beginNewTurn, completeTurn, conversationId, isTurnCurrent, makeMessageId, onConversationCreated, runLayoutPass]);
+  }, [applyAssistantChunk, beginNewTurn, completeTurn, conversationId, isTurnCurrent, makeMessageId, onConversationCreated]);
 
   // Stable ref so the pendingHotkeyText effect always calls the latest sendText without it being a dep
   const sendTextRef = useRef(sendText);
@@ -823,7 +664,6 @@ export function ChatView({
         onPolish={polishLastUserFromStrip}
         onGenerateReply={generateReply}
         onMessageRef={onMessageRef}
-        bottomSpacerPx={bottomSpacerPx}
         inputRef={inputRef}
         input={input}
         onInputChange={setInput}

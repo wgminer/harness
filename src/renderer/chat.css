@@ -1,7 +1,7 @@
 /*
- * Chat column: `.chat-pane` holds `--chat-composer-dock-height`. `.chat-scroll` is the scrollport only
- * (no bottom padding here — flex + padding on overflow nodes is unreliable). Composer clearance is a
- * flex spacer `::after` on `.chat-area-inner` so scrollHeight includes the overlay gap.
+ * Chat column: `.chat-pane` holds `--chat-composer-dock-height` from the composer dock.
+ * `.chat-scroll` is the only scrollport and uses bottom padding to keep latest content clear
+ * of the overlay composer while preserving a simple chronological flow.
  */
 .chat-pane {
   --chat-composer-dock-height: 140px;
@@ -20,7 +20,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0 16px;
+  padding: 0 16px calc(var(--chat-composer-dock-height) + 40px);
 }
 
 /* Empty / placeholder panes (no conversation selected): same flex contract as an active chat */
@@ -40,31 +40,22 @@
 
 /* Transcript column: max-width + flex growth (replaces former chat-area → chat-area-inner chain). */
 .chat-area-inner {
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
-  min-height: 0;
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
-  display: flex;
-  flex-direction: column;
+  display: block;
 }
 
-/* Dynamic bottom spacer is rendered by React as `.chat-bottom-spacer`. */
-.chat-bottom-spacer {
-  flex-shrink: 0;
-  width: 100%;
-  pointer-events: none;
-}
-
-/* Newest messages sit near the composer; history extends upward without manual scroll math. */
+/* Chronological message flow: oldest at top, newest at bottom. */
 .chat-messages-stack {
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   gap: 16px;
   width: 100%;
   box-sizing: border-box;
-  padding: var(--space-unit) 0 calc(var(--space-unit) * 2);
+  padding: 0 0 calc(var(--space-unit) * 2);
 }
 
 .message-block .content {
@@ -398,7 +389,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 12px 16px;
+  padding: 8px;
 }
 
 /* Title control: compact text button, transparent until hover */
@@ -415,11 +406,11 @@
 .chat-pane-header .chat-pane-title.btn {
   font-family: var(--font-family);
   color: var(--fg);
-  background: color-mix(in srgb, var(--fg) 6%, var(--bg-secondary));
-  box-shadow: var(--btn-shadow);
-  height: 30px;
+  background: transparent;
+  box-shadow: none;
+  height: var(--input-height);
   padding: 0 12px;
-  font-size: calc(var(--font-size) * 12 / 14);
+  font-size: calc(var(--font-size) * 13 / 14);
 }
 
 .chat-pane-header .chat-pane-title.btn:hover:not(:disabled) {
@@ -600,14 +591,11 @@
   margin-left: auto;
 }
 
-/* Voice recording controls */
-.voice-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: auto;
+.input-actions-spacer {
+  margin-left: auto;
 }
 
+/* Voice recording controls */
 .voice-btn {
   color: var(--fg);
   transition: color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
