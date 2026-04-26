@@ -10,14 +10,15 @@ import {
   themeSettingsToCss,
   type ThemeSettings,
 } from "../shared/theme";
+import { ensureLocalDataMigration, getLocalDataThemesDir } from "./localDataPaths";
 
-const THEMES_DIR = "themes";
 const THEME_FILE = "theme.json";
 const LAYOUT_FILE = "layout.json";
 const MAX_THEME_JSON = 32 * 1024;
 
 function getThemesDir(): string {
-  const dir = join(app.getPath("userData"), THEMES_DIR);
+  ensureLocalDataMigration();
+  const dir = getLocalDataThemesDir();
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }

@@ -15,6 +15,7 @@ import { registerRecordingHandlers } from "./recording";
 import { registerGlobalFnRecording } from "./globalRecordingMain";
 import { registerSystemHandlers } from "./systemHandlers";
 import { importFromFolder } from "./importChatGPT";
+import { registerSyncHandlers } from "./sync";
 import {
   WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
 } from "../shared/windowLayout";
@@ -145,6 +146,7 @@ app.whenReady().then(() => {
   registerNotesHandlers();
   registerRecordingHandlers();
   registerSystemHandlers();
+  registerSyncHandlers();
 
   if (process.platform === "darwin") {
     app.dock.setIcon(nativeImage.createFromPath(iconPath));

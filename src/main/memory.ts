@@ -1,20 +1,28 @@
-import { ipcMain } from "electron";
-import { readFile, writeFile, mkdir, unlink } from "fs/promises";
+import { ipcMain, shell } from "electron";
+import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
-import { app } from "electron";
 import type { AppendMessageMeta, ChatMessage, SearchResult } from "../shared/types";
 import { notifyConversationTitleUpdated } from "./titleEvents";
 import { generateId, fileExists } from "./utils";
+import {
+  cleanupLegacyMemoryDir,
+  getAppStateDir,
+  getLegacyMemoryDir,
+  getLocalDataDir,
+  getLocalDataSettingsPath,
+  getLocalDataThemesDir,
+} from "./localDataPaths";
+import { getRecordingsDir } from "./recording";
+import { getSyncStatus } from "./sync";
 
-const MEMORY_DIR = "memory";
 const CONVERSATIONS_FILE = "conversations.json";
 const USER_MEMORY_FILE = "user_memory.json";
 export const TASKS_FILE = "tasks.json";
 export const PLANS_FILE = "plans.json";
 
 export function getMemoryDir(): string {
-  const dir = join(app.getPath("userData"), MEMORY_DIR);
+  const dir = getAppStateDir();
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -278,6 +286,53 @@ async function resetStoredData(): Promise<void> {
   return resetStoredDataIn(getMemoryDir());
 }
 
+export interface DataStatusSnapshot {
+  localDataDir: string;
+  appStateDir: string;
+  localDataExists: boolean;
+  conversationsCount: number;
+  messageFilesCount: number;
+  notesFilesCount: number;
+  hasSettingsFile: boolean;
+  hasThemesDir: boolean;
+  recordingsDir: string;
+  recordingsLocalOnly: true;
+  legacyMemoryDir: string;
+  legacyMemoryExists: boolean;
+  sync: Awaited<ReturnType<typeof getSyncStatus>>;
+}
+
+async function getDataStatus(): Promise<DataStatusSnapshot> {
+  const appStateDir = getMemoryDir();
+  const conv = await loadConversationsIn(appStateDir);
+  const appStateFiles = existsSync(appStateDir) ? await readdir(appStateDir) : [];
+  const noteDir = join(appStateDir, "notes");
+  const notesFiles = existsSync(noteDir) ? await readdir(noteDir) : [];
+  return {
+    localDataDir: getLocalDataDir(),
+    appStateDir,
+    localDataExists: existsSync(getLocalDataDir()),
+    conversationsCount: Object.keys(conv).length,
+    messageFilesCount: appStateFiles.filter((name) => name.startsWith("messages_") && name.endsWith(".json")).length,
+    notesFilesCount: notesFiles.filter((name) => name.endsWith(".md")).length,
+    hasSettingsFile: existsSync(getLocalDataSettingsPath()),
+    hasThemesDir: existsSync(getLocalDataThemesDir()),
+    recordingsDir: getRecordingsDir(),
+    recordingsLocalOnly: true,
+    legacyMemoryDir: getLegacyMemoryDir(),
+    legacyMemoryExists: existsSync(getLegacyMemoryDir()),
+    sync: await getSyncStatus(),
+  };
+}
+
+async function openLocalDataFolder(): Promise<void> {
+  await shell.openPath(getLocalDataDir());
+}
+
+async function runCleanupLegacyMemory(): Promise<{ removed: boolean }> {
+  return { removed: cleanupLegacyMemoryDir() };
+}
+
 export async function getMessagesIn(memoryDir: string, conversationId: string): Promise<ChatMessage[]> {
   const rows = await loadMessagesIn(memoryDir, conversationId);
   return rows.map((r) => {
@@ -480,6 +535,9 @@ export function registerMemoryHandlers(): void {
   ipcMain.handle("memory:deleteConversation", (_e, conversationId: string) => deleteConversation(conversationId));
   ipcMain.handle("memory:searchConversations", (_e, query: string) => searchConversations(query));
   ipcMain.handle("memory:resetStoredData", () => resetStoredData());
+  ipcMain.handle("memory:openLocalDataFolder", () => openLocalDataFolder());
+  ipcMain.handle("memory:getDataStatus", () => getDataStatus());
+  ipcMain.handle("memory:cleanupLegacyMemory", () => runCleanupLegacyMemory());
   ipcMain.handle("memory:setConversationTitle", async (_e, conversationId: string, title: string) => {
     await setConversationTitle(conversationId, title, "user");
     notifyConversationTitleUpdated(conversationId);

@@ -1,4 +1,4 @@
-import { access, readFile } from "fs/promises";
+import { access, readFile, writeFile } from "fs/promises";
 import { constants } from "fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTempDir } from "./__tests__/tempDir";
@@ -126,10 +126,14 @@ describe("memory persistence", () => {
     const id = await createConversationIn(dir);
     await appendMessageIn(dir, id, "user", "hello");
     await setUserMemoryIn(dir, "name", "Harness");
+    await writeFile(`${dir}/settings.json`, '{"preserve":true}', "utf-8");
+    await writeFile(`${dir}/theme.json`, '{"accent":"#fff"}', "utf-8");
     await readFile(getMessagesPathIn(dir, id), "utf-8");
     await resetStoredDataIn(dir);
 
     expect(await listConversationsIn(dir)).toEqual([]);
     expect(await searchConversationsIn(dir, "hello")).toEqual([]);
+    expect(await readFile(`${dir}/settings.json`, "utf-8")).toContain('"preserve":true');
+    expect(await readFile(`${dir}/theme.json`, "utf-8")).toContain('"accent":"#fff"');
   });
 });

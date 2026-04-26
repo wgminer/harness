@@ -496,6 +496,26 @@
   color: var(--fg-muted);
 }
 
+.settings-data-status {
+  margin-top: 8px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: calc(var(--font-size) * 12 / 14);
+}
+
+.settings-data-status p {
+  margin: 0 0 6px;
+  color: var(--fg-muted);
+  line-height: 1.4;
+}
+
+.settings-data-status p:last-child {
+  margin-bottom: 0;
+}
+
 .settings-section select {
   font-size: var(--font-size);
   width: 100%;

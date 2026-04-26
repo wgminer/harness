@@ -10,7 +10,7 @@ import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import { recordOpenAIUsage, recordParakeetTranscription } from "./usageStats";
 
-function getRecordingsDir(): string {
+export function getRecordingsDir(): string {
   return join(app.getPath("userData"), "recordings");
 }
 

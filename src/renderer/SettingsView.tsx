@@ -17,6 +17,7 @@ import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import { EMPTY_USAGE_STATS } from "../shared/usageStats";
+import type { SyncStatus } from "../shared/sync";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
 import {
@@ -73,6 +74,26 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [importing, setImporting] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [cleanupLegacyBusy, setCleanupLegacyBusy] = useState(false);
+  const [cleanupLegacyMessage, setCleanupLegacyMessage] = useState<string | null>(null);
+  const [dataStatusLoading, setDataStatusLoading] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [dataStatus, setDataStatus] = useState<{
+    localDataDir: string;
+    appStateDir: string;
+    localDataExists: boolean;
+    conversationsCount: number;
+    messageFilesCount: number;
+    notesFilesCount: number;
+    hasSettingsFile: boolean;
+    hasThemesDir: boolean;
+    recordingsDir: string;
+    recordingsLocalOnly: true;
+    legacyMemoryDir: string;
+    legacyMemoryExists: boolean;
+    sync: SyncStatus;
+  } | null>(null);
   const [isMac] = useState(
     () => typeof navigator !== "undefined" && navigator.platform.startsWith("Mac")
   );
@@ -136,6 +157,11 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     },
     []
   );
+
+  useEffect(() => {
+    if (activeTab !== "data") return;
+    void refreshDataStatus();
+  }, [activeTab]);
 
   useEffect(() => {
     if (skipNextSaveRef.current) {
@@ -241,6 +267,40 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
       onStoredDataReset?.();
     } finally {
       setResetting(false);
+    }
+  };
+
+  const refreshDataStatus = async () => {
+    setDataStatusLoading(true);
+    try {
+      const status = await window.electron.memory.getDataStatus();
+      setDataStatus(status);
+    } finally {
+      setDataStatusLoading(false);
+    }
+  };
+
+  const runCleanupLegacyMemory = async () => {
+    setCleanupLegacyBusy(true);
+    setCleanupLegacyMessage(null);
+    try {
+      const result = await window.electron.memory.cleanupLegacyMemory();
+      setCleanupLegacyMessage(result.removed ? "Removed legacy memory folder." : "No legacy memory folder found.");
+      await refreshDataStatus();
+    } finally {
+      setCleanupLegacyBusy(false);
+    }
+  };
+
+  const runSyncNow = async () => {
+    setSyncBusy(true);
+    setSyncMessage(null);
+    try {
+      const result = await window.electron.sync.runNow();
+      setSyncMessage(result.ok ? "Sync completed." : result.status.lastError ?? "Sync failed.");
+      await refreshDataStatus();
+    } finally {
+      setSyncBusy(false);
     }
   };
 
@@ -856,6 +916,56 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             role="tabpanel"
             aria-labelledby="settings-tab-data"
           >
+            <section className="settings-group">
+              <h3 className="settings-group__title">Local data</h3>
+              <p className="settings-group__lead">
+                Local-first storage root and sync status. Recordings remain local-only unless exported manually.
+              </p>
+              <div className="settings-actions">
+                <button type="button" className="btn" onClick={() => window.electron.memory.openLocalDataFolder()}>
+                  Show local-data folder <ExternalLink size={14} aria-hidden />
+                </button>
+                <button type="button" className="btn" onClick={() => void refreshDataStatus()} disabled={dataStatusLoading}>
+                  {dataStatusLoading ? "Refreshing…" : "Refresh status"}
+                </button>
+              </div>
+              {dataStatus && (
+                <div className="settings-data-status" role="status">
+                  <p><strong>Local folder:</strong> {dataStatus.localDataDir}</p>
+                  <p><strong>App-state folder:</strong> {dataStatus.appStateDir}</p>
+                  <p>
+                    <strong>Counts:</strong> {dataStatus.conversationsCount} conversations, {dataStatus.messageFilesCount} message files,{" "}
+                    {dataStatus.notesFilesCount} notes
+                  </p>
+                  <p>
+                    <strong>Settings/themes:</strong> {dataStatus.hasSettingsFile ? "settings present" : "settings missing"},{" "}
+                    {dataStatus.hasThemesDir ? "themes present" : "themes missing"}
+                  </p>
+                  <p><strong>Recordings:</strong> Local-only in {dataStatus.recordingsDir}</p>
+                  <p>
+                    <strong>Firebase sync:</strong>{" "}
+                    {dataStatus.sync.configured ? "configured" : "not configured"}
+                    {dataStatus.sync.lastSuccessAt ? `, last success ${new Date(dataStatus.sync.lastSuccessAt).toLocaleString()}` : ""}
+                    {dataStatus.sync.lastError ? `, last error: ${dataStatus.sync.lastError}` : ""}
+                  </p>
+                </div>
+              )}
+              <div className="settings-actions">
+                <button type="button" className="btn" onClick={() => void runSyncNow()} disabled={syncBusy}>
+                  {syncBusy ? "Syncing…" : "Sync now"}
+                </button>
+              </div>
+              {syncMessage && <p className="settings-group__hint settings-group__hint--flush">{syncMessage}</p>}
+              <div className="settings-actions">
+                <button type="button" className="btn" onClick={() => void runCleanupLegacyMemory()} disabled={cleanupLegacyBusy}>
+                  {cleanupLegacyBusy ? "Cleaning…" : "Cleanup legacy memory folder"}
+                </button>
+              </div>
+              {cleanupLegacyMessage && (
+                <p className="settings-group__hint settings-group__hint--flush">{cleanupLegacyMessage}</p>
+              )}
+            </section>
+
             <section className="settings-group">
               <h3 className="settings-group__title">Import from ChatGPT</h3>
               <p className="settings-group__lead">Choose the folder from an unzipped ChatGPT export.</p>
