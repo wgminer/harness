@@ -17,6 +17,7 @@ interface NotesIndexEntry {
   title: string;
   createdAt: number;
   updatedAt: number;
+  wordCount: number;
 }
 
 interface NotesIndex {
@@ -57,12 +58,19 @@ function titleFromContent(content: string, fallback: string): string {
   return firstLine.length > 80 ? `${firstLine.slice(0, 80).trimEnd()}...` : firstLine;
 }
 
+function countWords(content: string): number {
+  const trimmed = String(content ?? "").trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
 function toSummary(entry: NotesIndexEntry): NoteSummary {
   return {
     id: entry.id,
     title: entry.title,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
+    wordCount: entry.wordCount,
   };
 }
 
@@ -90,6 +98,7 @@ async function loadNotesIndexIn(memoryDir: string): Promise<NotesIndex> {
         const title = (item as { title?: unknown }).title;
         const createdAt = (item as { createdAt?: unknown }).createdAt;
         const updatedAt = (item as { updatedAt?: unknown }).updatedAt;
+        const wordCount = (item as { wordCount?: unknown }).wordCount;
         if (
           typeof id !== "string" ||
           typeof title !== "string" ||
@@ -98,7 +107,13 @@ async function loadNotesIndexIn(memoryDir: string): Promise<NotesIndex> {
         ) {
           return null;
         }
-        return { id, title, createdAt, updatedAt };
+        return {
+          id,
+          title,
+          createdAt,
+          updatedAt,
+          wordCount: typeof wordCount === "number" && Number.isFinite(wordCount) ? Math.max(0, Math.floor(wordCount)) : 0,
+        };
       })
       .filter((entry): entry is NotesIndexEntry => entry != null);
     return { notes: sortByUpdatedAtDesc(notes) };
@@ -135,6 +150,7 @@ async function migrateLegacyDocIn(memoryDir: string): Promise<void> {
         title: titleFromContent(normalized, LEGACY_IMPORTED_NOTE_TITLE),
         createdAt,
         updatedAt: createdAt,
+        wordCount: countWords(normalized),
       },
     ],
   });
@@ -148,7 +164,21 @@ async function ensureNotesReadyIn(memoryDir: string): Promise<NotesIndex> {
 
 export async function listNotesIn(memoryDir: string): Promise<NoteSummary[]> {
   const index = await ensureNotesReadyIn(memoryDir);
-  return sortByUpdatedAtDesc(index.notes).map(toSummary);
+  const notesWithWordCounts = await Promise.all(
+    index.notes.map(async (entry) => {
+      const path = getNotePathIn(memoryDir, entry.id);
+      const content = (await fileExists(path)) ? await readFile(path, "utf-8") : "";
+      return {
+        ...entry,
+        wordCount: countWords(content),
+      };
+    }),
+  );
+  const changed = notesWithWordCounts.some((entry, idx) => entry.wordCount !== index.notes[idx]?.wordCount);
+  if (changed) {
+    await saveNotesIndexIn(memoryDir, { notes: notesWithWordCounts });
+  }
+  return sortByUpdatedAtDesc(notesWithWordCounts).map(toSummary);
 }
 
 export async function listNotes(): Promise<NoteSummary[]> {
@@ -165,6 +195,7 @@ export async function createNoteIn(memoryDir: string, title?: string, content = 
     title: normalizeTitle(title, titleFromContent(normalizedContent, `${DEFAULT_NOTE_TITLE} ${index.notes.length + 1}`)),
     createdAt: now,
     updatedAt: now,
+    wordCount: countWords(normalizedContent),
   };
   await writeFile(getNotePathIn(memoryDir, id), normalizedContent, "utf-8");
   await saveNotesIndexIn(memoryDir, { notes: [entry, ...index.notes] });
@@ -208,6 +239,7 @@ export async function saveNoteIn(memoryDir: string, id: string, content: string)
     ...current,
     title: titleFromContent(normalized, current.title || UNTITLED_NOTE_TITLE),
     updatedAt: now,
+    wordCount: countWords(normalized),
   };
   const next = [...index.notes];
   next[noteIndex] = updatedEntry;

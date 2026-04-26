@@ -208,20 +208,11 @@ export function Sidebar({
                 </span>
               </span>
             </button>
-            <button
-              type="button"
-              className={`btn sidebar-workspace__btn${view === "settings" ? " sidebar-workspace__btn--active" : ""}`}
-              data-testid="sidebar-settings"
-              onClick={() => onViewChange("settings")}
-              aria-label="Settings"
-              aria-current={view === "settings" ? "page" : undefined}
-            >
-              <Settings size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">Settings</span>
-            </button>
           </nav>
         )}
-        <ul className="sidebar-list">
+        <div className="sidebar-list-wrap">
+          <div className="sidebar-list__fade-top" aria-hidden />
+          <ul className="sidebar-list">
           {searchOpen ? (
             searchQuery.trim() ? (
               searchLoading ? (
@@ -314,7 +305,8 @@ export function Sidebar({
               ) : null}
             </>
           )}
-        </ul>
+          </ul>
+        </div>
         <div className="sidebar-footer">
           <div className="sidebar-footer__meta">
             {appVersion != null && appVersion !== "" ? (
@@ -323,6 +315,17 @@ export function Sidebar({
               </span>
             ) : null}
           </div>
+          <button
+            type="button"
+            className={`btn btn-icon sidebar-footer__settings-toggle${view === "settings" ? " sidebar-footer__settings-toggle--active" : ""}`}
+            data-testid="sidebar-settings"
+            onClick={() => onViewChange("settings")}
+            aria-label="Settings"
+            aria-current={view === "settings" ? "page" : undefined}
+            title="Settings"
+          >
+            <Settings size={14} />
+          </button>
           {!windowPresetSmall ? (
             <button
               type="button"

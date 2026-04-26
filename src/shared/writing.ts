@@ -3,6 +3,7 @@ export interface NoteSummary {
   title: string;
   updatedAt: number;
   createdAt: number;
+  wordCount: number;
 }
 
 export interface Note extends NoteSummary {

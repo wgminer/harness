@@ -27,6 +27,7 @@ interface ChatViewProps {
   onChatActivityChange?: (active: boolean) => void;
   /** Parent increments when the composer should be focused (e.g. switching to small window). */
   focusComposerNonce?: number;
+  onOpenNotesView?: (noteId: string) => void;
 }
 
 export function ChatView({
@@ -38,6 +39,7 @@ export function ChatView({
   onPendingHotkeyTextConsumed,
   onChatActivityChange,
   focusComposerNonce,
+  onOpenNotesView,
 }: ChatViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -45,6 +47,7 @@ export function ChatView({
   const [isTurnPending, setIsTurnPending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedToNotesId, setSavedToNotesId] = useState<string | null>(null);
   const [activeChatModel, setActiveChatModel] = useState("");
   const activeChatModelRef = useRef("");
   const conversationIdRef = useRef<string | null>(conversationId);
@@ -236,6 +239,7 @@ export function ChatView({
     setIsStreaming(false);
     setInput("");
     setCopiedId(null);
+    setSavedToNotesId(null);
     setVoiceError(null);
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
@@ -495,6 +499,24 @@ export function ChatView({
     });
   }, [appendAssistantPlaceholder, beginNewTurn, conversationId, makeMessageId, runAssistantTurn]);
 
+  const saveMessageToNotes = useCallback(
+    async (messageId: string, content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed) return;
+      try {
+        const note = await window.electron.notes.create(undefined, trimmed);
+        setSavedToNotesId(messageId);
+        window.setTimeout(() => {
+          setSavedToNotesId((current) => (current === messageId ? null : current));
+        }, 2000);
+        onOpenNotesView?.(note.id);
+      } catch {
+        // Ignore; user can retry.
+      }
+    },
+    [onOpenNotesView]
+  );
+
   // Stable ref so the pendingHotkeyText effect always calls the latest sendText without it being a dep
   const sendTextRef = useRef(sendText);
   useEffect(() => {
@@ -613,7 +635,9 @@ export function ChatView({
         )}
         displayMessages={messages}
         copiedId={copiedId}
+        savedToNotesId={savedToNotesId}
         onCopied={setCopiedId}
+        onSaveToNotes={saveMessageToNotes}
         streamingContent={streamingContent}
         sending={sending}
         polishHintAfterDictation={polishHintAfterDictation}

@@ -21,7 +21,17 @@ function formatUpdatedAt(ms: number): string {
   });
 }
 
-export function NotesView() {
+function formatWordCount(count: number): string {
+  const normalized = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+  return `${normalized.toLocaleString()} ${normalized === 1 ? "word" : "words"}`;
+}
+
+interface NotesViewProps {
+  initialOpenNoteId?: string | null;
+  onInitialOpenNoteHandled?: () => void;
+}
+
+export function NotesView({ initialOpenNoteId, onInitialOpenNoteHandled }: NotesViewProps) {
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
@@ -75,6 +85,24 @@ export function NotesView() {
     };
   }, [loadNotes]);
 
+  useEffect(() => {
+    if (!initialOpenNoteId) return;
+    let cancelled = false;
+    const openInitialNote = async () => {
+      setScreen("detail");
+      setStatus({ kind: "loading" });
+      await loadActiveNote(initialOpenNoteId);
+      if (!cancelled) {
+        requestAnimationFrame(() => editorRef.current?.focus());
+      }
+      onInitialOpenNoteHandled?.();
+    };
+    void openInitialNote();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialOpenNoteId, loadActiveNote, onInitialOpenNoteHandled]);
+
   const dirty = draft !== savedDraft;
 
   const save = useCallback(async () => {
@@ -86,7 +114,9 @@ export function NotesView() {
       setSavedDraft(note.content);
       setNotes((prev) =>
         prev
-          .map((item) => (item.id === note.id ? { ...item, title: note.title, updatedAt: note.updatedAt } : item))
+          .map((item) =>
+            item.id === note.id ? { ...item, title: note.title, updatedAt: note.updatedAt, wordCount: note.wordCount } : item,
+          )
           .sort((a, b) => b.updatedAt - a.updatedAt),
       );
       setStatus({ kind: "saved" });
@@ -105,7 +135,13 @@ export function NotesView() {
     setStatus({ kind: "creating" });
     try {
       const note = await notesApi.create();
-      const summary = { id: note.id, title: note.title, updatedAt: note.updatedAt, createdAt: note.createdAt };
+      const summary = {
+        id: note.id,
+        title: note.title,
+        updatedAt: note.updatedAt,
+        createdAt: note.createdAt,
+        wordCount: note.wordCount,
+      };
       setNotes((prev) => [summary, ...prev].sort((a, b) => b.updatedAt - a.updatedAt));
       setSelectedNoteId(note.id);
       setDraft(note.content);
@@ -168,6 +204,15 @@ export function NotesView() {
               <SquarePen size={18} />
               <h2 className="settings-title">Notes</h2>
             </div>
+            <button
+              type="button"
+              className="btn btn-primary notes-surface__header-new-note"
+              onClick={() => void createNote()}
+              disabled={status.kind === "creating" || status.kind === "saving" || status.kind === "deleting"}
+            >
+              <Plus size={12} />
+              New note
+            </button>
           </div>
         </header>
       ) : null}
@@ -186,22 +231,18 @@ export function NotesView() {
                     className="notes-surface__note-item"
                     onClick={() => void openNote(note.id)}
                   >
-                    <span className="notes-surface__note-title">{note.title}</span>
-                    <span className="notes-surface__note-time">{formatUpdatedAt(note.updatedAt)}</span>
+                    <span className="notes-surface__note-title" title={note.title}>
+                      {note.title}
+                    </span>
+                    <span className="notes-surface__note-time">
+                      <span className="notes-surface__note-time-default">{formatUpdatedAt(note.updatedAt)}</span>
+                      <span className="notes-surface__note-time-hover">{formatWordCount(note.wordCount)}</span>
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
             {notes.length === 0 ? <p className="notes-surface__empty">No notes yet. Create one to get started.</p> : null}
-            <button
-              type="button"
-              className="btn btn-primary notes-surface__new-note"
-              onClick={() => void createNote()}
-              disabled={status.kind === "creating" || status.kind === "saving" || status.kind === "deleting"}
-            >
-              <Plus size={14} />
-              New note
-            </button>
           </section>
         ) : (
           <>
@@ -216,7 +257,9 @@ export function NotesView() {
                 <ArrowLeft size={16} />
               </button>
               <div className="notes-surface__meta">
-                <strong>{activeNote?.title ?? "Note"}</strong>
+                <strong className="notes-surface__meta-title" title={activeNote?.title ?? "Note"}>
+                  {activeNote?.title ?? "Note"}
+                </strong>
               </div>
               <button
                 type="button"
@@ -230,12 +273,13 @@ export function NotesView() {
               </button>
               <button
                 type="button"
-                className="btn notes-surface__show-file-btn"
+                className="btn btn-icon"
                 onClick={() => void window.electron.notes.showInFolder(selectedNoteId)}
                 disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                aria-label="Show note file"
+                title="Show file"
               >
-                <FolderOpen size={14} />
-                Show file
+                <FolderOpen size={16} />
               </button>
               <button
                 type="button"

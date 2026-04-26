@@ -5,6 +5,7 @@ import {
   type ToolCallDisplay,
   MarkdownContent,
   CopyButton,
+  SaveToNotesButton,
   toolLabel,
   toolIcon,
   formatMessageTime,
@@ -14,7 +15,9 @@ import {
 interface ChatMessageListProps {
   displayMessages: Message[];
   copiedId: string | null;
+  savedToNotesId: string | null;
   onCopied: (id: string | null) => void;
+  onSaveToNotes: (id: string, content: string) => void | Promise<void>;
   streamingContent: string;
   sending: boolean;
   polishHintAfterDictation: boolean;
@@ -26,7 +29,9 @@ interface ChatMessageListProps {
 export function ChatMessageList({
   displayMessages,
   copiedId,
+  savedToNotesId,
   onCopied,
+  onSaveToNotes,
   streamingContent,
   sending,
   polishHintAfterDictation,
@@ -190,12 +195,13 @@ export function ChatMessageList({
                     </>
                   )}
                 </div>
-                <CopyButton
+                <SaveToNotesButton
                   content={m.content}
                   messageId={m.id}
-                  copiedId={copiedId}
-                  onCopied={onCopied}
+                  savedNoteId={savedToNotesId}
+                  onSaveToNotes={onSaveToNotes}
                 />
+                <CopyButton content={m.content} messageId={m.id} copiedId={copiedId} onCopied={onCopied} />
               </div>
             </div>
           );
