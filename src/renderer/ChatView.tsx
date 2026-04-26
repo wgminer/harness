@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
+import { audioFileToWav } from "./audioFileToWav";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import { ChatTitleModal } from "./ChatTitleModal";
@@ -10,6 +11,13 @@ import {
   type ToolCallDisplay,
   type VoiceState,
 } from "./chatHelpers";
+import {
+  calculateBottomSpacerPx,
+  computeScrollTopForMessage,
+  isAlignedToTopOffset,
+  shouldApplyTurnUpdate,
+  shouldAutoScrollUserMessage,
+} from "./chatTurnFlow";
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -37,15 +45,27 @@ export function ChatView({
   onChatActivityChange,
   focusComposerNonce,
 }: ChatViewProps) {
+  const TOP_OFFSET_PX = 16;
+  const ALIGN_TOLERANCE_PX = 1;
+  const MAX_NODE_WAIT_RAFS = 24;
+  const MAX_ALIGN_RAFS = 8;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [streamingContent, setStreamingContent] = useState("");
-  const [sending, setSending] = useState(false);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [bottomSpacerPx, setBottomSpacerPx] = useState(0);
+  const [activeUserMessageId, setActiveUserMessageId] = useState<string | null>(null);
+  const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<string | null>(null);
+  const [isTurnPending, setIsTurnPending] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeChatModel, setActiveChatModel] = useState("");
   const [streamingMeta, setStreamingMeta] = useState<{ model: string; startedAt: number } | null>(null);
   const streamingMetaRef = useRef<{ model: string; startedAt: number } | null>(null);
   const activeChatModelRef = useRef("");
+  const conversationIdRef = useRef<string | null>(conversationId);
+  const sendingRef = useRef(false);
+  const isTurnPendingRef = useRef(false);
+  const isStreamingRef = useRef(false);
 
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   /** After plain dictation, show polish next to reply (polish targets the dictated turn only). */
@@ -55,31 +75,42 @@ export function ChatView({
   const [titleDraft, setTitleDraft] = useState("");
   const [titleSaving, setTitleSaving] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
+  const [attachedAudioFile, setAttachedAudioFile] = useState<File | null>(null);
+  const [attachmentTranscribing, setAttachmentTranscribing] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const recordingStartRef = useRef<number>(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const recorder = useRecorder();
 
   /** Tool calls for the assistant turn currently being streamed; shown inline and then stored on the message when stream ends. */
-  const [currentTurnToolCalls, setCurrentTurnToolCalls] = useState<ToolCallDisplay[]>([]);
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
-  const streamingContentRef = useRef("");
-  const currentTurnToolCallsRef = useRef<ToolCallDisplay[]>([]);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const messagesRef = useRef<Message[]>([]);
+  const nextMessageIdRef = useRef(0);
+  const turnIdRef = useRef(0);
+  const activeTurnIdRef = useRef<number | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
 
-  const beginAssistantTurn = useCallback(() => {
-    setSending(true);
-    setStreamingContent("");
-    setCurrentTurnToolCalls([]);
-    setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
-  }, []);
+  const sending = isTurnPending || isStreaming;
 
   useEffect(() => {
-    streamingContentRef.current = streamingContent;
-  }, [streamingContent]);
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
   useEffect(() => {
-    currentTurnToolCallsRef.current = currentTurnToolCalls;
-  }, [currentTurnToolCalls]);
+    messagesRef.current = messages;
+  }, [messages]);
+  useEffect(() => {
+    sendingRef.current = sending;
+  }, [sending]);
+  useEffect(() => {
+    isTurnPendingRef.current = isTurnPending;
+  }, [isTurnPending]);
+  useEffect(() => {
+    isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
   useEffect(() => {
     streamingMetaRef.current = streamingMeta;
   }, [streamingMeta]);
@@ -87,6 +118,149 @@ export function ChatView({
   useEffect(() => {
     activeChatModelRef.current = activeChatModel;
   }, [activeChatModel]);
+
+  const makeMessageId = useCallback((prefix: "user" | "assistant" | "history") => {
+    const id = `${prefix}-${Date.now()}-${nextMessageIdRef.current}`;
+    nextMessageIdRef.current += 1;
+    return id;
+  }, []);
+
+  const isTurnCurrent = useCallback((turnId: number, signal?: AbortSignal) => {
+    return shouldApplyTurnUpdate({
+      activeTurnId: activeTurnIdRef.current,
+      expectedTurnId: turnId,
+      aborted: !!signal?.aborted,
+    });
+  }, []);
+
+  const completeTurn = useCallback((turnId: number) => {
+    if (activeTurnIdRef.current !== turnId) return;
+    activeTurnIdRef.current = null;
+    streamAbortRef.current = null;
+    setIsTurnPending(false);
+    setIsStreaming(false);
+    setActiveAssistantMessageId(null);
+    setActiveUserMessageId(null);
+    setStreamingMeta(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const beginNewTurn = useCallback(() => {
+    const priorAbort = streamAbortRef.current;
+    if (priorAbort && !priorAbort.signal.aborted) {
+      priorAbort.abort();
+    }
+    if (sendingRef.current) {
+      void window.electron.chat.stop().catch(() => {});
+    }
+    const nextTurnId = turnIdRef.current + 1;
+    turnIdRef.current = nextTurnId;
+    activeTurnIdRef.current = nextTurnId;
+    streamAbortRef.current = new AbortController();
+    setIsTurnPending(true);
+    setIsStreaming(false);
+    setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
+    return { turnId: nextTurnId, signal: streamAbortRef.current.signal };
+  }, []);
+
+  const waitForMessageNode = useCallback(async (messageId: string, signal: AbortSignal): Promise<HTMLDivElement | null> => {
+    for (let i = 0; i < MAX_NODE_WAIT_RAFS; i += 1) {
+      if (signal.aborted) return null;
+      const found = messageRefs.current.get(messageId);
+      if (found) return found;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+    return messageRefs.current.get(messageId) ?? null;
+  }, []);
+
+  const computeSpacer = useCallback((userId: string, assistantId: string | null) => {
+    const viewportHeight = chatAreaRef.current?.clientHeight ?? 0;
+    const composerHeight = composerRef.current?.getBoundingClientRect().height ?? 0;
+    const userHeight = messageRefs.current.get(userId)?.getBoundingClientRect().height ?? 0;
+    const assistantHeight = assistantId ? messageRefs.current.get(assistantId)?.getBoundingClientRect().height ?? 0 : 0;
+    const spacer = calculateBottomSpacerPx({ viewportHeight, composerHeight, userHeight, assistantHeight });
+    setBottomSpacerPx((prev) => (Math.abs(prev - spacer) < 0.5 ? prev : spacer));
+  }, []);
+
+  const alignMessageToTop = useCallback(async (messageId: string, signal: AbortSignal) => {
+    const scrollEl = chatAreaRef.current;
+    const node = messageRefs.current.get(messageId);
+    if (!scrollEl || !node || signal.aborted) return;
+
+    const nodeRect = node.getBoundingClientRect();
+    const targetTop = computeScrollTopForMessage({
+      scrollTop: scrollEl.scrollTop,
+      messageTopInContainer: nodeRect.top,
+      topOffset: TOP_OFFSET_PX,
+    });
+    scrollEl.scrollTo({ top: Math.max(0, targetTop) });
+
+    for (let i = 0; i < MAX_ALIGN_RAFS; i += 1) {
+      if (signal.aborted) return;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const nextNode = messageRefs.current.get(messageId);
+      if (!nextNode) return;
+      const nextRect = nextNode.getBoundingClientRect();
+      const messageTopInContainer = nextRect.top;
+      if (isAlignedToTopOffset({
+        messageTopInContainer,
+        topOffset: TOP_OFFSET_PX,
+        tolerancePx: ALIGN_TOLERANCE_PX,
+      })) {
+        return;
+      }
+      const retryTarget = computeScrollTopForMessage({
+        scrollTop: scrollEl.scrollTop,
+        messageTopInContainer,
+        topOffset: TOP_OFFSET_PX,
+      });
+      scrollEl.scrollTo({ top: Math.max(0, retryTarget) });
+    }
+  }, []);
+
+  const runLayoutPass = useCallback(
+    async (args: { userId: string; assistantId: string | null; shouldScroll: boolean; signal: AbortSignal; turnId: number }) => {
+      const userNode = await waitForMessageNode(args.userId, args.signal);
+      if (!userNode || !isTurnCurrent(args.turnId, args.signal)) return;
+      if (args.assistantId) {
+        await waitForMessageNode(args.assistantId, args.signal);
+        if (!isTurnCurrent(args.turnId, args.signal)) return;
+      }
+      computeSpacer(args.userId, args.assistantId);
+      if (args.shouldScroll) {
+        await alignMessageToTop(args.userId, args.signal);
+        if (!isTurnCurrent(args.turnId, args.signal)) return;
+      }
+      computeSpacer(args.userId, args.assistantId);
+    },
+    [alignMessageToTop, computeSpacer, isTurnCurrent, waitForMessageNode]
+  );
+
+  const applyAssistantChunk = useCallback((assistantId: string, updater: (prev: string) => string) => {
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === assistantId
+          ? {
+              ...message,
+              content: updater(message.content),
+            }
+          : message
+      )
+    );
+  }, []);
+
+  const setAssistantToolCall = useCallback((assistantId: string, toolName: string, payload: unknown) => {
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === assistantId
+          ? {
+              ...message,
+              toolCalls: [...(message.toolCalls ?? []), { toolName, payload }],
+            }
+          : message
+      )
+    );
+  }, []);
 
   useEffect(() => {
     setActiveChatModel(OPENAI_CHAT_MODEL);
@@ -104,22 +278,35 @@ export function ChatView({
 
   useEffect(() => {
     if (!conversationId) {
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+      activeTurnIdRef.current = null;
       setMessages([]);
+      setBottomSpacerPx(0);
       return;
     }
 
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+    activeTurnIdRef.current = null;
+    void window.electron.chat.stop().catch(() => {});
     setMessages([]);
-    setStreamingContent("");
-    setCurrentTurnToolCalls([]);
-    setSending(false);
+    setBottomSpacerPx(0);
+    setActiveUserMessageId(null);
+    setActiveAssistantMessageId(null);
+    setIsTurnPending(false);
+    setIsStreaming(false);
     setInput("");
-    setCopiedIndex(null);
+    setCopiedId(null);
     setVoiceError(null);
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
     setVoiceState("idle");
+    setAttachedAudioFile(null);
+    setAttachmentTranscribing(false);
+    setAttachmentError(null);
     setPolishHintAfterDictation(false);
     setStreamingMeta(null);
     setTitleModalOpen(false);
@@ -128,7 +315,8 @@ export function ChatView({
     window.electron.memory.getMessages(conversationId).then((list) => {
       if (cancelled) return;
       setMessages(
-        list.map((m) => ({
+        list.map((m, i) => ({
+          id: `${(m as Message).role === "assistant" ? "assistant" : "history"}-${(m as Message).timestamp ?? Date.now()}-${i}`,
           role: m.role,
           content: m.content,
           toolCalls: (m as Message).toolCalls,
@@ -144,63 +332,53 @@ export function ChatView({
 
   useEffect(() => {
     const unsub = window.electron.chat.onToolPanelUpdate((cid, toolName, payload) => {
-      if (cid !== conversationId) return;
-      setCurrentTurnToolCalls((prev) => [...prev, { toolName, payload }]);
+      if (cid !== conversationIdRef.current) return;
+      const assistantId = activeAssistantMessageId;
+      const turnId = activeTurnIdRef.current;
+      const signal = streamAbortRef.current?.signal;
+      if (!assistantId || turnId == null || !isTurnCurrent(turnId, signal)) return;
+      setAssistantToolCall(assistantId, toolName, payload);
     });
     return () => {
       unsub();
     };
-  }, [conversationId]);
-
-  // Single list: show streaming as the last "message" so we don't replace the block on stream end (avoids scroll jump)
-  const displayMessages: Message[] =
-    streamingContent.length > 0 || currentTurnToolCalls.length > 0
-      ? [
-          ...messages,
-          {
-            role: "assistant",
-            content: streamingContent,
-            toolCalls: currentTurnToolCalls.length > 0 ? currentTurnToolCalls : undefined,
-            model: streamingMeta?.model ?? activeChatModel,
-            timestamp: streamingMeta?.startedAt ?? Date.now(),
-          },
-        ]
-      : messages;
+  }, [activeAssistantMessageId, isTurnCurrent, setAssistantToolCall]);
 
   useEffect(() => {
     const unsubChunk = window.electron.chat.onStreamChunk((cid, chunk) => {
-      if (cid === conversationId) setStreamingContent((prev) => prev + chunk);
+      if (cid !== conversationIdRef.current) return;
+      if (!isStreamingRef.current) return;
+      const assistantId = activeAssistantMessageId;
+      const turnId = activeTurnIdRef.current;
+      const signal = streamAbortRef.current?.signal;
+      if (!assistantId || turnId == null || !isTurnCurrent(turnId, signal)) return;
+      applyAssistantChunk(assistantId, (prev) => prev + chunk);
     });
     const unsubEnd = window.electron.chat.onStreamEnd((cid) => {
-      if (cid === conversationId) {
-        const finalContent = streamingContentRef.current;
-        const toolCalls = currentTurnToolCallsRef.current.length > 0 ? [...currentTurnToolCallsRef.current] : undefined;
-        const model = streamingMetaRef.current?.model ?? activeChatModelRef.current;
-        setMessages((prev) =>
-          finalContent || toolCalls
-            ? [
-                ...prev,
-                {
-                  role: "assistant",
-                  content: finalContent || "",
-                  toolCalls,
-                  model: model || undefined,
-                  timestamp: Date.now(),
-                },
-              ]
-            : prev
-        );
-        setStreamingContent("");
-        setCurrentTurnToolCalls([]);
-        setStreamingMeta(null);
-        setSending(false);
-      }
+      if (cid !== conversationIdRef.current) return;
+      const turnId = activeTurnIdRef.current;
+      if (turnId == null) return;
+      completeTurn(turnId);
     });
     return () => {
       unsubChunk();
       unsubEnd();
     };
-  }, [conversationId]);
+  }, [activeAssistantMessageId, applyAssistantChunk, completeTurn, isTurnCurrent]);
+
+  useEffect(() => {
+    return () => {
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+      activeTurnIdRef.current = null;
+      void window.electron.chat.stop().catch(() => {});
+    };
+  }, []);
+
+  const displayMessages: Message[] = messages;
+  const streamingContent = activeAssistantMessageId
+    ? messages.find((m) => m.id === activeAssistantMessageId)?.content ?? ""
+    : "";
 
   const handleToolConfirm = useCallback(
     async (tc: ToolCallDisplay, action: "proceed" | "cancel") => {
@@ -244,49 +422,179 @@ export function ChatView({
   /** Core send logic; accepts text directly so it can be called programmatically (e.g. hotkey injection). */
   const sendText = useCallback(
     async (text: string, opts?: { fromDictation?: boolean }) => {
-      if (!text.trim() || !conversationId || sending) return;
+      if (!text.trim() || !conversationId) return;
       if (opts?.fromDictation) setPolishHintAfterDictation(true);
       else setPolishHintAfterDictation(false);
-      beginAssistantTurn();
-      setMessages((prev) => [...prev, { role: "user", content: text, timestamp: Date.now() }]);
+
+      const { turnId, signal } = beginNewTurn();
+      const existingUserMessageCount = messagesRef.current.filter((message) => message.role === "user").length;
+      const shouldScroll = shouldAutoScrollUserMessage(existingUserMessageCount);
+      const userMessageId = makeMessageId("user");
+      const assistantMessageId = makeMessageId("assistant");
+      setActiveUserMessageId(userMessageId);
+      setActiveAssistantMessageId(null);
+      setMessages((prev) => [
+        ...prev,
+        { id: userMessageId, role: "user", content: text, timestamp: Date.now() },
+      ]);
+      await runLayoutPass({
+        userId: userMessageId,
+        assistantId: null,
+        shouldScroll,
+        signal,
+        turnId,
+      });
+      if (!isTurnCurrent(turnId, signal)) return;
+
+      setActiveAssistantMessageId(assistantMessageId);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: "",
+          toolCalls: [],
+          model: streamingMetaRef.current?.model ?? activeChatModelRef.current,
+          timestamp: Date.now(),
+        },
+      ]);
+
+      await runLayoutPass({
+        userId: userMessageId,
+        assistantId: assistantMessageId,
+        shouldScroll: false,
+        signal,
+        turnId,
+      });
+      if (!isTurnCurrent(turnId, signal)) return;
+
+      setIsTurnPending(false);
+      setIsStreaming(true);
+      requestAnimationFrame(() => inputRef.current?.focus());
       try {
         await window.electron.chat.send(conversationId, text);
         onConversationCreated();
       } catch (e) {
-        setStreamingContent(`[Error: ${e instanceof Error ? e.message : String(e)}]`);
-        setStreamingMeta(null);
-        setSending(false);
+        const wasAborted = signal.aborted || String(e).toLowerCase().includes("abort");
+        if (wasAborted) {
+          completeTurn(turnId);
+          return;
+        }
+        if (!isTurnCurrent(turnId, signal)) return;
+        const errorText = `[Error: ${e instanceof Error ? e.message : String(e)}]`;
+        applyAssistantChunk(assistantMessageId, () => errorText);
+        completeTurn(turnId);
       }
     },
-    [beginAssistantTurn, conversationId, sending, onConversationCreated]
+    [
+      applyAssistantChunk,
+      beginNewTurn,
+      completeTurn,
+      conversationId,
+      isTurnCurrent,
+      makeMessageId,
+      onConversationCreated,
+      runLayoutPass,
+    ]
   );
+
+  useLayoutEffect(() => {
+    if (!activeUserMessageId) return;
+    computeSpacer(activeUserMessageId, activeAssistantMessageId);
+  }, [activeAssistantMessageId, activeUserMessageId, computeSpacer, messages]);
+
+  useEffect(() => {
+    if (!activeUserMessageId) return;
+    const area = chatAreaRef.current;
+    const composer = composerRef.current;
+    if (!area || !composer || typeof ResizeObserver === "undefined") return;
+    const recompute = () => computeSpacer(activeUserMessageId, activeAssistantMessageId);
+    const observer = new ResizeObserver(recompute);
+    observer.observe(area);
+    observer.observe(composer);
+    window.addEventListener("resize", recompute);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", recompute);
+    };
+  }, [activeAssistantMessageId, activeUserMessageId, computeSpacer]);
+
+  const onMessageRef = useCallback((id: string, node: HTMLDivElement | null) => {
+    if (node) {
+      messageRefs.current.set(id, node);
+      return;
+    }
+    messageRefs.current.delete(id);
+  }, []);
 
   /** Post-strip polish: replace last user dictation with instruction + same text, then stream. */
   const polishLastUserFromStrip = useCallback(async () => {
-    if (!conversationId || sending) return;
-    const last = messages[messages.length - 1];
+    if (!conversationId) return;
+    const last = messagesRef.current[messagesRef.current.length - 1];
     if (!last || last.role !== "user" || !last.content?.trim()) return;
     setPolishHintAfterDictation(false);
     const instruction = DICTATION_POLISH_INSTRUCTION;
     const t1 = Date.now();
     const t2 = t1 + 1;
     const transcript = last.content;
-    beginAssistantTurn();
+    const { turnId, signal } = beginNewTurn();
+    const instructionId = makeMessageId("user");
+    const transcriptId = makeMessageId("user");
+    const assistantMessageId = makeMessageId("assistant");
+    setActiveUserMessageId(transcriptId);
+    setActiveAssistantMessageId(null);
     setMessages((prev) => [
       ...prev.slice(0, -1),
-      { role: "user", content: instruction, timestamp: t1 },
-      { role: "user", content: transcript, timestamp: t2 },
+      { id: instructionId, role: "user", content: instruction, timestamp: t1 },
+      { id: transcriptId, role: "user", content: transcript, timestamp: t2 },
     ]);
+    await runLayoutPass({
+      userId: transcriptId,
+      assistantId: null,
+      shouldScroll: false,
+      signal,
+      turnId,
+    });
+    if (!isTurnCurrent(turnId, signal)) return;
+    setActiveAssistantMessageId(assistantMessageId);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        toolCalls: [],
+        model: streamingMetaRef.current?.model ?? activeChatModelRef.current,
+        timestamp: Date.now(),
+      },
+    ]);
+    await runLayoutPass({
+      userId: transcriptId,
+      assistantId: assistantMessageId,
+      shouldScroll: false,
+      signal,
+      turnId,
+    });
+    if (!isTurnCurrent(turnId, signal)) return;
+    setIsTurnPending(false);
+    setIsStreaming(true);
     try {
       await window.electron.chat.polishLastUser(conversationId);
       onConversationCreated();
     } catch (e) {
-      setStreamingContent(`[Error: ${e instanceof Error ? e.message : String(e)}]`);
-      setStreamingMeta(null);
-      setSending(false);
+      const wasAborted = signal.aborted || String(e).toLowerCase().includes("abort");
+      if (wasAborted) {
+        completeTurn(turnId);
+        return;
+      }
+      if (!isTurnCurrent(turnId, signal)) return;
+      const errorText = `[Error: ${e instanceof Error ? e.message : String(e)}]`;
+      applyAssistantChunk(assistantMessageId, () => errorText);
+      completeTurn(turnId);
       void window.electron.memory.getMessages(conversationId).then((list) => {
         setMessages(
-          list.map((m) => ({
+          list.map((m, i) => ({
+            id: `history-${(m as Message).timestamp ?? Date.now()}-${i}`,
             role: m.role,
             content: m.content,
             toolCalls: (m as Message).toolCalls,
@@ -296,27 +604,98 @@ export function ChatView({
         );
       });
     }
-  }, [beginAssistantTurn, conversationId, sending, messages, onConversationCreated]);
+  }, [applyAssistantChunk, beginNewTurn, completeTurn, conversationId, isTurnCurrent, makeMessageId, onConversationCreated, runLayoutPass]);
 
   const send = useCallback(async () => {
+    if (attachmentTranscribing) return;
+
     const text = input.trim();
-    if (!text) return;
+    const attached = attachedAudioFile;
+    if (!text && !attached) return;
+
+    setAttachmentError(null);
+    let transcript = "";
+    if (attached) {
+      setAttachmentTranscribing(true);
+      try {
+        const wav = await audioFileToWav(attached);
+        const result = await window.electron.recording.transcribe(wav);
+        if ("error" in result) {
+          setAttachmentError(result.error);
+          return;
+        }
+        transcript = result.text.trim();
+        if (!transcript) {
+          setAttachmentError("Unable to transcribe attached audio.");
+          return;
+        }
+      } catch (err) {
+        setAttachmentError(err instanceof Error ? err.message : "Unable to read attached audio.");
+        return;
+      } finally {
+        setAttachmentTranscribing(false);
+      }
+    }
+
+    const messageText =
+      text && transcript
+        ? `${text}\n\n${transcript}`
+        : text || transcript;
+    if (!messageText) return;
+
     setInput("");
-    await sendText(text);
-  }, [input, sendText]);
+    setAttachedAudioFile(null);
+    await sendText(messageText);
+  }, [attachedAudioFile, attachmentTranscribing, input, sendText]);
 
   const generateReply = useCallback(async () => {
-    if (!conversationId || sending) return;
-    beginAssistantTurn();
+    if (!conversationId) return;
+    const { turnId, signal } = beginNewTurn();
+    const assistantMessageId = makeMessageId("assistant");
+    const latestUserId =
+      [...messagesRef.current]
+        .reverse()
+        .find((message) => message.role === "user")?.id ?? null;
+    setActiveUserMessageId(latestUserId);
+    setActiveAssistantMessageId(assistantMessageId);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        toolCalls: [],
+        model: streamingMetaRef.current?.model ?? activeChatModelRef.current,
+        timestamp: Date.now(),
+      },
+    ]);
+    if (latestUserId) {
+      await runLayoutPass({
+        userId: latestUserId,
+        assistantId: assistantMessageId,
+        shouldScroll: false,
+        signal,
+        turnId,
+      });
+      if (!isTurnCurrent(turnId, signal)) return;
+    }
+    setIsTurnPending(false);
+    setIsStreaming(true);
     try {
       await window.electron.chat.generateReply(conversationId);
       onConversationCreated();
     } catch (e) {
-      setStreamingContent(`[Error: ${e instanceof Error ? e.message : String(e)}]`);
-      setStreamingMeta(null);
-      setSending(false);
+      const wasAborted = signal.aborted || String(e).toLowerCase().includes("abort");
+      if (wasAborted) {
+        completeTurn(turnId);
+        return;
+      }
+      if (!isTurnCurrent(turnId, signal)) return;
+      const errorText = `[Error: ${e instanceof Error ? e.message : String(e)}]`;
+      applyAssistantChunk(assistantMessageId, () => errorText);
+      completeTurn(turnId);
     }
-  }, [beginAssistantTurn, conversationId, sending, onConversationCreated]);
+  }, [applyAssistantChunk, beginNewTurn, completeTurn, conversationId, isTurnCurrent, makeMessageId, onConversationCreated, runLayoutPass]);
 
   // Stable ref so the pendingHotkeyText effect always calls the latest sendText without it being a dep
   const sendTextRef = useRef(sendText);
@@ -435,24 +814,43 @@ export function ChatView({
           </button>
         )}
         displayMessages={displayMessages}
-        copiedIndex={copiedIndex}
-        onCopied={setCopiedIndex}
+        copiedId={copiedId}
+        onCopied={setCopiedId}
         streamingContent={streamingContent}
         sending={sending}
         polishHintAfterDictation={polishHintAfterDictation}
         onToolConfirm={handleToolConfirm}
         onPolish={polishLastUserFromStrip}
         onGenerateReply={generateReply}
+        onMessageRef={onMessageRef}
+        bottomSpacerPx={bottomSpacerPx}
+        inputRef={inputRef}
         input={input}
         onInputChange={setInput}
         onSend={send}
-        onStop={() => void window.electron.chat.stop()}
+        onStop={() => {
+          const turnId = activeTurnIdRef.current;
+          streamAbortRef.current?.abort();
+          void window.electron.chat.stop().catch(() => {});
+          if (turnId != null) completeTurn(turnId);
+        }}
         voiceState={voiceState}
         voiceError={voiceError}
         recordingMs={recordingMs}
         onStartRecording={startRecording}
         onStopRecording={stopAndTranscribe}
         onCancelRecording={cancelRecording}
+        attachedAudioName={attachedAudioFile?.name ?? null}
+        attachmentTranscribing={attachmentTranscribing}
+        attachmentError={attachmentError}
+        onAttachAudio={(file) => {
+          setAttachedAudioFile(file);
+          setAttachmentError(null);
+        }}
+        onRemoveAttachedAudio={() => {
+          setAttachedAudioFile(null);
+          setAttachmentError(null);
+        }}
         focusComposerNonce={focusComposerNonce}
         messagesTestId="chat-messages"
         composerTestId="chat-composer"

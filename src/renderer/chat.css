@@ -50,11 +50,10 @@
   flex-direction: column;
 }
 
-/* Reserve scroll extent for the overlay composer (avoids padding-bottom on `.chat-scroll`). */
-.chat-scroll:not(.chat-scroll--placeholder) .chat-area-inner::after {
-  content: "";
+/* Dynamic bottom spacer is rendered by React as `.chat-bottom-spacer`. */
+.chat-bottom-spacer {
   flex-shrink: 0;
-  height: var(--chat-composer-dock-height);
+  width: 100%;
   pointer-events: none;
 }
 
@@ -509,10 +508,65 @@
     inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
 }
 
+.chat-audio-file-input {
+  display: none;
+}
+
+.chat-attachment-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+
+.chat-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--fg-muted);
+  background: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
+}
+
+.chat-attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.chat-attachment-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.chat-attachment-remove:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 14%, transparent);
+}
+
+.chat-attachment-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .chat-input {
   width: 100%;
   font-family: var(--font-family);
-  font-size: 14px;
+  font-size: var(--font-size);
   background: transparent;
   color: var(--fg);
   border: none;
