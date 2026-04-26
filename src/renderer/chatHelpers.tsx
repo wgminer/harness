@@ -1,4 +1,4 @@
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -22,6 +22,16 @@ export function formatMessageTime(ts: number): string {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+/** Inline “waiting for first token” state for the assistant bubble. */
+export function ReplyingIndicator() {
+  return (
+    <span className="voice-status">
+      <Loader2 size={13} className="voice-spinner" />
+      Replying…
+    </span>
+  );
 }
 
 /** Renders markdown (bold, lists, code, etc.) without headers (they render as paragraphs). */
@@ -54,9 +64,11 @@ export function toolLabel(name: string): string {
     memory_list_facts: "Listed memories",
     memory_search_conversations: "Searched history",
     get_datetime: "Checked date & time",
-    doc_read: "Read writing surface",
-    doc_write: "Rewrote writing surface",
-    doc_append: "Appended to writing surface",
+    note_list: "Listed notes",
+    note_create: "Created note",
+    note_read: "Read note",
+    note_save: "Saved note",
+    note_delete: "Deleted note",
   };
   return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }

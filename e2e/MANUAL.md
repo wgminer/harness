@@ -8,7 +8,7 @@ Automated E2E uses `HARNESS_E2E=1` with a dedicated user data dir (see `src/main
 - settings persistence (`autoSend`, weather ZIP)
 - tasks add flow
 - stop-mid-stream data-loss guard
-- writing surface persistence and save-history round-trip
+- notes persistence and save round-trip
 - ChatGPT import dedupe (fixture-driven)
 
 It still does **not** validate OS-level behavior.

@@ -46,12 +46,9 @@ export function ChatView({
   const [isStreaming, setIsStreaming] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeChatModel, setActiveChatModel] = useState("");
-  const [streamingMeta, setStreamingMeta] = useState<{ model: string; startedAt: number } | null>(null);
-  const streamingMetaRef = useRef<{ model: string; startedAt: number } | null>(null);
   const activeChatModelRef = useRef("");
   const conversationIdRef = useRef<string | null>(conversationId);
   const sendingRef = useRef(false);
-  const isTurnPendingRef = useRef(false);
   const isStreamingRef = useRef(false);
 
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -92,14 +89,8 @@ export function ChatView({
     sendingRef.current = sending;
   }, [sending]);
   useEffect(() => {
-    isTurnPendingRef.current = isTurnPending;
-  }, [isTurnPending]);
-  useEffect(() => {
     isStreamingRef.current = isStreaming;
   }, [isStreaming]);
-  useEffect(() => {
-    streamingMetaRef.current = streamingMeta;
-  }, [streamingMeta]);
 
   useEffect(() => {
     activeChatModelRef.current = activeChatModel;
@@ -126,7 +117,6 @@ export function ChatView({
     setIsTurnPending(false);
     setIsStreaming(false);
     setActiveAssistantMessageId(null);
-    setStreamingMeta(null);
     requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
@@ -144,7 +134,6 @@ export function ChatView({
     streamAbortRef.current = new AbortController();
     setIsTurnPending(true);
     setIsStreaming(false);
-    setStreamingMeta({ model: activeChatModelRef.current, startedAt: Date.now() });
     return { turnId: nextTurnId, signal: streamAbortRef.current.signal };
   }, []);
 
@@ -173,6 +162,46 @@ export function ChatView({
       )
     );
   }, []);
+
+  const appendAssistantPlaceholder = useCallback((assistantMessageId: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        toolCalls: [],
+        model: activeChatModelRef.current,
+        timestamp: Date.now(),
+      },
+    ]);
+  }, []);
+
+  const runAssistantTurn = useCallback(
+    async (args: {
+      turnId: number;
+      signal: AbortSignal;
+      assistantId: string;
+      backend: () => Promise<unknown>;
+    }) => {
+      const { turnId, signal, assistantId, backend } = args;
+      try {
+        await backend();
+        onConversationCreated();
+      } catch (e) {
+        const wasAborted = signal.aborted || String(e).toLowerCase().includes("abort");
+        if (wasAborted) {
+          completeTurn(turnId);
+          return;
+        }
+        if (!isTurnCurrent(turnId, signal)) return;
+        const errorText = `[Error: ${e instanceof Error ? e.message : String(e)}]`;
+        applyAssistantChunk(assistantId, () => errorText);
+        completeTurn(turnId);
+      }
+    },
+    [applyAssistantChunk, completeTurn, isTurnCurrent, onConversationCreated]
+  );
 
   useEffect(() => {
     setActiveChatModel(OPENAI_CHAT_MODEL);
@@ -217,7 +246,6 @@ export function ChatView({
     setAttachmentTranscribing(false);
     setAttachmentError(null);
     setPolishHintAfterDictation(false);
-    setStreamingMeta(null);
     setTitleModalOpen(false);
 
     let cancelled = false;
@@ -225,7 +253,7 @@ export function ChatView({
       if (cancelled) return;
       setMessages(
         list.map((m, i) => ({
-          id: `${(m as Message).role === "assistant" ? "assistant" : "history"}-${(m as Message).timestamp ?? Date.now()}-${i}`,
+          id: `history-${(m as Message).timestamp ?? Date.now()}-${i}`,
           role: m.role,
           content: m.content,
           toolCalls: (m as Message).toolCalls,
@@ -284,7 +312,6 @@ export function ChatView({
     };
   }, []);
 
-  const displayMessages: Message[] = messages;
   const streamingContent = activeAssistantMessageId
     ? messages.find((m) => m.id === activeAssistantMessageId)?.content ?? ""
     : "";
@@ -346,52 +373,28 @@ export function ChatView({
       if (!isTurnCurrent(turnId, signal)) return;
 
       setActiveAssistantMessageId(assistantMessageId);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: assistantMessageId,
-          role: "assistant",
-          content: "",
-          toolCalls: [],
-          model: streamingMetaRef.current?.model ?? activeChatModelRef.current,
-          timestamp: Date.now(),
-        },
-      ]);
+      appendAssistantPlaceholder(assistantMessageId);
       if (!isTurnCurrent(turnId, signal)) return;
 
       setIsTurnPending(false);
       setIsStreaming(true);
       requestAnimationFrame(() => inputRef.current?.focus());
-      try {
-        await window.electron.chat.send(conversationId, text);
-        onConversationCreated();
-      } catch (e) {
-        const wasAborted = signal.aborted || String(e).toLowerCase().includes("abort");
-        if (wasAborted) {
-          completeTurn(turnId);
-          return;
-        }
-        if (!isTurnCurrent(turnId, signal)) return;
-        const errorText = `[Error: ${e instanceof Error ? e.message : String(e)}]`;
-        applyAssistantChunk(assistantMessageId, () => errorText);
-        completeTurn(turnId);
-      }
+      await runAssistantTurn({
+        turnId,
+        signal,
+        assistantId: assistantMessageId,
+        backend: () => window.electron.chat.send(conversationId, text),
+      });
     },
     [
-      applyAssistantChunk,
+      appendAssistantPlaceholder,
       beginNewTurn,
-      completeTurn,
       conversationId,
       isTurnCurrent,
       makeMessageId,
-      onConversationCreated,
+      runAssistantTurn,
     ]
   );
-
-  const onMessageRef = useCallback((id: string, node: HTMLDivElement | null) => {
-    void id;
-    void node;
-  }, []);
 
   /** Post-strip polish: replace last user dictation with instruction + same text, then stream. */
   const polishLastUserFromStrip = useCallback(async () => {
@@ -415,47 +418,24 @@ export function ChatView({
     ]);
     if (!isTurnCurrent(turnId, signal)) return;
     setActiveAssistantMessageId(assistantMessageId);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "",
-        toolCalls: [],
-        model: streamingMetaRef.current?.model ?? activeChatModelRef.current,
-        timestamp: Date.now(),
-      },
-    ]);
+    appendAssistantPlaceholder(assistantMessageId);
     if (!isTurnCurrent(turnId, signal)) return;
     setIsTurnPending(false);
     setIsStreaming(true);
-    try {
-      await window.electron.chat.polishLastUser(conversationId);
-      onConversationCreated();
-    } catch (e) {
-      const wasAborted = signal.aborted || String(e).toLowerCase().includes("abort");
-      if (wasAborted) {
-        completeTurn(turnId);
-        return;
-      }
-      if (!isTurnCurrent(turnId, signal)) return;
-      const errorText = `[Error: ${e instanceof Error ? e.message : String(e)}]`;
-      applyAssistantChunk(assistantMessageId, () => errorText);
-      completeTurn(turnId);
-      void window.electron.memory.getMessages(conversationId).then((list) => {
-        setMessages(
-          list.map((m, i) => ({
-            id: `history-${(m as Message).timestamp ?? Date.now()}-${i}`,
-            role: m.role,
-            content: m.content,
-            toolCalls: (m as Message).toolCalls,
-            timestamp: (m as Message).timestamp,
-            model: (m as Message).model,
-          }))
-        );
-      });
-    }
-  }, [applyAssistantChunk, beginNewTurn, completeTurn, conversationId, isTurnCurrent, makeMessageId, onConversationCreated]);
+    await runAssistantTurn({
+      turnId,
+      signal,
+      assistantId: assistantMessageId,
+      backend: () => window.electron.chat.polishLastUser(conversationId),
+    });
+  }, [
+    appendAssistantPlaceholder,
+    beginNewTurn,
+    conversationId,
+    isTurnCurrent,
+    makeMessageId,
+    runAssistantTurn,
+  ]);
 
   const send = useCallback(async () => {
     if (attachmentTranscribing) return;
@@ -503,40 +483,17 @@ export function ChatView({
     if (!conversationId) return;
     const { turnId, signal } = beginNewTurn();
     const assistantMessageId = makeMessageId("assistant");
-    const latestUserId =
-      [...messagesRef.current]
-        .reverse()
-        .find((message) => message.role === "user")?.id ?? null;
     setActiveAssistantMessageId(assistantMessageId);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "",
-        toolCalls: [],
-        model: streamingMetaRef.current?.model ?? activeChatModelRef.current,
-        timestamp: Date.now(),
-      },
-    ]);
-    void latestUserId;
+    appendAssistantPlaceholder(assistantMessageId);
     setIsTurnPending(false);
     setIsStreaming(true);
-    try {
-      await window.electron.chat.generateReply(conversationId);
-      onConversationCreated();
-    } catch (e) {
-      const wasAborted = signal.aborted || String(e).toLowerCase().includes("abort");
-      if (wasAborted) {
-        completeTurn(turnId);
-        return;
-      }
-      if (!isTurnCurrent(turnId, signal)) return;
-      const errorText = `[Error: ${e instanceof Error ? e.message : String(e)}]`;
-      applyAssistantChunk(assistantMessageId, () => errorText);
-      completeTurn(turnId);
-    }
-  }, [applyAssistantChunk, beginNewTurn, completeTurn, conversationId, isTurnCurrent, makeMessageId, onConversationCreated]);
+    await runAssistantTurn({
+      turnId,
+      signal,
+      assistantId: assistantMessageId,
+      backend: () => window.electron.chat.generateReply(conversationId),
+    });
+  }, [appendAssistantPlaceholder, beginNewTurn, conversationId, makeMessageId, runAssistantTurn]);
 
   // Stable ref so the pendingHotkeyText effect always calls the latest sendText without it being a dep
   const sendTextRef = useRef(sendText);
@@ -654,7 +611,7 @@ export function ChatView({
             {displayTitle}
           </button>
         )}
-        displayMessages={displayMessages}
+        displayMessages={messages}
         copiedId={copiedId}
         onCopied={setCopiedId}
         streamingContent={streamingContent}
@@ -663,7 +620,6 @@ export function ChatView({
         onToolConfirm={handleToolConfirm}
         onPolish={polishLastUserFromStrip}
         onGenerateReply={generateReply}
-        onMessageRef={onMessageRef}
         inputRef={inputRef}
         input={input}
         onInputChange={setInput}

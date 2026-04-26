@@ -133,39 +133,41 @@ contextBridge.exposeInMainWorld("electron", {
   fileTools: {
     getAllowedRoots: () => ipcRenderer.invoke("fileTools:getAllowedRoots"),
   },
-  writing: {
-    listNotes: () =>
-      ipcRenderer.invoke("writing:notes:list") as Promise<
+  notes: {
+    list: () =>
+      ipcRenderer.invoke("notes:list") as Promise<
         { id: string; title: string; updatedAt: number; createdAt: number }[]
       >,
-    createNote: (title?: string) =>
-      ipcRenderer.invoke("writing:notes:create", title) as Promise<{
+    create: (title?: string, content?: string) =>
+      ipcRenderer.invoke("notes:create", title, content) as Promise<{
         id: string;
         title: string;
         content: string;
         updatedAt: number;
         createdAt: number;
       }>,
-    readNote: (id: string) =>
-      ipcRenderer.invoke("writing:notes:read", id) as Promise<{
+    read: (id: string) =>
+      ipcRenderer.invoke("notes:read", id) as Promise<{
         id: string;
         title: string;
         content: string;
         updatedAt: number;
         createdAt: number;
       } | null>,
-    saveNote: (id: string, content: string) =>
-      ipcRenderer.invoke("writing:notes:save", id, content) as Promise<{
+    save: (id: string, content: string) =>
+      ipcRenderer.invoke("notes:save", id, content) as Promise<{
         id: string;
         title: string;
         content: string;
         updatedAt: number;
         createdAt: number;
       }>,
-    deleteNote: (id: string) =>
-      ipcRenderer.invoke("writing:notes:delete", id) as Promise<
+    delete: (id: string) =>
+      ipcRenderer.invoke("notes:delete", id) as Promise<
         { id: string; title: string; updatedAt: number; createdAt: number }[]
       >,
+    showInFolder: (id: string) =>
+      ipcRenderer.invoke("notes:showInFolder", id) as Promise<void>,
   },
   recording: {
     requestMicrophoneAccess: () =>

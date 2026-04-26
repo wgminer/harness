@@ -1,5 +1,5 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   type Message,
   type ToolCallDisplay,
@@ -8,6 +8,7 @@ import {
   toolLabel,
   toolIcon,
   formatMessageTime,
+  ReplyingIndicator,
 } from "./chatHelpers";
 
 interface ChatMessageListProps {
@@ -20,7 +21,6 @@ interface ChatMessageListProps {
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
   onGenerateReply: () => void;
-  onMessageRef: (id: string, node: HTMLDivElement | null) => void;
 }
 
 export function ChatMessageList({
@@ -33,7 +33,6 @@ export function ChatMessageList({
   onToolConfirm,
   onPolish,
   onGenerateReply,
-  onMessageRef,
 }: ChatMessageListProps) {
   const [expandedUserCards, setExpandedUserCards] = useState<Set<string>>(new Set());
   const [overflowedUserCards, setOverflowedUserCards] = useState<Set<string>>(new Set());
@@ -80,6 +79,12 @@ export function ChatMessageList({
             !m.content &&
             !streamingContent;
 
+          let assistantBubbleBody: ReactNode = null;
+          if (m.role !== "user") {
+            if (m.content) assistantBubbleBody = <MarkdownContent content={m.content} />;
+            else if (isLatestAssistantPending) assistantBubbleBody = <ReplyingIndicator />;
+          }
+
           return (
             <div
               key={m.id}
@@ -87,7 +92,6 @@ export function ChatMessageList({
               data-message-role={m.role}
               data-message-ts={m.timestamp != null ? String(m.timestamp) : undefined}
               data-message-id={m.id}
-              ref={(node) => onMessageRef(m.id, node)}
             >
               <div className="content">
                 {m.role === "user" ? (
@@ -162,14 +166,7 @@ export function ChatMessageList({
                         })}
                       </div>
                     )}
-                    {m.content ? (
-                      <MarkdownContent content={m.content} />
-                    ) : isLatestAssistantPending ? (
-                      <span className="voice-status">
-                        <Loader2 size={13} className="voice-spinner" />
-                        Replying…
-                      </span>
-                    ) : null}
+                    {assistantBubbleBody}
                   </>
                 )}
               </div>
@@ -206,23 +203,14 @@ export function ChatMessageList({
       </div>
       {showReplyActions && (
         <div className="chat-secondary-actions">
-          {sending ? (
-            <span className="voice-status">
-              <Loader2 size={13} className="voice-spinner" />
-              Replying…
-            </span>
-          ) : (
-            <>
-              {showPolishInStrip && (
-                <button type="button" className="btn btn-chat-secondary chat-pane-btn" onClick={onPolish}>
-                  Polish
-                </button>
-              )}
-              <button type="button" className="btn btn-chat-secondary chat-pane-btn" onClick={onGenerateReply}>
-                Reply
-              </button>
-            </>
+          {showPolishInStrip && (
+            <button type="button" className="btn btn-chat-secondary chat-pane-btn" onClick={onPolish}>
+              Polish
+            </button>
           )}
+          <button type="button" className="btn btn-chat-secondary chat-pane-btn" onClick={onGenerateReply}>
+            Reply
+          </button>
         </div>
       )}
     </>

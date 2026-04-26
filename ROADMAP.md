@@ -8,8 +8,8 @@ Living document. **Completed** records what shipped; **v0.5** is the active plan
 
 ### 2026-04-21 — Test coverage expansion (unit + e2e)
 
-- **Unit coverage upgrade** — Added broad Vitest coverage for persistence and data-loss-sensitive modules (`memory`, `writing`, `plans`, `settings`, `assistantTools` task reducer paths, ChatGPT import parsing, file-tools path safety) plus renderer/shared utility tests.
-- **E2E flow coverage upgrade** — Expanded Playwright coverage for core UX and data durability: chat persistence across relaunch, conversation delete safety, settings/task flows, stream abort behavior, writing surface checkpoint persistence, and fixture-driven ChatGPT import dedupe.
+- **Unit coverage upgrade** — Added broad Vitest coverage for persistence and data-loss-sensitive modules (`memory`, `notes`, `plans`, `settings`, `assistantTools` task reducer paths, ChatGPT import parsing, file-tools path safety) plus renderer/shared utility tests.
+- **E2E flow coverage upgrade** — Expanded Playwright coverage for core UX and data durability: chat persistence across relaunch, conversation delete safety, settings/task flows, stream abort behavior, notes persistence, and fixture-driven ChatGPT import dedupe.
 - **Testability refactors** — Added `*In(dir)` pure-storage entry points across main-process persistence modules so tests can run against temp dirs without Electron bootstrapping.
 
 ### 2026-03-22 — Tray assets, recorder UX & typed bridge
@@ -72,11 +72,13 @@ Target: iterate on real usage from 0.4.x — clearer shell layout, better scalin
 
 - **Accent on dark backgrounds** — Introduce a derived accent token (e.g. softened or mixed toward foreground) for links and chips so saturated user accents remain readable on dark UI.
 
-### Design questions to settle (may drive spikes, not necessarily full builds in 0.5)
+### LLM-Assisted Notes Roadmap
 
 These stay **easy to explain in one paragraph** each; implementation can trail.
 
-- **Writing surface tool** — A durable, **markdown-only** document the model and user can write to over time — minimal schema, explicit save semantics, separate from ephemeral chat.
+- **Phase 1 (MVP+)** — Add note metadata (`source`, `lastEditedBy`, optional tags), list/search/sort in Notes, and helper tools (`note_suggest_outline`, `note_rewrite_section`) with explicit apply.
+- **Phase 2** — Add guided writing actions in Notes UI (“brainstorm”, “tighten”, “expand”, “change tone”), plus diff/preview before apply and per-note snapshots.
+- **Phase 3** — Add full co-author mode with a side panel linked to the active note, block-level edit intents, and provenance timeline for human vs model edits.
 - **Conversation links + memory** — How conversations reference each other; how long-term memory is refreshed (on demand vs scheduled vs nightly scan). Prefer a small number of clear rules over a black box.
 
 ### Explicitly not in this roadmap doc
