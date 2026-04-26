@@ -253,9 +253,9 @@ export const TOOL_DEFINITIONS = [
   {
     type: "function" as const,
     function: {
-      name: "doc_read",
+      name: "note_list",
       description:
-        "Read the current Desk note content (persistent markdown separate from chat). Returns { content, updatedAt, noteId }. Use this before editing so you append to what is actually there.",
+        "List all persisted notes with their ids, titles, and timestamps. Use this before selecting a note to read, update, or delete.",
       parameters: {
         type: "object",
         properties: {},
@@ -265,36 +265,79 @@ export const TOOL_DEFINITIONS = [
   {
     type: "function" as const,
     function: {
-      name: "doc_write",
+      name: "note_create",
       description:
-        "Replace the current Desk note with the given markdown content. Destructive — prefer doc_append for additions. Use when the user asks to rewrite / restart / clear the note, or when you have a freshly assembled full draft.",
+        "Create a new note. Title is optional and content can be provided at creation time.",
       parameters: {
         type: "object",
         properties: {
+          title: {
+            type: "string",
+            description: "Optional human-friendly title for the note.",
+          },
           content: {
             type: "string",
-            description: "New full markdown body for the document. Pass an empty string to clear.",
+            description: "Optional initial markdown body for the note.",
           },
         },
-        required: ["content"],
       },
     },
   },
   {
     type: "function" as const,
     function: {
-      name: "doc_append",
+      name: "note_read",
       description:
-        "Append markdown to the end of the current Desk note (with a blank line separator if needed). Use this for additive edits like 'add a section', 'write a paragraph about X', 'jot this down'.",
+        "Read one note by id. Use this before editing a specific note.",
       parameters: {
         type: "object",
         properties: {
-          content: {
+          id: {
             type: "string",
-            description: "Markdown to append to the end of the document.",
+            description: "ID of the note to read.",
           },
         },
-        required: ["content"],
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "note_save",
+      description:
+        "Replace the full markdown content of a note by id. Use this when rewriting or saving a complete updated draft.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description: "ID of the note to save.",
+          },
+          content: {
+            type: "string",
+            description: "Full markdown content for the note.",
+          },
+        },
+        required: ["id", "content"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "note_delete",
+      description:
+        "Delete a note by id when it is no longer needed.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description: "ID of the note to delete.",
+          },
+        },
+        required: ["id"],
       },
     },
   },

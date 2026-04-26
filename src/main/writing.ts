@@ -1,8 +1,8 @@
-import { ipcMain } from "electron";
+import { ipcMain, shell } from "electron";
 import { randomUUID } from "crypto";
 import { mkdir, readFile, stat, unlink, writeFile } from "fs/promises";
 import { join } from "path";
-import { UNTITLED_NOTE_TITLE, type WritingNote, type WritingNoteSummary } from "../shared/writing";
+import { UNTITLED_NOTE_TITLE, type Note, type NoteSummary } from "../shared/writing";
 import { getMemoryDir } from "./memory";
 import { fileExists } from "./utils";
 
@@ -12,15 +12,15 @@ const NOTES_DIR = "notes";
 const LEGACY_IMPORTED_NOTE_TITLE = "Imported note";
 const DEFAULT_NOTE_TITLE = "Note";
 
-interface WritingIndexEntry {
+interface NotesIndexEntry {
   id: string;
   title: string;
   createdAt: number;
   updatedAt: number;
 }
 
-interface WritingIndex {
-  notes: WritingIndexEntry[];
+interface NotesIndex {
+  notes: NotesIndexEntry[];
 }
 
 function getLegacyDocPathIn(memoryDir: string): string {
@@ -57,7 +57,7 @@ function titleFromContent(content: string, fallback: string): string {
   return firstLine.length > 80 ? `${firstLine.slice(0, 80).trimEnd()}...` : firstLine;
 }
 
-function toSummary(entry: WritingIndexEntry): WritingNoteSummary {
+function toSummary(entry: NotesIndexEntry): NoteSummary {
   return {
     id: entry.id,
     title: entry.title,
@@ -66,7 +66,7 @@ function toSummary(entry: WritingIndexEntry): WritingNoteSummary {
   };
 }
 
-function sortByUpdatedAtDesc(entries: WritingIndexEntry[]): WritingIndexEntry[] {
+function sortByUpdatedAtDesc(entries: NotesIndexEntry[]): NotesIndexEntry[] {
   return [...entries].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
@@ -74,7 +74,7 @@ async function ensureNotesDirIn(memoryDir: string): Promise<void> {
   await mkdir(getNotesDirPathIn(memoryDir), { recursive: true });
 }
 
-async function loadNotesIndexIn(memoryDir: string): Promise<WritingIndex> {
+async function loadNotesIndexIn(memoryDir: string): Promise<NotesIndex> {
   const path = getNotesIndexPathIn(memoryDir);
   if (!(await fileExists(path))) {
     return { notes: [] };
@@ -100,14 +100,14 @@ async function loadNotesIndexIn(memoryDir: string): Promise<WritingIndex> {
         }
         return { id, title, createdAt, updatedAt };
       })
-      .filter((entry): entry is WritingIndexEntry => entry != null);
+      .filter((entry): entry is NotesIndexEntry => entry != null);
     return { notes: sortByUpdatedAtDesc(notes) };
   } catch {
     return { notes: [] };
   }
 }
 
-async function saveNotesIndexIn(memoryDir: string, index: WritingIndex): Promise<void> {
+async function saveNotesIndexIn(memoryDir: string, index: NotesIndex): Promise<void> {
   const path = getNotesIndexPathIn(memoryDir);
   const sorted = sortByUpdatedAtDesc(index.notes);
   await writeFile(path, JSON.stringify({ notes: sorted }, null, 2), "utf-8");
@@ -140,41 +140,42 @@ async function migrateLegacyDocIn(memoryDir: string): Promise<void> {
   });
 }
 
-async function ensureNotesReadyIn(memoryDir: string): Promise<WritingIndex> {
+async function ensureNotesReadyIn(memoryDir: string): Promise<NotesIndex> {
   await ensureNotesDirIn(memoryDir);
   await migrateLegacyDocIn(memoryDir);
   return loadNotesIndexIn(memoryDir);
 }
 
-export async function listNotesIn(memoryDir: string): Promise<WritingNoteSummary[]> {
+export async function listNotesIn(memoryDir: string): Promise<NoteSummary[]> {
   const index = await ensureNotesReadyIn(memoryDir);
   return sortByUpdatedAtDesc(index.notes).map(toSummary);
 }
 
-export async function listNotes(): Promise<WritingNoteSummary[]> {
+export async function listNotes(): Promise<NoteSummary[]> {
   return listNotesIn(getMemoryDir());
 }
 
-export async function createNoteIn(memoryDir: string, title?: string): Promise<WritingNote> {
+export async function createNoteIn(memoryDir: string, title?: string, content = ""): Promise<Note> {
   const index = await ensureNotesReadyIn(memoryDir);
   const id = randomUUID();
   const now = Date.now();
-  const entry: WritingIndexEntry = {
+  const normalizedContent = normalizeContent(content);
+  const entry: NotesIndexEntry = {
     id,
-    title: normalizeTitle(title, `${DEFAULT_NOTE_TITLE} ${index.notes.length + 1}`),
+    title: normalizeTitle(title, titleFromContent(normalizedContent, `${DEFAULT_NOTE_TITLE} ${index.notes.length + 1}`)),
     createdAt: now,
     updatedAt: now,
   };
-  await writeFile(getNotePathIn(memoryDir, id), "", "utf-8");
+  await writeFile(getNotePathIn(memoryDir, id), normalizedContent, "utf-8");
   await saveNotesIndexIn(memoryDir, { notes: [entry, ...index.notes] });
-  return { ...entry, content: "" };
+  return { ...entry, content: normalizedContent };
 }
 
-export async function createNote(title?: string): Promise<WritingNote> {
-  return createNoteIn(getMemoryDir(), title);
+export async function createNote(title?: string, content?: string): Promise<Note> {
+  return createNoteIn(getMemoryDir(), title, content ?? "");
 }
 
-export async function readNoteIn(memoryDir: string, id: string): Promise<WritingNote | null> {
+export async function readNoteIn(memoryDir: string, id: string): Promise<Note | null> {
   const cleanId = String(id ?? "").trim();
   if (!cleanId) return null;
   const index = await ensureNotesReadyIn(memoryDir);
@@ -185,11 +186,11 @@ export async function readNoteIn(memoryDir: string, id: string): Promise<Writing
   return { ...entry, content };
 }
 
-export async function readNote(id: string): Promise<WritingNote | null> {
+export async function readNote(id: string): Promise<Note | null> {
   return readNoteIn(getMemoryDir(), id);
 }
 
-export async function saveNoteIn(memoryDir: string, id: string, content: string): Promise<WritingNote> {
+export async function saveNoteIn(memoryDir: string, id: string, content: string): Promise<Note> {
   const cleanId = String(id ?? "").trim();
   if (!cleanId) {
     throw new Error("saveNote requires a note id");
@@ -203,7 +204,7 @@ export async function saveNoteIn(memoryDir: string, id: string, content: string)
   await writeFile(getNotePathIn(memoryDir, cleanId), normalized, "utf-8");
   const now = Date.now();
   const current = index.notes[noteIndex];
-  const updatedEntry: WritingIndexEntry = {
+  const updatedEntry: NotesIndexEntry = {
     ...current,
     title: titleFromContent(normalized, current.title || UNTITLED_NOTE_TITLE),
     updatedAt: now,
@@ -214,11 +215,11 @@ export async function saveNoteIn(memoryDir: string, id: string, content: string)
   return { ...updatedEntry, content: normalized };
 }
 
-export async function saveNote(id: string, content: string): Promise<WritingNote> {
+export async function saveNote(id: string, content: string): Promise<Note> {
   return saveNoteIn(getMemoryDir(), id, content);
 }
 
-export async function deleteNoteIn(memoryDir: string, id: string): Promise<WritingNoteSummary[]> {
+export async function deleteNoteIn(memoryDir: string, id: string): Promise<NoteSummary[]> {
   const cleanId = String(id ?? "").trim();
   if (!cleanId) return listNotesIn(memoryDir);
   const index = await ensureNotesReadyIn(memoryDir);
@@ -232,56 +233,61 @@ export async function deleteNoteIn(memoryDir: string, id: string): Promise<Writi
   return sortByUpdatedAtDesc(next).map(toSummary);
 }
 
-export async function deleteNote(id: string): Promise<WritingNoteSummary[]> {
+export async function deleteNote(id: string): Promise<NoteSummary[]> {
   return deleteNoteIn(getMemoryDir(), id);
 }
 
-async function getOrCreatePrimaryNoteIn(memoryDir: string): Promise<WritingNote> {
-  const notes = await listNotesIn(memoryDir);
-  if (notes.length > 0) {
-    const existing = await readNoteIn(memoryDir, notes[0].id);
-    if (existing) return existing;
+export async function showNoteInFolder(id: string): Promise<void> {
+  const cleanId = String(id ?? "").trim();
+  if (!cleanId) return;
+  const notePath = getNotePathIn(getMemoryDir(), cleanId);
+  if (!(await fileExists(notePath))) {
+    throw new Error(`Note file not found: ${cleanId}`);
   }
-  return createNoteIn(memoryDir, DEFAULT_NOTE_TITLE);
+  shell.showItemInFolder(notePath);
 }
 
-/**
- * Tool-call dispatch for the assistant. Kept here rather than in
- * assistantTools.ts so all writing-surface logic lives in one module.
- */
-export async function executeDocTool(
-  name: "doc_read" | "doc_write" | "doc_append",
+export async function executeNoteTool(
+  name: "note_list" | "note_create" | "note_read" | "note_save" | "note_delete",
   args: Record<string, unknown>,
-): Promise<{ content: string; updatedAt: number; noteId: string } | { error: string }> {
+): Promise<{ notes?: NoteSummary[]; note?: Note; ok?: boolean; error?: string }> {
   const memoryDir = getMemoryDir();
-  const primary = await getOrCreatePrimaryNoteIn(memoryDir);
   switch (name) {
-    case "doc_read":
-      return { content: primary.content, updatedAt: primary.updatedAt, noteId: primary.id };
-    case "doc_write": {
+    case "note_list":
+      return { notes: await listNotesIn(memoryDir) };
+    case "note_create": {
+      const title = typeof args.title === "string" ? args.title : undefined;
       const content = typeof args.content === "string" ? args.content : "";
-      const saved = await saveNoteIn(memoryDir, primary.id, content);
-      return { content: saved.content, updatedAt: saved.updatedAt, noteId: saved.id };
+      return { note: await createNoteIn(memoryDir, title, content) };
     }
-    case "doc_append": {
+    case "note_read": {
+      const id = typeof args.id === "string" ? args.id.trim() : "";
+      if (!id) return { error: "note_read requires a non-empty 'id' string" };
+      const note = await readNoteIn(memoryDir, id);
+      return note ? { note } : { error: `Note not found: ${id}` };
+    }
+    case "note_save": {
+      const id = typeof args.id === "string" ? args.id.trim() : "";
       const content = typeof args.content === "string" ? args.content : "";
-      if (!content) {
-        return { error: "doc_append requires a non-empty 'content' string" };
-      }
-      const needsSeparator = primary.content.length > 0 && !primary.content.endsWith("\n");
-      const combined = primary.content + (needsSeparator ? "\n\n" : "") + content;
-      const saved = await saveNoteIn(memoryDir, primary.id, combined);
-      return { content: saved.content, updatedAt: saved.updatedAt, noteId: saved.id };
+      if (!id) return { error: "note_save requires a non-empty 'id' string" };
+      return { note: await saveNoteIn(memoryDir, id, content) };
+    }
+    case "note_delete": {
+      const id = typeof args.id === "string" ? args.id.trim() : "";
+      if (!id) return { error: "note_delete requires a non-empty 'id' string" };
+      await deleteNoteIn(memoryDir, id);
+      return { ok: true };
     }
     default:
-      return { error: `Unknown writing tool: ${name}` };
+      return { error: `Unknown note tool: ${name}` };
   }
 }
 
-export function registerWritingHandlers(): void {
-  ipcMain.handle("writing:notes:list", () => listNotes());
-  ipcMain.handle("writing:notes:create", (_e, title?: string) => createNote(title));
-  ipcMain.handle("writing:notes:read", (_e, id: string) => readNote(id ?? ""));
-  ipcMain.handle("writing:notes:save", (_e, id: string, content: string) => saveNote(id ?? "", content ?? ""));
-  ipcMain.handle("writing:notes:delete", (_e, id: string) => deleteNote(id ?? ""));
+export function registerNotesHandlers(): void {
+  ipcMain.handle("notes:list", () => listNotes());
+  ipcMain.handle("notes:create", (_e, title?: string, content?: string) => createNote(title, content));
+  ipcMain.handle("notes:read", (_e, id: string) => readNote(id ?? ""));
+  ipcMain.handle("notes:save", (_e, id: string, content: string) => saveNote(id ?? "", content ?? ""));
+  ipcMain.handle("notes:delete", (_e, id: string) => deleteNote(id ?? ""));
+  ipcMain.handle("notes:showInFolder", (_e, id: string) => showNoteInFolder(id ?? ""));
 }

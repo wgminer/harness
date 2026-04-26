@@ -26,7 +26,7 @@ async function makeDir(): Promise<string> {
   return temp.path;
 }
 
-describe("writing surface", () => {
+describe("notes storage", () => {
   it("starts with empty notes list when storage is missing", async () => {
     const dir = await makeDir();
     await expect(listNotesIn(dir)).resolves.toEqual([]);

@@ -39,17 +39,13 @@ test("stop mid-stream preserves partial assistant output", async () => {
   expect(text).not.toContain("[Error]");
 });
 
-test("writing surface survives relaunch with save history", async () => {
+test("notes persist across relaunch", async () => {
   let win = await page();
-  await win.getByTestId("sidebar-writing").click();
-  const editor = win.getByTestId("writing-editor");
-  await editor.fill("# Desk\n\nkeep this text");
+  await win.getByTestId("sidebar-notes").click();
+  const editor = win.getByTestId("notes-editor");
+  await editor.fill("# Notes\n\nkeep this text");
   await win.getByRole("button", { name: "Save", exact: true }).click();
   await win.waitForTimeout(600);
-
-  await win.getByRole("button", { name: "Open save history panel" }).click();
-  await expect(win.getByText("Save History")).toBeVisible();
-  await expect(win.getByText(/1\/\d+/)).toBeVisible();
 
   await electronApp.close();
   electronApp = await launchHarness({
@@ -57,8 +53,8 @@ test("writing surface survives relaunch with save history", async () => {
     HARNESS_E2E_IMPORT_DIR: path.join(process.cwd(), "e2e/fixtures/chatgpt-sample"),
   });
   win = await page();
-  await win.getByTestId("sidebar-writing").click();
-  await expect(win.getByTestId("writing-editor")).toHaveValue("# Desk\n\nkeep this text");
+  await win.getByTestId("sidebar-notes").click();
+  await expect(win.getByTestId("notes-editor")).toHaveValue("# Notes\n\nkeep this text");
 });
 
 test("chatgpt import is deduped on rerun", async () => {

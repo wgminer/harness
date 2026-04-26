@@ -1,0 +1,152 @@
+.notes-surface {
+  min-height: 0;
+}
+
+.notes-surface__scroll {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: 0;
+}
+
+.notes-surface__scroll--detail {
+  padding: 0;
+}
+
+.notes-surface__panel {
+  max-width: var(--content-width);
+  width: 100%;
+  margin: 0 auto;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 16px 24px;
+}
+
+.notes-surface__notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.notes-surface__new-note {
+  width: 100%;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.notes-surface__note-item {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: 4px;
+  text-align: left;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.notes-surface__note-title {
+  font-size: calc(var(--font-size) * 13 / 14);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notes-surface__note-time {
+  font-size: calc(var(--font-size) * 11 / 14);
+  color: var(--fg-muted);
+}
+
+.notes-surface__toolbar {
+  width: 100%;
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notes-surface__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.notes-surface__meta strong {
+  color: var(--fg);
+  font-size: var(--font-size);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notes-surface__toolbar .btn {
+  height: var(--input-height);
+}
+
+.notes-surface__toolbar .btn-icon {
+  width: var(--input-height);
+  min-width: var(--input-height);
+}
+
+.notes-surface__save-btn {
+  font-size: var(--font-size);
+  gap: 8px;
+}
+
+.notes-surface__show-file-btn {
+  gap: 8px;
+}
+
+.notes-surface__editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  outline: none;
+  resize: none;
+  padding: 16px;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.notes-surface__empty {
+  margin: 10px 0 0;
+  color: var(--fg-muted);
+  font-size: calc(var(--font-size) * 13 / 14);
+}
+
+.notes-surface__error {
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  font-size: calc(var(--font-size) * 12 / 14);
+  color: var(--danger, #d04747);
+}
+
+@media (max-width: 768px) {
+  .notes-surface__panel {
+    width: 100%;
+  }
+
+  .notes-surface__meta span {
+    display: none;
+  }
+}

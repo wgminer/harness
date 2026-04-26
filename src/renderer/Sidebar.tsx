@@ -194,15 +194,15 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              className={`btn sidebar-workspace__btn${view === "writing" ? " sidebar-workspace__btn--active" : ""}`}
-              data-testid="sidebar-writing"
-              onClick={() => onViewChange("writing")}
-              aria-label="Desk"
-              aria-current={view === "writing" ? "page" : undefined}
+              className={`btn sidebar-workspace__btn${view === "notes" ? " sidebar-workspace__btn--active" : ""}`}
+              data-testid="sidebar-notes"
+              onClick={() => onViewChange("notes")}
+              aria-label="Notes"
+              aria-current={view === "notes" ? "page" : undefined}
             >
               <SquarePen size={16} className="sidebar-workspace__icon" aria-hidden />
               <span className="sidebar-workspace__label">
-                <span>Desk</span>
+                <span>Notes</span>
                 <span className="sidebar-workspace__wip-tag" aria-hidden>
                   WIP
                 </span>

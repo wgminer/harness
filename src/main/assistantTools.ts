@@ -12,7 +12,7 @@ import {
 } from "../shared/taskTags";
 import { getSettings } from "./settings";
 import { getWeatherForZip } from "./weather";
-import { executeDocTool } from "./writing";
+import { executeNoteTool } from "./writing";
 
 export interface TaskItem {
   id: string;
@@ -355,9 +355,11 @@ export function isAssistantToolName(name: string): boolean {
     "memory_search_conversations",
     "get_datetime",
     "get_weather",
-    "doc_read",
-    "doc_write",
-    "doc_append",
+    "note_list",
+    "note_create",
+    "note_read",
+    "note_save",
+    "note_delete",
   ].includes(name);
 }
 
@@ -383,10 +385,12 @@ export async function executeAssistantTool(name: string, args: Record<string, un
       return JSON.stringify(getDatetime(args));
     case "get_weather":
       return JSON.stringify(await fetchWeather(args));
-    case "doc_read":
-    case "doc_write":
-    case "doc_append":
-      return JSON.stringify(await executeDocTool(name, args));
+    case "note_list":
+    case "note_create":
+    case "note_read":
+    case "note_save":
+    case "note_delete":
+      return JSON.stringify(await executeNoteTool(name, args));
     default:
       return JSON.stringify({ error: `Unknown assistant tool: ${name}` });
   }

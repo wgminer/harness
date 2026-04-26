@@ -1,11 +1,11 @@
-export interface WritingNoteSummary {
+export interface NoteSummary {
   id: string;
   title: string;
   updatedAt: number;
   createdAt: number;
 }
 
-export interface WritingNote extends WritingNoteSummary {
+export interface Note extends NoteSummary {
   content: string;
 }
 

@@ -46,7 +46,6 @@ interface ChatSurfaceProps {
   focusComposerNonce?: number;
   messagesTestId: string;
   composerTestId: string;
-  onMessageRef: (id: string, node: HTMLDivElement | null) => void;
   inputRef: MutableRefObject<HTMLTextAreaElement | null>;
 }
 
@@ -82,7 +81,6 @@ export function ChatSurface({
   focusComposerNonce,
   messagesTestId,
   composerTestId,
-  onMessageRef,
   inputRef,
 }: ChatSurfaceProps) {
   const [hasScrolled, setHasScrolled] = useState(false);
@@ -180,7 +178,6 @@ export function ChatSurface({
             onToolConfirm={onToolConfirm}
             onPolish={onPolish}
             onGenerateReply={onGenerateReply}
-            onMessageRef={onMessageRef}
           />
         </div>
       </div>
