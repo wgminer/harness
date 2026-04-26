@@ -20,9 +20,12 @@ export function getSettingsPathForUserData(userDataDir: string): string {
 
 function parseTranscription(raw: Record<string, unknown> | undefined): NonNullable<Settings["transcription"]> {
   const c = raw?.cleanup as Record<string, unknown> | undefined;
+  const defaultPrompt = D.transcription!.cleanup!.prompt;
+  const prompt = typeof c?.prompt === "string" && c.prompt.trim() ? c.prompt : defaultPrompt;
   return {
     cleanup: {
       enabled: typeof c?.enabled === "boolean" ? c.enabled : D.transcription!.cleanup!.enabled,
+      prompt,
     },
   };
 }

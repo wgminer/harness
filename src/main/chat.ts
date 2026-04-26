@@ -29,6 +29,101 @@ function getMainWindow(): BrowserWindow | null {
   return wins.length > 0 ? wins[0] : null;
 }
 
+const MEMORY_STOPWORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "but",
+  "by",
+  "for",
+  "from",
+  "how",
+  "i",
+  "if",
+  "in",
+  "is",
+  "it",
+  "me",
+  "my",
+  "of",
+  "on",
+  "or",
+  "that",
+  "the",
+  "this",
+  "to",
+  "was",
+  "we",
+  "with",
+  "you",
+  "your",
+]);
+
+const MEMORY_ALWAYS_RELEVANT_KEY_PARTS = ["writing", "tone", "style", "voice", "goal", "audience", "constraint"];
+const MAX_MEMORY_ENTRIES = 6;
+const MAX_MEMORY_CHARS = 900;
+const MIN_MEMORY_SCORE = 0.65;
+
+function toTokens(text: string): string[] {
+  return String(text)
+    .toLowerCase()
+    .split(/[^a-z0-9_]+/)
+    .filter((t) => t.length >= 3 && !MEMORY_STOPWORDS.has(t));
+}
+
+function countOverlap(base: Set<string>, candidates: string[]): number {
+  let count = 0;
+  for (const token of candidates) {
+    if (base.has(token)) count += 1;
+  }
+  return count;
+}
+
+function scoreMemoryEntry(key: string, value: string, userContent: string): number {
+  const userTokens = new Set(toTokens(userContent));
+  if (userTokens.size === 0) return 0;
+  const keyTokens = toTokens(key);
+  const valueTokens = toTokens(value);
+  const keyMatches = countOverlap(userTokens, keyTokens);
+  const valueMatches = countOverlap(userTokens, valueTokens);
+  const tokenNorm = Math.sqrt(Math.max(1, keyTokens.length + valueTokens.length));
+  let score = (keyMatches * 2 + valueMatches) / tokenNorm;
+  const keyLower = key.toLowerCase();
+  if (MEMORY_ALWAYS_RELEVANT_KEY_PARTS.some((part) => keyLower.includes(part))) score += 1;
+  const extraChars = Math.max(0, value.length - 260);
+  score -= (extraChars / 200) * 0.2;
+  return score;
+}
+
+function selectRelevantMemoryEntries(
+  userMemory: Record<string, string>,
+  userContent?: string
+): Array<[key: string, value: string]> {
+  const entries = Object.entries(userMemory).filter(([k]) => k.trim().length > 0);
+  if (entries.length === 0) return [];
+  if (!userContent?.trim()) return entries.slice(0, 3);
+
+  const scored = entries
+    .map(([key, value]) => ({ key, value, score: scoreMemoryEntry(key, value, userContent) }))
+    .filter((row) => row.score >= MIN_MEMORY_SCORE)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_MEMORY_ENTRIES);
+
+  let usedChars = 0;
+  const selected: Array<[string, string]> = [];
+  for (const row of scored) {
+    const nextLine = `- ${row.key}: ${row.value}`;
+    if (selected.length > 0 && usedChars + nextLine.length > MAX_MEMORY_CHARS) break;
+    selected.push([row.key, row.value]);
+    usedChars += nextLine.length;
+  }
+  return selected;
+}
+
 function splitIntoWordChunks(content: string): string[] {
   const parts = content.split(/\s+/).filter(Boolean);
   if (parts.length <= 1) return [content];
@@ -45,16 +140,29 @@ async function buildMessageList(
   secondUserContent?: string
 ): Promise<ChatMessage[]> {
   const userMemory = await getUserMemory();
+  const selectedMemory = selectRelevantMemoryEntries(userMemory, userContent);
   const memoryBlock =
-    Object.keys(userMemory).length > 0
-      ? "User context / remembered facts:\n" +
-        Object.entries(userMemory)
-          .map(([k, v]) => `- ${k}: ${v}`)
-          .join("\n")
+    selectedMemory.length > 0
+      ? [
+          "[USER_MEMORY_CONTEXT]",
+          "Use only if relevant to the current request.",
+          ...selectedMemory.map(([k, v]) => `- ${k}: ${v}`),
+          "",
+          "[MEMORY_RULES]",
+          "- Treat memory as hints, not absolute truth.",
+          "- If memory conflicts with the user's current message, follow the current message.",
+          "- If uncertain whether memory still applies, ask one brief clarifying question.",
+        ].join("\n")
       : "";
 
   const systemPrompt =
-    "Helpful assistant running in a local desktop app. Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent tagged task list visible in a dedicated panel); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); and note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat). Call them when appropriate." +
+    [
+      "[CORE_INSTRUCTIONS]",
+      "You are a helpful assistant running in a local desktop app.",
+      "Prefer concise, practical, high-signal responses.",
+      "For complex writing/thinking tasks, start with structure (questions, outline, tradeoffs) unless the user explicitly asks for a full draft immediately.",
+      "Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent tagged task list visible in a dedicated panel); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); and note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat). Call them when appropriate.",
+    ].join("\n") +
     (memoryBlock ? "\n\n" + memoryBlock : "");
 
   const history = await getMessages(conversationId);

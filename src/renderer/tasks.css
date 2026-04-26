@@ -12,6 +12,16 @@
   pointer-events: none;
 }
 
+.tasks-section {
+  margin-bottom: 16px;
+}
+
+.tasks-group {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
 .tasks-section-heading {
   display: flex;
   align-items: center;

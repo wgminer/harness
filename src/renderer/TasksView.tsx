@@ -287,18 +287,18 @@ export function TasksView() {
   const completedTasks = tasks.filter((t) => taskIsDone(normalizeTags(t.tags)));
 
   return (
-    <div ref={tasksPaneRef} className="settings-page tasks-page">
-      <header className={`settings-header ${headerScrolled ? "settings-header--scrolled" : ""}`}>
-        <div className="settings-header-inner">
-          <div className="settings-header-title-row">
+    <div ref={tasksPaneRef} className="workspace-page tasks-page">
+      <header className={`workspace-header ${headerScrolled ? "workspace-header--scrolled" : ""}`}>
+        <div className="workspace-header-inner">
+          <div className="workspace-header-title-row">
             <ListTodo size={18} />
-            <h2 className="settings-title">Tasks</h2>
+            <h2 className="workspace-title">Tasks</h2>
           </div>
         </div>
       </header>
-      <div ref={scrollRef} className="settings-scroll tasks-scroll" onScroll={onScroll}>
-        <div className="settings-content tasks-content">
-          <div className="settings-section">
+      <div ref={scrollRef} className="workspace-scroll tasks-scroll" onScroll={onScroll}>
+        <div className="workspace-content tasks-content">
+          <div className="tasks-section">
             <button
               type="button"
               className="tasks-section-heading"
@@ -333,7 +333,7 @@ export function TasksView() {
           </div>
 
           {completedTasks.length > 0 && (
-            <div className="settings-group">
+            <div className="tasks-group">
               <button
                 type="button"
                 className="tasks-section-heading"

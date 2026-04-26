@@ -40,6 +40,8 @@ export interface Settings {
     cleanup?: {
       /** Optional post-transcription cleanup pass via OpenAI (separate from chat model). */
       enabled: boolean;
+      /** User-editable prompt that guides transcript cleanup behavior. */
+      prompt: string;
     };
   };
   /** Optional Tavily API key for the `web_search` assistant tool. */
@@ -92,6 +94,8 @@ export const DEFAULT_SETTINGS: Settings = {
   transcription: {
     cleanup: {
       enabled: false,
+      prompt:
+        "Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Keep proper nouns and technical terms unchanged. Do not add new information.",
     },
   },
   search: {

@@ -196,13 +196,13 @@ export function NotesView({ initialOpenNoteId, onInitialOpenNoteHandled }: Notes
   }, [save]);
 
   return (
-    <div className="settings-page notes-surface">
+    <div className="workspace-page notes-surface">
       {screen === "list" ? (
-        <header className={`settings-header ${headerScrolled ? "settings-header--scrolled" : ""}`}>
-          <div className="settings-header-inner">
-            <div className="settings-header-title-row">
+        <header className={`workspace-header ${headerScrolled ? "workspace-header--scrolled" : ""}`}>
+          <div className="workspace-header-inner">
+            <div className="workspace-header-title-row">
               <SquarePen size={18} />
-              <h2 className="settings-title">Notes</h2>
+              <h2 className="workspace-title">Notes</h2>
             </div>
             <button
               type="button"
@@ -218,7 +218,7 @@ export function NotesView({ initialOpenNoteId, onInitialOpenNoteHandled }: Notes
       ) : null}
       <div
         ref={scrollRef}
-        className={`settings-scroll notes-surface__scroll${screen === "detail" ? " notes-surface__scroll--detail" : ""}`}
+        className={`workspace-scroll notes-surface__scroll${screen === "detail" ? " notes-surface__scroll--detail" : ""}`}
         onScroll={onScroll}
       >
         {screen === "list" ? (

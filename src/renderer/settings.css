@@ -34,6 +34,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .settings-header--scrolled {
@@ -57,6 +58,57 @@
   max-width: var(--content-width);
   margin: 0 auto;
   padding: 8px 16px 24px;
+}
+
+.settings-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-tabs--header {
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.settings-tabs--latched {
+  opacity: 1;
+}
+
+.settings-tab {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-family);
+  font-size: calc(var(--font-size) * 11 / 14);
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-tab:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+
+.settings-tab--active {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+.settings-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-tab-panel + .settings-tab-panel {
+  margin-top: 12px;
 }
 
 .settings-group {
@@ -290,6 +342,11 @@
   margin-bottom: 16px;
 }
 
+.settings-cleanup-prompt__actions {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
 .settings-memory-hint {
   margin-top: 0;
   margin-bottom: 12px;
@@ -335,6 +392,17 @@
   color: var(--fg-muted);
 }
 
+.settings-memory-edit {
+  flex-shrink: 0;
+  color: var(--fg-muted);
+}
+
+.settings-memory-edit:hover:not(:disabled) {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-secondary));
+  box-shadow: var(--btn-shadow-hover);
+}
+
 .settings-memory-delete:hover:not(:disabled) {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 14%, var(--bg-secondary));
@@ -358,6 +426,13 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--fg-muted);
+}
+
+.settings-memory-detail-input {
+  height: auto;
+  min-height: calc(var(--input-height) * 3);
+  padding: 8px 10px;
+  resize: vertical;
 }
 
 .settings-section--inline {
