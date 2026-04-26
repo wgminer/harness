@@ -1,21 +1,22 @@
 import { ipcMain } from "electron";
 import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
-import { app } from "electron";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings } from "../shared/types";
 import { fileExists } from "./utils";
+import { ensureLocalDataMigration, getLocalDataSettingsPath } from "./localDataPaths";
 
 const SETTINGS_FILE = "settings.json";
 
 const D = DEFAULT_SETTINGS;
 
 function getSettingsPath(): string {
-  return join(app.getPath("userData"), SETTINGS_FILE);
+  ensureLocalDataMigration();
+  return getLocalDataSettingsPath();
 }
 
 export function getSettingsPathForUserData(userDataDir: string): string {
-  return join(userDataDir, SETTINGS_FILE);
+  return join(userDataDir, "local-data", "settings", SETTINGS_FILE);
 }
 
 function parseTranscription(raw: Record<string, unknown> | undefined): NonNullable<Settings["transcription"]> {

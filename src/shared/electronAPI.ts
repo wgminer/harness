@@ -2,6 +2,7 @@ import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./typ
 import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
 import type { Note, NoteSummary } from "./writing";
+import type { SyncResult, SyncStatus } from "./sync";
 
 export interface TaskItem {
   id: string;
@@ -61,6 +62,23 @@ export interface ElectronAPI {
     searchConversations: (query: string) => Promise<SearchResult[]>;
     importFromChatGPTFolder: () => Promise<{ imported: number; errors: string[] }>;
     resetStoredData: () => Promise<void>;
+    openLocalDataFolder: () => Promise<void>;
+    getDataStatus: () => Promise<{
+      localDataDir: string;
+      appStateDir: string;
+      localDataExists: boolean;
+      conversationsCount: number;
+      messageFilesCount: number;
+      notesFilesCount: number;
+      hasSettingsFile: boolean;
+      hasThemesDir: boolean;
+      recordingsDir: string;
+      recordingsLocalOnly: true;
+      legacyMemoryDir: string;
+      legacyMemoryExists: boolean;
+      sync: SyncStatus;
+    }>;
+    cleanupLegacyMemory: () => Promise<{ removed: boolean }>;
     setConversationTitle: (conversationId: string, title: string) => Promise<void>;
     setVoiceDictationTitle: (conversationId: string) => Promise<string>;
   };
@@ -126,6 +144,10 @@ export interface ElectronAPI {
     onStartSilent: (cb: () => void) => () => void;
     onStopAndPaste: (cb: (wasFocused: boolean) => void) => () => void;
     onCancel: (cb: () => void) => () => void;
+  };
+  sync: {
+    getStatus: () => Promise<SyncStatus>;
+    runNow: () => Promise<SyncResult>;
   };
   /** Present when the app is launched with `HARNESS_E2E=1`. */
   e2e?: {

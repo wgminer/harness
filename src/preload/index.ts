@@ -55,6 +55,31 @@ contextBridge.exposeInMainWorld("electron", {
     importFromChatGPTFolder: () =>
       ipcRenderer.invoke("memory:importFromChatGPTFolder") as Promise<{ imported: number; errors: string[] }>,
     resetStoredData: () => ipcRenderer.invoke("memory:resetStoredData"),
+    openLocalDataFolder: () => ipcRenderer.invoke("memory:openLocalDataFolder") as Promise<void>,
+    getDataStatus: () =>
+      ipcRenderer.invoke("memory:getDataStatus") as Promise<{
+        localDataDir: string;
+        appStateDir: string;
+        localDataExists: boolean;
+        conversationsCount: number;
+        messageFilesCount: number;
+        notesFilesCount: number;
+        hasSettingsFile: boolean;
+        hasThemesDir: boolean;
+        recordingsDir: string;
+        recordingsLocalOnly: true;
+        legacyMemoryDir: string;
+        legacyMemoryExists: boolean;
+        sync: {
+          provider: "firebase";
+          configured: boolean;
+          lastAttemptAt: number | null;
+          lastSuccessAt: number | null;
+          lastError: string | null;
+          lastUploadedRevision: string | null;
+        };
+      }>,
+    cleanupLegacyMemory: () => ipcRenderer.invoke("memory:cleanupLegacyMemory") as Promise<{ removed: boolean }>,
     setConversationTitle: (conversationId: string, title: string) =>
       ipcRenderer.invoke("memory:setConversationTitle", conversationId, title),
     setVoiceDictationTitle: (conversationId: string) =>
@@ -201,6 +226,29 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.on("recording:cancel", sub);
       return () => ipcRenderer.removeListener("recording:cancel", sub);
     },
+  },
+  sync: {
+    getStatus: () =>
+      ipcRenderer.invoke("sync:getStatus") as Promise<{
+        provider: "firebase";
+        configured: boolean;
+        lastAttemptAt: number | null;
+        lastSuccessAt: number | null;
+        lastError: string | null;
+        lastUploadedRevision: string | null;
+      }>,
+    runNow: () =>
+      ipcRenderer.invoke("sync:runNow") as Promise<{
+        ok: boolean;
+        status: {
+          provider: "firebase";
+          configured: boolean;
+          lastAttemptAt: number | null;
+          lastSuccessAt: number | null;
+          lastError: string | null;
+          lastUploadedRevision: string | null;
+        };
+      }>,
   },
   ...(e2eBridge ? { e2e: e2eBridge } : {}),
 });
