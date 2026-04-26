@@ -1,4 +1,4 @@
-import { Check, Copy, Loader2 } from "lucide-react";
+import { Check, Copy, Loader2, SquarePen } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -107,6 +107,32 @@ export function CopyButton({
       aria-label={justCopied ? "Copied!" : "Copy message"}
     >
       {justCopied ? <Check size={12} /> : <Copy size={12} />}
+    </button>
+  );
+}
+
+export function SaveToNotesButton({
+  content,
+  messageId,
+  savedNoteId,
+  onSaveToNotes,
+}: {
+  content: string;
+  messageId: string;
+  savedNoteId: string | null;
+  onSaveToNotes: (messageId: string, content: string) => void | Promise<void>;
+}) {
+  const justSaved = savedNoteId === messageId;
+  return (
+    <button
+      type="button"
+      className="message-footer-icon-btn"
+      onClick={() => void onSaveToNotes(messageId, content)}
+      disabled={!content.trim()}
+      title={justSaved ? "Added to notes" : "Add to notes"}
+      aria-label={justSaved ? "Added to notes" : "Add message to notes"}
+    >
+      {justSaved ? <Check size={12} /> : <SquarePen size={12} />}
     </button>
   );
 }

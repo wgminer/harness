@@ -21,7 +21,9 @@ interface ChatSurfaceProps {
   headerClassName?: string;
   displayMessages: Message[];
   copiedId: string | null;
+  savedToNotesId: string | null;
   onCopied: (id: string | null) => void;
+  onSaveToNotes: (id: string, content: string) => void | Promise<void>;
   streamingContent: string;
   sending: boolean;
   polishHintAfterDictation: boolean;
@@ -56,7 +58,9 @@ export function ChatSurface({
   headerClassName,
   displayMessages,
   copiedId,
+  savedToNotesId,
   onCopied,
+  onSaveToNotes,
   streamingContent,
   sending,
   polishHintAfterDictation,
@@ -171,7 +175,9 @@ export function ChatSurface({
           <ChatMessageList
             displayMessages={displayMessages}
             copiedId={copiedId}
+            savedToNotesId={savedToNotesId}
             onCopied={onCopied}
+            onSaveToNotes={onSaveToNotes}
             streamingContent={streamingContent}
             sending={sending}
             polishHintAfterDictation={polishHintAfterDictation}

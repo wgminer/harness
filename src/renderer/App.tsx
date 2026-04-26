@@ -29,6 +29,8 @@ export default function App() {
   const [activeChatProcessing, setActiveChatProcessing] = useState(false);
   /** Per-conversation refcount for async LLM thread title generation after a reply. */
   const [titleGenInFlight, setTitleGenInFlight] = useState<Record<string, number>>({});
+  /** Note id to open when entering Notes from chat message action. */
+  const [pendingOpenNoteId, setPendingOpenNoteId] = useState<string | null>(null);
 
   // Hotkey recorder — owns the background mic capture for the global shortcut path
   const hotkeyRecorder = useRecorder();
@@ -296,13 +298,22 @@ export default function App() {
             }}
             onChatActivityChange={handleChatActivityChange}
             focusComposerNonce={focusComposerNonce}
+            onOpenNotesView={(noteId) => {
+              setPendingOpenNoteId(noteId);
+              setView("notes");
+            }}
           />
         )}
         {view === "settings" && (
           <SettingsView onImportComplete={loadConversations} onStoredDataReset={onStoredDataReset} />
         )}
         {view === "tasks" && <TasksView key={tasksRemountKey} />}
-        {view === "notes" && <NotesView />}
+        {view === "notes" && (
+          <NotesView
+            initialOpenNoteId={pendingOpenNoteId}
+            onInitialOpenNoteHandled={() => setPendingOpenNoteId(null)}
+          />
+        )}
       </main>
     </div>
   );
