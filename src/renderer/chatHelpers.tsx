@@ -8,6 +8,7 @@ export interface ToolCallDisplay {
 }
 
 export interface Message {
+  id: string;
   role: string;
   content: string;
   toolCalls?: ToolCallDisplay[];
@@ -64,17 +65,27 @@ export function toolIcon() {
   return <Check size={12} aria-hidden />;
 }
 
-export function CopyButton({ content, messageIndex, copiedIndex, onCopied }: { content: string; messageIndex: number; copiedIndex: number | null; onCopied: (i: number | null) => void }) {
+export function CopyButton({
+  content,
+  messageId,
+  copiedId,
+  onCopied,
+}: {
+  content: string;
+  messageId: string;
+  copiedId: string | null;
+  onCopied: (id: string | null) => void;
+}) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(content);
-      onCopied(messageIndex);
+      onCopied(messageId);
       setTimeout(() => onCopied(null), 2000);
     } catch (_) {
       /* ignore */
     }
   };
-  const justCopied = copiedIndex === messageIndex;
+  const justCopied = copiedId === messageId;
   return (
     <button
       type="button"

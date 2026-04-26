@@ -12,19 +12,20 @@ import {
 
 interface ChatMessageListProps {
   displayMessages: Message[];
-  copiedIndex: number | null;
-  onCopied: (i: number | null) => void;
+  copiedId: string | null;
+  onCopied: (id: string | null) => void;
   streamingContent: string;
   sending: boolean;
   polishHintAfterDictation: boolean;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
   onGenerateReply: () => void;
+  onMessageRef: (id: string, node: HTMLDivElement | null) => void;
 }
 
 export function ChatMessageList({
   displayMessages,
-  copiedIndex,
+  copiedId,
   onCopied,
   streamingContent,
   sending,
@@ -32,6 +33,7 @@ export function ChatMessageList({
   onToolConfirm,
   onPolish,
   onGenerateReply,
+  onMessageRef,
 }: ChatMessageListProps) {
   const [expandedUserCards, setExpandedUserCards] = useState<Set<number>>(new Set());
   const [overflowedUserCards, setOverflowedUserCards] = useState<Set<number>>(new Set());
@@ -80,10 +82,12 @@ export function ChatMessageList({
 
             return (
               <div
-                key={i}
+                key={m.id}
                 className={`message-block ${m.role}`}
                 data-message-role={m.role}
                 data-message-ts={m.timestamp != null ? String(m.timestamp) : undefined}
+                data-message-id={m.id}
+                ref={(node) => onMessageRef(m.id, node)}
               >
                 <div className="content">
                   {m.role === "user" ? (
@@ -184,8 +188,8 @@ export function ChatMessageList({
                   </div>
                   <CopyButton
                     content={m.content}
-                    messageIndex={i}
-                    copiedIndex={copiedIndex}
+                    messageId={m.id}
+                    copiedId={copiedId}
                     onCopied={onCopied}
                   />
                 </div>

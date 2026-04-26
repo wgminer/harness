@@ -69,3 +69,30 @@ test("chatgpt import is deduped on rerun", async () => {
   const second = await win.evaluate(async () => window.electron.memory.importFromChatGPTFolder());
   expect(second.imported).toBe(0);
 });
+
+test("chat turn flow keeps focus and aligns second user message", async () => {
+  const win = await page();
+  await win.getByTestId("sidebar-new-chat").click();
+
+  const input = win.getByTestId("chat-input");
+  await input.fill("first turn");
+  await input.press("Enter");
+  await expect(win.getByRole("button", { name: "Stop" })).toBeVisible({ timeout: 5_000 });
+  await expect(win.getByRole("button", { name: "Stop" })).toBeHidden({ timeout: 10_000 });
+
+  await input.fill("second turn");
+  await input.press("Enter");
+  await expect(win.getByRole("button", { name: "Stop" })).toBeVisible({ timeout: 5_000 });
+
+  const secondUserBox = await win.locator('.message-block.user', { hasText: "second turn" }).first().boundingBox();
+  expect(secondUserBox).not.toBeNull();
+  expect(secondUserBox!.y).toBeLessThanOrEqual(120);
+
+  await expect(win.getByRole("button", { name: "Stop" })).toBeHidden({ timeout: 10_000 });
+  await expect.poll(() => win.evaluate(() => document.activeElement?.getAttribute("data-testid"))).toBe("chat-input");
+
+  await input.fill("dedupe send");
+  await Promise.all([input.press("Enter"), input.press("Enter")]);
+  await expect(win.getByRole("button", { name: "Stop" })).toBeHidden({ timeout: 10_000 });
+  await expect(win.locator(".message-block.user", { hasText: "dedupe send" })).toHaveCount(1);
+});

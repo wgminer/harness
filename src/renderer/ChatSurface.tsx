@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode, RefObject, UIEvent } from "react";
+import type { MutableRefObject, ReactNode, RefObject, UIEvent } from "react";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessageList } from "./ChatMessageList";
 import {
@@ -8,7 +8,6 @@ import {
   type ToolCallDisplay,
   type VoiceState,
 } from "./chatHelpers";
-import { useFollowChatLiveEdge } from "./chatLiveScroll";
 
 interface ChatSurfaceProps {
   chatAreaRef: RefObject<HTMLDivElement>;
@@ -16,8 +15,8 @@ interface ChatSurfaceProps {
   headerContent: ReactNode;
   headerClassName?: string;
   displayMessages: Message[];
-  copiedIndex: number | null;
-  onCopied: (i: number | null) => void;
+  copiedId: string | null;
+  onCopied: (id: string | null) => void;
   streamingContent: string;
   sending: boolean;
   polishHintAfterDictation: boolean;
@@ -34,9 +33,17 @@ interface ChatSurfaceProps {
   onStartRecording: () => void | Promise<void>;
   onStopRecording: () => void | Promise<void>;
   onCancelRecording: () => void | Promise<void>;
+  attachedAudioName: string | null;
+  attachmentTranscribing: boolean;
+  attachmentError: string | null;
+  onAttachAudio: (file: File | null) => void;
+  onRemoveAttachedAudio: () => void;
   focusComposerNonce?: number;
   messagesTestId: string;
   composerTestId: string;
+  onMessageRef: (id: string, node: HTMLDivElement | null) => void;
+  bottomSpacerPx: number;
+  inputRef: MutableRefObject<HTMLTextAreaElement | null>;
 }
 
 export function ChatSurface({
@@ -45,7 +52,7 @@ export function ChatSurface({
   headerContent,
   headerClassName,
   displayMessages,
-  copiedIndex,
+  copiedId,
   onCopied,
   streamingContent,
   sending,
@@ -63,20 +70,20 @@ export function ChatSurface({
   onStartRecording,
   onStopRecording,
   onCancelRecording,
+  attachedAudioName,
+  attachmentTranscribing,
+  attachmentError,
+  onAttachAudio,
+  onRemoveAttachedAudio,
   focusComposerNonce,
   messagesTestId,
   composerTestId,
+  onMessageRef,
+  bottomSpacerPx,
+  inputRef,
 }: ChatSurfaceProps) {
   const [hasScrolled, setHasScrolled] = useState(false);
-  const chatMessagesContentRef = useRef<HTMLDivElement>(null);
   const chatPaneRef = useRef<HTMLDivElement>(null);
-
-  useFollowChatLiveEdge({
-    scrollRef: chatAreaRef,
-    sending,
-    streamingContent,
-    messageCount: displayMessages.length,
-  });
 
   /** Keep scroll padding in sync with the overlay composer height (textarea auto-grow, errors). */
   useLayoutEffect(() => {
@@ -143,10 +150,10 @@ export function ChatSurface({
         <header className={headerClassName ? `chat-pane-header ${headerClassName}` : "chat-pane-header"}>
           {headerContent}
         </header>
-        <div ref={chatMessagesContentRef} className="chat-area-inner" data-testid={messagesTestId}>
+        <div className="chat-area-inner" data-testid={messagesTestId}>
           <ChatMessageList
             displayMessages={displayMessages}
-            copiedIndex={copiedIndex}
+            copiedId={copiedId}
             onCopied={onCopied}
             streamingContent={streamingContent}
             sending={sending}
@@ -154,7 +161,9 @@ export function ChatSurface({
             onToolConfirm={onToolConfirm}
             onPolish={onPolish}
             onGenerateReply={onGenerateReply}
+            onMessageRef={onMessageRef}
           />
+          <div className="chat-bottom-spacer" style={{ height: `${Math.max(0, Math.floor(bottomSpacerPx))}px` }} aria-hidden />
         </div>
       </div>
       <div
@@ -176,7 +185,13 @@ export function ChatSurface({
           onStartRecording={onStartRecording}
           onStopRecording={onStopRecording}
           onCancelRecording={onCancelRecording}
+          attachedAudioName={attachedAudioName}
+          attachmentTranscribing={attachmentTranscribing}
+          attachmentError={attachmentError}
+          onAttachAudio={onAttachAudio}
+          onRemoveAttachedAudio={onRemoveAttachedAudio}
           focusComposerNonce={focusComposerNonce}
+          inputRef={inputRef}
         />
       </div>
     </div>
