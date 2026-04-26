@@ -8,6 +8,11 @@ import {
   type ToolCallDisplay,
   type VoiceState,
 } from "./chatHelpers";
+import {
+  LIVE_EDGE_TOLERANCE_PX,
+  distanceFromLiveEdge,
+  useFollowChatLiveEdge,
+} from "./chatLiveScroll";
 
 interface ChatSurfaceProps {
   chatAreaRef: RefObject<HTMLDivElement>;
@@ -42,7 +47,6 @@ interface ChatSurfaceProps {
   messagesTestId: string;
   composerTestId: string;
   onMessageRef: (id: string, node: HTMLDivElement | null) => void;
-  bottomSpacerPx: number;
   inputRef: MutableRefObject<HTMLTextAreaElement | null>;
 }
 
@@ -79,11 +83,24 @@ export function ChatSurface({
   messagesTestId,
   composerTestId,
   onMessageRef,
-  bottomSpacerPx,
   inputRef,
 }: ChatSurfaceProps) {
   const [hasScrolled, setHasScrolled] = useState(false);
+  const [followLiveEdge, setFollowLiveEdge] = useState(true);
   const chatPaneRef = useRef<HTMLDivElement>(null);
+
+  useFollowChatLiveEdge({
+    scrollRef: chatAreaRef,
+    followLiveEdge,
+    sending,
+    streamingContent,
+    messageCount: displayMessages.length,
+  });
+
+  useLayoutEffect(() => {
+    if (!sending) return;
+    setFollowLiveEdge(true);
+  }, [sending]);
 
   /** Keep scroll padding in sync with the overlay composer height (textarea auto-grow, errors). */
   useLayoutEffect(() => {
@@ -114,6 +131,8 @@ export function ChatSurface({
     const el = chatAreaRef.current;
     if (!el) return;
     setHasScrolled(el.scrollTop > SCROLL_TOP_THRESHOLD);
+    const nearLiveEdge = distanceFromLiveEdge(el) <= LIVE_EDGE_TOLERANCE_PX;
+    setFollowLiveEdge(nearLiveEdge);
   }, [chatAreaRef]);
 
   const scrollToTop = useCallback(() => {
@@ -163,7 +182,6 @@ export function ChatSurface({
             onGenerateReply={onGenerateReply}
             onMessageRef={onMessageRef}
           />
-          <div className="chat-bottom-spacer" style={{ height: `${Math.max(0, Math.floor(bottomSpacerPx))}px` }} aria-hidden />
         </div>
       </div>
       <div

@@ -128,53 +128,41 @@ export function ChatComposer({
           rows={1}
         />
         <div className="input-actions">
-          <div className="voice-controls">
+          <button
+            type="button"
+            className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={voiceState !== "idle" || sending || attachmentTranscribing}
+            title="Attach audio file"
+            aria-label="Attach audio file"
+          >
+            <Paperclip size={15} />
+          </button>
+          {voiceState === "recording" && (
+            <span className="voice-timer">
+              {`${Math.floor(recordingMs / 60000)}:${String(Math.floor((recordingMs % 60000) / 1000)).padStart(2, "0")}.${String(recordingMs % 1000).padStart(3, "0")}`}
+            </span>
+          )}
+          {voiceState === "processing" && (
+            <span className="voice-status">
+              <Loader2 size={13} className="voice-spinner" />
+              Transcribing…
+            </span>
+          )}
+          <div className="input-actions-spacer" />
+          {voiceState !== "processing" && (
             <button
               type="button"
-              className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={voiceState !== "idle" || sending || attachmentTranscribing}
-              title="Attach audio file"
-              aria-label="Attach audio file"
+              className={`btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn${voiceState === "recording" ? " voice-btn--recording" : ""}`}
+              onClick={voiceState === "recording" ? onStopRecording : onStartRecording}
+              disabled={sending}
+              title={voiceState === "recording" ? "Stop recording" : "Record voice message"}
+              aria-label={voiceState === "recording" ? "Stop recording" : "Start recording"}
             >
-              <Paperclip size={15} />
+              {voiceState === "recording" ? <Square size={13} /> : <Mic size={15} />}
             </button>
-            {voiceState === "idle" && (
-              <button
-                type="button"
-                className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn"
-                onClick={onStartRecording}
-                disabled={sending}
-                title="Record voice message"
-                aria-label="Start recording"
-              >
-                <Mic size={15} />
-              </button>
-            )}
-            {voiceState === "recording" && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn voice-btn--recording"
-                  onClick={onStopRecording}
-                  title="Stop recording"
-                  aria-label="Stop recording"
-                >
-                  <Square size={13} />
-                </button>
-                <span className="voice-timer">
-                  {`${Math.floor(recordingMs / 60000)}:${String(Math.floor((recordingMs % 60000) / 1000)).padStart(2, "0")}.${String(recordingMs % 1000).padStart(3, "0")}`}
-                </span>
-              </>
-            )}
-            {voiceState === "processing" && (
-              <span className="voice-status">
-                <Loader2 size={13} className="voice-spinner" />
-                Transcribing…
-              </span>
-            )}
-          </div>
-          {voiceState !== "idle" ? (
+          )}
+          {voiceState !== "idle" && (
             <button
               type="button"
               className="btn chat-pane-btn chat-pane-btn--danger"
@@ -184,7 +172,8 @@ export function ChatComposer({
               <X size={15} />
               Cancel
             </button>
-          ) : sending ? (
+          )}
+          {sending ? (
             <button type="button" className="btn chat-pane-btn input-actions-stop" onClick={onStop}>
               Stop
             </button>

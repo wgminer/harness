@@ -1,14 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { MAX_WRITING_CHECKPOINTS } from "../shared/writing";
 import { createTempDir } from "./__tests__/tempDir";
 import {
-  appendDocIn,
-  createCheckpointIn,
-  deleteCheckpointIn,
-  listCheckpointsIn,
+  createNoteIn,
+  deleteNoteIn,
+  listNotesIn,
   normalizeContent,
-  readDocIn,
-  writeDocIn,
+  readNoteIn,
+  saveNoteIn,
 } from "./writing";
 import { writeFile } from "fs/promises";
 import { join } from "path";
@@ -29,47 +27,48 @@ async function makeDir(): Promise<string> {
 }
 
 describe("writing surface", () => {
-  it("returns empty snapshot when file is missing", async () => {
+  it("starts with empty notes list when storage is missing", async () => {
     const dir = await makeDir();
-    await expect(readDocIn(dir)).resolves.toEqual({ content: "", updatedAt: 0 });
+    await expect(listNotesIn(dir)).resolves.toEqual([]);
   });
 
-  it("writes and normalizes line endings", async () => {
+  it("creates and saves a note while normalizing line endings", async () => {
     const dir = await makeDir();
-    const snapshot = await writeDocIn(dir, "a\r\nb\rc");
-    expect(snapshot.content).toBe("a\nb\nc");
+    const note = await createNoteIn(dir, "Quick draft");
+    const saved = await saveNoteIn(dir, note.id, "a\r\nb\rc");
+    expect(saved.content).toBe("a\nb\nc");
     expect(normalizeContent("x\r\ny")).toBe("x\ny");
-    const readBack = await readDocIn(dir);
-    expect(readBack.content).toBe("a\nb\nc");
+    const readBack = await readNoteIn(dir, note.id);
+    expect(readBack).not.toBeNull();
+    expect(readBack?.content).toBe("a\nb\nc");
   });
 
-  it("appendDocIn inserts a paragraph separator when needed", async () => {
+  it("lists notes in descending updated order", async () => {
     const dir = await makeDir();
-    await writeDocIn(dir, "hello");
-    const appended = await appendDocIn(dir, "world");
-    expect(appended.content).toBe("hello\n\nworld");
-    const unchanged = await appendDocIn(dir, "");
-    expect(unchanged.content).toBe("hello\n\nworld");
+    const older = await createNoteIn(dir, "Older");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const newer = await createNoteIn(dir, "Newer");
+    const list = await listNotesIn(dir);
+    expect(list[0].id).toBe(newer.id);
+    expect(list[1].id).toBe(older.id);
   });
 
-  it("maintains checkpoint cap and delete behavior", async () => {
+  it("deletes notes and ignores missing ids", async () => {
     const dir = await makeDir();
-    for (let i = 0; i < MAX_WRITING_CHECKPOINTS + 4; i++) {
-      await createCheckpointIn(dir, `cp-${i}`);
-    }
-    const all = await listCheckpointsIn(dir);
-    expect(all.length).toBe(MAX_WRITING_CHECKPOINTS);
-    expect(all[0].createdAt).toBeGreaterThanOrEqual(all[1].createdAt);
-
-    const next = await deleteCheckpointIn(dir, all[0].id);
-    expect(next.some((cp) => cp.id === all[0].id)).toBe(false);
-    const same = await deleteCheckpointIn(dir, "missing-id");
+    const one = await createNoteIn(dir, "One");
+    await createNoteIn(dir, "Two");
+    const next = await deleteNoteIn(dir, one.id);
+    expect(next.some((n) => n.id === one.id)).toBe(false);
+    const same = await deleteNoteIn(dir, "missing-id");
     expect(same.length).toBe(next.length);
   });
 
-  it("tolerates corrupt checkpoint file", async () => {
+  it("migrates legacy writing.md into initial note", async () => {
     const dir = await makeDir();
-    await writeFile(join(dir, "writing-checkpoints.json"), "{invalid-json", "utf-8");
-    await expect(listCheckpointsIn(dir)).resolves.toEqual([]);
+    await writeFile(join(dir, "writing.md"), "# Legacy\nhello", "utf-8");
+    const notes = await listNotesIn(dir);
+    expect(notes.length).toBe(1);
+    const legacy = await readNoteIn(dir, notes[0].id);
+    expect(legacy?.content).toContain("hello");
   });
 });

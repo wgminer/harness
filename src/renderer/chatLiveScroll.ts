@@ -16,6 +16,7 @@ export function scrollScrollContainerToLiveEdge(scrollEl: HTMLDivElement): void 
  */
 export function useFollowChatLiveEdge(args: {
   scrollRef: RefObject<HTMLDivElement | null>;
+  followLiveEdge: boolean;
   sending: boolean;
   streamingContent: string;
   messageCount: number;
@@ -29,15 +30,8 @@ export function useFollowChatLiveEdge(args: {
     const justStartedTurn = !prevSendingRef.current && args.sending;
     prevSendingRef.current = args.sending;
 
-    if (!args.sending) return;
-
-    if (justStartedTurn) {
-      scrollScrollContainerToLiveEdge(scroll);
-      return;
-    }
-
-    if (distanceFromLiveEdge(scroll) <= LIVE_EDGE_TOLERANCE_PX) {
+    if (justStartedTurn || args.followLiveEdge) {
       scrollScrollContainerToLiveEdge(scroll);
     }
-  }, [args.sending, args.streamingContent, args.messageCount, args.scrollRef]);
+  }, [args.followLiveEdge, args.sending, args.streamingContent, args.messageCount, args.scrollRef]);
 }

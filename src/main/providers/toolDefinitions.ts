@@ -255,7 +255,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "doc_read",
       description:
-        "Read the current writing surface (a single persistent markdown document separate from the chat). Returns { content, updatedAt }. Use this before editing so you append to what is actually there.",
+        "Read the current Desk note content (persistent markdown separate from chat). Returns { content, updatedAt, noteId }. Use this before editing so you append to what is actually there.",
       parameters: {
         type: "object",
         properties: {},
@@ -267,7 +267,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "doc_write",
       description:
-        "Replace the entire writing surface with the given markdown content. Destructive — prefer doc_append for additions. Use when the user asks to rewrite / restart / clear the doc, or when you have a freshly assembled full draft.",
+        "Replace the current Desk note with the given markdown content. Destructive — prefer doc_append for additions. Use when the user asks to rewrite / restart / clear the note, or when you have a freshly assembled full draft.",
       parameters: {
         type: "object",
         properties: {
@@ -285,7 +285,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "doc_append",
       description:
-        "Append markdown to the end of the writing surface (with a blank line separator if needed). Use this for additive edits like 'add a section', 'write a paragraph about X to the doc', 'jot this down'.",
+        "Append markdown to the end of the current Desk note (with a blank line separator if needed). Use this for additive edits like 'add a section', 'write a paragraph about X', 'jot this down'.",
       parameters: {
         type: "object",
         properties: {

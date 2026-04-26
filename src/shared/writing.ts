@@ -1,2 +1,12 @@
-/** Max checkpoints retained for Desk save history (rolling; oldest dropped first). */
-export const MAX_WRITING_CHECKPOINTS = 20;
+export interface WritingNoteSummary {
+  id: string;
+  title: string;
+  updatedAt: number;
+  createdAt: number;
+}
+
+export interface WritingNote extends WritingNoteSummary {
+  content: string;
+}
+
+export const UNTITLED_NOTE_TITLE = "Untitled note";
