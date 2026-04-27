@@ -31,6 +31,8 @@ export default function App() {
   const [titleGenInFlight, setTitleGenInFlight] = useState<Record<string, number>>({});
   /** Note id to open when entering Notes from chat message action. */
   const [pendingOpenNoteId, setPendingOpenNoteId] = useState<string | null>(null);
+  const [notesScreen, setNotesScreen] = useState<"list" | "detail">("list");
+  const [notesOverviewNonce, setNotesOverviewNonce] = useState(0);
 
   // Hotkey recorder — owns the background mic capture for the global shortcut path
   const hotkeyRecorder = useRecorder();
@@ -171,6 +173,12 @@ export default function App() {
     }
   }, [conversationId, conversations]);
 
+  const handleNotesClick = useCallback(() => {
+    setPendingOpenNoteId(null);
+    setNotesOverviewNonce((n) => n + 1);
+    setView("notes");
+  }, []);
+
   useEffect(() => {
     const unsub = window.electron.recording.onStartSilent(async () => {
       hotkeyCancelledRef.current = false;
@@ -278,6 +286,8 @@ export default function App() {
         activeChatProcessing={activeChatProcessing}
         titleGenInFlight={titleGenInFlight}
         appVersion={appVersion}
+        notesItemActive={view === "notes" && notesScreen === "list"}
+        onNotesClick={handleNotesClick}
       />
       <main className="main">
         {view === "chat" && (
@@ -312,6 +322,8 @@ export default function App() {
           <NotesView
             initialOpenNoteId={pendingOpenNoteId}
             onInitialOpenNoteHandled={() => setPendingOpenNoteId(null)}
+            resetToOverviewNonce={notesOverviewNonce}
+            onScreenChange={setNotesScreen}
           />
         )}
       </main>

@@ -10,6 +10,7 @@ import {
 } from "../shared/taskTags";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
+import { WorkspaceHeader } from "./WorkspaceHeader";
 
 const taskDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 const taskRelativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
@@ -288,14 +289,7 @@ export function TasksView() {
 
   return (
     <div ref={tasksPaneRef} className="workspace-page tasks-page">
-      <header className={`workspace-header ${headerScrolled ? "workspace-header--scrolled" : ""}`}>
-        <div className="workspace-header-inner">
-          <div className="workspace-header-title-row">
-            <ListTodo size={18} />
-            <h2 className="workspace-title">Tasks</h2>
-          </div>
-        </div>
-      </header>
+      <WorkspaceHeader title="Tasks" icon={<ListTodo size={18} />} scrolled={headerScrolled} />
       <div ref={scrollRef} className="workspace-scroll tasks-scroll" onScroll={onScroll}>
         <div className="workspace-content tasks-content">
           <div className="tasks-section">

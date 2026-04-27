@@ -3,7 +3,6 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
   background: var(--bg-secondary);
 }
 
@@ -37,6 +36,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .workspace-title {

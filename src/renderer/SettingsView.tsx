@@ -18,9 +18,16 @@ import type { Settings } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import { EMPTY_USAGE_STATS } from "../shared/usageStats";
 import type { SyncStatus } from "../shared/sync";
+import {
+  DEFAULT_NOTE_TEMPLATES,
+  normalizeNoteTemplates,
+  type NoteTemplateConfig,
+} from "../shared/writing";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
+import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
+  DEFAULT_ACCENT_SWATCHES,
   DEFAULT_THEME_SETTINGS,
   FONTS,
   FONT_SIZE_OPTIONS,
@@ -40,13 +47,13 @@ interface SettingsViewProps {
 const SAVE_DEBOUNCE_MS = 500;
 
 const D = DEFAULT_SETTINGS;
-type SettingsTabId = "general" | "tools" | "voice" | "theme" | "memory" | "data";
+type SettingsTabId = "general" | "tools" | "voice" | "notes" | "memory" | "data";
 
 const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: "general", label: "General" },
   { id: "tools", label: "Tools" },
   { id: "voice", label: "Voice" },
-  { id: "theme", label: "Theme" },
+  { id: "notes", label: "Notes" },
   { id: "memory", label: "Memory" },
   { id: "data", label: "Data" },
 ];
@@ -61,6 +68,14 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [cleanupPrompt, setCleanupPrompt] = useState(D.transcription?.cleanup?.prompt ?? "");
   const [cleanupPromptDraft, setCleanupPromptDraft] = useState(D.transcription?.cleanup?.prompt ?? "");
   const [cleanupPromptModalOpen, setCleanupPromptModalOpen] = useState(false);
+  const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
+    DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
+  );
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateTitleDraft, setTemplateTitleDraft] = useState("");
+  const [templateDescriptionDraft, setTemplateDescriptionDraft] = useState("");
+  const [templateContentDraft, setTemplateContentDraft] = useState("");
 
   const [autoSend, setAutoSend] = useState(true);
   const [weatherZip, setWeatherZip] = useState(D.weather!.defaultZip);
@@ -110,7 +125,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     general: null,
     tools: null,
     voice: null,
-    theme: null,
+    notes: null,
     memory: null,
     data: null,
   });
@@ -136,6 +151,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
         setCleanupPrompt(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "");
         setCleanupPromptDraft(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "");
         setWeatherZip(S.weather?.defaultZip ?? D.weather!.defaultZip);
+        setNoteTemplates(normalizeNoteTemplates(S.notes?.templates));
       })
       .finally(enableSwitchAnimations);
     void window.electron.usage.getStats().then(setUsageStats);
@@ -218,6 +234,44 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
 
   const resetCleanupPromptDraft = () => {
     setCleanupPromptDraft(D.transcription?.cleanup?.prompt ?? "");
+  };
+
+  const closeTemplatesModal = () => {
+    setTemplatesModalOpen(false);
+    setEditingTemplateId(null);
+    setTemplateTitleDraft("");
+    setTemplateDescriptionDraft("");
+    setTemplateContentDraft("");
+  };
+
+  const openTemplateModal = (template: NoteTemplateConfig) => {
+    setEditingTemplateId(template.id);
+    setTemplateTitleDraft(template.title);
+    setTemplateDescriptionDraft(template.description);
+    setTemplateContentDraft(template.content);
+    setTemplatesModalOpen(true);
+  };
+
+  const saveTemplate = async () => {
+    if (!editingTemplateId) return;
+    const nextTitle = templateTitleDraft.trim();
+    const nextDescription = templateDescriptionDraft.trim();
+    if (!nextTitle || !nextDescription) return;
+    const nextTemplates = noteTemplates.map((template) =>
+      template.id === editingTemplateId
+        ? {
+            ...template,
+            title: nextTitle,
+            description: nextDescription,
+            content: templateContentDraft,
+          }
+        : template,
+    );
+    const normalized = normalizeNoteTemplates(nextTemplates);
+    setNoteTemplates(normalized);
+    await window.electron.settings.set({ notes: { templates: normalized } });
+    window.dispatchEvent(new CustomEvent("notes:templatesUpdated", { detail: normalized }));
+    closeTemplatesModal();
   };
 
   const closeMemoryModal = () => {
@@ -405,13 +459,12 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   };
 
   return (
-    <div className="settings-page">
-      <header className={`settings-header ${headerScrolled ? "settings-header--scrolled" : ""}`}>
-        <div className="settings-header-inner">
-          <div className="settings-header-title-row">
-            <SettingsIcon size={18} />
-            <h2 className="settings-title">Settings</h2>
-          </div>
+    <div className="workspace-page settings-page">
+      <WorkspaceHeader
+        title="Settings"
+        icon={<SettingsIcon size={18} />}
+        scrolled={headerScrolled}
+        actions={
           <div
             className={`settings-tabs settings-tabs--header${headerScrolled ? " settings-tabs--latched" : ""}`}
             role="tablist"
@@ -437,10 +490,10 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               </button>
             ))}
           </div>
-        </div>
-      </header>
-      <div ref={scrollRef} className="settings-scroll" onScroll={onScroll}>
-        <div className="settings-content">
+        }
+      />
+      <div ref={scrollRef} className="workspace-scroll settings-scroll" onScroll={onScroll}>
+        <div className="workspace-content settings-content">
           {activeTab === "general" && <section
             id="settings-panel-general"
             className="settings-tab-panel"
@@ -485,6 +538,150 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               <p className="settings-group__lead">
                 Core app configuration that applies globally across chat and voice workflows.
               </p>
+            </section>
+
+            <section className="settings-group">
+              <h3 className="settings-group__title">Theme preview</h3>
+              <p className="settings-group__lead">
+                Adjust accent, font (including Google Fonts loaded with the app), and base size. The preview uses
+                your current app colors; only the accent is overridden here until you apply. Apply saves your
+                overrides to your saved theme (replacing any previous custom theme from this screen or tools).
+              </p>
+              <div className="settings-playground">
+                <div className="settings-playground-tools settings-section">
+                  <div className="settings-playground-field">
+                    <label htmlFor="theme-accent">Accent color</label>
+                    <div className="settings-playground-color-row">
+                      <input
+                        id="theme-accent"
+                        type="color"
+                        value={normalizeColorPickerValue(themeForm.accent)}
+                        onChange={(e) =>
+                          setThemeForm((f) => ({ ...f, accent: e.target.value }))
+                        }
+                        aria-label="Accent color picker"
+                      />
+                      <input
+                        type="text"
+                        value={themeForm.accent}
+                        onChange={(e) => setThemeForm((f) => ({ ...f, accent: e.target.value }))}
+                        spellCheck={false}
+                        autoComplete="off"
+                        aria-label="Accent hex"
+                      />
+                    </div>
+                    <div className="settings-playground-accent-grid" role="list" aria-label="Default accents">
+                      {DEFAULT_ACCENT_SWATCHES.map((accent) => {
+                        const isSelected = normalizeColorPickerValue(themeForm.accent) === accent;
+                        return (
+                          <button
+                            key={accent}
+                            type="button"
+                            className={`settings-playground-accent-swatch${isSelected ? " settings-playground-accent-swatch--selected" : ""}`}
+                            onClick={() => setThemeForm((f) => ({ ...f, accent }))}
+                            aria-label={`Use accent ${accent}`}
+                            aria-pressed={isSelected}
+                            style={{ "--swatch-color": accent } as CSSProperties}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="settings-playground-field">
+                    <label htmlFor="theme-font">Font</label>
+                    <select
+                      id="theme-font"
+                      value={themeForm.font}
+                      onChange={(e) =>
+                        setThemeForm((f) => ({ ...f, font: e.target.value as FontId }))
+                      }
+                    >
+                      {FONTS.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="settings-playground-field">
+                    <label htmlFor="theme-font-size">Base font size</label>
+                    <select
+                      id="theme-font-size"
+                      value={themeForm.fontSize}
+                      onChange={(e) =>
+                        setThemeForm((f) => ({
+                          ...f,
+                          fontSize: Number(e.target.value) as (typeof FONT_SIZE_OPTIONS)[number],
+                        }))
+                      }
+                    >
+                      {FONT_SIZE_OPTIONS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}px
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="settings-actions settings-playground-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={themeApplyBusy}
+                      onClick={() => void applyTheme()}
+                    >
+                      {themeApplyBusy ? "Applying…" : "Apply theme"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={themeApplyBusy}
+                      onClick={() => void resetThemeToBuiltin()}
+                    >
+                      Reset to built-in
+                    </button>
+                  </div>
+                  {themeApplyMessage && (
+                    <p className="settings-playground-status settings-playground-status--ok" role="status">
+                      {themeApplyMessage}
+                    </p>
+                  )}
+                  {themeApplyError && (
+                    <p className="settings-playground-status settings-playground-status--err" role="alert">
+                      {themeApplyError}
+                    </p>
+                  )}
+                </div>
+                <div className="settings-playground-canvas" style={playgroundPreviewStyle}>
+                  <h4 className="settings-playground-canvas__title">Conversation title</h4>
+                  <nav className="settings-playground-canvas__side-nav" aria-label="Sample side navigation">
+                    <button type="button" className="settings-playground-canvas__side-link settings-playground-canvas__side-link--active">
+                      Active thread
+                    </button>
+                    <button type="button" className="settings-playground-canvas__side-link">
+                      Notes
+                    </button>
+                    <button type="button" className="settings-playground-canvas__side-link">
+                      Settings
+                    </button>
+                  </nav>
+                  <p className="settings-playground-canvas__body">
+                    This paragraph uses the body stack and size.{" "}
+                    <span className="settings-playground-canvas__accent">Accent</span> highlights links and focus.
+                  </p>
+                  <p className="settings-playground-canvas__muted">
+                    Secondary line — timestamps, hints, and labels often look like this.
+                  </p>
+                  <div className="settings-playground-canvas__panel">
+                    <span className="settings-playground-canvas__panel-label">Inset</span>
+                    <p className="settings-playground-canvas__body settings-playground-canvas__body--tight">
+                      A block on a lifted surface uses the secondary background.
+                    </p>
+                  </div>
+                  <button type="button" className="settings-playground-canvas__btn">
+                    Sample button
+                  </button>
+                </div>
+              </div>
             </section>
           </section>}
 
@@ -651,126 +848,35 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             </div>
           )}
 
-          {activeTab === "theme" && <section
-            id="settings-panel-theme"
+          {activeTab === "notes" && <section
+            id="settings-panel-notes"
             className="settings-tab-panel"
             role="tabpanel"
-            aria-labelledby="settings-tab-theme"
+            aria-labelledby="settings-tab-notes"
           >
             <section className="settings-group">
-              <h3 className="settings-group__title">{"Theme preview"}</h3>
+              <h3 className="settings-group__title">Notes templates</h3>
               <p className="settings-group__lead">
-                Adjust accent, font (including Google Fonts loaded with the app), and base size. The preview uses
-                your current app colors; only the accent is overridden here until you apply. Apply saves your
-                overrides to your saved theme (replacing any previous custom theme from this screen or tools).
+                Edit the three note templates shown on the Notes overview page.
               </p>
-              <div className="settings-playground">
-                <div className="settings-playground-tools settings-section">
-                  <div className="settings-playground-field">
-                    <label htmlFor="theme-accent">Accent color</label>
-                    <div className="settings-playground-color-row">
-                      <input
-                        id="theme-accent"
-                        type="color"
-                        value={normalizeColorPickerValue(themeForm.accent)}
-                        onChange={(e) =>
-                          setThemeForm((f) => ({ ...f, accent: e.target.value }))
-                        }
-                        aria-label="Accent color picker"
-                      />
-                      <input
-                        type="text"
-                        value={themeForm.accent}
-                        onChange={(e) => setThemeForm((f) => ({ ...f, accent: e.target.value }))}
-                        spellCheck={false}
-                        autoComplete="off"
-                        aria-label="Accent hex"
-                      />
+              <div className="settings-notes-templates-list">
+                {noteTemplates.map((template) => (
+                  <div key={template.id} className="settings-notes-template-row">
+                    <div className="settings-notes-template-entry">
+                      <div className="settings-notes-template-entry__title">{template.title}</div>
+                      <div className="settings-notes-template-entry__description">{template.description}</div>
                     </div>
-                  </div>
-                  <div className="settings-playground-field">
-                    <label htmlFor="theme-font">Font</label>
-                    <select
-                      id="theme-font"
-                      value={themeForm.font}
-                      onChange={(e) =>
-                        setThemeForm((f) => ({ ...f, font: e.target.value as FontId }))
-                      }
-                    >
-                      {FONTS.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="settings-playground-field">
-                    <label htmlFor="theme-font-size">Base font size</label>
-                    <select
-                      id="theme-font-size"
-                      value={themeForm.fontSize}
-                      onChange={(e) =>
-                        setThemeForm((f) => ({
-                          ...f,
-                          fontSize: Number(e.target.value) as (typeof FONT_SIZE_OPTIONS)[number],
-                        }))
-                      }
-                    >
-                      {FONT_SIZE_OPTIONS.map((n) => (
-                        <option key={n} value={n}>
-                          {n}px
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="settings-actions settings-playground-actions">
                     <button
                       type="button"
-                      className="btn btn-primary"
-                      disabled={themeApplyBusy}
-                      onClick={() => void applyTheme()}
+                      className="btn btn-icon"
+                      onClick={() => openTemplateModal(template)}
+                      aria-label={`Edit ${template.title} template`}
+                      title="Edit template"
                     >
-                      {themeApplyBusy ? "Applying…" : "Apply theme"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={themeApplyBusy}
-                      onClick={() => void resetThemeToBuiltin()}
-                    >
-                      Reset to built-in
+                      <Pencil size={16} />
                     </button>
                   </div>
-                  {themeApplyMessage && (
-                    <p className="settings-playground-status settings-playground-status--ok" role="status">
-                      {themeApplyMessage}
-                    </p>
-                  )}
-                  {themeApplyError && (
-                    <p className="settings-playground-status settings-playground-status--err" role="alert">
-                      {themeApplyError}
-                    </p>
-                  )}
-                </div>
-                <div className="settings-playground-canvas" style={playgroundPreviewStyle}>
-                  <h4 className="settings-playground-canvas__title">Conversation title</h4>
-                  <p className="settings-playground-canvas__body">
-                    This paragraph uses the body stack and size.{" "}
-                    <span className="settings-playground-canvas__accent">Accent</span> highlights links and focus.
-                  </p>
-                  <p className="settings-playground-canvas__muted">
-                    Secondary line — timestamps, hints, and labels often look like this.
-                  </p>
-                  <div className="settings-playground-canvas__panel">
-                    <span className="settings-playground-canvas__panel-label">Inset</span>
-                    <p className="settings-playground-canvas__body settings-playground-canvas__body--tight">
-                      A block on a lifted surface uses the secondary background.
-                    </p>
-                  </div>
-                  <button type="button" className="settings-playground-canvas__btn">
-                    Sample button
-                  </button>
-                </div>
+                ))}
               </div>
             </section>
           </section>}
@@ -905,6 +1011,60 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                   className="app-modal-input settings-memory-detail-input"
                   rows={4}
                   autoComplete="off"
+                />
+              </label>
+            </div>
+          </Modal>
+
+          <Modal
+            open={templatesModalOpen}
+            onClose={closeTemplatesModal}
+            title="Edit notes template"
+            data-testid="settings-notes-template-modal"
+            footer={
+              <>
+                <button type="button" className="btn" onClick={closeTemplatesModal}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void saveTemplate()}
+                  disabled={!templateTitleDraft.trim() || !templateDescriptionDraft.trim()}
+                >
+                  Save
+                </button>
+              </>
+            }
+          >
+            <div className="settings-memory-modal-stack">
+              <label className="settings-memory-field">
+                <span className="settings-memory-field__label">Title</span>
+                <input
+                  type="text"
+                  value={templateTitleDraft}
+                  onChange={(e) => setTemplateTitleDraft(e.target.value)}
+                  className="app-modal-input"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="settings-memory-field">
+                <span className="settings-memory-field__label">Description</span>
+                <input
+                  type="text"
+                  value={templateDescriptionDraft}
+                  onChange={(e) => setTemplateDescriptionDraft(e.target.value)}
+                  className="app-modal-input"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="settings-memory-field">
+                <span className="settings-memory-field__label">Template body</span>
+                <textarea
+                  value={templateContentDraft}
+                  onChange={(e) => setTemplateContentDraft(e.target.value)}
+                  className="app-modal-input settings-memory-detail-input settings-notes-template-content-input"
+                  rows={10}
                 />
               </label>
             </div>

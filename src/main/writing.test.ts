@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createTempDir } from "./__tests__/tempDir";
 import {
+  buildNotesEditPrompt,
   createNoteIn,
   deleteNoteIn,
   listNotesIn,
@@ -70,5 +71,35 @@ describe("notes storage", () => {
     expect(notes.length).toBe(1);
     const legacy = await readNoteIn(dir, notes[0].id);
     expect(legacy?.content).toContain("hello");
+  });
+});
+
+describe("buildNotesEditPrompt", () => {
+  it("includes instruction, selected text, and surrounding context blocks", () => {
+    const prompt = buildNotesEditPrompt({
+      prompt: "Make this more concise.",
+      selectedText: "selected",
+      beforeText: "before",
+      afterText: "after",
+      documentText: "before selected after",
+    });
+
+    expect(prompt).toContain("[Instruction]\nMake this more concise.");
+    expect(prompt).toContain("[TextBeforeSelection]\nbefore");
+    expect(prompt).toContain("[SelectedText]\nselected");
+    expect(prompt).toContain("[TextAfterSelection]\nafter");
+    expect(prompt).toContain("[FullDocument]\nbefore selected after");
+  });
+
+  it("mentions concise-answer allowance for question-style prompts", () => {
+    const prompt = buildNotesEditPrompt({
+      prompt: "What does this sentence mean?",
+      selectedText: "This sentence.",
+      beforeText: "",
+      afterText: "",
+      documentText: "This sentence.",
+    });
+
+    expect(prompt).toContain("If the instruction is clearly a question about the selected text");
   });
 });

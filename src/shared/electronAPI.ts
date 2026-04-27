@@ -1,7 +1,7 @@
 import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./types";
 import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
-import type { Note, NoteSummary } from "./writing";
+import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSummary } from "./writing";
 import type { SyncResult, SyncStatus } from "./sync";
 
 export interface TaskItem {
@@ -131,6 +131,7 @@ export interface ElectronAPI {
     save: (id: string, content: string) => Promise<Note>;
     delete: (id: string) => Promise<NoteSummary[]>;
     showInFolder: (id: string) => Promise<void>;
+    proposeEdit: (input: NoteEditProposalInput) => Promise<NoteEditProposal>;
   };
   recording: {
     requestMicrophoneAccess: () => Promise<boolean>;

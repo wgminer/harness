@@ -40,6 +40,7 @@ describe("settings parsing", () => {
     });
     expect(parsed.openai?.apiKey).toBe("abc");
     expect(parsed.transcription?.cleanup?.enabled).toBe(false);
+    expect(parsed.notes?.templates.length).toBe(3);
     expect((parsed as Record<string, unknown>).extra).toBeUndefined();
   });
 
