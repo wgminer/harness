@@ -3,6 +3,7 @@ import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings } from "../shared/types";
+import { normalizeNoteTemplates } from "../shared/writing";
 import { fileExists } from "./utils";
 import { ensureLocalDataMigration, getLocalDataSettingsPath } from "./localDataPaths";
 
@@ -58,6 +59,9 @@ export function parseSettings(data: Record<string, unknown>): Settings {
     weather: {
       defaultZip,
     },
+    notes: {
+      templates: normalizeNoteTemplates((data.notes as Record<string, unknown> | undefined)?.templates),
+    },
     recording: {
       autoSend:
         typeof (data.recording as Record<string, unknown> | undefined)?.autoSend === "boolean"
@@ -108,6 +112,16 @@ export async function setSettings(partial: Partial<Settings>): Promise<Settings>
             : current.transcription?.cleanup,
         }
       : current.transcription,
+    notes: partial.notes
+      ? {
+          ...current.notes,
+          ...partial.notes,
+          templates:
+            partial.notes.templates != null
+              ? normalizeNoteTemplates(partial.notes.templates)
+              : current.notes?.templates ?? D.notes!.templates,
+        }
+      : current.notes,
   };
   await saveSettings(next);
   return next;

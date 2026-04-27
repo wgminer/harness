@@ -26,6 +26,8 @@ interface SidebarProps {
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
   appVersion: string | null;
+  notesItemActive: boolean;
+  onNotesClick: () => void;
 }
 
 function HighlightText({ text, range }: { text: string; range?: [number, number] }) {
@@ -56,6 +58,8 @@ export function Sidebar({
   activeChatProcessing,
   titleGenInFlight,
   appVersion,
+  notesItemActive,
+  onNotesClick,
 }: SidebarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -193,11 +197,11 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              className={`btn sidebar-workspace__btn${view === "notes" ? " sidebar-workspace__btn--active" : ""}`}
+              className={`btn sidebar-workspace__btn${notesItemActive ? " sidebar-workspace__btn--active" : ""}`}
               data-testid="sidebar-notes"
-              onClick={() => onViewChange("notes")}
+              onClick={onNotesClick}
               aria-label="Notes"
-              aria-current={view === "notes" ? "page" : undefined}
+              aria-current={notesItemActive ? "page" : undefined}
             >
               <SquarePen size={16} className="sidebar-workspace__icon" aria-hidden />
               <span className="sidebar-workspace__label">
@@ -211,6 +215,7 @@ export function Sidebar({
         )}
         <div className="sidebar-list-wrap">
           <div className="sidebar-list__fade-top" aria-hidden />
+          <div className="sidebar-list__fade-bottom" aria-hidden />
           <ul className="sidebar-list">
           {searchOpen ? (
             searchQuery.trim() ? (

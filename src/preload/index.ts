@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AppendMessageMeta } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
+import type { NoteEditProposal, NoteEditProposalInput } from "../shared/writing";
 
 const e2eBridge =
   process.env.HARNESS_E2E === "1"
@@ -193,6 +194,8 @@ contextBridge.exposeInMainWorld("electron", {
       >,
     showInFolder: (id: string) =>
       ipcRenderer.invoke("notes:showInFolder", id) as Promise<void>,
+    proposeEdit: (input: NoteEditProposalInput) =>
+      ipcRenderer.invoke("notes:proposeEdit", input) as Promise<NoteEditProposal>,
   },
   recording: {
     requestMicrophoneAccess: () =>

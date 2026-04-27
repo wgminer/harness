@@ -28,11 +28,11 @@ npm install
 
 NeMo conversion scripts require **Python 3.12+** (they use `tarfile.extract(..., filter=…)`). macOS’s default `python3` is often 3.9 — install a newer Python, e.g. `**brew install python@3.12`**, and ensure `python3.12` is on your `PATH`. The setup script recreates `build/parakeet-venv` if it was made with an older Python.
 
-`npm run build` (and anything that runs it, e.g. `dist:mac`) automatically runs `**prebuild**`: icon generation, then Parakeet setup on macOS. The first Parakeet run can take a long time and needs several GB free; later builds skip when `resources/parakeet/` already has `parakeet`, `libaxiom.0.dylib`, `model.safetensors`, and `vocab.txt`. Set `PARAKEET_FORCE=1` to redo Parakeet. `resources/parakeet/*` is gitignored except `.gitkeep`.
+`npm run build` (and anything that runs it, e.g. `dist:mac`) automatically runs `**prebuild`**: icon generation, then Parakeet setup on macOS. The first Parakeet run can take a long time and needs several GB free; later builds skip when `resources/parakeet/` already has `parakeet`, `libaxiom.0.dylib`, `model.safetensors`, and `vocab.txt`. Set `PARAKEET_FORCE=1` to redo Parakeet. `resources/parakeet/*` is gitignored except `.gitkeep`.
 
 ### Parakeet transcription (bundled)
 
-Voice is transcribed locally with **NVIDIA Parakeet TDT 0.6B** via [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp) (no separate transcription API). `**parakeet:setup`** runs as part of `**prebuild**`; you can also run it alone:
+Voice is transcribed locally with **NVIDIA Parakeet TDT 0.6B** via [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp) (no separate transcription API). `**parakeet:setup`** runs as part of `**prebuild`**; you can also run it alone:
 
 ```bash
 npm run parakeet:setup
@@ -136,9 +136,9 @@ Equivalent: `npm run dist:mac -- --replace` (the dedicated script avoids the ext
 
 Quit Harness if it is running before replacing, so the copy can succeed.
 
-- If you **omit** the `APPLE_*` variables, the app will still be **signed** (when `CSC_*` is set); the build will skip notarization and print a warning. Other Macs often see Gatekeeper **“unverified”** or **“cannot be opened”** until users override security — **do not ship** builds made this way.
-- If you **set** all `APPLE_*` variables, the build will sign and then notarize the app. After notarization, the DMG/zip is ready to distribute.
-- `**npm run release`** sets `REQUIRE_NOTARIZE=1`, so a missing `APPLE_*` configuration **fails the build** instead of producing a skipped-notarization artifact.
+- If you **omit** the `APPLE_`* variables, the app will still be **signed** (when `CSC_`* is set); the build will skip notarization and print a warning. Other Macs often see Gatekeeper **“unverified”** or **“cannot be opened”** until users override security — **do not ship** builds made this way.
+- If you **set** all `APPLE_`* variables, the build will sign and then notarize the app. After notarization, the DMG/zip is ready to distribute.
+- `**npm run release`** sets `REQUIRE_NOTARIZE=1`, so a missing `APPLE_`* configuration **fails the build** instead of producing a skipped-notarization artifact.
 
 ---
 

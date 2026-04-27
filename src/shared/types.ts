@@ -53,6 +53,9 @@ export interface Settings {
     /** US ZIP used when the model does not pass one explicitly. */
     defaultZip: string;
   };
+  notes?: {
+    templates: import("./writing").NoteTemplateConfig[];
+  };
 }
 
 export interface SearchResult {
@@ -103,5 +106,58 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   weather: {
     defaultZip: "12528",
+  },
+  notes: {
+    templates: [
+      {
+        id: "blank",
+        title: "Blank",
+        description: "Empty",
+        content: "# Note\n",
+      },
+      {
+        id: "one-on-one",
+        title: "1:1",
+        description: "Sync",
+        content: [
+          "# 1:1",
+          "",
+          "## Wins",
+          "- ",
+          "",
+          "## Updates",
+          "- ",
+          "",
+          "## Feedback",
+          "- ",
+          "",
+          "## Blockers",
+          "- ",
+          "",
+          "## Next steps",
+          "- [ ] ",
+        ].join("\n"),
+      },
+      {
+        id: "daily-log",
+        title: "Daily log",
+        description: "Reflective",
+        content: [
+          "# Daily Log",
+          "",
+          "## Wins",
+          "- ",
+          "",
+          "## Focus",
+          "- ",
+          "",
+          "## Blockers",
+          "- ",
+          "",
+          "## Tomorrow",
+          "- ",
+        ].join("\n"),
+      },
+    ],
   },
 };

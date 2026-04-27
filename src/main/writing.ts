@@ -2,8 +2,18 @@ import { ipcMain, shell } from "electron";
 import { randomUUID } from "crypto";
 import { mkdir, readFile, stat, unlink, writeFile } from "fs/promises";
 import { join } from "path";
-import { UNTITLED_NOTE_TITLE, type Note, type NoteSummary } from "../shared/writing";
+import OpenAI from "openai";
+import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
+import {
+  UNTITLED_NOTE_TITLE,
+  type Note,
+  type NoteEditProposal,
+  type NoteEditProposalInput,
+  type NoteSummary,
+} from "../shared/writing";
 import { getMemoryDir } from "./memory";
+import { getSettings } from "./settings";
+import { recordOpenAIUsage } from "./usageStats";
 import { fileExists } from "./utils";
 
 const LEGACY_DOC_FILE = "writing.md";
@@ -315,6 +325,90 @@ export async function executeNoteTool(
   }
 }
 
+export function buildNotesEditPrompt(input: NoteEditProposalInput): string {
+  const prompt = String(input.prompt ?? "").trim();
+  const selectedText = String(input.selectedText ?? "");
+  const beforeText = String(input.beforeText ?? "");
+  const afterText = String(input.afterText ?? "");
+  const documentText = String(input.documentText ?? "");
+
+  return [
+    "Rewrite the selected text according to the instruction.",
+    "Return only the rewritten text with no explanation, markdown, or surrounding quotes.",
+    "If the instruction is clearly a question about the selected text, you may return a concise answer instead.",
+    "Keep the same language and preserve key facts unless the instruction asks otherwise.",
+    "When rewriting, make sure the result fits naturally between the surrounding text and stays consistent with the overall document.",
+    "",
+    "[Instruction]",
+    prompt,
+    "",
+    "[TextBeforeSelection]",
+    beforeText,
+    "",
+    "[SelectedText]",
+    selectedText,
+    "",
+    "[TextAfterSelection]",
+    afterText,
+    "",
+    "[FullDocument]",
+    documentText,
+  ].join("\n");
+}
+
+export async function proposeNoteEdit(input: NoteEditProposalInput): Promise<NoteEditProposal> {
+  const selectedText = String(input.selectedText ?? "");
+  const prompt = String(input.prompt ?? "").trim();
+  if (!selectedText.trim()) {
+    throw new Error("Cannot propose edit for empty selection.");
+  }
+  if (!prompt) {
+    throw new Error("Prompt is required.");
+  }
+
+  const settings = await getSettings();
+  const apiKey = settings.openai?.apiKey?.trim() ?? "";
+  if (!apiKey) {
+    throw new Error("OpenAI API key not set. Configure it in Settings.");
+  }
+
+  const client = new OpenAI({ apiKey });
+  const response = await client.chat.completions.create(
+    {
+      model: OPENAI_CHAT_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an editing assistant for a local notes app. Output only replacement text for the selected span.",
+        },
+        {
+          role: "user",
+          content: buildNotesEditPrompt({
+            selectedText,
+            prompt,
+            beforeText: String(input.beforeText ?? ""),
+            afterText: String(input.afterText ?? ""),
+            documentText: String(input.documentText ?? ""),
+          }),
+        },
+      ],
+      reasoning_effort: "medium",
+      max_completion_tokens: 1200,
+    },
+    { signal: AbortSignal.timeout(20_000) },
+  );
+
+  if (response.usage) {
+    recordOpenAIUsage(response.usage);
+  }
+  const proposedText = response.choices[0]?.message?.content?.trim() ?? "";
+  if (!proposedText) {
+    throw new Error("The model returned an empty edit proposal.");
+  }
+  return { proposedText };
+}
+
 export function registerNotesHandlers(): void {
   ipcMain.handle("notes:list", () => listNotes());
   ipcMain.handle("notes:create", (_e, title?: string, content?: string) => createNote(title, content));
@@ -322,4 +416,5 @@ export function registerNotesHandlers(): void {
   ipcMain.handle("notes:save", (_e, id: string, content: string) => saveNote(id ?? "", content ?? ""));
   ipcMain.handle("notes:delete", (_e, id: string) => deleteNote(id ?? ""));
   ipcMain.handle("notes:showInFolder", (_e, id: string) => showNoteInFolder(id ?? ""));
+  ipcMain.handle("notes:proposeEdit", (_e, input: NoteEditProposalInput) => proposeNoteEdit(input));
 }

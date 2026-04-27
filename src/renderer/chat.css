@@ -45,6 +45,8 @@
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
   display: block;
 }
 
@@ -493,20 +495,8 @@
   min-width: 0;
   border-bottom: none;
   border-radius: 8px 8px 0 0;
-  background:
-    linear-gradient(
-      165deg,
-      color-mix(in oklab, var(--fg) 9%, transparent) 0%,
-      transparent 42%
-    ),
-    color-mix(in oklab, var(--bg-elevated) 58%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(1.45);
-  backdrop-filter: blur(16px) saturate(1.45);
-  border: 1px solid color-mix(in oklab, var(--border) 68%, transparent);
   border-bottom: none;
-  box-shadow:
-    0 -10px 36px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
+  box-shadow: 0 -10px 36px rgba(0, 0, 0, 0.2), inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
 }
 
 .chat-audio-file-input {

@@ -106,6 +106,49 @@ export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   fontSize: 14,
 };
 
+export const DEFAULT_ACCENT_SWATCHES = [
+  "#f2ff00",
+  "#ffe066",
+  "#ffb703",
+  "#fb8500",
+  "#ff7f50",
+  "#f94144",
+  "#ef476f",
+  "#d00000",
+  "#9d0208",
+  "#c9184a",
+  "#ff4d6d",
+  "#ff8fab",
+  "#c77dff",
+  "#9d4edd",
+  "#7b2cbf",
+  "#5a189a",
+  "#3a0ca3",
+  "#4361ee",
+  "#4895ef",
+  "#4cc9f0",
+  "#00b4d8",
+  "#0096c7",
+  "#0077b6",
+  "#023e8a",
+  "#48cae4",
+  "#2ec4b6",
+  "#06d6a0",
+  "#52b788",
+  "#38b000",
+  "#70e000",
+  "#a7c957",
+  "#b5e48c",
+  "#f4a261",
+  "#e76f51",
+  "#8d6e63",
+  "#adb5bd",
+  "#6c757d",
+  "#ff006e",
+  "#8338ec",
+  "#3a86ff",
+] as const;
+
 function parseFontSizePx(raw: unknown): (typeof FONT_SIZE_OPTIONS)[number] | undefined {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
   const n = Math.round(raw);
@@ -155,6 +198,7 @@ export function themePreviewStyleVars(settings: ThemeSettings): Record<string, s
   const s = normalizeThemeSettings(settings);
   return {
     "--accent": s.accent.trim(),
+    "--accent-readable": `color-mix(in oklab, ${s.accent.trim()} 70%, var(--fg))`,
     "--font-family": FONT_STACKS[s.font],
     "--font-size": `${s.fontSize}px`,
     "--line-height": "1.5",
