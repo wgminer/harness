@@ -1,9 +1,5 @@
-Releases now ship DMGs as GitHub Release assets instead of committing binaries here.
+Releases no longer commit DMGs here.
 
-Expected asset name:
+The download page links users to the latest GitHub release page:
 
-- `harness-mac.dmg`
-
-The download page links to:
-
-- `https://github.com/wgminer/harness/releases/latest/download/harness-mac.dmg`
+- `https://github.com/wgminer/harness/releases/latest`

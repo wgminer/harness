@@ -49,11 +49,10 @@ function main() {
     env: { ...process.env, REQUIRE_NOTARIZE: "1" },
   });
 
-  const dmgName = `harness-v${version}-mac.dmg`;
   console.log("Next steps:");
   console.log("  1) npm run verify:mac-trust");
-  console.log(`  2) gh release create v${version} dist/${dmgName} --title "v${version}" --notes ""`);
-  console.log(`  3) gh release upload v${version} dist/${dmgName} --clobber --name harness-mac.dmg`);
+  console.log(`  2) gh release create v${version} --title "v${version}" --notes "" (or update existing)`);
+  console.log(`  3) Upload dist/harness-v${version}-mac.dmg to your artifact host (GitHub assets reject files >= 2 GiB)`);
   console.log("  4) git push origin main --tags");
 }
 
