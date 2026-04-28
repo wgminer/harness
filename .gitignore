@@ -31,6 +31,7 @@ import_v2
 .env
 out
 *.tsbuildinfo
+site/downloads/*.dmg
 
 # Playwright / E2E
 .e2e-user-data/
