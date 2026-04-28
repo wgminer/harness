@@ -168,13 +168,15 @@ You can double‑click `Harness.app` in `dist/mac-`* or the DMG to install and o
 
 ---
 
-## 8. Simple distribution flow (checked-in DMG + Pages)
+## 8. Simple distribution flow (GitHub Release asset + Pages)
 
-This project ships one DMG file directly from the repo:
+This project ships the DMG as a GitHub Release asset:
 
-- `site/downloads/harness.dmg`
+- `harness-mac.dmg` (uploaded from `dist/harness-vx.x.x-mac.dmg`)
 
-The GitHub Pages download button links to that exact file.
+The GitHub Pages download button points to:
+
+- `https://github.com/wgminer/harness/releases/latest/download/harness-mac.dmg`
 
 ### Quick release command
 
@@ -188,16 +190,15 @@ This command:
 
 1. Verifies your git working tree is clean.
 2. Builds `dist:mac` with `**REQUIRE_NOTARIZE=1**`.
-3. `dist:mac` already copies the newest `dist/*.dmg` to `site/downloads/harness.dmg`.
-4. Prints the git commands to commit and push the DMG.
+3. Prints commands to create/update the GitHub Release DMG asset.
 
 ### Manual checklist
 
 1. Build locally (`npm run dist:mac`) with your signing/notarization env vars set.
 2. Verify notarization and Gatekeeper trust (`npm run verify:mac-trust`).
-3. Ensure `site/downloads/harness.dmg` is updated (every `npm run dist:mac` refreshes it).
-4. Commit and push the updated DMG.
-5. Confirm the site button downloads `harness.dmg`.
+3. Create or update release asset `harness-mac.dmg` from `dist/harness-vx.x.x-mac.dmg`.
+4. Push tag/branch updates.
+5. Confirm the site button downloads `harness-mac.dmg`.
 
 ### GitHub Pages setup
 

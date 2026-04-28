@@ -1,5 +1,9 @@
-After `npm run dist:mac`, `scripts/dist-mac.js` copies the built DMG from `dist/` here as:
+Releases now ship DMGs as GitHub Release assets instead of committing binaries here.
 
-- `harness.dmg`
+Expected asset name:
 
-The download page links to `./downloads/harness.dmg`. Commit this file when you ship.
+- `harness-mac.dmg`
+
+The download page links to:
+
+- `https://github.com/wgminer/harness/releases/latest/download/harness-mac.dmg`

@@ -49,11 +49,12 @@ function main() {
     env: { ...process.env, REQUIRE_NOTARIZE: "1" },
   });
 
-  console.log("Next steps (dist:mac copies the DMG to site/downloads/harness.dmg):");
+  const dmgName = `harness-v${version}-mac.dmg`;
+  console.log("Next steps:");
   console.log("  1) npm run verify:mac-trust");
-  console.log("  2) git add site/downloads/harness.dmg");
-  console.log(`  3) git commit -m "release macOS dmg v${version}"`);
-  console.log("  4) git push origin main");
+  console.log(`  2) gh release create v${version} dist/${dmgName} --title "v${version}" --notes ""`);
+  console.log(`  3) gh release upload v${version} dist/${dmgName} --clobber --name harness-mac.dmg`);
+  console.log("  4) git push origin main --tags");
 }
 
 try {
