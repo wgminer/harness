@@ -208,8 +208,10 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("recording:exportWav", data, suggestedName) as Promise<{ path: string } | { cancelled: true }>,
     openFolder: () =>
       ipcRenderer.invoke("recording:openFolder") as Promise<void>,
-    transcribe: (data: ArrayBuffer) =>
-      ipcRenderer.invoke("recording:transcribe", data) as Promise<{ text: string } | { error: string }>,
+    transcribe: (data: ArrayBuffer, options?: { requestId?: string }) =>
+      ipcRenderer.invoke("recording:transcribe", data, options?.requestId) as Promise<{ text: string } | { error: string }>,
+    cancelTranscription: (requestId: string) =>
+      ipcRenderer.invoke("recording:cancelTranscription", requestId) as Promise<void>,
     pasteText: (text: string) =>
       ipcRenderer.invoke("recording:pasteText", text) as Promise<void>,
     done: () =>

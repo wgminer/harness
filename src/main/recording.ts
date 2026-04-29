@@ -14,7 +14,12 @@ export function getRecordingsDir(): string {
   return join(app.getPath("userData"), "recordings");
 }
 
-async function runTranscriptCleanup(text: string, apiKey: string, userInstructions: string): Promise<string> {
+async function runTranscriptCleanup(
+  text: string,
+  apiKey: string,
+  userInstructions: string,
+  signal: AbortSignal
+): Promise<string> {
   const systemPrompt =
     "You are an expert transcript editor for dictation text. Rewrite the transcript to remove filler words, verbal stumbles, and false starts while preserving meaning. Improve punctuation and readability. Do not add new facts. Keep proper nouns and technical terms intact. Return only the cleaned transcript text.\n\nAdditional user instructions:\n" +
     userInstructions;
@@ -28,7 +33,7 @@ async function runTranscriptCleanup(text: string, apiKey: string, userInstructio
         { role: "user", content: text },
       ],
     },
-    { signal: AbortSignal.timeout(8_000) }
+    { signal }
   );
   if (completion.usage) {
     recordOpenAIUsage(completion.usage);
@@ -39,6 +44,7 @@ async function runTranscriptCleanup(text: string, apiKey: string, userInstructio
 }
 
 export function registerRecordingHandlers(): void {
+  const transcriptionCancels = new Map<string, AbortController>();
   /** macOS: TCC requires this main-process call before getUserMedia will receive mic audio. */
   ipcMain.handle("recording:requestMicrophoneAccess", async (): Promise<boolean> => {
     if (process.platform !== "darwin") {
@@ -83,15 +89,28 @@ export function registerRecordingHandlers(): void {
     await shell.openPath(dir);
   });
 
-  ipcMain.handle("recording:transcribe", async (_e, data: ArrayBuffer) => {
+  ipcMain.handle("recording:cancelTranscription", async (_e, requestId: string) => {
+    const controller = transcriptionCancels.get(requestId);
+    if (controller) {
+      controller.abort();
+      transcriptionCancels.delete(requestId);
+    }
+  });
+
+  ipcMain.handle("recording:transcribe", async (_e, data: ArrayBuffer, requestId?: string) => {
     if (isHarnessE2E()) {
       void data;
       return { text: HARNESS_E2E_TRANSCRIBE_TEXT };
     }
     const settings = await getSettings();
+    const abortController = requestId ? new AbortController() : null;
+    if (requestId && abortController) {
+      transcriptionCancels.set(requestId, abortController);
+    }
+    const signal = abortController?.signal;
     try {
       const provider = getTranscriptionProvider();
-      const { text, parakeetTokens } = await provider.transcribe(data);
+      const { text, parakeetTokens } = await provider.transcribe(data, signal);
       recordParakeetTranscription(text, parakeetTokens ?? undefined);
       const shouldCleanup = settings.transcription?.cleanup?.enabled ?? false;
       if (!shouldCleanup || !text.trim()) {
@@ -104,7 +123,9 @@ export function registerRecordingHandlers(): void {
       try {
         const cleanupPrompt =
           settings.transcription?.cleanup?.prompt?.trim() || DEFAULT_SETTINGS.transcription!.cleanup!.prompt;
-        const cleaned = await runTranscriptCleanup(text, key, cleanupPrompt);
+        const cleanupSignal =
+          signal ? AbortSignal.any([signal, AbortSignal.timeout(8_000)]) : AbortSignal.timeout(8_000);
+        const cleaned = await runTranscriptCleanup(text, key, cleanupPrompt, cleanupSignal);
         return { text: cleaned };
       } catch (err) {
         console.warn("Transcript cleanup failed; returning original transcript.", err);
@@ -112,6 +133,10 @@ export function registerRecordingHandlers(): void {
       }
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
+    } finally {
+      if (requestId) {
+        transcriptionCancels.delete(requestId);
+      }
     }
   });
 

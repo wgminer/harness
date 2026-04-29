@@ -37,20 +37,48 @@ function parseParakeetTokenCount(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function runParakeetCli(exe: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {
+function runParakeetCli(
+  exe: string,
+  args: string[],
+  signal?: AbortSignal
+): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
     const child = spawn(exe, args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    const finalize = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      fn();
+    };
+    const onAbort = () => {
+      child.kill("SIGTERM");
+      finalize(() => reject(new Error("Transcription cancelled.")));
+    };
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
     child.stdout?.on("data", (d: Buffer) => {
       stdout += d.toString("utf8");
     });
     child.stderr?.on("data", (d: Buffer) => {
       stderr += d.toString("utf8");
     });
-    child.on("error", reject);
+    child.on("error", (err) => {
+      finalize(() => reject(err));
+    });
     child.on("close", (code) => {
-      resolve({ stdout, stderr, code });
+      finalize(() => resolve({ stdout, stderr, code }));
+    });
+    child.on("exit", () => {
+      if (signal) {
+        signal.removeEventListener("abort", onAbort);
+      }
     });
   });
 }
@@ -71,7 +99,7 @@ export function createParakeetTranscriptionProvider(): TranscriptionProvider {
   return {
     id: "parakeet-local",
 
-    async transcribe(audioBuffer: ArrayBuffer): Promise<TranscriptionResult> {
+    async transcribe(audioBuffer: ArrayBuffer, signal?: AbortSignal): Promise<TranscriptionResult> {
       const base = getParakeetBundleDir();
       const exe = join(base, PARAKEET_FILENAMES.cli);
       const weights = join(base, PARAKEET_FILENAMES.weights);
@@ -96,7 +124,7 @@ export function createParakeetTranscriptionProvider(): TranscriptionProvider {
           if (fp16) args.push("--fp16");
         }
 
-        const { stdout, stderr, code } = await runParakeetCli(exe, args);
+        const { stdout, stderr, code } = await runParakeetCli(exe, args, signal);
         const tokenCount = parseParakeetTokenCount(stdout);
         const text = parseParakeetTranscriptStdout(stdout);
         if (code !== 0) {
