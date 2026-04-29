@@ -41,6 +41,7 @@ export function ChatView({
   focusComposerNonce,
   onOpenNotesView,
 }: ChatViewProps) {
+  const MAX_RECORDING_MS = 5 * 60 * 1000;
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<string | null>(null);
@@ -67,6 +68,8 @@ export function ChatView({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const recordingStartRef = useRef<number>(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const transcriptionRequestIdRef = useRef<string | null>(null);
+  const transcriptionCancelledRef = useRef(false);
 
   const recorder = useRecorder();
 
@@ -245,6 +248,8 @@ export function ChatView({
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
+    transcriptionRequestIdRef.current = null;
+    transcriptionCancelledRef.current = false;
     setVoiceState("idle");
     setAttachedAudioFile(null);
     setAttachmentTranscribing(false);
@@ -545,23 +550,38 @@ export function ChatView({
     try {
       await recorder.start();
       setVoiceState("recording");
+      transcriptionCancelledRef.current = false;
       recordingStartRef.current = Date.now();
       recordingTimerRef.current = setInterval(() => {
-        setRecordingMs(Date.now() - recordingStartRef.current);
+        const elapsed = Date.now() - recordingStartRef.current;
+        setRecordingMs(elapsed);
+        if (elapsed >= MAX_RECORDING_MS) {
+          if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+          }
+          void stopAndTranscribe();
+        }
       }, 33);
     } catch (err) {
       setVoiceError(err instanceof Error ? err.message : "Microphone access denied.");
     }
-  }, [recorder]);
+  }, [recorder, MAX_RECORDING_MS]);
 
   const stopAndTranscribe = useCallback(async () => {
     if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
     setVoiceState("processing");
     setVoiceError(null);
+    transcriptionCancelledRef.current = false;
     try {
       const wav = await recorder.stop();
       window.electron.recording.saveWav(wav).catch(() => {});
-      const result = await window.electron.recording.transcribe(wav);
+      const requestId = crypto.randomUUID();
+      transcriptionRequestIdRef.current = requestId;
+      const result = await window.electron.recording.transcribe(wav, { requestId });
+      if (transcriptionCancelledRef.current || transcriptionRequestIdRef.current !== requestId) {
+        return;
+      }
       if ("error" in result) {
         setVoiceError(result.error);
       } else {
@@ -577,18 +597,28 @@ export function ChatView({
     } catch (err) {
       setVoiceError(err instanceof Error ? err.message : "Recording failed.");
     } finally {
+      transcriptionRequestIdRef.current = null;
       setVoiceState("idle");
     }
   }, [recorder]);
 
   const cancelRecording = useCallback(async () => {
     if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
-    try { await recorder.stop(); } catch (_) { /* already stopped */ }
+    if (voiceState === "processing" && transcriptionRequestIdRef.current) {
+      transcriptionCancelledRef.current = true;
+      void window.electron.recording.cancelTranscription(transcriptionRequestIdRef.current).catch(() => {});
+      transcriptionRequestIdRef.current = null;
+    }
+    try {
+      if (voiceState === "recording") {
+        await recorder.stop();
+      }
+    } catch (_) { /* already stopped */ }
     setVoiceState("idle");
     setVoiceError(null);
     setRecordingMs(0);
     playCancelChime();
-  }, [recorder]);
+  }, [recorder, voiceState]);
 
   const openTitleModal = useCallback(() => {
     setTitleDraft(displayTitle);

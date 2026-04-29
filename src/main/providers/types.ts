@@ -22,5 +22,5 @@ export interface TranscriptionResult {
 
 export interface TranscriptionProvider {
   id: string;
-  transcribe(audioBuffer: ArrayBuffer): Promise<TranscriptionResult>;
+  transcribe(audioBuffer: ArrayBuffer, signal?: AbortSignal): Promise<TranscriptionResult>;
 }

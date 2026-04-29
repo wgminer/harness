@@ -139,7 +139,8 @@ export interface ElectronAPI {
     showInFolder: (path: string) => Promise<void>;
     exportWav: (data: ArrayBuffer, suggestedName?: string) => Promise<{ path: string } | { cancelled: true }>;
     openFolder: () => Promise<void>;
-    transcribe: (data: ArrayBuffer) => Promise<{ text: string } | { error: string }>;
+    transcribe: (data: ArrayBuffer, options?: { requestId?: string }) => Promise<{ text: string } | { error: string }>;
+    cancelTranscription: (requestId: string) => Promise<void>;
     pasteText: (text: string) => Promise<void>;
     done: () => Promise<void>;
     onStartSilent: (cb: () => void) => () => void;

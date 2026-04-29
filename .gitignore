@@ -29,6 +29,7 @@ firebase.js
 import
 import_v2
 .env
+*.p12
 out
 *.tsbuildinfo
 site/downloads/*.dmg
