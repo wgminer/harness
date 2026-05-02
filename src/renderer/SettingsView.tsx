@@ -28,13 +28,18 @@ import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
   DEFAULT_ACCENT_SWATCHES,
+  DEFAULT_BG_SWATCHES,
+  DEFAULT_FG_SWATCHES,
   DEFAULT_THEME_SETTINGS,
-  FONTS,
+  enforceVeryLowContrastGuard,
   FONT_SIZE_OPTIONS,
+  MONO_FONTS,
   normalizeColorPickerValue,
-  themePreviewStyleVars,
-  type FontId,
+  themeSettingsToCss,
+  UI_FONTS,
+  type MonoFontId,
   type ThemeSettings,
+  type UiFontId,
 } from "../shared/theme";
 
 interface SettingsViewProps {
@@ -115,9 +120,8 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
   const [themeForm, setThemeForm] = useState<ThemeSettings>({ ...DEFAULT_THEME_SETTINGS });
   const [themeApplyBusy, setThemeApplyBusy] = useState(false);
-  const [themeApplyMessage, setThemeApplyMessage] = useState<string | null>(null);
   const [themeApplyError, setThemeApplyError] = useState<string | null>(null);
-  const themeMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const themeApplySeqRef = useRef(0);
   const skipNextSaveRef = useRef(true);
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
@@ -166,13 +170,6 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     if (!isMac) return;
     void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
   }, [isMac]);
-
-  useEffect(
-    () => () => {
-      if (themeMsgTimerRef.current) clearTimeout(themeMsgTimerRef.current);
-    },
-    []
-  );
 
   useEffect(() => {
     if (activeTab !== "data") return;
@@ -375,46 +372,61 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     }
   };
 
-  const showThemeNotice = (msg: string) => {
-    if (themeMsgTimerRef.current) clearTimeout(themeMsgTimerRef.current);
-    setThemeApplyError(null);
-    setThemeApplyMessage(msg);
-    themeMsgTimerRef.current = setTimeout(() => {
-      setThemeApplyMessage(null);
-      themeMsgTimerRef.current = null;
-    }, 2200);
+  const applyThemeCssImmediately = (settings: ThemeSettings | null) => {
+    const el = document.getElementById("custom-theme") as HTMLStyleElement | null;
+    if (!el) return;
+    if (settings === null) {
+      el.textContent = "";
+      return;
+    }
+    el.textContent = themeSettingsToCss(settings);
   };
 
-  const applyTheme = async () => {
-    setThemeApplyBusy(true);
-    setThemeApplyError(null);
-    try {
-      await window.electron.customization.setThemeSettings(themeForm);
-      showThemeNotice("Theme applied");
-    } catch (e) {
-      setThemeApplyMessage(null);
-      setThemeApplyError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setThemeApplyBusy(false);
-    }
+  const updateThemeForm = (updater: (prev: ThemeSettings) => ThemeSettings) => {
+    setThemeForm((prev) => {
+      const updated = updater(prev);
+      const changedFg = updated.fg !== prev.fg;
+      const changedBg = updated.bg !== prev.bg;
+      const next =
+        changedFg !== changedBg
+          ? {
+              ...updated,
+              ...enforceVeryLowContrastGuard(
+                { fg: updated.fg, bg: updated.bg },
+                changedFg ? "fg" : "bg",
+              ),
+            }
+          : updated;
+      applyThemeCssImmediately(next);
+      const seq = ++themeApplySeqRef.current;
+      setThemeApplyBusy(true);
+      setThemeApplyError(null);
+      void window.electron.customization
+        .setThemeSettings(next)
+        .catch((e) => {
+          if (seq !== themeApplySeqRef.current) return;
+          setThemeApplyError(e instanceof Error ? e.message : String(e));
+        })
+        .finally(() => {
+          if (seq === themeApplySeqRef.current) setThemeApplyBusy(false);
+        });
+      return next;
+    });
   };
 
   const resetThemeToBuiltin = async () => {
     setThemeApplyBusy(true);
     setThemeApplyError(null);
     try {
+      applyThemeCssImmediately(null);
       await window.electron.customization.setThemeSettings(null);
       setThemeForm({ ...DEFAULT_THEME_SETTINGS });
-      showThemeNotice("Restored built-in theme");
     } catch (e) {
-      setThemeApplyMessage(null);
       setThemeApplyError(e instanceof Error ? e.message : String(e));
     } finally {
       setThemeApplyBusy(false);
     }
   };
-
-  const playgroundPreviewStyle = themePreviewStyleVars(themeForm) as CSSProperties;
 
   const switchTab = (id: SettingsTabId) => {
     setActiveTab(id);
@@ -541,145 +553,195 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             </section>
 
             <section className="settings-group">
-              <h3 className="settings-group__title">Theme preview</h3>
-              <p className="settings-group__lead">
-                Adjust accent, font (including Google Fonts loaded with the app), and base size. The preview uses
-                your current app colors; only the accent is overridden here until you apply. Apply saves your
-                overrides to your saved theme (replacing any previous custom theme from this screen or tools).
+              <h3 className="settings-group__title">Theme studio</h3>
+              <p className="settings-group__lead settings-group__lead--tight">
+                Background, text, accent; UI and code fonts (Google Fonts load with the app); base size. Changes apply
+                instantly and save to your theme (replacing any previous custom theme from this screen or tools).
               </p>
               <div className="settings-playground">
                 <div className="settings-playground-tools settings-section">
-                  <div className="settings-playground-field">
-                    <label htmlFor="theme-accent">Accent color</label>
-                    <div className="settings-playground-color-row">
-                      <input
-                        id="theme-accent"
-                        type="color"
-                        value={normalizeColorPickerValue(themeForm.accent)}
-                        onChange={(e) =>
-                          setThemeForm((f) => ({ ...f, accent: e.target.value }))
-                        }
-                        aria-label="Accent color picker"
-                      />
-                      <input
-                        type="text"
-                        value={themeForm.accent}
-                        onChange={(e) => setThemeForm((f) => ({ ...f, accent: e.target.value }))}
-                        spellCheck={false}
-                        autoComplete="off"
-                        aria-label="Accent hex"
-                      />
-                    </div>
-                    <div className="settings-playground-accent-grid" role="list" aria-label="Default accents">
-                      {DEFAULT_ACCENT_SWATCHES.map((accent) => {
-                        const isSelected = normalizeColorPickerValue(themeForm.accent) === accent;
-                        return (
-                          <button
-                            key={accent}
-                            type="button"
-                            className={`settings-playground-accent-swatch${isSelected ? " settings-playground-accent-swatch--selected" : ""}`}
-                            onClick={() => setThemeForm((f) => ({ ...f, accent }))}
-                            aria-label={`Use accent ${accent}`}
-                            aria-pressed={isSelected}
-                            style={{ "--swatch-color": accent } as CSSProperties}
+                  <div className="settings-playground-columns">
+                    <div className="settings-playground-column" aria-label="Color controls">
+                      <h4 className="settings-playground-column__title">Colors</h4>
+                      <div className="settings-playground-field">
+                        <label htmlFor="theme-bg">Background color</label>
+                        <div className="settings-playground-color-row">
+                          <input
+                            id="theme-bg"
+                            type="color"
+                            value={normalizeColorPickerValue(themeForm.bg)}
+                            onChange={(e) => updateThemeForm((f) => ({ ...f, bg: e.target.value }))}
+                            aria-label="Background color picker"
                           />
-                        );
-                      })}
+                          <input
+                            type="text"
+                            value={themeForm.bg}
+                            onChange={(e) => updateThemeForm((f) => ({ ...f, bg: e.target.value }))}
+                            spellCheck={false}
+                            autoComplete="off"
+                            aria-label="Background hex"
+                          />
+                        </div>
+                        <div className="settings-playground-swatch-grid" role="list" aria-label="Background presets">
+                          {DEFAULT_BG_SWATCHES.map((bg) => {
+                            const isSelected = normalizeColorPickerValue(themeForm.bg) === bg;
+                            return (
+                              <button
+                                key={bg}
+                                type="button"
+                                className={`settings-playground-swatch${isSelected ? " settings-playground-swatch--selected" : ""}`}
+                                onClick={() => updateThemeForm((f) => ({ ...f, bg }))}
+                                aria-label={`Use background ${bg}`}
+                                aria-pressed={isSelected}
+                                style={{ "--swatch-color": bg } as CSSProperties}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="settings-playground-field">
+                        <label htmlFor="theme-fg">Text color</label>
+                        <div className="settings-playground-color-row">
+                          <input
+                            id="theme-fg"
+                            type="color"
+                            value={normalizeColorPickerValue(themeForm.fg)}
+                            onChange={(e) => updateThemeForm((f) => ({ ...f, fg: e.target.value }))}
+                            aria-label="Text color picker"
+                          />
+                          <input
+                            type="text"
+                            value={themeForm.fg}
+                            onChange={(e) => updateThemeForm((f) => ({ ...f, fg: e.target.value }))}
+                            spellCheck={false}
+                            autoComplete="off"
+                            aria-label="Text color hex"
+                          />
+                        </div>
+                        <div className="settings-playground-swatch-grid" role="list" aria-label="Text color presets">
+                          {DEFAULT_FG_SWATCHES.map((fg) => {
+                            const isSelected = normalizeColorPickerValue(themeForm.fg) === fg;
+                            return (
+                              <button
+                                key={fg}
+                                type="button"
+                                className={`settings-playground-swatch${isSelected ? " settings-playground-swatch--selected" : ""}`}
+                                onClick={() => updateThemeForm((f) => ({ ...f, fg }))}
+                                aria-label={`Use text color ${fg}`}
+                                aria-pressed={isSelected}
+                                style={{ "--swatch-color": fg } as CSSProperties}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="settings-playground-field">
+                        <label htmlFor="theme-accent">Accent color</label>
+                        <div className="settings-playground-color-row">
+                          <input
+                            id="theme-accent"
+                            type="color"
+                            value={normalizeColorPickerValue(themeForm.accent)}
+                            onChange={(e) => updateThemeForm((f) => ({ ...f, accent: e.target.value }))}
+                            aria-label="Accent color picker"
+                          />
+                          <input
+                            type="text"
+                            value={themeForm.accent}
+                            onChange={(e) => updateThemeForm((f) => ({ ...f, accent: e.target.value }))}
+                            spellCheck={false}
+                            autoComplete="off"
+                            aria-label="Accent hex"
+                          />
+                        </div>
+                        <div className="settings-playground-accent-grid" role="list" aria-label="Default accents">
+                          {DEFAULT_ACCENT_SWATCHES.map((accent) => {
+                            const isSelected = normalizeColorPickerValue(themeForm.accent) === accent;
+                            return (
+                              <button
+                                key={accent}
+                                type="button"
+                                className={`settings-playground-accent-swatch${isSelected ? " settings-playground-accent-swatch--selected" : ""}`}
+                                onClick={() => updateThemeForm((f) => ({ ...f, accent }))}
+                                aria-label={`Use accent ${accent}`}
+                                aria-pressed={isSelected}
+                                style={{ "--swatch-color": accent } as CSSProperties}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="settings-playground-field">
-                    <label htmlFor="theme-font">Font</label>
-                    <select
-                      id="theme-font"
-                      value={themeForm.font}
-                      onChange={(e) =>
-                        setThemeForm((f) => ({ ...f, font: e.target.value as FontId }))
-                      }
-                    >
-                      {FONTS.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="settings-playground-field">
-                    <label htmlFor="theme-font-size">Base font size</label>
-                    <select
-                      id="theme-font-size"
-                      value={themeForm.fontSize}
-                      onChange={(e) =>
-                        setThemeForm((f) => ({
-                          ...f,
-                          fontSize: Number(e.target.value) as (typeof FONT_SIZE_OPTIONS)[number],
-                        }))
-                      }
-                    >
-                      {FONT_SIZE_OPTIONS.map((n) => (
-                        <option key={n} value={n}>
-                          {n}px
-                        </option>
-                      ))}
-                    </select>
+                    <div className="settings-playground-column" aria-label="Font controls">
+                      <h4 className="settings-playground-column__title">Fonts</h4>
+                      <div className="settings-playground-field">
+                        <label htmlFor="theme-font">UI font</label>
+                        <select
+                          id="theme-font"
+                          value={themeForm.font}
+                          onChange={(e) =>
+                            updateThemeForm((f) => ({ ...f, font: e.target.value as UiFontId }))
+                          }
+                        >
+                          {UI_FONTS.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="settings-playground-field">
+                        <label htmlFor="theme-font-mono">Code / notes font</label>
+                        <select
+                          id="theme-font-mono"
+                          value={themeForm.fontMono}
+                          onChange={(e) =>
+                            updateThemeForm((f) => ({ ...f, fontMono: e.target.value as MonoFontId }))
+                          }
+                        >
+                          {MONO_FONTS.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="settings-playground-field">
+                        <label htmlFor="theme-font-size">Base font size</label>
+                        <select
+                          id="theme-font-size"
+                          value={themeForm.fontSize}
+                          onChange={(e) =>
+                            updateThemeForm((f) => ({
+                              ...f,
+                              fontSize: Number(e.target.value) as (typeof FONT_SIZE_OPTIONS)[number],
+                            }))
+                          }
+                        >
+                          {FONT_SIZE_OPTIONS.map((n) => (
+                            <option key={n} value={n}>
+                              {n}px
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
                   <div className="settings-actions settings-playground-actions">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={themeApplyBusy}
-                      onClick={() => void applyTheme()}
-                    >
-                      {themeApplyBusy ? "Applying…" : "Apply theme"}
-                    </button>
                     <button
                       type="button"
                       className="btn"
                       disabled={themeApplyBusy}
                       onClick={() => void resetThemeToBuiltin()}
                     >
-                      Reset to built-in
+                      Reset
                     </button>
                   </div>
-                  {themeApplyMessage && (
-                    <p className="settings-playground-status settings-playground-status--ok" role="status">
-                      {themeApplyMessage}
-                    </p>
-                  )}
                   {themeApplyError && (
                     <p className="settings-playground-status settings-playground-status--err" role="alert">
                       {themeApplyError}
                     </p>
                   )}
-                </div>
-                <div className="settings-playground-canvas" style={playgroundPreviewStyle}>
-                  <h4 className="settings-playground-canvas__title">Conversation title</h4>
-                  <nav className="settings-playground-canvas__side-nav" aria-label="Sample side navigation">
-                    <button type="button" className="settings-playground-canvas__side-link settings-playground-canvas__side-link--active">
-                      Active thread
-                    </button>
-                    <button type="button" className="settings-playground-canvas__side-link">
-                      Notes
-                    </button>
-                    <button type="button" className="settings-playground-canvas__side-link">
-                      Settings
-                    </button>
-                  </nav>
-                  <p className="settings-playground-canvas__body">
-                    This paragraph uses the body stack and size.{" "}
-                    <span className="settings-playground-canvas__accent">Accent</span> highlights links and focus.
-                  </p>
-                  <p className="settings-playground-canvas__muted">
-                    Secondary line — timestamps, hints, and labels often look like this.
-                  </p>
-                  <div className="settings-playground-canvas__panel">
-                    <span className="settings-playground-canvas__panel-label">Inset</span>
-                    <p className="settings-playground-canvas__body settings-playground-canvas__body--tight">
-                      A block on a lifted surface uses the secondary background.
-                    </p>
-                  </div>
-                  <button type="button" className="settings-playground-canvas__btn">
-                    Sample button
-                  </button>
                 </div>
               </div>
             </section>

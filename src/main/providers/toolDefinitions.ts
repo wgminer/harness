@@ -1,4 +1,8 @@
-import { FONT_IDS_FOR_SCHEMA, FONT_SIZE_OPTIONS } from "../../shared/theme";
+import {
+  FONT_MONO_IDS_FOR_SCHEMA,
+  FONT_SIZE_OPTIONS,
+  FONT_UI_IDS_FOR_SCHEMA,
+} from "../../shared/theme";
 
 export const TOOL_DEFINITIONS = [
   {
@@ -69,12 +73,19 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "update_theme",
       description:
-        "Update the app theme (accent, fonts, base size). Omit fields you do not want to change. Call when colors, typography, or appearance are requested.",
+        "Update the app theme (accent, text/background colors, UI font, monospace font for code/notes, base size). Omit fields you do not want to change. Call when colors, typography, or appearance are requested.",
       parameters: {
         type: "object",
         properties: {
           accent: { type: "string", description: "Accent color as #RGB or #RRGGBB hex" },
-          font: { type: "string", enum: FONT_IDS_FOR_SCHEMA, description: "Global app font id" },
+          fg: { type: "string", description: "Primary text color as #RGB or #RRGGBB hex" },
+          bg: { type: "string", description: "Primary background color as #RGB or #RRGGBB hex" },
+          font: { type: "string", enum: FONT_UI_IDS_FOR_SCHEMA, description: "UI / app chrome font id" },
+          fontMono: {
+            type: "string",
+            enum: FONT_MONO_IDS_FOR_SCHEMA,
+            description: "Monospace font id for code and notes editor",
+          },
           fontSize: {
             type: "number",
             enum: [...FONT_SIZE_OPTIONS],

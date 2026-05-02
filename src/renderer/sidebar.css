@@ -352,12 +352,12 @@
 .sidebar .sidebar-workspace__btn.sidebar-workspace__btn--active {
   color: var(--fg);
   border-left-color: var(--accent);
-  background: var(--bg);
+  background: var(--sidebar-control-active-hover-bg);
   box-shadow: none;
 }
 
 .sidebar .sidebar-workspace__btn.sidebar-workspace__btn--active:hover:not(:disabled) {
-  background: var(--bg);
+  background: var(--sidebar-control-active-hover-bg);
 }
 
 .sidebar-search-row {

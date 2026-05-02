@@ -102,12 +102,13 @@ function notifyRenderer(channel: string, payload: unknown): void {
 
 function applyThemePatch(args: Record<string, unknown>): void {
   const current = readThemeSettings() ?? DEFAULT_THEME_SETTINGS;
-  const merged = {
-    ...current,
-    ...(typeof args.accent === "string" ? { accent: args.accent } : {}),
-    ...(args.font !== undefined ? { font: args.font } : {}),
-    ...(args.fontSize !== undefined ? { fontSize: args.fontSize } : {}),
-  };
+  const merged: Record<string, unknown> = { ...current };
+  if (typeof args.accent === "string") merged.accent = args.accent;
+  if (args.font !== undefined) merged.font = args.font;
+  if (args.fontMono !== undefined) merged.fontMono = args.fontMono;
+  if (args.fontSize !== undefined) merged.fontSize = args.fontSize;
+  if (typeof args.fg === "string") merged.fg = args.fg;
+  if (typeof args.bg === "string") merged.bg = args.bg;
   setThemeSettings(normalizeThemeSettings(merged));
 }
 
