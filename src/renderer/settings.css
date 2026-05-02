@@ -570,15 +570,34 @@
 .settings-playground {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 .settings-playground-tools {
   margin-bottom: 0;
 }
 
+.settings-playground-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.settings-playground-column {
+  min-width: 0;
+}
+
+.settings-playground-column__title {
+  margin: 0 0 8px;
+  font-size: calc(var(--font-size) * 12 / 14);
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
 .settings-playground-tools.settings-section > .settings-playground-field {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .settings-playground-field select {
@@ -611,15 +630,17 @@
   font-size: calc(var(--font-size) * 13 / 14);
 }
 
-.settings-playground-accent-grid {
+.settings-playground-accent-grid,
+.settings-playground-swatch-grid {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 10px;
+  gap: 6px;
+  margin-top: 8px;
   max-width: 320px;
 }
 
-.settings-playground-accent-swatch {
+.settings-playground-accent-swatch,
+.settings-playground-swatch {
   width: 100%;
   aspect-ratio: 1;
   border-radius: 4px;
@@ -631,17 +652,20 @@
     border-color 0.12s ease;
 }
 
-.settings-playground-accent-swatch:hover {
+.settings-playground-accent-swatch:hover,
+.settings-playground-swatch:hover {
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--swatch-color) 45%, var(--fg));
 }
 
-.settings-playground-accent-swatch:focus-visible {
+.settings-playground-accent-swatch:focus-visible,
+.settings-playground-swatch:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.settings-playground-accent-swatch--selected {
+.settings-playground-accent-swatch--selected,
+.settings-playground-swatch--selected {
   border-color: color-mix(in srgb, var(--swatch-color) 60%, white);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, white 65%, transparent);
 }
@@ -665,112 +689,11 @@
   color: var(--danger);
 }
 
-.settings-playground-canvas {
-  border-radius: 8px;
-  padding: 18px 16px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-}
-
-.settings-playground-canvas__title {
-  font-family: var(--font-family);
-  font-size: calc(var(--font-size) * 1.12);
-  font-weight: 600;
-  color: var(--fg);
-  margin: 0 0 10px;
-  line-height: 1.25;
-}
-
-.settings-playground-canvas__body {
-  font-family: var(--font-family);
-  font-size: var(--font-size);
-  line-height: var(--line-height);
-  color: var(--fg);
-  margin: 0 0 10px;
-}
-
-.settings-playground-canvas__body--tight {
-  margin-bottom: 0;
-}
-
-.settings-playground-canvas__muted {
-  font-family: var(--font-family);
-  font-size: calc(var(--font-size) * 0.93);
-  line-height: var(--line-height);
-  color: var(--fg-muted);
-  margin: 0 0 14px;
-}
-
-.settings-playground-canvas__side-nav {
-  display: flex;
-  gap: 6px;
-  margin: 0 0 12px;
-}
-
-.settings-playground-canvas__side-link {
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 4px 8px;
-  background: transparent;
-  color: var(--fg-muted);
-  font-family: var(--font-family);
-  font-size: calc(var(--font-size) * 12 / 14);
-  line-height: 1.2;
-}
-
-.settings-playground-canvas__side-link--active {
-  color: var(--accent-readable);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  font-weight: 600;
-}
-
-.settings-playground-canvas__accent {
-  color: var(--accent-readable);
-  font-weight: 600;
-}
-
-.settings-playground-canvas__panel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 12px;
-  margin-bottom: 14px;
-}
-
-.settings-playground-canvas__panel-label {
-  display: block;
-  font-family: var(--font-family);
-  font-size: calc(var(--font-size) * 11 / 14);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--fg-muted);
-  margin-bottom: 6px;
-}
-
-.settings-playground-canvas__btn {
-  font-family: var(--font-family);
-  font-size: calc(var(--font-size) * 13 / 14);
-  line-height: 1.2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  height: var(--input-height);
-  border-radius: 4px;
-  border: none;
-  background: color-mix(in srgb, var(--fg) 12%, var(--bg));
-  color: var(--fg);
-  cursor: default;
-  box-shadow: none;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease;
-}
-
-.settings-playground-canvas__btn:hover {
-  color: var(--accent-readable);
-  background: color-mix(in srgb, var(--fg) 10%, var(--bg));
+@media (max-width: 940px) {
+  .settings-playground-columns {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
 }
 
 .settings-page .workspace-header-title-row svg {

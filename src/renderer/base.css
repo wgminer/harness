@@ -18,12 +18,14 @@
    * outlines, and backgrounds, keep using --accent.
    */
   --accent-readable: color-mix(in oklab, var(--accent) 70%, var(--fg));
-  --selection-bg: color-mix(in srgb, var(--accent) 38%, var(--fg-muted) 22%);
+  --selection-bg: color-mix(in srgb, var(--accent) 38%, var(--fg) 22%);
   --danger: #c0392b;
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   --btn-shadow: none;
   --btn-shadow-hover: none;
   --font-family: "Inter", system-ui, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
   --font-size: 14px;
   /**
    * Lucide / toolbar icons: scale with theme base font (defaults match 14px base —
@@ -37,7 +39,7 @@
   --icon-size-xl: calc(var(--font-size) * 20 / 14);
   --space-unit: 8px;
   --sidebar-control-hover-bg: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
-  --sidebar-control-active-hover-bg: color-mix(in srgb, var(--fg) 14%, var(--bg-secondary));
+  --sidebar-control-active-hover-bg: color-mix(in srgb, var(--accent) 72%, var(--bg-secondary));
   --input-height: 36px;
   --line-height: 1.5;
   --line-height-message: 1.7;
