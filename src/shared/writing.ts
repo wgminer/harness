@@ -66,6 +66,8 @@ export const DEFAULT_NOTE_TEMPLATES: NoteTemplateConfig[] = [
     content: [
       "# Daily Log",
       "",
+      "{{today}}",
+      "",
       "## Wins",
       "- ",
       "",
@@ -80,6 +82,38 @@ export const DEFAULT_NOTE_TEMPLATES: NoteTemplateConfig[] = [
     ].join("\n"),
   },
 ];
+
+/** Inserted in template body; replaced with a locale-formatted date when a new note is created. */
+export const NOTE_TEMPLATE_TODAY_TOKEN = "{{today}}";
+
+export function formatNoteTemplateToday(options?: {
+  now?: Date;
+  locales?: Intl.LocalesArgument;
+  timeZone?: string;
+}): string {
+  const now = options?.now ?? new Date();
+  return new Intl.DateTimeFormat(options?.locales, {
+    dateStyle: "medium",
+    ...(options?.timeZone ? { timeZone: options.timeZone } : {}),
+  }).format(now);
+}
+
+/**
+ * Resolves template variables in note template content at creation time.
+ * Unknown tokens are left unchanged.
+ */
+export function interpolateNoteTemplateContent(
+  content: string,
+  options?: {
+    now?: Date;
+    locales?: Intl.LocalesArgument;
+    timeZone?: string;
+  },
+): string {
+  if (!content.includes(NOTE_TEMPLATE_TODAY_TOKEN)) return content;
+  const formatted = formatNoteTemplateToday(options);
+  return content.split(NOTE_TEMPLATE_TODAY_TOKEN).join(formatted);
+}
 
 export function normalizeNoteTemplates(input: unknown): NoteTemplateConfig[] {
   if (!Array.isArray(input) || input.length !== DEFAULT_NOTE_TEMPLATES.length) {
@@ -107,3 +141,28 @@ export function normalizeNoteTemplates(input: unknown): NoteTemplateConfig[] {
 }
 
 export const UNTITLED_NOTE_TITLE = "Untitled note";
+
+/**
+ * Returns the markdown list prefix to continue on the next line, if the given
+ * line looks like a non-empty bullet/numbered list item.
+ */
+export function getListContinuationPrefixForLine(line: string): string | null {
+  const unorderedMatch = line.match(/^(\s*)([-*+])\s+(.+)$/);
+  if (unorderedMatch) {
+    const [, indent, bullet, content] = unorderedMatch;
+    if (content.trim()) {
+      return `${indent}${bullet} `;
+    }
+  }
+
+  const orderedMatch = line.match(/^(\s*)(\d+)\.\s+(.+)$/);
+  if (orderedMatch) {
+    const [, indent, rawNumber, content] = orderedMatch;
+    if (content.trim()) {
+      const nextNumber = Number.parseInt(rawNumber, 10) + 1;
+      return `${indent}${nextNumber}. `;
+    }
+  }
+
+  return null;
+}

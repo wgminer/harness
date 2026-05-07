@@ -40,6 +40,9 @@
   --space-unit: 8px;
   --sidebar-control-hover-bg: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
   --sidebar-control-active-hover-bg: color-mix(in srgb, var(--accent) 72%, var(--bg-secondary));
+  --scrollbar-thumb: color-mix(in oklab, var(--fg) 42%, var(--bg));
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--accent) 40%, var(--fg) 35%, var(--bg));
+  --scrollbar-track: color-mix(in oklab, var(--bg) 88%, var(--fg));
   --input-height: 36px;
   --line-height: 1.5;
   --line-height-message: 1.7;
@@ -71,6 +74,33 @@ html {
 
 body {
   -webkit-font-smoothing: antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Easier to see what is selected when dragging to copy (esp. on dark backgrounds). */

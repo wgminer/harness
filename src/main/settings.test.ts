@@ -44,6 +44,20 @@ describe("settings parsing", () => {
     expect((parsed as Record<string, unknown>).extra).toBeUndefined();
   });
 
+  it("normalizes transcription dictionary entries", () => {
+    const parsed = parseSettings({
+      transcription: {
+        dictionary: [
+          { from: "  wgm  ", to: " WGM " },
+          { from: "WGM", to: "ignored duplicate" },
+          { from: "", to: "bad" },
+          { nope: true },
+        ],
+      },
+    });
+    expect(parsed.transcription?.dictionary).toEqual([{ from: "wgm", to: "WGM" }]);
+  });
+
   it("round-trips via explicit path helpers", async () => {
     const dir = await makeDir();
     const path = join(dir, "settings.json");

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Settings, Minimize2, Plus, Search, SquarePen, X, ListTodo, Loader2 } from "lucide-react";
+import { Settings, Minimize2, Plus, Search, NotebookText, X, ListTodo, Loader2 } from "lucide-react";
 import type { SearchResult } from "../shared/types";
 import { formatNewChatLabel } from "./chatDisplayTitle";
 import {
@@ -182,34 +182,24 @@ export function Sidebar({
           <nav className="sidebar-workspace" aria-label="Workspace">
             <button
               type="button"
-              className={`btn sidebar-workspace__btn${view === "tasks" ? " sidebar-workspace__btn--active" : ""}`}
+              className={`btn list-item-base sidebar-workspace__btn${view === "tasks" ? " active" : ""}`}
               onClick={() => onViewChange("tasks")}
               aria-label="Tasks"
               aria-current={view === "tasks" ? "page" : undefined}
             >
               <ListTodo size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">
-                <span>Tasks</span>
-                <span className="sidebar-workspace__wip-tag" aria-hidden>
-                  WIP
-                </span>
-              </span>
+              <span className="sidebar-workspace__label">Tasks</span>
             </button>
             <button
               type="button"
-              className={`btn sidebar-workspace__btn${notesItemActive ? " sidebar-workspace__btn--active" : ""}`}
+              className={`btn list-item-base sidebar-workspace__btn${notesItemActive ? " active" : ""}`}
               data-testid="sidebar-notes"
               onClick={onNotesClick}
               aria-label="Notes"
               aria-current={notesItemActive ? "page" : undefined}
             >
-              <SquarePen size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">
-                <span>Notes</span>
-                <span className="sidebar-workspace__wip-tag" aria-hidden>
-                  WIP
-                </span>
-              </span>
+              <NotebookText size={16} className="sidebar-workspace__icon" aria-hidden />
+              <span className="sidebar-workspace__label">Notes</span>
             </button>
           </nav>
         )}

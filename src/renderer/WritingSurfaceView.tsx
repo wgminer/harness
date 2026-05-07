@@ -1,7 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRightLeft, FolderOpen, RefreshCw, Save, SquarePen, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  ArrowLeft,
+  ArrowRightLeft,
+  Check,
+  PaintBucket,
+  Copy,
+  FolderOpen,
+  MoreVertical,
+  RefreshCw,
+  Save,
+  NotebookText,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   DEFAULT_NOTE_TEMPLATES,
+  getListContinuationPrefixForLine,
+  interpolateNoteTemplateContent,
   normalizeNoteTemplates,
   type NoteSummary,
   type NoteTemplateConfig,
@@ -34,6 +49,10 @@ interface CaretCoordinates {
 
 const MIN_REGENERATE_SPIN_MS = 3000;
 const ASIDE_PANEL_MEASURE_BUFFER_PX = 120;
+const NOTES_SELECTION_TOOLBAR_W_PX = 66;
+const NOTES_SELECTION_TOOLBAR_H_PX = 36;
+const NOTES_SELECTION_TOOLBAR_GAP_PX = 8;
+const NOTES_AUTO_SAVE_DEBOUNCE_MS = 800;
 const NOTE_WIDTH_MODES = ["narrow", "comfortable"] as const;
 type NoteWidthMode = (typeof NOTE_WIDTH_MODES)[number];
 const NOTE_WIDTH_LABELS: Record<NoteWidthMode, string> = {
@@ -185,24 +204,41 @@ export function NotesView({
     left: 24,
     width: 240,
   });
+  const [toolbarPosition, setToolbarPosition] = useState<{ top: number; left: number }>({ top: 24, left: 24 });
+  const [asideExpanded, setAsideExpanded] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
   const [noteWidthMode, setNoteWidthMode] = useState<NoteWidthMode>("comfortable");
+  const [noteToolbarMenuOpen, setNoteToolbarMenuOpen] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const copyFeedbackTimerRef = useRef<number | null>(null);
+  const noteToolbarMenuRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
+  const selectionToolbarRef = useRef<HTMLDivElement | null>(null);
+  const asidePanelRef = useRef<HTMLElement | null>(null);
 
   const activeNote = useMemo(
     () => notes.find((note) => note.id === selectedNoteId) ?? null,
     [selectedNoteId, notes],
   );
   const notesApi = window.electron.notes;
-  const asideOpen = selection != null;
-  const showSelectionOverlay = asideOpen && !editorFocused && selection != null;
+  const hasSelection = selection != null;
+  const showSelectionToolbar = hasSelection && !asideExpanded;
+  const showAsidePanel = hasSelection && asideExpanded;
+  const showSelectionOverlay = hasSelection && !editorFocused;
 
   const closeAsidePanel = useCallback(() => {
+    setAsideExpanded(false);
     setSelection(null);
     setPanelPrompt("");
     setPanelOutput("");
     setAsideStatus({ kind: "idle" });
+    setCopyFeedback(false);
+    if (copyFeedbackTimerRef.current != null) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+      copyFeedbackTimerRef.current = null;
+    }
   }, []);
 
   const updateAsidePosition = useCallback((range: SelectionRange | null) => {
@@ -224,6 +260,26 @@ export function NotesView({
       left: Math.max(12, Math.min(rawLeft, maxLeft)),
       top: Math.max(12, Math.min(rawTop, maxTop)),
       width: panelWidth,
+    });
+  }, []);
+
+  const updateToolbarPosition = useCallback((range: SelectionRange | null) => {
+    const editor = editorRef.current;
+    if (!editor || !range) return;
+    const endCoords = getTextareaCaretCoordinates(editor, range.end);
+    const lineHeight = endCoords.lineHeight;
+    const belowTop =
+      endCoords.top - editor.scrollTop + lineHeight + NOTES_SELECTION_TOOLBAR_GAP_PX;
+    const top = Math.max(
+      12,
+      Math.min(belowTop, editor.clientHeight - NOTES_SELECTION_TOOLBAR_H_PX - 12),
+    );
+    const anchorLeft = endCoords.left - editor.scrollLeft;
+    const rawLeft = anchorLeft - NOTES_SELECTION_TOOLBAR_W_PX + 4;
+    const maxLeft = Math.max(12, editor.clientWidth - NOTES_SELECTION_TOOLBAR_W_PX - 12);
+    setToolbarPosition({
+      top,
+      left: Math.max(12, Math.min(rawLeft, maxLeft)),
     });
   }, []);
 
@@ -250,6 +306,7 @@ export function NotesView({
       if (prev && prev.start === selectionStart && prev.end === selectionEnd && prev.text === selectedText) {
         return prev;
       }
+      if (prev) setAsideExpanded(false);
       return { start: selectionStart, end: selectionEnd, text: selectedText };
     });
     setPanelPrompt((prev) => {
@@ -265,8 +322,10 @@ export function NotesView({
       return selectionChanged ? "" : prev;
     });
     setAsideStatus({ kind: "idle" });
-    updateAsidePosition({ start: selectionStart, end: selectionEnd, text: selectedText });
-  }, [closeAsidePanel, draft, selection, updateAsidePosition]);
+    const range = { start: selectionStart, end: selectionEnd, text: selectedText };
+    updateAsidePosition(range);
+    updateToolbarPosition(range);
+  }, [closeAsidePanel, draft, selection, updateAsidePosition, updateToolbarPosition]);
 
   const loadNotes = useCallback(async () => {
     setStatus({ kind: "loading" });
@@ -308,8 +367,14 @@ export function NotesView({
         setNoteTemplates(DEFAULT_NOTE_TEMPLATES.map((template) => ({ ...template })));
       });
     return () => {
+      if (autoSaveTimerRef.current != null) {
+        window.clearTimeout(autoSaveTimerRef.current);
+      }
       if (savedToastTimerRef.current != null) {
         window.clearTimeout(savedToastTimerRef.current);
+      }
+      if (copyFeedbackTimerRef.current != null) {
+        window.clearTimeout(copyFeedbackTimerRef.current);
       }
     };
   }, [loadNotes]);
@@ -351,6 +416,27 @@ export function NotesView({
     setScreen("list");
   }, [closeAsidePanel, resetToOverviewNonce]);
 
+  useEffect(() => {
+    if (screen !== "detail") setNoteToolbarMenuOpen(false);
+  }, [screen]);
+
+  useEffect(() => {
+    if (!noteToolbarMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNoteToolbarMenuOpen(false);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      const el = noteToolbarMenuRef.current;
+      if (el && !el.contains(e.target as Node)) setNoteToolbarMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  }, [noteToolbarMenuOpen]);
+
   const dirty = draft !== savedDraft;
 
   const save = useCallback(async () => {
@@ -382,7 +468,10 @@ export function NotesView({
   const createNote = useCallback(async (template?: NoteTemplateConfig) => {
     setStatus({ kind: "creating" });
     try {
-      const note = await notesApi.create(template?.title, template?.content);
+      const note = await notesApi.create(
+        template?.title,
+        template ? interpolateNoteTemplateContent(template.content) : undefined,
+      );
       const summary = {
         id: note.id,
         title: note.title,
@@ -508,13 +597,117 @@ export function NotesView({
     });
   }, [closeAsidePanel]);
 
+  const handleCopySelection = useCallback(async () => {
+    if (!selection) return;
+    try {
+      await navigator.clipboard.writeText(selection.text);
+      setCopyFeedback(true);
+      if (copyFeedbackTimerRef.current != null) {
+        window.clearTimeout(copyFeedbackTimerRef.current);
+      }
+      copyFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyFeedback(false);
+        copyFeedbackTimerRef.current = null;
+      }, 2000);
+    } catch {
+      /* ignore */
+    }
+  }, [selection]);
+
+  const openAiAside = useCallback(() => {
+    if (!selection) return;
+    setAsideExpanded(true);
+    requestAnimationFrame(() => {
+      updateAsidePosition(selection);
+      promptRef.current?.focus();
+    });
+  }, [selection, updateAsidePosition]);
+
   const handleEditorScroll = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) return;
     setEditorScrollTop(editor.scrollTop);
     setEditorScrollLeft(editor.scrollLeft);
+    if (!selection) return;
     updateAsidePosition(selection);
-  }, [selection, updateAsidePosition]);
+    updateToolbarPosition(selection);
+  }, [selection, updateAsidePosition, updateToolbarPosition]);
+
+  const handleEditorKeyDown = useCallback((e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const nativeEvent = e.nativeEvent as KeyboardEvent;
+      if (e.isComposing || nativeEvent.isComposing || e.repeat) return;
+      const editor = e.currentTarget;
+      const value = editor.value;
+      const selectionStart = editor.selectionStart ?? 0;
+      const selectionEnd = editor.selectionEnd ?? 0;
+      if (selectionStart !== selectionEnd) return;
+      const lineStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
+      const lineEnd = value.indexOf("\n", selectionStart);
+      const safeLineEnd = lineEnd === -1 ? value.length : lineEnd;
+      if (selectionStart !== safeLineEnd) return;
+      const line = value.slice(lineStart, safeLineEnd);
+      const continuation = getListContinuationPrefixForLine(line);
+      if (!continuation) return;
+      e.preventDefault();
+      const nextDraft = `${value.slice(0, selectionStart)}\n${continuation}${value.slice(selectionEnd)}`;
+      const nextCaret = selectionStart + 1 + continuation.length;
+      setDraft(nextDraft);
+      requestAnimationFrame(() => editor.setSelectionRange(nextCaret, nextCaret));
+      return;
+    }
+
+    if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    const editor = e.currentTarget;
+    const value = editor.value;
+    const selectionStart = editor.selectionStart ?? 0;
+    const selectionEnd = editor.selectionEnd ?? 0;
+
+    if (selectionStart === selectionEnd) {
+      if (e.shiftKey) {
+        const lineStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
+        if (value[lineStart] !== "\t") {
+          return;
+        }
+        const nextDraft = `${value.slice(0, lineStart)}${value.slice(lineStart + 1)}`;
+        const nextCaret = selectionStart > lineStart ? selectionStart - 1 : selectionStart;
+        setDraft(nextDraft);
+        requestAnimationFrame(() => editor.setSelectionRange(nextCaret, nextCaret));
+        return;
+      }
+      const nextDraft = `${value.slice(0, selectionStart)}\t${value.slice(selectionEnd)}`;
+      setDraft(nextDraft);
+      requestAnimationFrame(() => editor.setSelectionRange(selectionStart + 1, selectionStart + 1));
+      return;
+    }
+
+    const selectedBlockStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
+    const selectedBlock = value.slice(selectedBlockStart, selectionEnd);
+
+    if (e.shiftKey) {
+      const unindentedBlock = selectedBlock.replace(/^\t/gm, "");
+      const nextDraft = value.slice(0, selectedBlockStart) + unindentedBlock + value.slice(selectionEnd);
+      const removedAtStart = value[selectedBlockStart] === "\t" ? 1 : 0;
+      const removedTotal = selectedBlock.length - unindentedBlock.length;
+      setDraft(nextDraft);
+      requestAnimationFrame(() => {
+        editor.setSelectionRange(
+          Math.max(selectedBlockStart, selectionStart - removedAtStart),
+          Math.max(selectedBlockStart, selectionEnd - removedTotal),
+        );
+      });
+      return;
+    }
+
+    const indentedBlock = selectedBlock.replace(/^/gm, "\t");
+    const nextDraft = value.slice(0, selectedBlockStart) + indentedBlock + value.slice(selectionEnd);
+    const addedTotal = indentedBlock.length - selectedBlock.length;
+    setDraft(nextDraft);
+    requestAnimationFrame(() => {
+      editor.setSelectionRange(selectionStart + 1, selectionEnd + addedTotal);
+    });
+  }, []);
 
   const handleEditorFocus = useCallback(() => {
     setEditorFocused(true);
@@ -548,19 +741,62 @@ export function NotesView({
   }, [save]);
 
   useEffect(() => {
-    if (!asideOpen) return;
+    if (autoSaveTimerRef.current != null) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    if (!dirty || !selectedNoteId || screen !== "detail" || status.kind === "loading" || status.kind === "deleting") {
+      return;
+    }
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      void save();
+    }, NOTES_AUTO_SAVE_DEBOUNCE_MS);
+    return () => {
+      if (autoSaveTimerRef.current != null) {
+        window.clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  }, [dirty, save, screen, selectedNoteId, status.kind]);
+
+  useEffect(() => {
+    if (!selection) return;
     requestAnimationFrame(() => {
-      promptRef.current?.focus();
       updateAsidePosition(selection);
+      updateToolbarPosition(selection);
     });
-  }, [asideOpen, selection, updateAsidePosition]);
+  }, [selection, asideExpanded, updateAsidePosition, updateToolbarPosition]);
+
+  useEffect(() => {
+    if (!showSelectionToolbar) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (selectionToolbarRef.current?.contains(t)) return;
+      if (editorRef.current?.contains(t)) return;
+      dismissAside();
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
+  }, [showSelectionToolbar, dismissAside]);
+
+  useEffect(() => {
+    if (!asideExpanded) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (asidePanelRef.current?.contains(t)) return;
+      dismissAside();
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
+  }, [asideExpanded, dismissAside]);
 
   return (
     <div className="workspace-page notes-surface">
       {screen === "list" ? (
         <WorkspaceHeader
           title="Notes"
-          icon={<SquarePen size={18} />}
+          icon={<NotebookText size={18} />}
           scrolled={headerScrolled}
           titleRowClassName="notes-surface__header-title-row"
         />
@@ -626,35 +862,6 @@ export function NotesView({
               </div>
               <button
                 type="button"
-                className="btn btn-icon"
-                onClick={cycleNoteWidthMode}
-                aria-label={`Cycle note width (currently ${NOTE_WIDTH_LABELS[noteWidthMode]})`}
-                title={`Text width: ${NOTE_WIDTH_LABELS[noteWidthMode]}`}
-              >
-                <ArrowRightLeft size={16} />
-              </button>
-              <button
-                type="button"
-                className="btn btn-icon"
-                onClick={() => void deleteActiveNote()}
-                disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                aria-label="Delete current note"
-                title="Delete note"
-              >
-                <Trash2 size={16} />
-              </button>
-              <button
-                type="button"
-                className="btn btn-icon"
-                onClick={() => void window.electron.notes.showInFolder(selectedNoteId)}
-                disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                aria-label="Show note file"
-                title="Show file"
-              >
-                <FolderOpen size={16} />
-              </button>
-              <button
-                type="button"
                 className="btn btn-primary notes-surface__save-btn"
                 onClick={() => void save()}
                 disabled={!dirty || status.kind === "saving" || !selectedNoteId}
@@ -666,6 +873,63 @@ export function NotesView({
                     ? "Saved"
                     : "Save"}
               </button>
+              <div className="notes-surface__toolbar-menu-wrap" ref={noteToolbarMenuRef}>
+                <button
+                  type="button"
+                  className="btn btn-icon"
+                  aria-expanded={noteToolbarMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label="Note actions"
+                  title="More actions"
+                  onClick={() => setNoteToolbarMenuOpen((v) => !v)}
+                >
+                  <MoreVertical size={16} />
+                </button>
+                {noteToolbarMenuOpen ? (
+                  <div className="notes-surface__toolbar-menu" role="menu" aria-label="Note actions">
+                    <button
+                      type="button"
+                      className="notes-surface__toolbar-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        cycleNoteWidthMode();
+                        setNoteToolbarMenuOpen(false);
+                      }}
+                    >
+                      <ArrowRightLeft size={16} aria-hidden />
+                      <span>Text width ({NOTE_WIDTH_LABELS[noteWidthMode]})</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="notes-surface__toolbar-menu-item"
+                      role="menuitem"
+                      disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                      onClick={() => {
+                        const id = selectedNoteId;
+                        if (!id) return;
+                        void window.electron.notes.showInFolder(id);
+                        setNoteToolbarMenuOpen(false);
+                      }}
+                    >
+                      <FolderOpen size={16} aria-hidden />
+                      <span>Show file</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="notes-surface__toolbar-menu-item notes-surface__toolbar-menu-item--danger"
+                      role="menuitem"
+                      disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                      onClick={() => {
+                        void deleteActiveNote();
+                        setNoteToolbarMenuOpen(false);
+                      }}
+                    >
+                      <Trash2 size={16} aria-hidden />
+                      <span>Delete note</span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
             <div className={`notes-surface__editor-wrap notes-surface__editor-wrap--${noteWidthMode}`}>
               <textarea
@@ -678,6 +942,7 @@ export function NotesView({
                 onChange={(e) => setDraft(e.target.value)}
                 onSelect={updateSelectionState}
                 onMouseUp={updateSelectionState}
+                onKeyDown={handleEditorKeyDown}
                 onKeyUp={updateSelectionState}
                 onScroll={handleEditorScroll}
                 onFocus={handleEditorFocus}
@@ -696,8 +961,42 @@ export function NotesView({
                   </div>
                 </div>
               ) : null}
-              {asideOpen ? (
+              {showSelectionToolbar ? (
+                <div
+                  ref={selectionToolbarRef}
+                  className="notes-selection-toolbar"
+                  role="toolbar"
+                  aria-label="Selection actions"
+                  style={{
+                    top: `${toolbarPosition.top}px`,
+                    left: `${toolbarPosition.left}px`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="notes-selection-toolbar__btn"
+                    aria-label={copyFeedback ? "Copied" : "Copy"}
+                    title={copyFeedback ? "Copied!" : "Copy"}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => void handleCopySelection()}
+                  >
+                    {copyFeedback ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
+                  </button>
+                  <button
+                    type="button"
+                    className="notes-selection-toolbar__btn"
+                    aria-label="AI edit"
+                    title="AI edit"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={openAiAside}
+                  >
+                    <PaintBucket size={16} aria-hidden />
+                  </button>
+                </div>
+              ) : null}
+              {showAsidePanel ? (
                 <section
+                  ref={asidePanelRef}
                   className="notes-aside-panel notes-aside-panel--floating"
                   aria-label="Inline edit assistant"
                   style={{
@@ -736,11 +1035,11 @@ export function NotesView({
                     {panelOutput.trim() ? (
                       <button
                         type="button"
-                        className="btn btn-primary btn-sm notes-aside-panel__corner-btn notes-aside-panel__corner-btn--approve"
+                        className="btn btn-sm notes-aside-panel__corner-btn notes-aside-panel__corner-btn--approve"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={approveAside}
                       >
-                        <ArrowRightLeft size={12} />
+                        <PaintBucket size={12} aria-hidden />
                         Replace
                       </button>
                     ) : null}
@@ -789,7 +1088,7 @@ export function NotesView({
                               asideStatus.kind === "loading" ? "notes-aside-panel__regen-icon--spinning" : undefined
                             }
                           />
-                          Regenerate
+                          Generate
                         </button>
                       </div>
                     </div>

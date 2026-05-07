@@ -10,6 +10,26 @@ import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import { recordOpenAIUsage, recordParakeetTranscription } from "./usageStats";
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function applyTranscriptDictionary(
+  text: string,
+  dictionary: Array<{ from: string; to: string }>
+): string {
+  if (!text || dictionary.length === 0) return text;
+  let next = text;
+  for (const entry of dictionary) {
+    const from = String(entry.from ?? "").trim();
+    if (!from) continue;
+    const to = String(entry.to ?? "");
+    const pattern = new RegExp(`\\b${escapeRegex(from)}\\b`, "gi");
+    next = next.replace(pattern, to);
+  }
+  return next;
+}
+
 export function getRecordingsDir(): string {
   return join(app.getPath("userData"), "recordings");
 }
@@ -112,13 +132,14 @@ export function registerRecordingHandlers(): void {
       const provider = getTranscriptionProvider();
       const { text, parakeetTokens } = await provider.transcribe(data, signal);
       recordParakeetTranscription(text, parakeetTokens ?? undefined);
+      const dictionary = settings.transcription?.dictionary ?? [];
       const shouldCleanup = settings.transcription?.cleanup?.enabled ?? false;
       if (!shouldCleanup || !text.trim()) {
-        return { text };
+        return { text: applyTranscriptDictionary(text, dictionary) };
       }
       const key = settings.openai?.apiKey?.trim() ?? "";
       if (!key) {
-        return { text };
+        return { text: applyTranscriptDictionary(text, dictionary) };
       }
       try {
         const cleanupPrompt =
@@ -126,10 +147,10 @@ export function registerRecordingHandlers(): void {
         const cleanupSignal =
           signal ? AbortSignal.any([signal, AbortSignal.timeout(8_000)]) : AbortSignal.timeout(8_000);
         const cleaned = await runTranscriptCleanup(text, key, cleanupPrompt, cleanupSignal);
-        return { text: cleaned };
+        return { text: applyTranscriptDictionary(cleaned, dictionary) };
       } catch (err) {
         console.warn("Transcript cleanup failed; returning original transcript.", err);
-        return { text };
+        return { text: applyTranscriptDictionary(text, dictionary) };
       }
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };

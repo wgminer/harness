@@ -222,76 +222,188 @@ export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   bg: "#0d1117",
 };
 
-export const DEFAULT_ACCENT_SWATCHES = [
-  "#f2ff00",
-  "#ffe066",
-  "#ffb703",
-  "#fb8500",
-  "#ff7f50",
-  "#f94144",
-  "#ef476f",
-  "#d00000",
-  "#9d0208",
-  "#c9184a",
-  "#ff4d6d",
-  "#ff8fab",
-  "#c77dff",
-  "#9d4edd",
-  "#7b2cbf",
-  "#5a189a",
-  "#3a0ca3",
-  "#4361ee",
-  "#4895ef",
-  "#4cc9f0",
-] as const;
+export type ThemePreset = {
+  id: string;
+  label: string;
+  theme: ThemeSettings;
+};
 
-/** Curated text tones across light and dark themes (includes default `fg`). */
-export const DEFAULT_FG_SWATCHES = [
-  "#e6edf3",
-  "#f0f6fc",
-  "#c9d1d9",
-  "#d1d9e0",
-  "#e2e8f0",
-  "#f5f5f4",
-  "#eceff4",
-  "#d8dee9",
-  "#cdd6f4",
-  "#f8fafc",
-  "#111827",
-  "#1f2937",
-  "#374151",
-  "#4b5563",
-  "#0f172a",
-  "#334155",
-  "#3f3f46",
-  "#27272a",
-  "#1e293b",
-  "#000000",
-] as const;
-
-/** Curated dark and light surfaces (includes default `bg`). */
-export const DEFAULT_BG_SWATCHES = [
-  "#0d1117",
-  "#161b22",
-  "#0f1419",
-  "#1a1b26",
-  "#1e1e2e",
-  "#11111b",
-  "#0c0c0c",
-  "#181825",
-  "#252526",
-  "#1e2030",
-  "#f8fafc",
-  "#f1f5f9",
-  "#e2e8f0",
-  "#f5f5f4",
-  "#f4f4f5",
-  "#ecfeff",
-  "#eef2ff",
-  "#faf5ff",
-  "#fef3c7",
-  "#ffffff",
-] as const;
+/** Full themes (colors + fonts + size) for quick selection in Theme studio. */
+export const THEME_PRESETS: readonly ThemePreset[] = [
+  {
+    id: "midnight",
+    label: "Midnight",
+    theme: { ...DEFAULT_THEME_SETTINGS },
+  },
+  {
+    id: "paper",
+    label: "Paper",
+    theme: {
+      accent: "#2563eb",
+      font: "inter",
+      fontMono: "jetbrains",
+      fontSize: 14,
+      fg: "#171717",
+      bg: "#fafafa",
+    },
+  },
+  {
+    id: "synthwave",
+    label: "Synthwave",
+    theme: {
+      accent: "#f472b6",
+      font: "plus_jakarta",
+      fontMono: "fira_code",
+      fontSize: 14,
+      fg: "#f5d0fe",
+      bg: "#1a0533",
+    },
+  },
+  {
+    id: "neon_slime",
+    label: "Neon slime",
+    theme: {
+      accent: "#bef264",
+      font: "work_sans",
+      fontMono: "jetbrains",
+      fontSize: 14,
+      fg: "#ecfccb",
+      bg: "#052e16",
+    },
+  },
+  {
+    id: "lava_core",
+    label: "Lava core",
+    theme: {
+      accent: "#fb923c",
+      font: "lora",
+      fontMono: "source_code",
+      fontSize: 15,
+      fg: "#fee2e2",
+      bg: "#1c0808",
+    },
+  },
+  {
+    id: "electric",
+    label: "Electric",
+    theme: {
+      accent: "#38bdf8",
+      font: "inter",
+      fontMono: "space_mono",
+      fontSize: 14,
+      fg: "#e0e7ff",
+      bg: "#020617",
+    },
+  },
+  {
+    id: "dracula",
+    label: "Dracula",
+    theme: {
+      accent: "#bd93f9",
+      font: "nunito",
+      fontMono: "jetbrains",
+      fontSize: 14,
+      fg: "#f8f8f2",
+      bg: "#282a36",
+    },
+  },
+  {
+    id: "unicorn",
+    label: "Unicorn",
+    theme: {
+      accent: "#e879f9",
+      font: "nunito",
+      fontMono: "fira_code",
+      fontSize: 14,
+      fg: "#581c87",
+      bg: "#faf5ff",
+    },
+  },
+  {
+    id: "copper_rust",
+    label: "Copper rust",
+    theme: {
+      accent: "#f59e0b",
+      font: "merriweather",
+      fontMono: "ibm_plex",
+      fontSize: 14,
+      fg: "#fce7f3",
+      bg: "#292524",
+    },
+  },
+  {
+    id: "glitch_city",
+    label: "Glitch city",
+    theme: {
+      accent: "#22d3ee",
+      font: "plus_jakarta",
+      fontMono: "roboto_mono",
+      fontSize: 14,
+      fg: "#fae8ff",
+      bg: "#0f0518",
+    },
+  },
+  {
+    id: "matcha_latte",
+    label: "Matcha latte",
+    theme: {
+      accent: "#84cc16",
+      font: "literata",
+      fontMono: "source_code",
+      fontSize: 15,
+      fg: "#365314",
+      bg: "#f7fee7",
+    },
+  },
+  {
+    id: "blood_orange",
+    label: "Blood orange",
+    theme: {
+      accent: "#fb923c",
+      font: "open_sans",
+      fontMono: "sf",
+      fontSize: 14,
+      fg: "#7c2d12",
+      bg: "#fff7ed",
+    },
+  },
+  {
+    id: "void_caller",
+    label: "Void caller",
+    theme: {
+      accent: "#a855f7",
+      font: "source_sans_3",
+      fontMono: "space_mono",
+      fontSize: 14,
+      fg: "#e4e4e7",
+      bg: "#09090b",
+    },
+  },
+  {
+    id: "tropical_punch",
+    label: "Tropical punch",
+    theme: {
+      accent: "#f472b6",
+      font: "work_sans",
+      fontMono: "jetbrains",
+      fontSize: 14,
+      fg: "#ccfbf1",
+      bg: "#042f2e",
+    },
+  },
+  {
+    id: "crt_green",
+    label: "CRT green",
+    theme: {
+      accent: "#4ade80",
+      font: "roboto",
+      fontMono: "roboto_mono",
+      fontSize: 14,
+      fg: "#bbf7d0",
+      bg: "#0a150a",
+    },
+  },
+];
 
 function parseFontSizePx(raw: unknown): (typeof FONT_SIZE_OPTIONS)[number] | undefined {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
@@ -371,6 +483,20 @@ export function normalizeThemeSettings(input: unknown): ThemeSettings {
     fg: fg ?? d.fg,
     bg: bg ?? d.bg,
   };
+}
+
+/** Whether two themes match for preset highlighting (normalized hex + font fields). */
+export function themeMatchesPreset(a: ThemeSettings, b: ThemeSettings): boolean {
+  const na = normalizeThemeSettings(a);
+  const nb = normalizeThemeSettings(b);
+  return (
+    normalizeColorPickerValue(na.bg) === normalizeColorPickerValue(nb.bg) &&
+    normalizeColorPickerValue(na.fg) === normalizeColorPickerValue(nb.fg) &&
+    normalizeColorPickerValue(na.accent) === normalizeColorPickerValue(nb.accent) &&
+    na.font === nb.font &&
+    na.fontMono === nb.fontMono &&
+    na.fontSize === nb.fontSize
+  );
 }
 
 export function themeSettingsToCss(settings: ThemeSettings): string {
