@@ -1,4 +1,4 @@
-import { Check, Copy, Loader2, SquarePen } from "lucide-react";
+import { Check, Copy, Loader2, NotebookText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -132,7 +132,7 @@ export function SaveToNotesButton({
       title={justSaved ? "Added to notes" : "Add to notes"}
       aria-label={justSaved ? "Added to notes" : "Add message to notes"}
     >
-      {justSaved ? <Check size={12} /> : <SquarePen size={12} />}
+      {justSaved ? <Check size={12} /> : <NotebookText size={12} />}
     </button>
   );
 }

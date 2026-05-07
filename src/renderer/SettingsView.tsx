@@ -1,10 +1,4 @@
-import {
-  useState,
-  useEffect,
-  useRef,
-  type CSSProperties,
-  type KeyboardEvent,
-} from "react";
+import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 import {
   ExternalLink,
   Eye,
@@ -14,7 +8,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { DEFAULT_SETTINGS } from "../shared/types";
-import type { Settings } from "../shared/types";
+import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import { EMPTY_USAGE_STATS } from "../shared/usageStats";
 import type { SyncStatus } from "../shared/sync";
@@ -27,15 +21,14 @@ import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
-  DEFAULT_ACCENT_SWATCHES,
-  DEFAULT_BG_SWATCHES,
-  DEFAULT_FG_SWATCHES,
   DEFAULT_THEME_SETTINGS,
   enforceVeryLowContrastGuard,
   FONT_SIZE_OPTIONS,
   MONO_FONTS,
   normalizeColorPickerValue,
+  themeMatchesPreset,
   themeSettingsToCss,
+  THEME_PRESETS,
   UI_FONTS,
   type MonoFontId,
   type ThemeSettings,
@@ -63,6 +56,62 @@ const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: "data", label: "Data" },
 ];
 
+interface SettingsEntryRowProps {
+  title: string;
+  detail?: string;
+  onEdit: () => void;
+  onDelete?: () => void;
+  editAriaLabel: string;
+  deleteAriaLabel?: string;
+  /** Native tooltip on the edit button (default "Edit") */
+  editButtonTitle?: string;
+}
+
+export function SettingsEntryRow({
+  title,
+  detail,
+  onEdit,
+  onDelete,
+  editAriaLabel,
+  deleteAriaLabel,
+  editButtonTitle = "Edit",
+}: SettingsEntryRowProps) {
+  return (
+    <div className="settings-entry-row">
+      <div className="settings-entry-row__body">
+        <div className="settings-entry-row__title">{title}</div>
+        {detail !== undefined ? (
+          <div className="settings-entry-row__detail">{detail === "" ? "—" : detail}</div>
+        ) : null}
+      </div>
+      <div className="settings-entry-row__actions">
+        <button
+          type="button"
+          className="btn btn-icon"
+          data-action="edit"
+          onClick={onEdit}
+          aria-label={editAriaLabel}
+          title={editButtonTitle}
+        >
+          <Pencil size={16} />
+        </button>
+        {onDelete != null && deleteAriaLabel != null ? (
+          <button
+            type="button"
+            className="btn btn-icon"
+            data-action="delete"
+            onClick={onDelete}
+            aria-label={deleteAriaLabel}
+            title="Remove"
+          >
+            <Trash2 size={16} />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsViewProps) {
   const [apiKey, setApiKey] = useState(D.openai!.apiKey);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -72,6 +121,13 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [cleanupEnabled, setCleanupEnabled] = useState(D.transcription?.cleanup?.enabled ?? false);
   const [cleanupPrompt, setCleanupPrompt] = useState(D.transcription?.cleanup?.prompt ?? "");
   const [cleanupPromptDraft, setCleanupPromptDraft] = useState(D.transcription?.cleanup?.prompt ?? "");
+  const [transcriptDictionary, setTranscriptDictionary] = useState<TranscriptDictionaryEntry[]>(
+    D.transcription?.dictionary ?? [],
+  );
+  const [dictionaryModalOpen, setDictionaryModalOpen] = useState(false);
+  const [editingDictionaryFrom, setEditingDictionaryFrom] = useState<string | null>(null);
+  const [dictionaryFromDraft, setDictionaryFromDraft] = useState("");
+  const [dictionaryToDraft, setDictionaryToDraft] = useState("");
   const [cleanupPromptModalOpen, setCleanupPromptModalOpen] = useState(false);
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
     DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
@@ -154,6 +210,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
         setCleanupEnabled(S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false);
         setCleanupPrompt(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "");
         setCleanupPromptDraft(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "");
+        setTranscriptDictionary(S.transcription?.dictionary ?? D.transcription?.dictionary ?? []);
         setWeatherZip(S.weather?.defaultZip ?? D.weather!.defaultZip);
         setNoteTemplates(normalizeNoteTemplates(S.notes?.templates));
       })
@@ -191,6 +248,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             enabled: cleanupEnabled,
             prompt: cleanupPrompt,
           },
+          dictionary: transcriptDictionary,
         },
         weather: {
           defaultZip: weatherZip.trim(),
@@ -210,7 +268,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
         hideToastRef.current = null;
       }
     };
-  }, [apiKey, autoSend, cleanupEnabled, cleanupPrompt, weatherZip]);
+  }, [apiKey, autoSend, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip]);
 
   const openCleanupPromptModal = () => {
     setCleanupPromptDraft(cleanupPrompt);
@@ -231,6 +289,43 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
 
   const resetCleanupPromptDraft = () => {
     setCleanupPromptDraft(D.transcription?.cleanup?.prompt ?? "");
+  };
+
+  const closeDictionaryModal = () => {
+    setDictionaryModalOpen(false);
+    setEditingDictionaryFrom(null);
+    setDictionaryFromDraft("");
+    setDictionaryToDraft("");
+  };
+
+  const openAddDictionaryModal = () => {
+    setEditingDictionaryFrom(null);
+    setDictionaryFromDraft("");
+    setDictionaryToDraft("");
+    setDictionaryModalOpen(true);
+  };
+
+  const openEditDictionaryModal = (entry: TranscriptDictionaryEntry) => {
+    setEditingDictionaryFrom(entry.from);
+    setDictionaryFromDraft(entry.from);
+    setDictionaryToDraft(entry.to);
+    setDictionaryModalOpen(true);
+  };
+
+  const saveDictionaryEntry = () => {
+    const from = dictionaryFromDraft.trim();
+    if (!from) return;
+    const to = dictionaryToDraft.trim();
+    const filtered = transcriptDictionary.filter((entry) => {
+      if (editingDictionaryFrom && entry.from === editingDictionaryFrom) return false;
+      return entry.from.toLowerCase() !== from.toLowerCase();
+    });
+    setTranscriptDictionary([...filtered, { from, to }]);
+    closeDictionaryModal();
+  };
+
+  const deleteDictionaryEntry = (from: string) => {
+    setTranscriptDictionary((prev) => prev.filter((entry) => entry.from !== from));
   };
 
   const closeTemplatesModal = () => {
@@ -560,6 +655,42 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               </p>
               <div className="settings-playground">
                 <div className="settings-playground-tools settings-section">
+                  <div className="settings-playground-presets" role="list" aria-label="Theme presets">
+                    {THEME_PRESETS.map((preset) => {
+                      const selected = themeMatchesPreset(themeForm, preset.theme);
+                      const previewBg = normalizeColorPickerValue(preset.theme.bg);
+                      const previewFg = normalizeColorPickerValue(preset.theme.fg);
+                      const previewAccent = normalizeColorPickerValue(preset.theme.accent);
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          role="listitem"
+                          className={`settings-playground-theme-card${selected ? " settings-playground-theme-card--selected" : ""}`}
+                          onClick={() => updateThemeForm(() => ({ ...preset.theme }))}
+                          aria-pressed={selected}
+                          aria-label={`Apply ${preset.label} theme`}
+                        >
+                          <div
+                            className="settings-playground-theme-preview"
+                            style={{ background: previewBg, color: previewFg }}
+                          >
+                            <span className="settings-playground-theme-preview__line" aria-hidden />
+                            <span
+                              className="settings-playground-theme-preview__line settings-playground-theme-preview__line--short"
+                              aria-hidden
+                            />
+                            <span
+                              className="settings-playground-theme-preview__accent"
+                              style={{ background: previewAccent }}
+                              aria-hidden
+                            />
+                          </div>
+                          <span className="settings-playground-theme-card__label">{preset.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="settings-playground-columns">
                     <div className="settings-playground-column" aria-label="Color controls">
                       <h4 className="settings-playground-column__title">Colors</h4>
@@ -582,22 +713,6 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                             aria-label="Background hex"
                           />
                         </div>
-                        <div className="settings-playground-swatch-grid" role="list" aria-label="Background presets">
-                          {DEFAULT_BG_SWATCHES.map((bg) => {
-                            const isSelected = normalizeColorPickerValue(themeForm.bg) === bg;
-                            return (
-                              <button
-                                key={bg}
-                                type="button"
-                                className={`settings-playground-swatch${isSelected ? " settings-playground-swatch--selected" : ""}`}
-                                onClick={() => updateThemeForm((f) => ({ ...f, bg }))}
-                                aria-label={`Use background ${bg}`}
-                                aria-pressed={isSelected}
-                                style={{ "--swatch-color": bg } as CSSProperties}
-                              />
-                            );
-                          })}
-                        </div>
                       </div>
                       <div className="settings-playground-field">
                         <label htmlFor="theme-fg">Text color</label>
@@ -618,22 +733,6 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                             aria-label="Text color hex"
                           />
                         </div>
-                        <div className="settings-playground-swatch-grid" role="list" aria-label="Text color presets">
-                          {DEFAULT_FG_SWATCHES.map((fg) => {
-                            const isSelected = normalizeColorPickerValue(themeForm.fg) === fg;
-                            return (
-                              <button
-                                key={fg}
-                                type="button"
-                                className={`settings-playground-swatch${isSelected ? " settings-playground-swatch--selected" : ""}`}
-                                onClick={() => updateThemeForm((f) => ({ ...f, fg }))}
-                                aria-label={`Use text color ${fg}`}
-                                aria-pressed={isSelected}
-                                style={{ "--swatch-color": fg } as CSSProperties}
-                              />
-                            );
-                          })}
-                        </div>
                       </div>
                       <div className="settings-playground-field">
                         <label htmlFor="theme-accent">Accent color</label>
@@ -653,22 +752,6 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                             autoComplete="off"
                             aria-label="Accent hex"
                           />
-                        </div>
-                        <div className="settings-playground-accent-grid" role="list" aria-label="Default accents">
-                          {DEFAULT_ACCENT_SWATCHES.map((accent) => {
-                            const isSelected = normalizeColorPickerValue(themeForm.accent) === accent;
-                            return (
-                              <button
-                                key={accent}
-                                type="button"
-                                className={`settings-playground-accent-swatch${isSelected ? " settings-playground-accent-swatch--selected" : ""}`}
-                                onClick={() => updateThemeForm((f) => ({ ...f, accent }))}
-                                aria-label={`Use accent ${accent}`}
-                                aria-pressed={isSelected}
-                                style={{ "--swatch-color": accent } as CSSProperties}
-                              />
-                            );
-                          })}
                         </div>
                       </div>
                     </div>
@@ -809,6 +892,30 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                   Edit prompt
                 </button>
               </div>
+              <div className="settings-section">
+                <h4 className="settings-group__title">Transcript corrections</h4>
+                <p className="settings-group__hint settings-group__hint--flush">
+                  Deterministic fixes applied after transcription (kept separate from cleanup prompt).
+                </p>
+                <div className="settings-entry-list">
+                  {transcriptDictionary.map((entry) => (
+                    <SettingsEntryRow
+                      key={entry.from}
+                      title={entry.from}
+                      detail={entry.to}
+                      onEdit={() => openEditDictionaryModal(entry)}
+                      onDelete={() => deleteDictionaryEntry(entry.from)}
+                      editAriaLabel={`Edit transcript correction ${entry.from}`}
+                      deleteAriaLabel={`Remove transcript correction ${entry.from}`}
+                    />
+                  ))}
+                </div>
+                <div className="settings-actions">
+                  <button type="button" className="btn" onClick={openAddDictionaryModal}>
+                    Add correction
+                  </button>
+                </div>
+              </div>
               <div className="settings-section settings-section--usage">
                 <dl className="usage-stats">
                   <div className="usage-stats__row">
@@ -921,23 +1028,16 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               <p className="settings-group__lead">
                 Edit the three note templates shown on the Notes overview page.
               </p>
-              <div className="settings-notes-templates-list">
+              <div className="settings-entry-list">
                 {noteTemplates.map((template) => (
-                  <div key={template.id} className="settings-notes-template-row">
-                    <div className="settings-notes-template-entry">
-                      <div className="settings-notes-template-entry__title">{template.title}</div>
-                      <div className="settings-notes-template-entry__description">{template.description}</div>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-icon"
-                      onClick={() => openTemplateModal(template)}
-                      aria-label={`Edit ${template.title} template`}
-                      title="Edit template"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                  </div>
+                  <SettingsEntryRow
+                    key={template.id}
+                    title={template.title}
+                    detail={template.description}
+                    onEdit={() => openTemplateModal(template)}
+                    editAriaLabel={`Edit ${template.title} template`}
+                    editButtonTitle="Edit template"
+                  />
                 ))}
               </div>
             </section>
@@ -954,32 +1054,19 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               <p className="settings-group__lead">
                 Stable facts the assistant can use in every conversation. Pick a short name and a one-line detail; same name updates the old entry.
               </p>
-              {Object.entries(userMemory).map(([k, v]) => (
-                <div key={k} className="settings-memory-row">
-                  <div className="settings-memory-entry">
-                    <div className="settings-memory-entry__title">{k}</div>
-                    <div className="settings-memory-entry__detail">{v || "—"}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="settings-memory-edit btn btn-icon"
-                    onClick={() => openEditMemoryModal(k, v)}
-                    aria-label={`Edit ${k}`}
-                    title="Edit"
-                  >
-                    <Pencil size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-memory-delete btn btn-icon"
-                    onClick={() => deleteMemoryEntry(k)}
-                    aria-label={`Remove ${k}`}
-                    title="Remove"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
+              <div className="settings-entry-list">
+                {Object.entries(userMemory).map(([k, v]) => (
+                  <SettingsEntryRow
+                    key={k}
+                    title={k}
+                    detail={v}
+                    onEdit={() => openEditMemoryModal(k, v)}
+                    onDelete={() => void deleteMemoryEntry(k)}
+                    editAriaLabel={`Edit ${k}`}
+                    deleteAriaLabel={`Remove ${k}`}
+                  />
+                ))}
+              </div>
               <div className="settings-actions">
                 <button
                   type="button"
@@ -1017,15 +1104,61 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               </>
             }
           >
-            <div className="settings-memory-modal-stack">
-              <label className="settings-memory-field">
-                <span className="settings-memory-field__label">Prompt text</span>
+            <div className="settings-entry-modal-stack">
+              <label className="settings-entry-field">
+                <span className="settings-entry-field__label">Prompt text</span>
                 <textarea
                   placeholder="Describe how dictation should be cleaned up."
                   value={cleanupPromptDraft}
                   onChange={(e) => setCleanupPromptDraft(e.target.value)}
-                  className="app-modal-input settings-memory-detail-input"
+                  className="app-modal-input settings-entry-detail-input"
                   rows={6}
+                />
+              </label>
+            </div>
+          </Modal>
+
+          <Modal
+            open={dictionaryModalOpen}
+            onClose={closeDictionaryModal}
+            title={editingDictionaryFrom ? "Edit transcript correction" : "Add transcript correction"}
+            footer={
+              <>
+                <button type="button" className="btn" onClick={closeDictionaryModal}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={saveDictionaryEntry}
+                  disabled={!dictionaryFromDraft.trim()}
+                >
+                  {editingDictionaryFrom ? "Update" : "Save"}
+                </button>
+              </>
+            }
+          >
+            <div className="settings-entry-modal-stack">
+              <label className="settings-entry-field">
+                <span className="settings-entry-field__label">Heard as</span>
+                <input
+                  type="text"
+                  placeholder="e.g. wig em"
+                  value={dictionaryFromDraft}
+                  onChange={(e) => setDictionaryFromDraft(e.target.value)}
+                  className="app-modal-input"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="settings-entry-field">
+                <span className="settings-entry-field__label">Replace with</span>
+                <input
+                  type="text"
+                  placeholder="e.g. WGM"
+                  value={dictionaryToDraft}
+                  onChange={(e) => setDictionaryToDraft(e.target.value)}
+                  className="app-modal-input"
+                  autoComplete="off"
                 />
               </label>
             </div>
@@ -1052,9 +1185,9 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               </>
             }
           >
-            <div className="settings-memory-modal-stack">
-              <label className="settings-memory-field">
-                <span className="settings-memory-field__label">Label</span>
+            <div className="settings-entry-modal-stack">
+              <label className="settings-entry-field">
+                <span className="settings-entry-field__label">Label</span>
                 <input
                   type="text"
                   placeholder="e.g. timezone"
@@ -1064,13 +1197,13 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                   autoComplete="off"
                 />
               </label>
-              <label className="settings-memory-field">
-                <span className="settings-memory-field__label">Detail</span>
+              <label className="settings-entry-field">
+                <span className="settings-entry-field__label">Detail</span>
                 <textarea
                   placeholder="What to remember"
                   value={newMemDetail}
                   onChange={(e) => setNewMemDetail(e.target.value)}
-                  className="app-modal-input settings-memory-detail-input"
+                  className="app-modal-input settings-entry-detail-input"
                   rows={4}
                   autoComplete="off"
                 />
@@ -1099,9 +1232,9 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               </>
             }
           >
-            <div className="settings-memory-modal-stack">
-              <label className="settings-memory-field">
-                <span className="settings-memory-field__label">Title</span>
+            <div className="settings-entry-modal-stack">
+              <label className="settings-entry-field">
+                <span className="settings-entry-field__label">Title</span>
                 <input
                   type="text"
                   value={templateTitleDraft}
@@ -1110,8 +1243,8 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                   autoComplete="off"
                 />
               </label>
-              <label className="settings-memory-field">
-                <span className="settings-memory-field__label">Description</span>
+              <label className="settings-entry-field">
+                <span className="settings-entry-field__label">Description</span>
                 <input
                   type="text"
                   value={templateDescriptionDraft}
@@ -1120,12 +1253,16 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                   autoComplete="off"
                 />
               </label>
-              <label className="settings-memory-field">
-                <span className="settings-memory-field__label">Template body</span>
+              <label className="settings-entry-field">
+                <span className="settings-entry-field__label">Template body</span>
+                <p className="settings-group__hint settings-entry-hint">
+                  Use <code>{"{{today}}"}</code> to insert today&apos;s date when you create a note from this
+                  template (locale-formatted).
+                </p>
                 <textarea
                   value={templateContentDraft}
                   onChange={(e) => setTemplateContentDraft(e.target.value)}
-                  className="app-modal-input settings-memory-detail-input settings-notes-template-content-input"
+                  className="app-modal-input settings-entry-detail-input settings-entry-template-content-input"
                   rows={10}
                 />
               </label>

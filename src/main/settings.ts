@@ -22,13 +22,28 @@ export function getSettingsPathForUserData(userDataDir: string): string {
 
 function parseTranscription(raw: Record<string, unknown> | undefined): NonNullable<Settings["transcription"]> {
   const c = raw?.cleanup as Record<string, unknown> | undefined;
+  const dictionaryRaw = Array.isArray(raw?.dictionary) ? raw.dictionary : [];
   const defaultPrompt = D.transcription!.cleanup!.prompt;
   const prompt = typeof c?.prompt === "string" && c.prompt.trim() ? c.prompt : defaultPrompt;
+  const dedupe = new Set<string>();
+  const dictionary = dictionaryRaw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const from = typeof (entry as { from?: unknown }).from === "string" ? (entry as { from: string }).from.trim() : "";
+      const to = typeof (entry as { to?: unknown }).to === "string" ? (entry as { to: string }).to.trim() : "";
+      if (!from) return null;
+      const key = from.toLowerCase();
+      if (dedupe.has(key)) return null;
+      dedupe.add(key);
+      return { from, to };
+    })
+    .filter((entry): entry is { from: string; to: string } => entry != null);
   return {
     cleanup: {
       enabled: typeof c?.enabled === "boolean" ? c.enabled : D.transcription!.cleanup!.enabled,
       prompt,
     },
+    dictionary,
   };
 }
 
@@ -107,6 +122,10 @@ export async function setSettings(partial: Partial<Settings>): Promise<Settings>
       ? {
           ...current.transcription,
           ...partial.transcription,
+          dictionary:
+            partial.transcription.dictionary != null
+              ? parseTranscription({ dictionary: partial.transcription.dictionary }).dictionary
+              : current.transcription?.dictionary ?? D.transcription!.dictionary,
           cleanup: partial.transcription.cleanup
             ? { ...current.transcription?.cleanup, ...partial.transcription.cleanup }
             : current.transcription?.cleanup,

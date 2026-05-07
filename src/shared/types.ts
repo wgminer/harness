@@ -1,3 +1,5 @@
+import { DEFAULT_NOTE_TEMPLATES } from "./writing";
+
 export type MessageRole = "user" | "assistant" | "system";
 
 export interface ToolCallRecord {
@@ -28,6 +30,11 @@ export interface Conversation {
   createdAt: number;
 }
 
+export interface TranscriptDictionaryEntry {
+  from: string;
+  to: string;
+}
+
 export interface Settings {
   version: number;
   openai?: {
@@ -43,6 +50,8 @@ export interface Settings {
       /** User-editable prompt that guides transcript cleanup behavior. */
       prompt: string;
     };
+    /** Deterministic replacements applied to transcript output (for repeated mishears). */
+    dictionary: TranscriptDictionaryEntry[];
   };
   /** Optional Tavily API key for the `web_search` assistant tool. */
   search?: {
@@ -100,6 +109,7 @@ export const DEFAULT_SETTINGS: Settings = {
       prompt:
         "Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Keep proper nouns and technical terms unchanged. Do not add new information.",
     },
+    dictionary: [],
   },
   search: {
     tavilyApiKey: "",
@@ -108,56 +118,6 @@ export const DEFAULT_SETTINGS: Settings = {
     defaultZip: "12528",
   },
   notes: {
-    templates: [
-      {
-        id: "blank",
-        title: "Blank",
-        description: "Empty",
-        content: "# Note\n",
-      },
-      {
-        id: "one-on-one",
-        title: "1:1",
-        description: "Sync",
-        content: [
-          "# 1:1",
-          "",
-          "## Wins",
-          "- ",
-          "",
-          "## Updates",
-          "- ",
-          "",
-          "## Feedback",
-          "- ",
-          "",
-          "## Blockers",
-          "- ",
-          "",
-          "## Next steps",
-          "- [ ] ",
-        ].join("\n"),
-      },
-      {
-        id: "daily-log",
-        title: "Daily log",
-        description: "Reflective",
-        content: [
-          "# Daily Log",
-          "",
-          "## Wins",
-          "- ",
-          "",
-          "## Focus",
-          "- ",
-          "",
-          "## Blockers",
-          "- ",
-          "",
-          "## Tomorrow",
-          "- ",
-        ].join("\n"),
-      },
-    ],
+    templates: DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
   },
 };

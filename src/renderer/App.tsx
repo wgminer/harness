@@ -119,20 +119,22 @@ export default function App() {
       const el = document.getElementById("custom-theme");
       if (el) document.head.appendChild(el);
     };
+    const themeRequestSeqRef = { current: 0 };
+    const refreshThemeCss = () => {
+      const seq = ++themeRequestSeqRef.current;
+      window.electron.customization.getActiveTheme().then((css) => {
+        if (seq !== themeRequestSeqRef.current) return;
+        ensureCustomThemeLast();
+        const el = document.getElementById("custom-theme") as HTMLStyleElement | null;
+        if (el) el.textContent = css;
+      });
+    };
     ensureCustomThemeLast();
     window.electron.customization.getLayoutOptions().then(setLayout);
-    window.electron.customization.getActiveTheme().then((css) => {
-      ensureCustomThemeLast();
-      const el = document.getElementById("custom-theme") as HTMLStyleElement | null;
-      if (el) el.textContent = css;
-    });
+    refreshThemeCss();
     const unsub = window.electron.customization.onUpdated((p) => {
       if (p.type === "theme") {
-        window.electron.customization.getActiveTheme().then((css) => {
-          const el = document.getElementById("custom-theme") as HTMLStyleElement | null;
-          if (el) document.head.appendChild(el);
-          if (el) el.textContent = css;
-        });
+        refreshThemeCss();
       }
       if (p.type === "layout") {
         window.electron.customization.getLayoutOptions().then(setLayout);

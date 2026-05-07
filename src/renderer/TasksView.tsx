@@ -382,7 +382,7 @@ export function TasksView() {
           <div className="input-actions">
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn chat-pane-btn"
               onClick={() => void createTask()}
               disabled={creating || !newTitle.trim()}
             >
