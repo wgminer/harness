@@ -65,6 +65,11 @@ export interface Settings {
   notes?: {
     templates: import("./writing").NoteTemplateConfig[];
   };
+  /** Provider-agnostic backup-folder sync. The user picks any folder; Harness writes a bundle + manifest there. */
+  backup?: {
+    /** Absolute path to the chosen backup folder. Empty string = unset. */
+    folderPath: string;
+  };
 }
 
 export interface SearchResult {
@@ -119,5 +124,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   notes: {
     templates: DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
+  },
+  backup: {
+    folderPath: "",
   },
 };

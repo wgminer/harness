@@ -63,6 +63,10 @@ export function parseSettings(data: Record<string, unknown>): Settings {
     (typeof weatherRaw?.defaultZip === "string" ? weatherRaw.defaultZip : null) ??
     D.weather!.defaultZip;
 
+  const backupRaw = data.backup as Record<string, unknown> | undefined;
+  const folderPath =
+    typeof backupRaw?.folderPath === "string" ? backupRaw.folderPath : D.backup!.folderPath;
+
   return {
     version: D.version,
     openai: {
@@ -84,6 +88,9 @@ export function parseSettings(data: Record<string, unknown>): Settings {
           : D.recording!.autoSend,
     },
     transcription: parseTranscription(data.transcription as Record<string, unknown> | undefined),
+    backup: {
+      folderPath,
+    },
   };
 }
 
@@ -141,6 +148,7 @@ export async function setSettings(partial: Partial<Settings>): Promise<Settings>
               : current.notes?.templates ?? D.notes!.templates,
         }
       : current.notes,
+    backup: partial.backup ? { ...current.backup, ...partial.backup } : current.backup,
   };
   await saveSettings(next);
   return next;

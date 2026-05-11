@@ -2,7 +2,7 @@ import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./typ
 import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
 import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSummary } from "./writing";
-import type { SyncResult, SyncStatus } from "./sync";
+import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "./sync";
 
 export interface TaskItem {
   id: string;
@@ -150,6 +150,14 @@ export interface ElectronAPI {
   sync: {
     getStatus: () => Promise<SyncStatus>;
     runNow: () => Promise<SyncResult>;
+    /** Open a folder picker; persists the chosen path. Returns the chosen path or null if cancelled. */
+    pickFolder: () => Promise<string | null>;
+    /** Persist a backup folder path directly (used by Suggestions and Reset). Empty string clears it. */
+    setFolder: (path: string) => Promise<string | null>;
+    /** Reveal the configured backup folder in the OS file manager (no-op if unset). */
+    revealFolder: () => Promise<void>;
+    /** Best-effort suggestions for known cloud-sync providers' folders. */
+    listSuggestions: () => Promise<SyncFolderSuggestion[]>;
   };
   /** Present when the app is launched with `HARNESS_E2E=1`. */
   e2e?: {

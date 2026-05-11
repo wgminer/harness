@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { AppendMessageMeta } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import type { NoteEditProposal, NoteEditProposalInput } from "../shared/writing";
+import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "../shared/sync";
 
 const e2eBridge =
   process.env.HARNESS_E2E === "1"
@@ -71,14 +72,7 @@ contextBridge.exposeInMainWorld("electron", {
         recordingsLocalOnly: true;
         legacyMemoryDir: string;
         legacyMemoryExists: boolean;
-        sync: {
-          provider: "firebase";
-          configured: boolean;
-          lastAttemptAt: number | null;
-          lastSuccessAt: number | null;
-          lastError: string | null;
-          lastUploadedRevision: string | null;
-        };
+        sync: SyncStatus;
       }>,
     cleanupLegacyMemory: () => ipcRenderer.invoke("memory:cleanupLegacyMemory") as Promise<{ removed: boolean }>,
     setConversationTitle: (conversationId: string, title: string) =>
@@ -233,27 +227,14 @@ contextBridge.exposeInMainWorld("electron", {
     },
   },
   sync: {
-    getStatus: () =>
-      ipcRenderer.invoke("sync:getStatus") as Promise<{
-        provider: "firebase";
-        configured: boolean;
-        lastAttemptAt: number | null;
-        lastSuccessAt: number | null;
-        lastError: string | null;
-        lastUploadedRevision: string | null;
-      }>,
-    runNow: () =>
-      ipcRenderer.invoke("sync:runNow") as Promise<{
-        ok: boolean;
-        status: {
-          provider: "firebase";
-          configured: boolean;
-          lastAttemptAt: number | null;
-          lastSuccessAt: number | null;
-          lastError: string | null;
-          lastUploadedRevision: string | null;
-        };
-      }>,
+    getStatus: () => ipcRenderer.invoke("sync:getStatus") as Promise<SyncStatus>,
+    runNow: () => ipcRenderer.invoke("sync:runNow") as Promise<SyncResult>,
+    pickFolder: () => ipcRenderer.invoke("sync:pickFolder") as Promise<string | null>,
+    setFolder: (path: string) =>
+      ipcRenderer.invoke("sync:setFolder", path) as Promise<string | null>,
+    revealFolder: () => ipcRenderer.invoke("sync:revealFolder") as Promise<void>,
+    listSuggestions: () =>
+      ipcRenderer.invoke("sync:listSuggestions") as Promise<SyncFolderSuggestion[]>,
   },
   ...(e2eBridge ? { e2e: e2eBridge } : {}),
 });
