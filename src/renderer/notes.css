@@ -44,9 +44,9 @@
 }
 
 .notes-surface__template-btn {
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklab, var(--border) 68%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--bg) 96%, var(--accent) 4%);
+  background: transparent;
   color: var(--fg);
   padding: 10px 12px;
   display: flex;
@@ -58,13 +58,12 @@
   cursor: pointer;
 }
 
-.notes-surface__template-btn:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-}
-
+.notes-surface__template-btn:hover,
 .notes-surface__template-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
+  background: transparent;
+  -webkit-backdrop-filter: blur(16px) saturate(1.45);
+  backdrop-filter: blur(8px) saturate(1.45);
 }
 
 .notes-surface__template-title {
@@ -112,7 +111,7 @@
 
 .notes-surface__note-item {
   width: 100%;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--fg);
   border-radius: 0;
@@ -139,18 +138,23 @@
   pointer-events: none;
 }
 
-.notes-surface__note-item:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-radius: 4px;
+/* Hide the hairlines above/below the active row so they don't stack on the glass border (no margin trick). */
+.notes-surface__notes > li:has(.notes-surface__note-item:hover)::before,
+.notes-surface__notes > li:has(.notes-surface__note-item:focus-visible)::before,
+.notes-surface__notes > li:has(.notes-surface__note-item:hover) + li::before,
+.notes-surface__notes > li:has(.notes-surface__note-item:focus-visible) + li::before {
+  opacity: 0;
 }
 
-.notes-surface__note-item:hover .notes-surface__note-title {
-  color: var(--accent-readable);
-}
-
+/* Align with `.chat-composer-inner` / `.surface-elevated-glass` (composer glass), not accent tint. */
+.notes-surface__note-item:hover,
 .notes-surface__note-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  background: transparent;
+  -webkit-backdrop-filter: blur(16px) saturate(1.45);
+  backdrop-filter: blur(8px) saturate(1.45);
+  border-radius: 10px;
+  border-color: color-mix(in oklab, var(--border) 68%, transparent);
 }
 
 .notes-surface__note-title {

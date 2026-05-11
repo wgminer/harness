@@ -11,7 +11,7 @@ import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import { EMPTY_USAGE_STATS } from "../shared/usageStats";
-import type { SyncStatus } from "../shared/sync";
+import type { SyncFolderSuggestion, SyncStatus } from "../shared/sync";
 import {
   DEFAULT_NOTE_TEMPLATES,
   normalizeNoteTemplates,
@@ -155,6 +155,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [dataStatusLoading, setDataStatusLoading] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncSuggestions, setSyncSuggestions] = useState<SyncFolderSuggestion[]>([]);
   const [dataStatus, setDataStatus] = useState<{
     localDataDir: string;
     appStateDir: string;
@@ -443,12 +444,52 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     setSyncMessage(null);
     try {
       const result = await window.electron.sync.runNow();
-      setSyncMessage(result.ok ? "Sync completed." : result.status.lastError ?? "Sync failed.");
+      if (result.ok) {
+        const action = result.status.lastAction;
+        const summary =
+          action === "push"
+            ? "Pushed local changes to backup."
+            : action === "pull"
+              ? "Pulled newer backup into local data."
+              : "Already in sync.";
+        setSyncMessage(summary);
+      } else {
+        setSyncMessage(result.status.lastError ?? "Sync failed.");
+      }
       await refreshDataStatus();
     } finally {
       setSyncBusy(false);
     }
   };
+
+  const pickBackupFolder = async () => {
+    const chosen = await window.electron.sync.pickFolder();
+    if (chosen) {
+      setSyncMessage(null);
+      await refreshDataStatus();
+    }
+  };
+
+  const useSuggestedFolder = async (path: string) => {
+    await window.electron.sync.setFolder(path);
+    setSyncMessage(null);
+    await refreshDataStatus();
+  };
+
+  const clearBackupFolder = async () => {
+    await window.electron.sync.setFolder("");
+    setSyncMessage(null);
+    await refreshDataStatus();
+  };
+
+  const revealBackupFolder = async () => {
+    await window.electron.sync.revealFolder();
+  };
+
+  useEffect(() => {
+    if (activeTab !== "data") return;
+    void window.electron.sync.listSuggestions().then(setSyncSuggestions);
+  }, [activeTab]);
 
   const runImport = async () => {
     setImporting(true);
@@ -1278,7 +1319,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             <section className="settings-group">
               <h3 className="settings-group__title">Local data</h3>
               <p className="settings-group__lead">
-                Local-first storage root and sync status. Recordings remain local-only unless exported manually.
+                Local-first storage root. Recordings remain local-only unless exported manually.
               </p>
               <div className="settings-actions">
                 <button type="button" className="btn" onClick={() => window.electron.memory.openLocalDataFolder()}>
@@ -1301,20 +1342,8 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                     {dataStatus.hasThemesDir ? "themes present" : "themes missing"}
                   </p>
                   <p><strong>Recordings:</strong> Local-only in {dataStatus.recordingsDir}</p>
-                  <p>
-                    <strong>Firebase sync:</strong>{" "}
-                    {dataStatus.sync.configured ? "configured" : "not configured"}
-                    {dataStatus.sync.lastSuccessAt ? `, last success ${new Date(dataStatus.sync.lastSuccessAt).toLocaleString()}` : ""}
-                    {dataStatus.sync.lastError ? `, last error: ${dataStatus.sync.lastError}` : ""}
-                  </p>
                 </div>
               )}
-              <div className="settings-actions">
-                <button type="button" className="btn" onClick={() => void runSyncNow()} disabled={syncBusy}>
-                  {syncBusy ? "Syncing…" : "Sync now"}
-                </button>
-              </div>
-              {syncMessage && <p className="settings-group__hint settings-group__hint--flush">{syncMessage}</p>}
               <div className="settings-actions">
                 <button type="button" className="btn" onClick={() => void runCleanupLegacyMemory()} disabled={cleanupLegacyBusy}>
                   {cleanupLegacyBusy ? "Cleaning…" : "Cleanup legacy memory folder"}
@@ -1323,6 +1352,99 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
               {cleanupLegacyMessage && (
                 <p className="settings-group__hint settings-group__hint--flush">{cleanupLegacyMessage}</p>
               )}
+            </section>
+
+            <section className="settings-group">
+              <h3 className="settings-group__title">Backup folder</h3>
+              <p className="settings-group__lead">
+                Pick a folder Harness can read and write — anything inside iCloud Drive, Dropbox,
+                Google Drive, OneDrive, a network share, or an external drive works. Sync now writes
+                a single bundle + manifest there; your sync provider moves those files between
+                devices. Each device should point at the <strong>same</strong> folder.
+              </p>
+              <div className="settings-actions">
+                <button type="button" className="btn" onClick={() => void pickBackupFolder()}>
+                  Choose folder…
+                </button>
+                {dataStatus?.sync.backupFolderPath && (
+                  <>
+                    <button type="button" className="btn" onClick={() => void revealBackupFolder()}>
+                      Reveal in {isMac ? "Finder" : "Explorer"} <ExternalLink size={14} aria-hidden />
+                    </button>
+                    <button type="button" className="btn" onClick={() => void clearBackupFolder()}>
+                      Clear
+                    </button>
+                  </>
+                )}
+              </div>
+              {syncSuggestions.length > 0 && (
+                <div className="settings-data-status" role="group" aria-label="Suggested folders">
+                  <p><strong>Suggestions:</strong></p>
+                  <ul className="settings-suggestion-list">
+                    {syncSuggestions.map((s) => (
+                      <li key={s.path} className="settings-suggestion-item">
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => void useSuggestedFolder(s.path)}
+                          title={s.path}
+                        >
+                          Use {s.label}
+                          {!s.exists && <em> (will create)</em>}
+                        </button>
+                        <code className="settings-suggestion-path">{s.path}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {dataStatus && (
+                <div className="settings-data-status" role="status">
+                  <p>
+                    <strong>Backup folder:</strong>{" "}
+                    {dataStatus.sync.backupFolderPath
+                      ? <code>{dataStatus.sync.backupFolderPath}</code>
+                      : "not set"}
+                  </p>
+                  {dataStatus.sync.folderError && (
+                    <p className="settings-import-status__errors">
+                      {dataStatus.sync.folderError}
+                    </p>
+                  )}
+                  {dataStatus.sync.lastSuccessAt && (
+                    <p>
+                      <strong>Last sync:</strong>{" "}
+                      {new Date(dataStatus.sync.lastSuccessAt).toLocaleString()}
+                      {dataStatus.sync.lastAction && (
+                        <> ({dataStatus.sync.lastAction})</>
+                      )}
+                    </p>
+                  )}
+                  {dataStatus.sync.lastError && (
+                    <p className="settings-import-status__errors">
+                      Last error: {dataStatus.sync.lastError}
+                    </p>
+                  )}
+                  {dataStatus.sync.conflictCopies.length > 0 && (
+                    <p className="settings-import-status__errors">
+                      Conflict copies in backup folder: {dataStatus.sync.conflictCopies.join(", ")}.
+                      Resolve them manually so future syncs stay clean.
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="settings-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => void runSyncNow()}
+                  disabled={syncBusy || !dataStatus?.sync.configured}
+                  title={!dataStatus?.sync.configured ? "Pick a backup folder first" : undefined}
+                >
+                  {syncBusy ? "Syncing…" : "Sync now"}
+                </button>
+              </div>
+              {syncMessage && <p className="settings-group__hint settings-group__hint--flush">{syncMessage}</p>}
             </section>
 
             <section className="settings-group">
