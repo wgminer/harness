@@ -225,7 +225,7 @@
 
 .sidebar-item-delete:hover {
   color: var(--fg);
-  background: var(--border);
+  background: var(--border-light);
 }
 
 .sidebar-buttons {
@@ -234,7 +234,7 @@
   align-items: center;
   gap: var(--space-unit);
   padding: var(--space-unit);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .sidebar-new-chat-btn {
@@ -345,7 +345,7 @@
   align-items: center;
   gap: var(--space-unit);
   padding: var(--space-unit);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .sidebar-search-input {

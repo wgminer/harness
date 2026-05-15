@@ -424,6 +424,8 @@ function themeResolvedCssVars(s: ThemeSettings): Record<string, string> {
     "--fg-muted": `color-mix(in oklab, ${fg} 60%, ${bg})`,
     "--bg-secondary": `color-mix(in oklab, ${bg} 92%, ${fg})`,
     "--bg-elevated": `color-mix(in oklab, ${bg} 84%, ${fg})`,
+    "--border-dark": `color-mix(in oklab, ${bg} 80%, ${fg})`,
+    "--border-light": `color-mix(in oklab, ${bg} 90%, ${fg})`,
     "--border": `color-mix(in oklab, ${bg} 80%, ${fg})`,
     "--accent-readable": `color-mix(in oklab, ${accent} 70%, ${fg})`,
     "--selection-bg": `color-mix(in srgb, ${accent} 38%, ${fg} 22%)`,

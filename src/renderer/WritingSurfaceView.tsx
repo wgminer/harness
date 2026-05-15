@@ -155,13 +155,36 @@ function measureLongestSelectedLineWidth(textarea: HTMLTextAreaElement, selected
   return maxWidth;
 }
 
-function formatUpdatedAt(ms: number): string {
-  if (!ms) return "Never";
-  const d = new Date(ms);
-  return d.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+const noteRelativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+function formatTimeAgo(ms: number): string {
+  if (!ms || !Number.isFinite(ms)) return "Never";
+  const deltaMs = ms - Date.now();
+  const minuteMs = 60_000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+  const weekMs = 7 * dayMs;
+  const monthMs = 30 * dayMs;
+  const yearMs = 365 * dayMs;
+
+  if (Math.abs(deltaMs) < hourMs) {
+    const minutes = Math.round(deltaMs / minuteMs);
+    return noteRelativeTimeFormatter.format(minutes, "minute");
+  }
+  if (Math.abs(deltaMs) < dayMs) {
+    const hours = Math.round(deltaMs / hourMs);
+    return noteRelativeTimeFormatter.format(hours, "hour");
+  }
+  if (Math.abs(deltaMs) < weekMs) {
+    const days = Math.round(deltaMs / dayMs);
+    return noteRelativeTimeFormatter.format(days, "day");
+  }
+  if (Math.abs(deltaMs) < yearMs) {
+    const months = Math.round(deltaMs / monthMs);
+    return noteRelativeTimeFormatter.format(months, "month");
+  }
+  const years = Math.round(deltaMs / yearMs);
+  return noteRelativeTimeFormatter.format(years, "year");
 }
 
 function formatWordCount(count: number): string {
@@ -834,8 +857,10 @@ export function NotesView({
                       {note.title}
                     </span>
                     <span className="notes-surface__note-time">
-                      <span className="notes-surface__note-time-default">{formatUpdatedAt(note.updatedAt)}</span>
-                      <span className="notes-surface__note-time-hover">{formatWordCount(note.wordCount)}</span>
+                      <span className="notes-surface__note-time-default">{formatTimeAgo(note.updatedAt)}</span>
+                      <span className="notes-surface__note-time-hover">
+                        {formatTimeAgo(note.updatedAt)} · {formatWordCount(note.wordCount)}
+                      </span>
                     </span>
                   </button>
                 </li>

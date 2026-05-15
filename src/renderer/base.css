@@ -7,7 +7,10 @@
   --bg-elevated: #21262d;
   --fg: #e6edf3;
   --fg-muted: #9aa4af;
-  --border: #30363d;
+  --border-dark: #30363d;
+  --border-light: #21262d;
+  /** @deprecated Use --border-dark or --border-light; aliases dark for legacy rules. */
+  --border: var(--border-dark);
   --accent: #f2ff00;
   /**
    * Readable variant of --accent for use as *text color* on app backgrounds
@@ -129,7 +132,7 @@ body {
 hr {
   margin: 1.5rem 0;
   border: 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-light);
 }
 
 /* Buttons – single source of truth for all app buttons */
@@ -218,7 +221,7 @@ hr {
   padding: 0 10px;
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
 }
 
 .input-base::placeholder,
@@ -240,7 +243,7 @@ hr {
   background: transparent;
   -webkit-backdrop-filter: blur(16px) saturate(1.45);
   backdrop-filter: blur(8px) saturate(1.45);
-  border: 1px solid color-mix(in oklab, var(--border) 68%, transparent);
+  border: 1px solid color-mix(in oklab, var(--border-light) 68%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
 }
 
@@ -313,7 +316,7 @@ hr {
 .sidebar {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-light);
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
@@ -321,7 +324,7 @@ hr {
 
 .app[data-sidebar="right"] .sidebar {
   border-right: none;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--border-light);
 }
 
 .main {

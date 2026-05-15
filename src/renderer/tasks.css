@@ -19,7 +19,7 @@
 .tasks-group {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-light);
 }
 
 .tasks-section-heading {
@@ -76,7 +76,7 @@
   resize: vertical;
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   border-radius: 2px;
 }
 
@@ -281,7 +281,7 @@
   padding: 0 10px;
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   border-radius: 4px;
 }
 
