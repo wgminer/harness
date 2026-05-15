@@ -60,6 +60,8 @@ describe("themeSettingsToCss", () => {
     expect(css).toContain("--fg-muted:");
     expect(css).toContain("--bg-secondary:");
     expect(css).toContain("--bg-elevated:");
+    expect(css).toContain("--border-dark:");
+    expect(css).toContain("--border-light:");
     expect(css).toContain("--border:");
     expect(css).toContain("--accent-readable:");
     expect(css).toContain("--selection-bg:");

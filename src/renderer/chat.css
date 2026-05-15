@@ -216,7 +216,7 @@
   font-size: 0.9em;
   padding: 0.15em 0.35em;
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   border-radius: 2px;
 }
 
@@ -225,7 +225,7 @@
   padding: 12px;
   overflow-x: auto;
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   border-radius: 2px;
 }
 
@@ -675,6 +675,6 @@
   font-family: var(--font-family);
   font-size: 12px;
   color: #e05353;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
 }
 
