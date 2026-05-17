@@ -56,8 +56,32 @@ contextBridge.exposeInMainWorld("electron", {
     searchConversations: (query: string) => ipcRenderer.invoke("memory:searchConversations", query),
     importFromChatGPTFolder: () =>
       ipcRenderer.invoke("memory:importFromChatGPTFolder") as Promise<{ imported: number; errors: string[] }>,
-    resetStoredData: () => ipcRenderer.invoke("memory:resetStoredData"),
-    openLocalDataFolder: () => ipcRenderer.invoke("memory:openLocalDataFolder") as Promise<void>,
+    importFromClaudeFolder: () =>
+      ipcRenderer.invoke("memory:importFromClaudeFolder") as Promise<{ imported: number; errors: string[] }>,
+    runCompileNow: () =>
+      ipcRenderer.invoke("memory:runCompileNow") as Promise<
+        | {
+            ok: true;
+            result: {
+              ranAt: number;
+              considered: number;
+              added: number;
+              updated: number;
+              skipped: boolean;
+            };
+          }
+        | { ok: false; error: string }
+      >,
+    getCompileStatus: () =>
+      ipcRenderer.invoke("memory:getCompileStatus") as Promise<{
+        lastRunAt: number | null;
+        lastRunDateLocal: string | null;
+        lastAddedCount: number;
+        lastUpdatedCount: number;
+        lastConsideredCount: number;
+        lastError: string | null;
+      }>,
+    openAppDataFolder: () => ipcRenderer.invoke("memory:openAppDataFolder") as Promise<void>,
     getDataStatus: () =>
       ipcRenderer.invoke("memory:getDataStatus") as Promise<{
         localDataDir: string;
@@ -190,6 +214,8 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("notes:showInFolder", id) as Promise<void>,
     proposeEdit: (input: NoteEditProposalInput) =>
       ipcRenderer.invoke("notes:proposeEdit", input) as Promise<NoteEditProposal>,
+    print: (html: string, jobName?: string) =>
+      ipcRenderer.invoke("notes:print", html, jobName) as Promise<{ success: boolean }>,
   },
   recording: {
     requestMicrophoneAccess: () =>

@@ -61,8 +61,21 @@ export interface ElectronAPI {
     deleteUserMemoryKey: (key: string) => Promise<void>;
     searchConversations: (query: string) => Promise<SearchResult[]>;
     importFromChatGPTFolder: () => Promise<{ imported: number; errors: string[] }>;
-    resetStoredData: () => Promise<void>;
-    openLocalDataFolder: () => Promise<void>;
+    importFromClaudeFolder: () => Promise<{ imported: number; errors: string[] }>;
+    /** Distill durable user-memory facts from recent conversations (auto-merge). */
+    runCompileNow: () => Promise<
+      | { ok: true; result: { ranAt: number; considered: number; added: number; updated: number; skipped: boolean } }
+      | { ok: false; error: string }
+    >;
+    getCompileStatus: () => Promise<{
+      lastRunAt: number | null;
+      lastRunDateLocal: string | null;
+      lastAddedCount: number;
+      lastUpdatedCount: number;
+      lastConsideredCount: number;
+      lastError: string | null;
+    }>;
+    openAppDataFolder: () => Promise<void>;
     getDataStatus: () => Promise<{
       localDataDir: string;
       appStateDir: string;
@@ -132,6 +145,7 @@ export interface ElectronAPI {
     delete: (id: string) => Promise<NoteSummary[]>;
     showInFolder: (id: string) => Promise<void>;
     proposeEdit: (input: NoteEditProposalInput) => Promise<NoteEditProposal>;
+    print: (html: string, jobName?: string) => Promise<{ success: boolean }>;
   };
   recording: {
     requestMicrophoneAccess: () => Promise<boolean>;

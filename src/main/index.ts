@@ -14,7 +14,9 @@ import { registerNotesHandlers } from "./writing";
 import { registerRecordingHandlers } from "./recording";
 import { registerGlobalFnRecording } from "./globalRecordingMain";
 import { registerSystemHandlers } from "./systemHandlers";
-import { importFromFolder } from "./importChatGPT";
+import { importFromFolder as importFromChatGPTFolder } from "./importChatGPT";
+import { importFromFolder as importFromClaudeFolder } from "./importClaude";
+import { registerMemoryCompileHandlers, runMemoryCompileIfDue } from "./memoryCompile";
 import { registerSyncHandlers } from "./sync";
 import {
   WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
@@ -116,14 +118,27 @@ ipcMain.handle("window:toggleSize", (): "small" | "large" => {
 ipcMain.handle("memory:importFromChatGPTFolder", async () => {
   const e2eImportDir = process.env.HARNESS_E2E_IMPORT_DIR;
   if (e2eImportDir) {
-    return importFromFolder(e2eImportDir);
+    return importFromChatGPTFolder(e2eImportDir);
   }
   const win = BrowserWindow.getAllWindows()[0] ?? null;
   const result = await dialog.showOpenDialog(win ?? undefined, { properties: ["openDirectory"] });
   if (result.canceled || result.filePaths.length === 0) {
     return { imported: 0, errors: [] as string[] };
   }
-  return importFromFolder(result.filePaths[0]);
+  return importFromChatGPTFolder(result.filePaths[0]);
+});
+
+ipcMain.handle("memory:importFromClaudeFolder", async () => {
+  const e2eImportDir = process.env.HARNESS_E2E_CLAUDE_IMPORT_DIR;
+  if (e2eImportDir) {
+    return importFromClaudeFolder(e2eImportDir);
+  }
+  const win = BrowserWindow.getAllWindows()[0] ?? null;
+  const result = await dialog.showOpenDialog(win ?? undefined, { properties: ["openDirectory"] });
+  if (result.canceled || result.filePaths.length === 0) {
+    return { imported: 0, errors: [] as string[] };
+  }
+  return importFromClaudeFolder(result.filePaths[0]);
 });
 
 app.whenReady().then(() => {
@@ -138,6 +153,7 @@ app.whenReady().then(() => {
   registerSettingsHandlers();
   registerUsageStatsHandlers();
   registerMemoryHandlers();
+  registerMemoryCompileHandlers();
   registerPlansHandlers();
   registerChatHandlers();
   registerCustomizationHandlers();
@@ -172,6 +188,16 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Nightly memory compile: deferred briefly so it never blocks first paint.
+  // Skipped under E2E to keep tests deterministic and offline.
+  if (!isHarnessE2E()) {
+    setTimeout(() => {
+      void runMemoryCompileIfDue().catch(() => {
+        // Failures are persisted to compile state; intentionally silent here.
+      });
+    }, 5000);
+  }
 });
 
 app.on("will-quit", () => {

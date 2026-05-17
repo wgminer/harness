@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef, type KeyboardEvent } from "react";
+import { useState, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import {
   ExternalLink,
   Eye,
   EyeOff,
+  Minus,
   Pencil,
+  Plus,
   Settings as SettingsIcon,
   Trash2,
 } from "lucide-react";
@@ -11,9 +13,11 @@ import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import { EMPTY_USAGE_STATS } from "../shared/usageStats";
+import { DATA_STORAGE_DIAGRAM } from "../shared/dataStorageLayout";
 import type { SyncFolderSuggestion, SyncStatus } from "../shared/sync";
 import {
   DEFAULT_NOTE_TEMPLATES,
+  normalizeNoteTemplateDescription,
   normalizeNoteTemplates,
   type NoteTemplateConfig,
 } from "../shared/writing";
@@ -21,12 +25,15 @@ import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
+  applyThemeColors,
+  coerceFontSizePx,
   DEFAULT_THEME_SETTINGS,
   enforceVeryLowContrastGuard,
   FONT_SIZE_OPTIONS,
   MONO_FONTS,
+  stepFontSize,
   normalizeColorPickerValue,
-  themeMatchesPreset,
+  themeMatchesColorPreset,
   themeSettingsToCss,
   THEME_PRESETS,
   UI_FONTS,
@@ -38,8 +45,6 @@ import {
 interface SettingsViewProps {
   /** After ChatGPT import (new conversations in sidebar). */
   onImportComplete?: () => void;
-  /** After full local data erase (conversations, memory file, tasks, plans). */
-  onStoredDataReset?: () => void;
 }
 
 const SAVE_DEBOUNCE_MS = 500;
@@ -112,7 +117,7 @@ export function SettingsEntryRow({
   );
 }
 
-export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsViewProps) {
+export function SettingsView({ onImportComplete }: SettingsViewProps) {
   const [apiKey, setApiKey] = useState(D.openai!.apiKey);
   const [showApiKey, setShowApiKey] = useState(false);
   const [usageStats, setUsageStats] = useState<UsageStatsSnapshot>(EMPTY_USAGE_STATS);
@@ -148,11 +153,20 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [newMemDetail, setNewMemDetail] = useState("");
   const [importStatus, setImportStatus] = useState<{ imported: number; errors: string[] } | null>(null);
   const [importing, setImporting] = useState(false);
-  const [resetConfirm, setResetConfirm] = useState(false);
-  const [resetting, setResetting] = useState(false);
+  const [claudeImportStatus, setClaudeImportStatus] = useState<{ imported: number; errors: string[] } | null>(null);
+  const [claudeImporting, setClaudeImporting] = useState(false);
+  const [compileStatus, setCompileStatus] = useState<{
+    lastRunAt: number | null;
+    lastRunDateLocal: string | null;
+    lastAddedCount: number;
+    lastUpdatedCount: number;
+    lastConsideredCount: number;
+    lastError: string | null;
+  } | null>(null);
+  const [compileBusy, setCompileBusy] = useState(false);
+  const [compileMessage, setCompileMessage] = useState<string | null>(null);
   const [cleanupLegacyBusy, setCleanupLegacyBusy] = useState(false);
   const [cleanupLegacyMessage, setCleanupLegacyMessage] = useState<string | null>(null);
-  const [dataStatusLoading, setDataStatusLoading] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncSuggestions, setSyncSuggestions] = useState<SyncFolderSuggestion[]>([]);
@@ -179,7 +193,8 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const [themeApplyBusy, setThemeApplyBusy] = useState(false);
   const [themeApplyError, setThemeApplyError] = useState<string | null>(null);
   const themeApplySeqRef = useRef(0);
-  const skipNextSaveRef = useRef(true);
+  const settingsHydratedRef = useRef(false);
+  const skipAutosaveRef = useRef(false);
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const tabButtonRefs = useRef<Record<SettingsTabId, HTMLButtonElement | null>>({
@@ -205,6 +220,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
       .get()
       .then((s) => {
         if (cancelled) return;
+        skipAutosaveRef.current = true;
         const S = s as Settings;
         setApiKey(S.openai?.apiKey ?? D.openai!.apiKey);
         setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
@@ -215,7 +231,10 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
         setWeatherZip(S.weather?.defaultZip ?? D.weather!.defaultZip);
         setNoteTemplates(normalizeNoteTemplates(S.notes?.templates));
       })
-      .finally(enableSwitchAnimations);
+      .finally(() => {
+        if (!cancelled) settingsHydratedRef.current = true;
+        enableSwitchAnimations();
+      });
     void window.electron.usage.getStats().then(setUsageStats);
     window.electron.memory.getUserMemory().then(setUserMemory);
     window.electron.customization.getThemeSettings().then(setThemeForm);
@@ -235,8 +254,14 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   }, [activeTab]);
 
   useEffect(() => {
-    if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false;
+    if (activeTab !== "memory") return;
+    void refreshCompileStatus();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!settingsHydratedRef.current) return;
+    if (skipAutosaveRef.current) {
+      skipAutosaveRef.current = false;
       return;
     }
     const timer = setTimeout(async () => {
@@ -348,7 +373,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
   const saveTemplate = async () => {
     if (!editingTemplateId) return;
     const nextTitle = templateTitleDraft.trim();
-    const nextDescription = templateDescriptionDraft.trim();
+    const nextDescription = normalizeNoteTemplateDescription(templateDescriptionDraft);
     if (!nextTitle || !nextDescription) return;
     const nextTemplates = noteTemplates.map((template) =>
       template.id === editingTemplateId
@@ -405,26 +430,9 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     setUserMemory(await window.electron.memory.getUserMemory());
   };
 
-  const runResetStoredData = async () => {
-    if (!resetConfirm) return;
-    setResetting(true);
-    try {
-      await window.electron.memory.resetStoredData();
-      setResetConfirm(false);
-      onStoredDataReset?.();
-    } finally {
-      setResetting(false);
-    }
-  };
-
   const refreshDataStatus = async () => {
-    setDataStatusLoading(true);
-    try {
-      const status = await window.electron.memory.getDataStatus();
-      setDataStatus(status);
-    } finally {
-      setDataStatusLoading(false);
-    }
+    const status = await window.electron.memory.getDataStatus();
+    setDataStatus(status);
   };
 
   const runCleanupLegacyMemory = async () => {
@@ -432,7 +440,7 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     setCleanupLegacyMessage(null);
     try {
       const result = await window.electron.memory.cleanupLegacyMemory();
-      setCleanupLegacyMessage(result.removed ? "Removed legacy memory folder." : "No legacy memory folder found.");
+      setCleanupLegacyMessage(result.removed ? "Removed legacy memory folder." : "No legacy memory folder to remove.");
       await refreshDataStatus();
     } finally {
       setCleanupLegacyBusy(false);
@@ -476,14 +484,14 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
     await refreshDataStatus();
   };
 
-  const clearBackupFolder = async () => {
-    await window.electron.sync.setFolder("");
-    setSyncMessage(null);
-    await refreshDataStatus();
-  };
+  const defaultBackupPath = useMemo(
+    () => syncSuggestions.find((s) => s.label === "iCloud Drive")?.path ?? null,
+    [syncSuggestions],
+  );
 
-  const revealBackupFolder = async () => {
-    await window.electron.sync.revealFolder();
+  const useDefaultBackupFolder = async () => {
+    if (!defaultBackupPath) return;
+    await useSuggestedFolder(defaultBackupPath);
   };
 
   useEffect(() => {
@@ -505,6 +513,54 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
       });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const runClaudeImport = async () => {
+    setClaudeImporting(true);
+    setClaudeImportStatus(null);
+    try {
+      const result = await window.electron.memory.importFromClaudeFolder();
+      setClaudeImportStatus(result);
+      if (result.imported > 0) onImportComplete?.();
+    } catch (e) {
+      setClaudeImportStatus({
+        imported: 0,
+        errors: [e instanceof Error ? e.message : String(e)],
+      });
+    } finally {
+      setClaudeImporting(false);
+    }
+  };
+
+  const refreshCompileStatus = async () => {
+    const status = await window.electron.memory.getCompileStatus();
+    setCompileStatus(status);
+  };
+
+  const runCompileNow = async () => {
+    setCompileBusy(true);
+    setCompileMessage(null);
+    try {
+      const response = await window.electron.memory.runCompileNow();
+      if (response.ok) {
+        const r = response.result;
+        if (r.skipped) {
+          setCompileMessage("No new conversations to compile yet.");
+        } else if (r.added === 0 && r.updated === 0) {
+          setCompileMessage(`Reviewed ${r.considered} conversation${r.considered === 1 ? "" : "s"}; nothing durable to add.`);
+        } else {
+          setCompileMessage(
+            `Reviewed ${r.considered} conversation${r.considered === 1 ? "" : "s"}: added ${r.added}, updated ${r.updated}.`
+          );
+        }
+      } else {
+        setCompileMessage(response.error);
+      }
+      await refreshCompileStatus();
+      setUserMemory(await window.electron.memory.getUserMemory());
+    } finally {
+      setCompileBusy(false);
     }
   };
 
@@ -691,26 +747,28 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             <section className="settings-group">
               <h3 className="settings-group__title">Theme studio</h3>
               <p className="settings-group__lead settings-group__lead--tight">
-                Background, text, accent; UI and code fonts (Google Fonts load with the app); base size. Changes apply
+                Pick a color palette or tune background, text, and accent. Typography is separate below. Changes apply
                 instantly and save to your theme (replacing any previous custom theme from this screen or tools).
               </p>
               <div className="settings-playground">
                 <div className="settings-playground-tools settings-section">
-                  <div className="settings-playground-presets" role="list" aria-label="Theme presets">
+                  <div className="settings-playground-block">
+                    <h4 className="settings-playground-block__title">Color themes</h4>
+                    <div className="settings-playground-presets" role="list" aria-label="Color theme presets">
                     {THEME_PRESETS.map((preset) => {
-                      const selected = themeMatchesPreset(themeForm, preset.theme);
-                      const previewBg = normalizeColorPickerValue(preset.theme.bg);
-                      const previewFg = normalizeColorPickerValue(preset.theme.fg);
-                      const previewAccent = normalizeColorPickerValue(preset.theme.accent);
+                      const selected = themeMatchesColorPreset(themeForm, preset.colors);
+                      const previewBg = normalizeColorPickerValue(preset.colors.bg);
+                      const previewFg = normalizeColorPickerValue(preset.colors.fg);
+                      const previewAccent = normalizeColorPickerValue(preset.colors.accent);
                       return (
                         <button
                           key={preset.id}
                           type="button"
                           role="listitem"
                           className={`settings-playground-theme-card${selected ? " settings-playground-theme-card--selected" : ""}`}
-                          onClick={() => updateThemeForm(() => ({ ...preset.theme }))}
+                          onClick={() => updateThemeForm((f) => applyThemeColors(f, preset.colors))}
                           aria-pressed={selected}
-                          aria-label={`Apply ${preset.label} theme`}
+                          aria-label={`Apply ${preset.label} colors`}
                         >
                           <div
                             className="settings-playground-theme-preview"
@@ -731,10 +789,10 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                         </button>
                       );
                     })}
+                    </div>
                   </div>
-                  <div className="settings-playground-columns">
-                    <div className="settings-playground-column" aria-label="Color controls">
-                      <h4 className="settings-playground-column__title">Colors</h4>
+                  <div className="settings-playground-block" aria-label="Custom colors">
+                    <h4 className="settings-playground-block__title">Custom colors</h4>
                       <div className="settings-playground-field">
                         <label htmlFor="theme-bg">Background color</label>
                         <div className="settings-playground-color-row">
@@ -795,9 +853,12 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                           />
                         </div>
                       </div>
-                    </div>
-                    <div className="settings-playground-column" aria-label="Font controls">
-                      <h4 className="settings-playground-column__title">Fonts</h4>
+                  </div>
+                  <div className="settings-playground-block" aria-label="Typography">
+                    <h4 className="settings-playground-block__title">Typography</h4>
+                    <p className="settings-playground-block__lead">
+                      UI and code fonts load with the app (Google Fonts). Independent of color themes above.
+                    </p>
                       <div className="settings-playground-field">
                         <label htmlFor="theme-font">UI font</label>
                         <select
@@ -831,25 +892,95 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                         </select>
                       </div>
                       <div className="settings-playground-field">
-                        <label htmlFor="theme-font-size">Base font size</label>
-                        <select
-                          id="theme-font-size"
-                          value={themeForm.fontSize}
-                          onChange={(e) =>
-                            updateThemeForm((f) => ({
-                              ...f,
-                              fontSize: Number(e.target.value) as (typeof FONT_SIZE_OPTIONS)[number],
-                            }))
-                          }
+                        <label id="theme-font-size-label" htmlFor="theme-font-size">
+                          Base font size
+                        </label>
+                        <div
+                          className="settings-font-size-stepper"
+                          role="group"
+                          aria-labelledby="theme-font-size-label"
                         >
-                          {FONT_SIZE_OPTIONS.map((n) => (
-                            <option key={n} value={n}>
-                              {n}px
-                            </option>
-                          ))}
-                        </select>
+                          <button
+                            type="button"
+                            className="btn btn-icon"
+                            disabled={themeForm.fontSize === FONT_SIZE_OPTIONS[0]}
+                            aria-label="Decrease base font size"
+                            onClick={() =>
+                              updateThemeForm((f) => ({
+                                ...f,
+                                fontSize: stepFontSize(f.fontSize, -1),
+                              }))
+                            }
+                          >
+                            <Minus size={16} aria-hidden />
+                          </button>
+                          <div className="settings-font-size-stepper__input-wrap">
+                            <input
+                              id="theme-font-size"
+                              type="number"
+                              inputMode="numeric"
+                              min={FONT_SIZE_OPTIONS[0]}
+                              max={FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]}
+                              value={themeForm.fontSize}
+                              onChange={(e) => {
+                                const n = Math.round(Number(e.target.value));
+                                if (!Number.isFinite(n)) return;
+                                if (!FONT_SIZE_OPTIONS.includes(n as (typeof FONT_SIZE_OPTIONS)[number])) {
+                                  return;
+                                }
+                                updateThemeForm((f) => ({
+                                  ...f,
+                                  fontSize: n as (typeof FONT_SIZE_OPTIONS)[number],
+                                }));
+                              }}
+                              onBlur={(e) => {
+                                const n = Number(e.target.value);
+                                if (!Number.isFinite(n)) return;
+                                updateThemeForm((f) => ({
+                                  ...f,
+                                  fontSize: coerceFontSizePx(n),
+                                }));
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "ArrowUp") {
+                                  e.preventDefault();
+                                  updateThemeForm((f) => ({
+                                    ...f,
+                                    fontSize: stepFontSize(f.fontSize, 1),
+                                  }));
+                                } else if (e.key === "ArrowDown") {
+                                  e.preventDefault();
+                                  updateThemeForm((f) => ({
+                                    ...f,
+                                    fontSize: stepFontSize(f.fontSize, -1),
+                                  }));
+                                }
+                              }}
+                              aria-label="Base font size in pixels"
+                            />
+                            <span className="settings-font-size-stepper__unit" aria-hidden>
+                              px
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-icon"
+                            disabled={
+                              themeForm.fontSize ===
+                              FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
+                            }
+                            aria-label="Increase base font size"
+                            onClick={() =>
+                              updateThemeForm((f) => ({
+                                ...f,
+                                fontSize: stepFontSize(f.fontSize, 1),
+                              }))
+                            }
+                          >
+                            <Plus size={16} aria-hidden />
+                          </button>
+                        </div>
                       </div>
-                    </div>
                   </div>
                   <div className="settings-actions settings-playground-actions">
                     <button
@@ -1119,6 +1250,53 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                 </button>
               </div>
             </section>
+
+            <section className="settings-group">
+              <h3 className="settings-group__title">Nightly memory compile</h3>
+              <p className="settings-group__lead">
+                Once per day on first launch, Harness reviews conversations updated since the last run
+                and adds durable facts to your memory list above. Uses your OpenAI API key. Auto-merges
+                without asking — edit or remove entries above any time.
+              </p>
+              <div className="settings-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="settings-run-memory-compile"
+                  onClick={() => void runCompileNow()}
+                  disabled={compileBusy}
+                >
+                  {compileBusy ? "Compiling…" : "Compile now"}
+                </button>
+              </div>
+              {compileStatus && (
+                <div className="settings-data-status" role="status">
+                  <p>
+                    <strong>Last run:</strong>{" "}
+                    {compileStatus.lastRunAt
+                      ? new Date(compileStatus.lastRunAt).toLocaleString()
+                      : "never"}
+                  </p>
+                  {compileStatus.lastRunAt != null && (
+                    <p>
+                      <strong>Last result:</strong> reviewed{" "}
+                      {compileStatus.lastConsideredCount} conversation
+                      {compileStatus.lastConsideredCount === 1 ? "" : "s"}, added{" "}
+                      {compileStatus.lastAddedCount}, updated{" "}
+                      {compileStatus.lastUpdatedCount}
+                    </p>
+                  )}
+                  {compileStatus.lastError && (
+                    <p className="settings-import-status__errors">
+                      Last error: {compileStatus.lastError}
+                    </p>
+                  )}
+                </div>
+              )}
+              {compileMessage && (
+                <p className="settings-group__hint settings-group__hint--flush">{compileMessage}</p>
+              )}
+            </section>
           </section>}
 
           <Modal
@@ -1317,36 +1495,21 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             aria-labelledby="settings-tab-data"
           >
             <section className="settings-group">
-              <h3 className="settings-group__title">Local data</h3>
+              <h3 className="settings-group__title">Storage layout</h3>
               <p className="settings-group__lead">
-                Local-first storage root. Recordings remain local-only unless exported manually.
+                Everything Harness saves on this device. Sync copies a snapshot of{" "}
+                <code>local-data</code> (except recordings) into your chosen backup folder;
+                your cloud provider moves that folder between machines.
               </p>
+              <figure className="settings-storage-diagram" aria-label="Storage layout diagram">
+                <pre className="settings-storage-diagram__pre">{DATA_STORAGE_DIAGRAM}</pre>
+              </figure>
               <div className="settings-actions">
-                <button type="button" className="btn" onClick={() => window.electron.memory.openLocalDataFolder()}>
-                  Show local-data folder <ExternalLink size={14} aria-hidden />
+                <button type="button" className="btn" onClick={() => window.electron.memory.openAppDataFolder()}>
+                  Show app data folder <ExternalLink size={14} aria-hidden />
                 </button>
-                <button type="button" className="btn" onClick={() => void refreshDataStatus()} disabled={dataStatusLoading}>
-                  {dataStatusLoading ? "Refreshing…" : "Refresh status"}
-                </button>
-              </div>
-              {dataStatus && (
-                <div className="settings-data-status" role="status">
-                  <p><strong>Local folder:</strong> {dataStatus.localDataDir}</p>
-                  <p><strong>App-state folder:</strong> {dataStatus.appStateDir}</p>
-                  <p>
-                    <strong>Counts:</strong> {dataStatus.conversationsCount} conversations, {dataStatus.messageFilesCount} message files,{" "}
-                    {dataStatus.notesFilesCount} notes
-                  </p>
-                  <p>
-                    <strong>Settings/themes:</strong> {dataStatus.hasSettingsFile ? "settings present" : "settings missing"},{" "}
-                    {dataStatus.hasThemesDir ? "themes present" : "themes missing"}
-                  </p>
-                  <p><strong>Recordings:</strong> Local-only in {dataStatus.recordingsDir}</p>
-                </div>
-              )}
-              <div className="settings-actions">
                 <button type="button" className="btn" onClick={() => void runCleanupLegacyMemory()} disabled={cleanupLegacyBusy}>
-                  {cleanupLegacyBusy ? "Cleaning…" : "Cleanup legacy memory folder"}
+                  {cleanupLegacyBusy ? "Cleaning…" : "Clean legacy memory folder"}
                 </button>
               </div>
               {cleanupLegacyMessage && (
@@ -1366,38 +1529,12 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
                 <button type="button" className="btn" onClick={() => void pickBackupFolder()}>
                   Choose folder…
                 </button>
-                {dataStatus?.sync.backupFolderPath && (
-                  <>
-                    <button type="button" className="btn" onClick={() => void revealBackupFolder()}>
-                      Reveal in {isMac ? "Finder" : "Explorer"} <ExternalLink size={14} aria-hidden />
-                    </button>
-                    <button type="button" className="btn" onClick={() => void clearBackupFolder()}>
-                      Clear
-                    </button>
-                  </>
+                {!dataStatus?.sync.backupFolderPath && defaultBackupPath && (
+                  <button type="button" className="btn" onClick={() => void useDefaultBackupFolder()}>
+                    Use default
+                  </button>
                 )}
               </div>
-              {syncSuggestions.length > 0 && (
-                <div className="settings-data-status" role="group" aria-label="Suggested folders">
-                  <p><strong>Suggestions:</strong></p>
-                  <ul className="settings-suggestion-list">
-                    {syncSuggestions.map((s) => (
-                      <li key={s.path} className="settings-suggestion-item">
-                        <button
-                          type="button"
-                          className="btn"
-                          onClick={() => void useSuggestedFolder(s.path)}
-                          title={s.path}
-                        >
-                          Use {s.label}
-                          {!s.exists && <em> (will create)</em>}
-                        </button>
-                        <code className="settings-suggestion-path">{s.path}</code>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
               {dataStatus && (
                 <div className="settings-data-status" role="status">
                   <p>
@@ -1482,43 +1619,44 @@ export function SettingsView({ onImportComplete, onStoredDataReset }: SettingsVi
             </section>
 
             <section className="settings-group">
-              <h3 className="settings-group__title">Erase local data</h3>
+              <h3 className="settings-group__title">Import from Claude</h3>
               <p className="settings-group__lead">
-                Removes chats, tasks, plans, and memory entries. Keeps settings, theme, and your recording files.
+                Choose the folder from Claude.ai&apos;s &ldquo;Export data&rdquo; archive (contains{" "}
+                <code>conversations.json</code>). Re-imports skip threads already added.
               </p>
               <div className="settings-actions">
-                {!resetConfirm ? (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setResetConfirm(true)}
-                    disabled={resetting}
-                  >
-                    Erase…
-                  </button>
-                ) : (
-                  <>
-                    <div className="settings-reset-prompt">Erase everything listed above?</div>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={runResetStoredData}
-                      disabled={resetting}
-                    >
-                      {resetting ? "Erasing…" : "Yes, erase"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setResetConfirm(false)}
-                      disabled={resetting}
-                    >
-                      Cancel
-                    </button>
-                  </>
-                )}
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="settings-claude-import"
+                  onClick={runClaudeImport}
+                  disabled={claudeImporting}
+                >
+                  {claudeImporting ? "Importing…" : "Import"}
+                </button>
               </div>
+              {claudeImportStatus != null && (
+                <div className="settings-import-status" role="status">
+                  {claudeImportStatus.imported > 0 && (
+                    <p className="settings-import-status__ok">
+                      Imported {claudeImportStatus.imported} conversation
+                      {claudeImportStatus.imported !== 1 ? "s" : ""}.
+                    </p>
+                  )}
+                  {claudeImportStatus.errors.length > 0 && (
+                    <div className="settings-import-status__errors">
+                      <p>Errors:</p>
+                      <ul>
+                        {claudeImportStatus.errors.map((err, i) => (
+                          <li key={i}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
+
           </section>}
         </div>
       </div>

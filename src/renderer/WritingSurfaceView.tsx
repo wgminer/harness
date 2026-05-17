@@ -7,6 +7,7 @@ import {
   Copy,
   FolderOpen,
   MoreVertical,
+  Printer,
   RefreshCw,
   Save,
   NotebookText,
@@ -21,6 +22,7 @@ import {
   type NoteSummary,
   type NoteTemplateConfig,
 } from "../shared/writing";
+import { buildNotePrintHtml } from "../shared/notePrint";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 
@@ -923,6 +925,21 @@ export function NotesView({
                     >
                       <ArrowRightLeft size={16} aria-hidden />
                       <span>Text width ({NOTE_WIDTH_LABELS[noteWidthMode]})</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="notes-surface__toolbar-menu-item"
+                      role="menuitem"
+                      disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                      onClick={() => {
+                        const title = activeNote?.title ?? "Note";
+                        const html = buildNotePrintHtml(title, draft);
+                        void window.electron.notes.print(html, title);
+                        setNoteToolbarMenuOpen(false);
+                      }}
+                    >
+                      <Printer size={16} aria-hidden />
+                      <span>Print</span>
                     </button>
                     <button
                       type="button"

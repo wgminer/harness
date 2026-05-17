@@ -417,4 +417,11 @@ export function registerNotesHandlers(): void {
   ipcMain.handle("notes:delete", (_e, id: string) => deleteNote(id ?? ""));
   ipcMain.handle("notes:showInFolder", (_e, id: string) => showNoteInFolder(id ?? ""));
   ipcMain.handle("notes:proposeEdit", (_e, input: NoteEditProposalInput) => proposeNoteEdit(input));
+  ipcMain.handle("notes:print", async (_e, html: unknown, jobName?: unknown) => {
+    if (typeof html !== "string" || !html.trim()) {
+      throw new Error("Print HTML is required.");
+    }
+    const { printHtml } = await import("./notePrint");
+    return printHtml(html, typeof jobName === "string" ? jobName : undefined);
+  });
 }

@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyThemeColors,
+  coerceFontSizePx,
   DEFAULT_THEME_SETTINGS,
   enforceVeryLowContrastGuard,
+  FONT_SIZE_OPTIONS,
   normalizeThemeSettings,
+  stepFontSize,
+  themeMatchesColorPreset,
   themeSettingsToCss,
+  THEME_PRESETS,
 } from "./theme";
 
 describe("normalizeThemeSettings", () => {
@@ -50,6 +56,63 @@ describe("normalizeThemeSettings", () => {
   });
 });
 
+describe("THEME_PRESETS", () => {
+  it("exposes exactly five curated color palettes", () => {
+    expect(THEME_PRESETS).toHaveLength(5);
+    expect(THEME_PRESETS.map((p) => p.id)).toEqual(["night", "paper", "matcha", "ik_blue", "bloomberg"]);
+  });
+});
+
+describe("applyThemeColors", () => {
+  it("updates colors without changing typography", () => {
+    const base: typeof DEFAULT_THEME_SETTINGS = {
+      ...DEFAULT_THEME_SETTINGS,
+      font: "lora",
+      fontMono: "fira_code",
+      fontSize: 16,
+    };
+    const paper = THEME_PRESETS.find((p) => p.id === "paper")!.colors;
+    const next = applyThemeColors(base, paper);
+    expect(next.fg).toBe(paper.fg);
+    expect(next.bg).toBe(paper.bg);
+    expect(next.accent).toBe(paper.accent);
+    expect(next.font).toBe("lora");
+    expect(next.fontMono).toBe("fira_code");
+    expect(next.fontSize).toBe(16);
+  });
+});
+
+describe("themeMatchesColorPreset", () => {
+  it("matches colors only and ignores typography", () => {
+    const paper = THEME_PRESETS.find((p) => p.id === "paper")!.colors;
+    const withDifferentFonts = {
+      ...applyThemeColors(DEFAULT_THEME_SETTINGS, paper),
+      font: "lora" as const,
+      fontMono: "space_mono" as const,
+      fontSize: 18 as const,
+    };
+    expect(themeMatchesColorPreset(withDifferentFonts, paper)).toBe(true);
+    expect(themeMatchesColorPreset(DEFAULT_THEME_SETTINGS, paper)).toBe(false);
+  });
+});
+
+describe("font size stepping", () => {
+  it("steps through allowed sizes and clamps at ends", () => {
+    expect(stepFontSize(14, -1)).toBe(13);
+    expect(stepFontSize(14, 1)).toBe(15);
+    expect(stepFontSize(FONT_SIZE_OPTIONS[0], -1)).toBe(FONT_SIZE_OPTIONS[0]);
+    expect(stepFontSize(FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1], 1)).toBe(
+      FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1],
+    );
+  });
+
+  it("coerces arbitrary px values to the nearest allowed size", () => {
+    expect(coerceFontSizePx(14)).toBe(14);
+    expect(coerceFontSizePx(17)).toBe(16);
+    expect(coerceFontSizePx(11)).toBe(12);
+  });
+});
+
 describe("themeSettingsToCss", () => {
   it("emits user and derived custom properties", () => {
     const css = themeSettingsToCss(DEFAULT_THEME_SETTINGS);
@@ -63,6 +126,11 @@ describe("themeSettingsToCss", () => {
     expect(css).toContain("--border-dark:");
     expect(css).toContain("--border-light:");
     expect(css).toContain("--border:");
+    // Borders must sit above surface steps (more fg than bg-secondary / bg-elevated).
+    expect(css).toMatch(/--bg-secondary: color-mix\(in oklab, #0d1117 92%, #e6edf3\)/);
+    expect(css).toMatch(/--bg-elevated: color-mix\(in oklab, #0d1117 84%, #e6edf3\)/);
+    expect(css).toMatch(/--border-light: color-mix\(in oklab, #0d1117 82%, #e6edf3\)/);
+    expect(css).toMatch(/--border-dark: color-mix\(in oklab, #0d1117 68%, #e6edf3\)/);
     expect(css).toContain("--accent-readable:");
     expect(css).toContain("--selection-bg:");
     expect(css).toContain("--sidebar-control-hover-bg:");
