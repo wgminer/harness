@@ -1,120 +1,215 @@
 # Harness Roadmap
 
-Living document. **Completed** records what shipped; **v0.5** is the active plan for the next release; **Post v0.5** holds the longer backlog. Rewritten periodically as priorities shift.
+Living document with two layers:
+
+1. **Outcomes** — what the project is *for* (steer ideas and compare work here first).
+2. **Execution** — what shipped (**Completed**), what’s active (**v0.5**), and what’s queued (**Post v0.5**).
+
+When considering a feature, ask: *which outcome does it serve, and does anything already on the execution track do it better?*
+
+---
+
+## Project outcomes
+
+Four concrete outcomes. Each has a **success picture** (how you know it’s working) and **signals** (things we can point at in the product today).
+
+### O1 — Showcase-grade layout and UI
+
+Harness should feel like a deliberate product: typography, spacing, motion, and hierarchy hold up under real use—not a dev tool skin on a chat box.
+
+| | |
+|---|---|
+| **Success picture** | Someone opening the app notices craft: readable density, coherent theme, surfaces that scale with the window, chat/notes/settings that feel designed—not bolted on. |
+| **Signals today** | Theme studio (color + typography split), `--accent-readable`, theme-linked font/icon tokens across surfaces, dedicated Notes/Settings shells, tray branding. |
+| **Gaps** | Chat column height and sticky composer; sidebar motion/focus; deeper viewport scaling (fluid width, breakpoints); polish pass on empty/loading/error states. |
+| **Anti-goals** | Feature sprawl that ignores layout debt; one-off screens that don’t share tokens; “good enough” spacing in primary flows. |
+
+### O2 — Replace paid AI subscriptions
+
+One personal harness should absorb daily workflows currently spread across chat apps, note tools, task lists, and light automation—so subscriptions shrink because Harness is *good enough* and *yours*.
+
+| | |
+|---|---|
+| **Success picture** | You reach for Harness first for chat, memory, notes, tasks, and imports; fewer standalone AI SaaS tabs; data lives locally with clear sync/backup. |
+| **Signals today** | Chat + tools + memory; tasks & plans; Notes + `proposeEdit`; ChatGPT + Claude import; nightly memory compile; folder backup sync; conversation search; weather tool; provider picker (OpenAI / Ollama). |
+| **Gaps** | More chat providers (Claude/Gemini APIs); backlog/inbox primitive; richer notes (metadata, search, guided actions); semantic memory; agent mode with guardrails. |
+| **Anti-goals** | Thin wrappers that still require the original app; black-box memory; importing without a path to *use* data inside Harness. |
+
+### O3 — Mobile companion (later)
+
+A small mobile surface for capture and Q&A—not desktop parity.
+
+| | |
+|---|---|
+| **Success picture** | Capture ideas on the go (voice/text → inbox); ask Harness a question; optional Telegram-style bridge before a full app. |
+| **Signals today** | Desktop backlog + sync foundation (folder bundle); product direction notes in v0.5. |
+| **Gaps** | Everything mobile-specific; shared backlog model across devices. |
+| **Anti-goals** | Rebuilding desktop recording/transcription on phone v1; feature parity that doubles maintenance. |
+
+### O4 — Learning lab for building AI tools
+
+Harness is where you practice the full stack: providers, tools, streaming, persistence, evals, and UX around models—not just calling an API.
+
+| | |
+|---|---|
+| **Success picture** | Each meaningful feature teaches something reusable: a new tool, IPC boundary, test pattern, or provider adapter you could lift into another project. |
+| **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; memory compile pipeline; import parsers; typed `window.electron`; unit + e2e coverage on persistence. |
+| **Gaps** | CI on PRs; plugin/tool registry; documented patterns for adding tools/providers; optional eval fixtures for prompts. |
+| **Anti-goals** | Opaque magic (no tests, no boundaries); one giant file per feature; skipping the “why” in favor of copy-paste. |
+
+---
+
+## Outcome scorecard (snapshot)
+
+Quick read on **May 2026**—refresh when major work lands.
+
+| Outcome | Posture | Notes |
+|---------|---------|--------|
+| **O1** UI craft | **Building** | Strong theme/notes/settings; chat shell still the weak link. |
+| **O2** Subscription cannibal | **Building** | Core harness + imports + memory compile; providers and backlog still open. |
+| **O3** Mobile | **Later** | Intentionally deferred; sync/backlog groundwork only. |
+| **O4** Learning lab | **Building** | Good architecture and tests; CI/docs for patterns still thin. |
+
+**Recent commit (`7ef4b01`) vs outcomes:**
+
+- **O1** — Theme presets + data-tab diagram help; not a layout overhaul.
+- **O2** — Claude import + memory compile + note print directly reduce external-tool dependence.
+- **O3** — No change (desktop-only).
+- **O4** — New parsers, compile pipeline, IPC, and tests are solid learning artifacts.
+
+---
+
+## How to test an idea
+
+Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 = no impact, 1 = indirect, 2 = direct*). If every outcome is 0, deprioritize unless it’s pure hygiene.
+
+| Question | Outcome |
+|----------|---------|
+| Does it make a primary screen noticeably better to use? | O1 |
+| Does it replace a workflow you still pay for or open another app for? | O2 |
+| Does it only matter on phone? (If yes, is O3 actually unlocked?) | O3 |
+| Will you learn something durable about AI product engineering? | O4 |
+
+**Outcome tags in execution sections:** items marked `[O1]` … `[O4]` map to the list above (multiple tags allowed).
 
 ---
 
 ## Completed
 
-### 2026-04-21 — Test coverage expansion (unit + e2e)
+### 2026-05-17 — Claude import, memory compile, note print, settings & data UX `[O2][O4]`
 
-- **Unit coverage upgrade** — Added broad Vitest coverage for persistence and data-loss-sensitive modules (`memory`, `notes`, `plans`, `settings`, `assistantTools` task reducer paths, ChatGPT import parsing, file-tools path safety) plus renderer/shared utility tests.
-- **E2E flow coverage upgrade** — Expanded Playwright coverage for core UX and data durability: chat persistence across relaunch, conversation delete safety, settings/task flows, stream abort behavior, notes persistence, and fixture-driven ChatGPT import dedupe.
-- **Testability refactors** — Added `*In(dir)` pure-storage entry points across main-process persistence modules so tests can run against temp dirs without Electron bootstrapping.
+- **Claude.ai conversation import** — Parse official export archives (`conversations.json` and per-file variants); map `human`/`assistant` and structured content blocks; dedupe by `claudeId`; Settings → Data import flow and `memory:importFromClaudeFolder` IPC (parallel to ChatGPT import).
+- **Nightly memory compile** — Once-per-day (plus manual “Compile now”) OpenAI distill of recent user messages into `user_memory.json`; char/conversation budgets; merge rules with case-insensitive key matching; `memory_compile_state.json` for last-run status; deferred run on app launch (skipped in E2E).
+- **Note printing** — `buildNotePrintHtml` + hidden-window system print dialog from the Notes toolbar menu.
+- **Theme studio refresh** `[O1]` — Color-only presets (night, paper, matcha, ik blue, bloomberg); typography (fonts, stepped font size) separate from palette; `applyThemeColors` / `themeMatchesColorPreset` helpers.
+- **Settings & data UX** `[O2]` — ASCII storage-layout diagram on Data tab; “Show app data folder” opens full Electron `userData`; backup-folder picker with iCloud default suggestion; removed “erase all stored data” from UI/API; note template descriptions normalized to first line.
 
-### 2026-03-22 — Tray assets, recorder UX & typed bridge
+### 2026-05 — Writing surface, theme-linked shell scaling, weather & folder sync `[O1][O2][O4]`
 
-- **Tray & app icon** — Idle and recording tray PNGs (`resources/icon-tray*.png`, including `@2x`), plus an updated `build/icon.icns` so the Dock and menu bar stay consistent with product branding.
-- **Renderer recording stack** — `useRecorder` hook and `recordingUtils` (PCM → WAV, start/stop chimes) keep capture logic out of views; Chat/App wiring uses the shared flow for save, export, transcription, and paste-back.
-- **Typed `window.electron`** — `src/shared/electronAPI.ts` defines the preload contract (including recording, chat, memory search, tasks) so renderer code stays aligned with main-process IPC.
+- **Notes / writing surface** — Dedicated Notes view with templates (`{{today}}`), overview, save/delete, show-in-folder, and LLM `notes:proposeEdit` for guided edits (preview before apply).
+- **Theme-linked UI scaling** — Surfaces (chat, notes, settings, tasks, sidebar) use `calc(var(--font-size) * …)` and shared icon-size tokens so typography scales with Theme studio base size.
+- **Readable accent token** — `--accent-readable` (oklab mix toward foreground) for links and accent text on dark backgrounds; vivid accents unchanged for borders/backgrounds.
+- **Weather tool** — `get_weather` assistant tool via [Open-Meteo](https://open-meteo.com/) (US ZIP, °F); default ZIP in Settings.
+- **Folder backup sync** — Provider-agnostic backup folder (push/pull bundle + manifest), sync status in Settings, cloud-folder suggestions (e.g. iCloud Drive), conflict-copy detection.
 
-### 2026-03-21 — Providers, Recording & Search
+### 2026-04-21 — Test coverage expansion (unit + e2e) `[O4]`
 
-- **Multi-provider architecture** — LLM provider abstraction (`LLMProvider` interface), provider registry, and extracted tool definitions. Chat streaming and title generation route through a unified provider interface, making new backends a single-file addition.
-- **Ollama / local model support** — Full provider for any OpenAI-compatible local server (Ollama, LM Studio) with streaming chat, tool use, and conversation title generation.
-- **Recording & transcription** — In-app audio capture (PCM → WAV), start/stop/cancel chimes, save-to-disk, export dialog, and show-in-folder. Pluggable transcription providers (OpenAI Whisper and local Whisper-compatible servers like whisper.cpp / faster-whisper-server) with a registry to switch between them. Tray icon reflects recording state.
-- **Conversation search** — Full-text search across all stored conversations with title and content matching, snippet extraction, and match-range highlighting. Exposed to both the UI and the assistant via `memory_search_conversations`.
-- **Settings v2 (provider & transcription)** — Active LLM provider picker (OpenAI vs Ollama), Ollama base URL and model fields, transcription provider picker (OpenAI vs local), local transcription endpoint config, and recording auto-send toggle — all in the Settings UI.
+- **Unit coverage upgrade** — Broad Vitest coverage for persistence and data-loss-sensitive modules plus renderer/shared utility tests.
+- **E2E flow coverage upgrade** — Playwright: chat persistence, delete safety, settings/tasks, stream abort, notes, ChatGPT import dedupe.
+- **Testability refactors** — `*In(dir)` pure-storage entry points for temp-dir tests without Electron boot.
 
-### 2026-03-21 — Foundation
+### 2026-03-22 — Tray assets, recorder UX & typed bridge `[O1][O4]`
 
-- Established project identity as a personal, all-in-one LLM harness (desktop app, local data, OpenAI API).
-- Electron + React app with streaming chat, tool use, and searchable conversation history grouped by date.
-- Per-conversation context and long-term user memory (key/value), merged into the system prompt.
-- File tools: the assistant can list, read, write, delete files and create directories within allowed roots.
-- Self-improvement tools: `update_theme` / `set_layout` and related tools let the assistant reshape the UI on request; preferences persist to disk.
-- Tasks & plans panel for tracking work across conversations.
-- ChatGPT conversation import.
-- Settings view: API key, model selection, memory editor.
-- macOS production builds with code signing and notarization via electron-builder.
-- Custom app icon and `productName: Harness` throughout the build pipeline.
+- **Tray & app icon** — Menu bar + Dock branding.
+- **Renderer recording stack** — `useRecorder`, PCM → WAV, chimes; shared save/export/transcribe flow.
+- **Typed `window.electron`** — Preload contract in `src/shared/electronAPI.ts`.
+
+### 2026-03-21 — Providers, Recording & Search `[O2][O4]`
+
+- **Multi-provider architecture** — `LLMProvider` registry; streaming + tools + titles through one interface.
+- **Ollama / local model support** — OpenAI-compatible local servers.
+- **Recording & transcription** — In-app capture; Whisper + local transcription registry; tray recording state.
+- **Conversation search** — Full-text search + `memory_search_conversations` tool.
+- **Settings v2** — Provider and transcription pickers, recording auto-send.
+
+### 2026-03-21 — Foundation `[O2][O4]`
+
+- Desktop harness: streaming chat, tools, local memory, file tools, theme/layout tools, tasks & plans, ChatGPT import, Settings, signed macOS builds.
 
 ---
 
-## v0.5.0 — planned release
+## v0.5.0 — release line (in progress)
 
-Target: iterate on real usage from 0.4.x — clearer shell layout, better scaling, one new external tool, and a concrete direction for mobile and backlog capture — without boiling the ocean.
+Near-term execution under the outcomes above. **Shipped on this line** is summarized in **Completed (2026-05\*)**.
 
-### Layout, scaling, and shell
+### Layout, scaling, and shell `[O1]` — remaining
 
-- **Viewport-aware UI scaling** — As the window (or embedded web surface) grows, typography and/or layout should scale or breathe so the app does not feel like a fixed-width column floating in empty space. Likely: fluid max-width, stepped or clamp-based font sizing, and/or CSS variables tied to breakpoints — exact approach TBD.
-- **Sidebar behavior** — Revisit open/close animation, focus traps, and affordances so the side menu feels predictable and lightweight rather than distracting.
-- **Chat page structure** — Rebuild the main chat layout with a clearer hierarchy: scroll regions, sticky composer, and stable heights so long conversations do not fight the viewport. Address current pain around **conversation column height** and streaming-era CSS quirks in one pass.
+- **Viewport-aware UI scaling (deeper pass)** — Fluid max-width, breakpoints, chat layout that uses large windows well (theme-linked size is step one).
+- **Sidebar behavior** — Open/close animation, focus traps, lighter affordances.
+- **Chat page structure** — Scroll regions, sticky composer, stable column height; fix streaming/layout quirks in one pass.
 
 ### Tools
 
-- **Weather** — Add an assistant-callable weather tool backed by a **free or very cheap** HTTP API (candidates: [Open-Meteo](https://open-meteo.com/) — no API key for non-commercial use; or national/municipal free tiers). Keep the tool input/output small and obvious (e.g. location + short forecast summary).
+- ~~**Weather**~~ — **Done** `[O2]`.
 
-### Mobile direction (companion, not parity)
+### Mobile direction `[O3]` — not v0.5 scope
 
-- **iOS (or cross-platform shell)** — Aim for something **extremely simple**: mobile chat + Q&A against the same mental model as desktop, not feature parity.
-- **Audio** — Prefer **voice-to-text** (or OS dictation) feeding normal chat, plus standard LLM calls — not a full duplicate of desktop recording/transcription unless it stays trivial to maintain.
-- **Capture-first UX** — Mobile should optimize for "capture now, organize later": one-tap voice/text capture that lands in a backlog inbox without losing ideas.
+- **iOS (or cross-platform shell)** — Simple chat + Q&A; not parity.
+- **Audio** — Voice-to-text / OS dictation into chat; avoid duplicating desktop recording unless trivial.
+- **Capture-first UX** — One-tap capture → backlog inbox (depends on backlog primitive `[O2]`).
 
-### Product direction (tool for thought, not just chat)
+### Trust & consolidation (cross-cutting) `[O2]`
 
-- **SaaS consolidation** — Harness should progressively absorb daily SaaS workflows (notes, tasks, lightweight planning, assistant chats, and simple automation) into one personal system.
-- **Trust-first control surface** — Assume low trust in external LLM providers: explicit provider routing, local-first defaults, and clear controls over what data leaves the device.
-- **Backlog as the center** — Treat backlog/inbox as a first-class primitive shared across desktop and mobile; captured ideas become triageable work items before they become tasks or projects.
-- **Backburner continuity** — Keep the "Backburner" concept as a capture/backlog mode inside Harness so prior mental models and project naming still map cleanly.
+- **Trust-first control** — Explicit provider routing, local-first defaults, clear data-leave-device boundaries.
+- **Backlog as center** — Shared inbox across surfaces; triage into tasks, conversations, plans.
+- **Backburner continuity** — Capture/backlog mode naming and mental-model fit.
 
-### Themes (carryover from ongoing polish)
+### LLM-Assisted Notes `[O2][O4]`
 
-- **Accent on dark backgrounds** — Introduce a derived accent token (e.g. softened or mixed toward foreground) for links and chips so saturated user accents remain readable on dark UI.
+- **Phase 1 (MVP+)** — Note metadata, list/search/sort, `note_suggest_outline` / `note_rewrite_section`. *Partial:* `notes:proposeEdit`.
+- **Phase 2** — Guided actions (“brainstorm”, “tighten”, …), diff/preview, snapshots. *Partial:* edit proposals.
+- **Phase 3** — Co-author side panel, block-level intents, provenance timeline.
+- **Conversation links + memory** — Cross-conversation references; memory refresh rules. *Partial:* nightly memory compile + manual run.
 
-### LLM-Assisted Notes Roadmap
+### Explicitly not in this doc
 
-These stay **easy to explain in one paragraph** each; implementation can trail.
-
-- **Phase 1 (MVP+)** — Add note metadata (`source`, `lastEditedBy`, optional tags), list/search/sort in Notes, and helper tools (`note_suggest_outline`, `note_rewrite_section`) with explicit apply.
-- **Phase 2** — Add guided writing actions in Notes UI (“brainstorm”, “tighten”, “expand”, “change tone”), plus diff/preview before apply and per-note snapshots.
-- **Phase 3** — Add full co-author mode with a side panel linked to the active note, block-level edit intents, and provenance timeline for human vs model edits.
-- **Conversation links + memory** — How conversations reference each other; how long-term memory is refreshed (on demand vs scheduled vs nightly scan). Prefer a small number of clear rules over a black box.
-
-### Explicitly not in this roadmap doc
-
-- **Multi-location development and testing workflows** — Worked separately alongside the **Devon LLM** setup; not tracked here.
+- **Multi-location dev workflows** — Tracked with **Devon LLM** setup separately.
 
 ---
 
 ## Post v0.5 — backlog
 
-Pulled forward from earlier planning; order is not commitment.
+Ordered loosely by outcome; not a commitment sequence.
 
 ### Near-term
 
-- **Automated test suite & CI (follow-up)** — Core unit/e2e expansion is now in place; next step is CI hardening (lint, TypeScript checks, and Playwright in PR workflows) so regressions are caught automatically before merge.
-- **More providers** — Anthropic (Claude) and Google (Gemini) in the provider registry.
-- **Agent / autonomous mode** — Persistent multi-step agent with human-in-the-loop approval before destructive actions.
-- **Semantic memory** — Local vector store + similarity retrieval on top of or beside key/value memory.
-- **Backlog pipeline** — Unified capture inbox with quick-add, triage states, and promotion into tasks, conversations, or plans.
-- **Workflow automation primitives** — Minimal, inspectable automations (rules/triggers/actions) that can run on backlog items without introducing a heavyweight external orchestrator.
+| Item | Outcomes |
+|------|----------|
+| **CI hardening** (lint, tsc, Playwright on PR) | O4 |
+| **Chat providers** — Anthropic, Gemini APIs (≠ export import) | O2, O4 |
+| **Agent mode** with human-in-the-loop before destructive actions | O2, O4 |
+| **Semantic memory** (vectors + retrieval) | O2, O4 |
+| **Backlog pipeline** (inbox, triage, promote) | O2, O3 |
+| **Workflow automation** (minimal rules/triggers) | O2, O4 |
 
 ### Medium-term
 
-- **Telegram integration** — Harness reachable from mobile without a dedicated app (may overlap with iOS direction; revisit when mobile plan firms up).
-- **Backup / sync** — Conversations, memory, settings across machines (local network, iCloud, or file-based).
-- **Simple sync backend (non-realtime)** — A lightweight backend or sync protocol that keeps Harness state aligned across devices on a schedule or explicit sync (not live realtime). Include a minimal UI to inspect and resolve conflicts when the same records diverge. Expect automated tests for sync semantics, merge rules, and conflict handling.
-- **Richer task management** — Due dates, priority, task-to-conversation links.
-- **Model parameter overrides** — Temperature, max tokens, top-p in Settings.
-- **Auto-update** — Electron `autoUpdater` for shipped builds.
+| Item | Outcomes |
+|------|----------|
+| **Telegram** (or similar) as mobile bridge | O3 |
+| **Backup / sync (deeper)** — scheduled sync, conflict UI, merge rules | O2, O3 |
+| **Richer tasks** — due dates, priority, conversation links | O2 |
+| **Model params in Settings** — temperature, max tokens, top-p | O4 |
+| **Auto-update** — `autoUpdater` for shipped builds | O2 |
 
 ### Longer-term
 
-- **Plugin / tool registry** — Install or author tool sets without forking core.
-- **Windows and Linux builds** — CI, signing, installers.
-- **Conversation sharing / export** — Markdown/JSON export; optional read-only links.
+| Item | Outcomes |
+|------|----------|
+| **Plugin / tool registry** | O4 |
+| **Windows & Linux builds** | O2 |
+| **Conversation export / share** | O2 |
 
 ---
 
-*Last updated: 2026-04-21*
+*Last updated: 2026-05-17*

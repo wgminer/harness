@@ -57,4 +57,4 @@ Packaged installers (macOS, signing/notarization): see [BUILD.md](BUILD.md).
 
 ## Roadmap
 
-Completed milestones and upcoming work are tracked in [ROADMAP.md](ROADMAP.md).
+[ROADMAP.md](ROADMAP.md) defines four **project outcomes** (UI craft, subscription consolidation, mobile later, AI engineering lab) and maps completed work, the active v0.5 line, and backlog to them—use it to steer and score new ideas before building.
