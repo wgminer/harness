@@ -86,6 +86,12 @@ export const DEFAULT_NOTE_TEMPLATES: NoteTemplateConfig[] = [
 /** Inserted in template body; replaced with a locale-formatted date when a new note is created. */
 export const NOTE_TEMPLATE_TODAY_TOKEN = "{{today}}";
 
+/** Collapse stored template descriptions to a single trimmed line. */
+export function normalizeNoteTemplateDescription(raw: string): string {
+  const firstLine = raw.trim().split(/\r?\n/, 1)[0] ?? "";
+  return firstLine.trim();
+}
+
 export function formatNoteTemplateToday(options?: {
   now?: Date;
   locales?: Intl.LocalesArgument;
@@ -126,7 +132,10 @@ export function normalizeNoteTemplates(input: unknown): NoteTemplateConfig[] {
         const candidate = item as Record<string, unknown>;
         const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
         const title = typeof candidate.title === "string" ? candidate.title.trim() : "";
-        const description = typeof candidate.description === "string" ? candidate.description.trim() : "";
+        const description =
+          typeof candidate.description === "string"
+            ? normalizeNoteTemplateDescription(candidate.description)
+            : "";
         const content = typeof candidate.content === "string" ? candidate.content : "";
         if (!id || !title || !description) return null;
         return { id, title, description, content };

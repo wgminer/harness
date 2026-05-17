@@ -12,6 +12,7 @@ import {
   getLocalDataDir,
   getLocalDataSettingsPath,
   getLocalDataThemesDir,
+  getUserDataDir,
 } from "./localDataPaths";
 import { getRecordingsDir } from "./recording";
 import { getSyncStatus } from "./sync";
@@ -44,7 +45,7 @@ function getUserMemoryPath(memoryDir: string): string {
   return join(memoryDir, USER_MEMORY_FILE);
 }
 
-/** Stored per-conversation; optional isFromChatGPT/chatgptId used for ChatGPT import dedupe. */
+/** Stored per-conversation; optional isFromChatGPT/chatgptId/claudeId used for import dedupe. */
 export type ConversationTitleSource = "auto" | "user" | "imported";
 
 export interface ConversationMeta {
@@ -52,6 +53,8 @@ export interface ConversationMeta {
   createdAt: number;
   isFromChatGPT?: boolean;
   chatgptId?: string;
+  isFromClaude?: boolean;
+  claudeId?: string;
   titleSource?: ConversationTitleSource;
 }
 
@@ -213,11 +216,27 @@ async function getExistingChatgptIds(): Promise<string[]> {
   return getExistingChatgptIdsIn(getMemoryDir());
 }
 
+export async function getExistingClaudeIdsIn(memoryDir: string): Promise<string[]> {
+  const conv = await loadConversationsIn(memoryDir);
+  const ids: string[] = [];
+  for (const c of Object.values(conv)) {
+    if (c.isFromClaude === true && typeof c.claudeId === "string" && c.claudeId) {
+      ids.push(c.claudeId);
+    }
+  }
+  return ids;
+}
+
+async function getExistingClaudeIds(): Promise<string[]> {
+  return getExistingClaudeIdsIn(getMemoryDir());
+}
+
 export interface ImportConversationItem {
   title: string | null;
   createdAt: number;
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
   chatgptId?: string;
+  claudeId?: string;
 }
 
 export async function importConversationsIn(
@@ -236,6 +255,10 @@ export async function importConversationsIn(
     if (item.chatgptId != null) {
       meta.isFromChatGPT = true;
       meta.chatgptId = item.chatgptId;
+    }
+    if (item.claudeId != null) {
+      meta.isFromClaude = true;
+      meta.claudeId = item.claudeId;
     }
     conv[id] = meta;
     const messages: MessageRecord[] = item.messages.map((m) => ({ role: m.role, content: m.content }));
@@ -282,10 +305,6 @@ export async function resetStoredDataIn(memoryDir: string): Promise<void> {
   if (await fileExists(plansPath)) await unlink(plansPath);
 }
 
-async function resetStoredData(): Promise<void> {
-  return resetStoredDataIn(getMemoryDir());
-}
-
 export interface DataStatusSnapshot {
   localDataDir: string;
   appStateDir: string;
@@ -325,8 +344,8 @@ async function getDataStatus(): Promise<DataStatusSnapshot> {
   };
 }
 
-async function openLocalDataFolder(): Promise<void> {
-  await shell.openPath(getLocalDataDir());
+async function openAppDataFolder(): Promise<void> {
+  await shell.openPath(getUserDataDir());
 }
 
 async function runCleanupLegacyMemory(): Promise<{ removed: boolean }> {
@@ -534,8 +553,7 @@ export function registerMemoryHandlers(): void {
   ipcMain.handle("memory:deleteUserMemoryKey", (_e, key: string) => deleteUserMemoryKey(key));
   ipcMain.handle("memory:deleteConversation", (_e, conversationId: string) => deleteConversation(conversationId));
   ipcMain.handle("memory:searchConversations", (_e, query: string) => searchConversations(query));
-  ipcMain.handle("memory:resetStoredData", () => resetStoredData());
-  ipcMain.handle("memory:openLocalDataFolder", () => openLocalDataFolder());
+  ipcMain.handle("memory:openAppDataFolder", () => openAppDataFolder());
   ipcMain.handle("memory:getDataStatus", () => getDataStatus());
   ipcMain.handle("memory:cleanupLegacyMemory", () => runCleanupLegacyMemory());
   ipcMain.handle("memory:setConversationTitle", async (_e, conversationId: string, title: string) => {
@@ -554,6 +572,7 @@ export {
   getConversation,
   createConversation,
   getExistingChatgptIds,
+  getExistingClaudeIds,
   importConversations,
   searchConversations,
   setConversationTitle,

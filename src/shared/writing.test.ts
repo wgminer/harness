@@ -3,6 +3,7 @@ import {
   NOTE_TEMPLATE_TODAY_TOKEN,
   getListContinuationPrefixForLine,
   interpolateNoteTemplateContent,
+  normalizeNoteTemplateDescription,
   normalizeNoteTemplates,
 } from "./writing";
 
@@ -38,11 +39,31 @@ describe("interpolateNoteTemplateContent", () => {
   });
 });
 
+describe("normalizeNoteTemplateDescription", () => {
+  it("keeps a single line unchanged", () => {
+    expect(normalizeNoteTemplateDescription("  Reflective  ")).toBe("Reflective");
+  });
+
+  it("drops text after the first newline", () => {
+    expect(normalizeNoteTemplateDescription("First line\nSecond line")).toBe("First line");
+  });
+});
+
 describe("normalizeNoteTemplates", () => {
   it("includes today token in default daily-log template content", () => {
     const templates = normalizeNoteTemplates(undefined);
     const daily = templates.find((t) => t.id === "daily-log");
     expect(daily?.content).toContain(NOTE_TEMPLATE_TODAY_TOKEN);
+  });
+
+  it("truncates multi-line descriptions to one line", () => {
+    const base = normalizeNoteTemplates(undefined);
+    const templates = normalizeNoteTemplates(
+      base.map((t) =>
+        t.id === "blank" ? { ...t, description: "Line one\nLine two" } : t,
+      ),
+    );
+    expect(templates.find((t) => t.id === "blank")?.description).toBe("Line one");
   });
 });
 

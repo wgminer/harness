@@ -23,8 +23,6 @@ export default function App() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  /** Bump to remount TasksView after tasks.json is cleared externally (e.g. settings reset). */
-  const [tasksRemountKey, setTasksRemountKey] = useState(0);
   /** True while the open chat is waiting on / streaming from the chat model (not composer voice). */
   const [activeChatProcessing, setActiveChatProcessing] = useState(false);
   /** Per-conversation refcount for async LLM thread title generation after a reply. */
@@ -63,13 +61,6 @@ export default function App() {
       return list[0].id;
     });
   }, []);
-
-  const onStoredDataReset = useCallback(() => {
-    void loadConversations();
-    void loadPlans();
-    setExpandedPlanId(null);
-    setTasksRemountKey((k) => k + 1);
-  }, [loadConversations, loadPlans]);
 
   useEffect(() => {
     loadConversations();
@@ -317,9 +308,9 @@ export default function App() {
           />
         )}
         {view === "settings" && (
-          <SettingsView onImportComplete={loadConversations} onStoredDataReset={onStoredDataReset} />
+          <SettingsView onImportComplete={loadConversations} />
         )}
-        {view === "tasks" && <TasksView key={tasksRemountKey} />}
+        {view === "tasks" && <TasksView />}
         {view === "notes" && (
           <NotesView
             initialOpenNoteId={pendingOpenNoteId}

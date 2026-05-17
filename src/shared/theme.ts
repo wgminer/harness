@@ -204,206 +204,66 @@ export function enforceVeryLowContrastGuard(
   return { fg: minimallyAdjustForContrast(fg, bg, MIN_FORCED_CONTRAST), bg };
 }
 
-export type ThemeSettings = {
+export type ThemeColors = {
   accent: string;
-  font: UiFontId;
-  fontMono: MonoFontId;
-  fontSize: (typeof FONT_SIZE_OPTIONS)[number];
   fg: string;
   bg: string;
 };
 
-export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
+export type ThemeSettings = ThemeColors & {
+  font: UiFontId;
+  fontMono: MonoFontId;
+  fontSize: (typeof FONT_SIZE_OPTIONS)[number];
+};
+
+export const DEFAULT_THEME_COLORS: ThemeColors = {
   accent: "#f2ff00",
+  fg: "#e6edf3",
+  bg: "#0d1117",
+};
+
+export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
+  ...DEFAULT_THEME_COLORS,
   font: "inter",
   fontMono: "jetbrains",
   fontSize: 14,
-  fg: "#e6edf3",
-  bg: "#0d1117",
 };
 
 export type ThemePreset = {
   id: string;
   label: string;
-  theme: ThemeSettings;
+  colors: ThemeColors;
 };
 
-/** Full themes (colors + fonts + size) for quick selection in Theme studio. */
+/** Color palettes for quick selection in Theme studio (typography is separate). */
 export const THEME_PRESETS: readonly ThemePreset[] = [
-  {
-    id: "midnight",
-    label: "Midnight",
-    theme: { ...DEFAULT_THEME_SETTINGS },
-  },
+  { id: "night", label: "Night", colors: { ...DEFAULT_THEME_COLORS } },
   {
     id: "paper",
     label: "Paper",
-    theme: {
-      accent: "#2563eb",
-      font: "inter",
-      fontMono: "jetbrains",
-      fontSize: 14,
-      fg: "#171717",
-      bg: "#fafafa",
-    },
+    colors: { accent: "#9a7b52", fg: "#3d3832", bg: "#f4efe6" },
   },
   {
-    id: "synthwave",
-    label: "Synthwave",
-    theme: {
-      accent: "#f472b6",
-      font: "plus_jakarta",
-      fontMono: "fira_code",
-      fontSize: 14,
-      fg: "#f5d0fe",
-      bg: "#1a0533",
-    },
+    id: "matcha",
+    label: "Matcha",
+    colors: { accent: "#6d8f4a", fg: "#364829", bg: "#eef4e4" },
   },
   {
-    id: "neon_slime",
-    label: "Neon slime",
-    theme: {
-      accent: "#bef264",
-      font: "work_sans",
-      fontMono: "jetbrains",
-      fontSize: 14,
-      fg: "#ecfccb",
-      bg: "#052e16",
-    },
+    id: "ik_blue",
+    label: "IK blue",
+    colors: { accent: "#7eb8ff", fg: "#ffffff", bg: "#002fa7" },
   },
   {
-    id: "lava_core",
-    label: "Lava core",
-    theme: {
-      accent: "#fb923c",
-      font: "lora",
-      fontMono: "source_code",
-      fontSize: 15,
-      fg: "#fee2e2",
-      bg: "#1c0808",
-    },
-  },
-  {
-    id: "electric",
-    label: "Electric",
-    theme: {
-      accent: "#38bdf8",
-      font: "inter",
-      fontMono: "space_mono",
-      fontSize: 14,
-      fg: "#e0e7ff",
-      bg: "#020617",
-    },
-  },
-  {
-    id: "dracula",
-    label: "Dracula",
-    theme: {
-      accent: "#bd93f9",
-      font: "nunito",
-      fontMono: "jetbrains",
-      fontSize: 14,
-      fg: "#f8f8f2",
-      bg: "#282a36",
-    },
-  },
-  {
-    id: "unicorn",
-    label: "Unicorn",
-    theme: {
-      accent: "#e879f9",
-      font: "nunito",
-      fontMono: "fira_code",
-      fontSize: 14,
-      fg: "#581c87",
-      bg: "#faf5ff",
-    },
-  },
-  {
-    id: "copper_rust",
-    label: "Copper rust",
-    theme: {
-      accent: "#f59e0b",
-      font: "merriweather",
-      fontMono: "ibm_plex",
-      fontSize: 14,
-      fg: "#fce7f3",
-      bg: "#292524",
-    },
-  },
-  {
-    id: "glitch_city",
-    label: "Glitch city",
-    theme: {
-      accent: "#22d3ee",
-      font: "plus_jakarta",
-      fontMono: "roboto_mono",
-      fontSize: 14,
-      fg: "#fae8ff",
-      bg: "#0f0518",
-    },
-  },
-  {
-    id: "matcha_latte",
-    label: "Matcha latte",
-    theme: {
-      accent: "#84cc16",
-      font: "literata",
-      fontMono: "source_code",
-      fontSize: 15,
-      fg: "#365314",
-      bg: "#f7fee7",
-    },
-  },
-  {
-    id: "blood_orange",
-    label: "Blood orange",
-    theme: {
-      accent: "#fb923c",
-      font: "open_sans",
-      fontMono: "sf",
-      fontSize: 14,
-      fg: "#7c2d12",
-      bg: "#fff7ed",
-    },
-  },
-  {
-    id: "void_caller",
-    label: "Void caller",
-    theme: {
-      accent: "#a855f7",
-      font: "source_sans_3",
-      fontMono: "space_mono",
-      fontSize: 14,
-      fg: "#e4e4e7",
-      bg: "#09090b",
-    },
-  },
-  {
-    id: "tropical_punch",
-    label: "Tropical punch",
-    theme: {
-      accent: "#f472b6",
-      font: "work_sans",
-      fontMono: "jetbrains",
-      fontSize: 14,
-      fg: "#ccfbf1",
-      bg: "#042f2e",
-    },
-  },
-  {
-    id: "crt_green",
-    label: "CRT green",
-    theme: {
-      accent: "#4ade80",
-      font: "roboto",
-      fontMono: "roboto_mono",
-      fontSize: 14,
-      fg: "#bbf7d0",
-      bg: "#0a150a",
-    },
+    id: "bloomberg",
+    label: "Bloomberg",
+    colors: { accent: "#ffb000", fg: "#ff9900", bg: "#000000" },
   },
 ];
+
+/** Apply a color palette to existing theme settings without changing typography. */
+export function applyThemeColors(settings: ThemeSettings, colors: ThemeColors): ThemeSettings {
+  return { ...settings, ...colors };
+}
 
 function parseFontSizePx(raw: unknown): (typeof FONT_SIZE_OPTIONS)[number] | undefined {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
@@ -411,6 +271,35 @@ function parseFontSizePx(raw: unknown): (typeof FONT_SIZE_OPTIONS)[number] | und
   return FONT_SIZE_OPTIONS.includes(n as (typeof FONT_SIZE_OPTIONS)[number])
     ? (n as (typeof FONT_SIZE_OPTIONS)[number])
     : undefined;
+}
+
+/** Step base font size through allowed px values. */
+export function stepFontSize(
+  current: (typeof FONT_SIZE_OPTIONS)[number],
+  delta: -1 | 1,
+): (typeof FONT_SIZE_OPTIONS)[number] {
+  const idx = FONT_SIZE_OPTIONS.indexOf(current);
+  const baseIdx = idx >= 0 ? idx : FONT_SIZE_OPTIONS.indexOf(DEFAULT_THEME_SETTINGS.fontSize);
+  const next = baseIdx + delta;
+  if (next <= 0) return FONT_SIZE_OPTIONS[0];
+  if (next >= FONT_SIZE_OPTIONS.length) return FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1];
+  return FONT_SIZE_OPTIONS[next];
+}
+
+/** Snap an arbitrary px value to the nearest allowed base font size. */
+export function coerceFontSizePx(raw: number): (typeof FONT_SIZE_OPTIONS)[number] {
+  const exact = parseFontSizePx(raw);
+  if (exact !== undefined) return exact;
+  let closest: (typeof FONT_SIZE_OPTIONS)[number] = FONT_SIZE_OPTIONS[0];
+  let minDist = Math.abs(raw - closest);
+  for (const opt of FONT_SIZE_OPTIONS) {
+    const dist = Math.abs(raw - opt);
+    if (dist < minDist) {
+      minDist = dist;
+      closest = opt;
+    }
+  }
+  return closest;
 }
 
 function themeResolvedCssVars(s: ThemeSettings): Record<string, string> {
@@ -424,9 +313,9 @@ function themeResolvedCssVars(s: ThemeSettings): Record<string, string> {
     "--fg-muted": `color-mix(in oklab, ${fg} 60%, ${bg})`,
     "--bg-secondary": `color-mix(in oklab, ${bg} 92%, ${fg})`,
     "--bg-elevated": `color-mix(in oklab, ${bg} 84%, ${fg})`,
-    "--border-dark": `color-mix(in oklab, ${bg} 80%, ${fg})`,
-    "--border-light": `color-mix(in oklab, ${bg} 90%, ${fg})`,
-    "--border": `color-mix(in oklab, ${bg} 80%, ${fg})`,
+    "--border-dark": `color-mix(in oklab, ${bg} 68%, ${fg})`,
+    "--border-light": `color-mix(in oklab, ${bg} 82%, ${fg})`,
+    "--border": `color-mix(in oklab, ${bg} 68%, ${fg})`,
     "--accent-readable": `color-mix(in oklab, ${accent} 70%, ${fg})`,
     "--selection-bg": `color-mix(in srgb, ${accent} 38%, ${fg} 22%)`,
     "--sidebar-control-hover-bg": `color-mix(in srgb, ${fg} 10%, var(--bg-secondary))`,
@@ -487,17 +376,13 @@ export function normalizeThemeSettings(input: unknown): ThemeSettings {
   };
 }
 
-/** Whether two themes match for preset highlighting (normalized hex + font fields). */
-export function themeMatchesPreset(a: ThemeSettings, b: ThemeSettings): boolean {
-  const na = normalizeThemeSettings(a);
-  const nb = normalizeThemeSettings(b);
+/** Whether theme colors match a preset for highlighting (typography ignored). */
+export function themeMatchesColorPreset(settings: ThemeSettings, colors: ThemeColors): boolean {
+  const s = normalizeThemeSettings(settings);
   return (
-    normalizeColorPickerValue(na.bg) === normalizeColorPickerValue(nb.bg) &&
-    normalizeColorPickerValue(na.fg) === normalizeColorPickerValue(nb.fg) &&
-    normalizeColorPickerValue(na.accent) === normalizeColorPickerValue(nb.accent) &&
-    na.font === nb.font &&
-    na.fontMono === nb.fontMono &&
-    na.fontSize === nb.fontSize
+    normalizeColorPickerValue(s.bg) === normalizeColorPickerValue(colors.bg) &&
+    normalizeColorPickerValue(s.fg) === normalizeColorPickerValue(colors.fg) &&
+    normalizeColorPickerValue(s.accent) === normalizeColorPickerValue(colors.accent)
   );
 }
 
