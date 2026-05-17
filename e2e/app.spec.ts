@@ -67,6 +67,7 @@ test("e2e inject Fn tap-toggle delivers transcribed text to chat", async () => {
 test("settings auto-send toggle persists", async () => {
   const win = await page();
   await win.getByTestId("sidebar-settings").click();
+  await win.getByRole("tab", { name: "Voice" }).click();
   const toggle = win.getByTestId("settings-auto-send");
   await expect(toggle).toBeVisible();
   const before = await toggle.isChecked();
@@ -81,5 +82,6 @@ test("settings auto-send toggle persists", async () => {
   await win.getByTestId("sidebar-new-chat").click();
   await expect(win.getByTestId("chat-composer")).toBeVisible();
   await win.getByTestId("sidebar-settings").click();
+  await win.getByRole("tab", { name: "Voice" }).click();
   await expect(win.getByTestId("settings-auto-send")).toBeChecked({ checked: !before });
 });

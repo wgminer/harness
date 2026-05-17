@@ -213,7 +213,7 @@ hr {
 /* Shared input base */
 .input-base,
 .sidebar-search-input,
-.settings-section input:not([type="checkbox"]):not([type="radio"]),
+.settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input),
 .settings-section select {
   font-family: var(--font-family);
   font-size: calc(var(--font-size) * 13 / 14);
@@ -231,7 +231,7 @@ hr {
 
 .input-base:focus,
 .sidebar-search-input:focus,
-.settings-section input:not([type="checkbox"]):not([type="radio"]):focus {
+.settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input):focus {
   outline: none;
   border-color: var(--accent);
 }

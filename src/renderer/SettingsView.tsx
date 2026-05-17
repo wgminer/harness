@@ -1,14 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
-import {
-  ExternalLink,
-  Eye,
-  EyeOff,
-  Minus,
-  Pencil,
-  Plus,
-  Settings as SettingsIcon,
-  Trash2,
-} from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Minus, Plus, Settings as SettingsIcon } from "lucide-react";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
@@ -24,6 +15,15 @@ import {
 import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import {
+  SettingsActions,
+  SettingsEntryRow,
+  SettingsField,
+  SettingsGroup,
+  SettingsHint,
+  SettingsSwitch,
+  SettingsSwitchProvider,
+} from "./settings";
 import {
   applyThemeColors,
   coerceFontSizePx,
@@ -61,61 +61,6 @@ const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: "data", label: "Data" },
 ];
 
-interface SettingsEntryRowProps {
-  title: string;
-  detail?: string;
-  onEdit: () => void;
-  onDelete?: () => void;
-  editAriaLabel: string;
-  deleteAriaLabel?: string;
-  /** Native tooltip on the edit button (default "Edit") */
-  editButtonTitle?: string;
-}
-
-export function SettingsEntryRow({
-  title,
-  detail,
-  onEdit,
-  onDelete,
-  editAriaLabel,
-  deleteAriaLabel,
-  editButtonTitle = "Edit",
-}: SettingsEntryRowProps) {
-  return (
-    <div className="settings-entry-row">
-      <div className="settings-entry-row__body">
-        <div className="settings-entry-row__title">{title}</div>
-        {detail !== undefined ? (
-          <div className="settings-entry-row__detail">{detail === "" ? "—" : detail}</div>
-        ) : null}
-      </div>
-      <div className="settings-entry-row__actions">
-        <button
-          type="button"
-          className="btn btn-icon"
-          data-action="edit"
-          onClick={onEdit}
-          aria-label={editAriaLabel}
-          title={editButtonTitle}
-        >
-          <Pencil size={16} />
-        </button>
-        {onDelete != null && deleteAriaLabel != null ? (
-          <button
-            type="button"
-            className="btn btn-icon"
-            data-action="delete"
-            onClick={onDelete}
-            aria-label={deleteAriaLabel}
-            title="Remove"
-          >
-            <Trash2 size={16} />
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
 
 export function SettingsView({ onImportComplete }: SettingsViewProps) {
   const [apiKey, setApiKey] = useState(D.openai!.apiKey);
@@ -190,7 +135,6 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
   );
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
   const [themeForm, setThemeForm] = useState<ThemeSettings>({ ...DEFAULT_THEME_SETTINGS });
-  const [themeApplyBusy, setThemeApplyBusy] = useState(false);
   const [themeApplyError, setThemeApplyError] = useState<string | null>(null);
   const themeApplySeqRef = useRef(0);
   const settingsHydratedRef = useRef(false);
@@ -591,33 +535,15 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
           : updated;
       applyThemeCssImmediately(next);
       const seq = ++themeApplySeqRef.current;
-      setThemeApplyBusy(true);
       setThemeApplyError(null);
       void window.electron.customization
         .setThemeSettings(next)
         .catch((e) => {
           if (seq !== themeApplySeqRef.current) return;
           setThemeApplyError(e instanceof Error ? e.message : String(e));
-        })
-        .finally(() => {
-          if (seq === themeApplySeqRef.current) setThemeApplyBusy(false);
         });
       return next;
     });
-  };
-
-  const resetThemeToBuiltin = async () => {
-    setThemeApplyBusy(true);
-    setThemeApplyError(null);
-    try {
-      applyThemeCssImmediately(null);
-      await window.electron.customization.setThemeSettings(null);
-      setThemeForm({ ...DEFAULT_THEME_SETTINGS });
-    } catch (e) {
-      setThemeApplyError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setThemeApplyBusy(false);
-    }
   };
 
   const switchTab = (id: SettingsTabId) => {
@@ -697,6 +623,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
         }
       />
       <div ref={scrollRef} className="workspace-scroll settings-scroll" onScroll={onScroll}>
+        <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
           {activeTab === "general" && <section
             id="settings-panel-general"
@@ -704,13 +631,11 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
             role="tabpanel"
             aria-labelledby="settings-tab-general"
           >
-            <section className="settings-group">
-              <h3 className="settings-group__title">Chat model</h3>
-              <p className="settings-group__lead">
-                Paste your key from OpenAI. Chat and titles use it; voice is handled on your Mac.
-              </p>
-              <div className="settings-section">
-                <label htmlFor="settings-api-key">API key</label>
+            <SettingsGroup
+              title="Chat model"
+              description="Paste your key from OpenAI. Chat and titles use it; voice is handled on your Mac."
+            >
+              <SettingsField label="API key" htmlFor="settings-api-key">
                 <div className="settings-api-key-row">
                   <input
                     id="settings-api-key"
@@ -734,22 +659,19 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                     {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-              </div>
-            </section>
+              </SettingsField>
+            </SettingsGroup>
 
-            <section className="settings-group">
-              <h3 className="settings-group__title">App preferences</h3>
-              <p className="settings-group__lead">
-                Core app configuration that applies globally across chat and voice workflows.
-              </p>
-            </section>
-
-            <section className="settings-group">
-              <h3 className="settings-group__title">Theme studio</h3>
-              <p className="settings-group__lead settings-group__lead--tight">
-                Pick a color palette or tune background, text, and accent. Typography is separate below. Changes apply
-                instantly and save to your theme (replacing any previous custom theme from this screen or tools).
-              </p>
+            <SettingsGroup
+              title="Theme studio"
+              descriptionClassName="settings-group__lead--tight"
+              description={
+                <>
+                  Pick a color palette or tune background, text, and accent. Typography is separate below. Changes apply
+                  instantly and save to your theme (replacing any previous custom theme from this screen or tools).
+                </>
+              }
+            >
               <div className="settings-playground">
                 <div className="settings-playground-tools settings-section">
                   <div className="settings-playground-block">
@@ -900,23 +822,37 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                           role="group"
                           aria-labelledby="theme-font-size-label"
                         >
-                          <button
-                            type="button"
-                            className="btn btn-icon"
-                            disabled={themeForm.fontSize === FONT_SIZE_OPTIONS[0]}
+                          <div
+                            className="settings-font-size-stepper__control"
+                            role="button"
+                            tabIndex={themeForm.fontSize === FONT_SIZE_OPTIONS[0] ? -1 : 0}
+                            aria-disabled={
+                              themeForm.fontSize === FONT_SIZE_OPTIONS[0] || undefined
+                            }
                             aria-label="Decrease base font size"
-                            onClick={() =>
+                            onClick={() => {
+                              if (themeForm.fontSize === FONT_SIZE_OPTIONS[0]) return;
                               updateThemeForm((f) => ({
                                 ...f,
                                 fontSize: stepFontSize(f.fontSize, -1),
-                              }))
-                            }
+                              }));
+                            }}
+                            onKeyDown={(e) => {
+                              if (themeForm.fontSize === FONT_SIZE_OPTIONS[0]) return;
+                              if (e.key !== "Enter" && e.key !== " ") return;
+                              e.preventDefault();
+                              updateThemeForm((f) => ({
+                                ...f,
+                                fontSize: stepFontSize(f.fontSize, -1),
+                              }));
+                            }}
                           >
                             <Minus size={16} aria-hidden />
-                          </button>
+                          </div>
                           <div className="settings-font-size-stepper__input-wrap">
                             <input
                               id="theme-font-size"
+                              className="settings-font-size-stepper__input"
                               type="number"
                               inputMode="numeric"
                               min={FONT_SIZE_OPTIONS[0]}
@@ -958,39 +894,55 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                               }}
                               aria-label="Base font size in pixels"
                             />
-                            <span className="settings-font-size-stepper__unit" aria-hidden>
+                            <span className="settings-font-size-stepper__unit" aria-hidden="true">
                               px
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            className="btn btn-icon"
-                            disabled={
+                          <div
+                            className="settings-font-size-stepper__control"
+                            role="button"
+                            tabIndex={
                               themeForm.fontSize ===
                               FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
+                                ? -1
+                                : 0
+                            }
+                            aria-disabled={
+                              themeForm.fontSize ===
+                                FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1] || undefined
                             }
                             aria-label="Increase base font size"
-                            onClick={() =>
+                            onClick={() => {
+                              if (
+                                themeForm.fontSize ===
+                                FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
+                              ) {
+                                return;
+                              }
                               updateThemeForm((f) => ({
                                 ...f,
                                 fontSize: stepFontSize(f.fontSize, 1),
-                              }))
-                            }
+                              }));
+                            }}
+                            onKeyDown={(e) => {
+                              if (
+                                themeForm.fontSize ===
+                                FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
+                              ) {
+                                return;
+                              }
+                              if (e.key !== "Enter" && e.key !== " ") return;
+                              e.preventDefault();
+                              updateThemeForm((f) => ({
+                                ...f,
+                                fontSize: stepFontSize(f.fontSize, 1),
+                              }));
+                            }}
                           >
                             <Plus size={16} aria-hidden />
-                          </button>
+                          </div>
                         </div>
                       </div>
-                  </div>
-                  <div className="settings-actions settings-playground-actions">
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={themeApplyBusy}
-                      onClick={() => void resetThemeToBuiltin()}
-                    >
-                      Reset
-                    </button>
                   </div>
                   {themeApplyError && (
                     <p className="settings-playground-status settings-playground-status--err" role="alert">
@@ -999,7 +951,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   )}
                 </div>
               </div>
-            </section>
+            </SettingsGroup>
           </section>}
 
           {activeTab === "tools" && <section
@@ -1008,14 +960,16 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
             role="tabpanel"
             aria-labelledby="settings-tab-tools"
           >
-            <section className="settings-group">
-              <h3 className="settings-group__title">Weather tool</h3>
-              <p className="settings-group__lead">
-                Default US ZIP used by the <code>get_weather</code> tool when the assistant does not specify a location.
-                Powered by Open-Meteo (no API key).
-              </p>
-              <div className="settings-section">
-                <label htmlFor="settings-weather-zip">Default ZIP</label>
+            <SettingsGroup
+              title="Weather tool"
+              description={
+                <>
+                  Default US ZIP used by the <code>get_weather</code> tool when the assistant does not specify a location.
+                  Powered by Open-Meteo (no API key).
+                </>
+              }
+            >
+              <SettingsField label="Default ZIP" htmlFor="settings-weather-zip">
                 <input
                   id="settings-weather-zip"
                   data-testid="settings-weather-zip"
@@ -1028,8 +982,8 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   spellCheck={false}
                   maxLength={5}
                 />
-              </div>
-            </section>
+              </SettingsField>
+            </SettingsGroup>
           </section>}
 
           {activeTab === "voice" && <section
@@ -1038,149 +992,137 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
             role="tabpanel"
             aria-labelledby="settings-tab-voice"
           >
-            <section className="settings-group">
-              <h3 className="settings-group__title">Voice & transcription</h3>
-              <p className="settings-group__lead">
-                Spoken audio is turned into text on this device. Optional cleanup uses your API key.
-              </p>
-
-              <label
-                className={`settings-switch-row${switchAnimationsReady ? "" : " settings-switch-row--static"}`}
-              >
-                <input
-                  id="transcriptCleanupToggle"
-                  type="checkbox"
-                  className="settings-switch-input"
-                  checked={cleanupEnabled}
-                  onChange={(e) => setCleanupEnabled(e.target.checked)}
-                />
-                <span className="settings-switch-track" aria-hidden="true">
-                  <span className="settings-switch-thumb" />
-                </span>
-                <span className="settings-switch-text">Automatically tidy up dictation text</span>
-              </label>
-              <div className="settings-actions settings-cleanup-prompt__actions">
+            <SettingsGroup
+              title="Voice & transcription"
+              description="Spoken audio is turned into text on this device. Optional cleanup uses your API key."
+            >
+              <SettingsSwitch
+                id="transcriptCleanupToggle"
+                label="Automatically tidy up dictation text"
+                checked={cleanupEnabled}
+                onChange={(e) => setCleanupEnabled(e.target.checked)}
+              />
+              <SettingsActions>
                 <button type="button" className="btn" onClick={openCleanupPromptModal}>
                   Edit prompt
                 </button>
-              </div>
-              <div className="settings-section">
-                <h4 className="settings-group__title">Transcript corrections</h4>
-                <p className="settings-group__hint settings-group__hint--flush">
-                  Deterministic fixes applied after transcription (kept separate from cleanup prompt).
-                </p>
-                <div className="settings-entry-list">
-                  {transcriptDictionary.map((entry) => (
-                    <SettingsEntryRow
-                      key={entry.from}
-                      title={entry.from}
-                      detail={entry.to}
-                      onEdit={() => openEditDictionaryModal(entry)}
-                      onDelete={() => deleteDictionaryEntry(entry.from)}
-                      editAriaLabel={`Edit transcript correction ${entry.from}`}
-                      deleteAriaLabel={`Remove transcript correction ${entry.from}`}
-                    />
-                  ))}
-                </div>
-                <div className="settings-actions">
-                  <button type="button" className="btn" onClick={openAddDictionaryModal}>
-                    Add correction
-                  </button>
-                </div>
-              </div>
-              <div className="settings-section settings-section--usage">
-                <dl className="usage-stats">
-                  <div className="usage-stats__row">
-                    <dt>Parakeet words transcribed</dt>
-                    <dd>{usageStats.parakeet.words.toLocaleString()}</dd>
-                  </div>
-                  <div className="usage-stats__row">
-                    <dt>Dictation sessions</dt>
-                    <dd>{usageStats.parakeet.transcriptions.toLocaleString()}</dd>
-                  </div>
-                </dl>
+              </SettingsActions>
+            </SettingsGroup>
 
-                <div className="settings-actions">
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => window.electron.recording.openFolder()}
-                  >
-                    Show Recordings <ExternalLink size={14} aria-hidden />
-                  </button>
-                </div>
+            <SettingsGroup
+              title="Transcript corrections"
+              description="Deterministic fixes applied after transcription (kept separate from cleanup prompt)."
+            >
+              <div className="settings-entry-list">
+                {transcriptDictionary.map((entry) => (
+                  <SettingsEntryRow
+                    key={entry.from}
+                    title={entry.from}
+                    detail={entry.to}
+                    onEdit={() => openEditDictionaryModal(entry)}
+                    onDelete={() => deleteDictionaryEntry(entry.from)}
+                    editAriaLabel={`Edit transcript correction ${entry.from}`}
+                    deleteAriaLabel={`Remove transcript correction ${entry.from}`}
+                  />
+                ))}
               </div>
-            </section>
+              <SettingsActions>
+                <button type="button" className="btn" onClick={openAddDictionaryModal}>
+                  Add correction
+                </button>
+              </SettingsActions>
+            </SettingsGroup>
 
-          {isMac && (
-            <section className="settings-group">
-              <h3 className="settings-group__title">Fn shortcut</h3>
-              <p className="settings-group__lead">
-                Press <strong>Fn</strong> to start recording, press again to stop. Harness needs Accessibility; allow <code>HarnessFnMonitor</code> too if macOS lists it.
-              </p>
-              <p className="settings-group__hint settings-group__hint--flush">
-                After changing permissions, quit and reopen the app. Use the buttons if macOS doesn’t prompt you.
-              </p>
-              <div className="settings-actions">
-                {accessibilityTrusted !== true && (
-                  <button
-                    type="button"
-                    className="btn"
-                    data-testid="settings-accessibility-prompt"
-                    onClick={() => {
-                      void window.electron.system.requestAccessibilityPrompt();
-                      setTimeout(() => {
-                        void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
-                      }, 800);
-                    }}
-                  >
-                    Ask for permission <ExternalLink size={14} aria-hidden />
-                  </button>
-                )}
+            <SettingsGroup
+              title="Usage & recordings"
+              description="Local transcription usage on this device."
+            >
+              <dl className="usage-stats">
+                <div className="usage-stats__row">
+                  <dt>Parakeet words transcribed</dt>
+                  <dd>{usageStats.parakeet.words.toLocaleString()}</dd>
+                </div>
+                <div className="usage-stats__row">
+                  <dt>Dictation sessions</dt>
+                  <dd>{usageStats.parakeet.transcriptions.toLocaleString()}</dd>
+                </div>
+              </dl>
+              <SettingsActions>
                 <button
                   type="button"
                   className="btn"
-                  data-testid="settings-open-accessibility"
-                  onClick={() => {
-                    void window.electron.system.openAccessibilitySettings();
-                    setTimeout(() => {
-                      void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
-                    }, 1500);
-                  }}
+                  onClick={() => window.electron.recording.openFolder()}
                 >
-                  Open accessibility <ExternalLink size={14} aria-hidden />
+                  Show Recordings <ExternalLink size={14} aria-hidden />
                 </button>
-              </div>
-              <p className="settings-group__hint settings-group__hint--flush">
-                {accessibilityTrusted === true
-                  ? "Accessibility looks good. If Fn still won’t work, restart and check both Harness and Fn Monitor."
-                  : accessibilityTrusted === false
-                    ? "Accessibility not enabled yet."
-                    : "Checking…"}
-              </p>
-            </section>
-          )}
+              </SettingsActions>
+            </SettingsGroup>
 
-          <section className="settings-group">
-            <h3 className="settings-group__title">After dictation</h3>
-            <p className="settings-group__lead">Send the transcribed message right away in a new chat.</p>
-            <label
-              className={`settings-switch-row${switchAnimationsReady ? "" : " settings-switch-row--static"}`}
+            {isMac && (
+              <SettingsGroup
+                title="Fn shortcut"
+                description={
+                  <>
+                    Press <strong>Fn</strong> to start recording, press again to stop. Harness needs Accessibility;
+                    allow <code>HarnessFnMonitor</code> too if macOS lists it.
+                  </>
+                }
+              >
+                <SettingsHint flush>
+                  After changing permissions, quit and reopen the app. Use the buttons if macOS doesn’t prompt you.
+                </SettingsHint>
+                <SettingsActions>
+                  {accessibilityTrusted !== true && (
+                    <button
+                      type="button"
+                      className="btn"
+                      data-testid="settings-accessibility-prompt"
+                      onClick={() => {
+                        void window.electron.system.requestAccessibilityPrompt();
+                        setTimeout(() => {
+                          void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+                        }, 800);
+                      }}
+                    >
+                      Ask for permission <ExternalLink size={14} aria-hidden />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn"
+                    data-testid="settings-open-accessibility"
+                    onClick={() => {
+                      void window.electron.system.openAccessibilitySettings();
+                      setTimeout(() => {
+                        void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+                      }, 1500);
+                    }}
+                  >
+                    Open accessibility <ExternalLink size={14} aria-hidden />
+                  </button>
+                </SettingsActions>
+                <SettingsHint flush>
+                  {accessibilityTrusted === true
+                    ? "Accessibility looks good. If Fn still won’t work, restart and check both Harness and Fn Monitor."
+                    : accessibilityTrusted === false
+                      ? "Accessibility not enabled yet."
+                      : "Checking…"}
+                </SettingsHint>
+              </SettingsGroup>
+            )}
+
+            <SettingsGroup
+              title="After dictation"
+              description="Send the transcribed message right away in a new chat."
             >
-              <input
+              <SettingsSwitch
                 id="autoSendToggle"
-                data-testid="settings-auto-send"
-                type="checkbox"
-                className="settings-switch-input"
+                testId="settings-auto-send"
+                label="Auto-send"
                 checked={autoSend}
                 onChange={(e) => setAutoSend(e.target.checked)}
               />
-              <span className="settings-switch-track" aria-hidden="true">
-                <span className="settings-switch-thumb" />
-              </span>
-              <span className="settings-switch-text">Auto-send</span>
-            </label>
-          </section>
+            </SettingsGroup>
           </section>}
 
           {saveStatus !== "idle" && (
@@ -1195,11 +1137,10 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
             role="tabpanel"
             aria-labelledby="settings-tab-notes"
           >
-            <section className="settings-group">
-              <h3 className="settings-group__title">Notes templates</h3>
-              <p className="settings-group__lead">
-                Edit the three note templates shown on the Notes overview page.
-              </p>
+            <SettingsGroup
+              title="Notes templates"
+              description="Edit the three note templates shown on the Notes overview page."
+            >
               <div className="settings-entry-list">
                 {noteTemplates.map((template) => (
                   <SettingsEntryRow
@@ -1212,7 +1153,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   />
                 ))}
               </div>
-            </section>
+            </SettingsGroup>
           </section>}
 
           {activeTab === "memory" && <section
@@ -1221,11 +1162,10 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
             role="tabpanel"
             aria-labelledby="settings-tab-memory"
           >
-            <section className="settings-group">
-              <h3 className="settings-group__title">Memory</h3>
-              <p className="settings-group__lead">
-                Stable facts the assistant can use in every conversation. Pick a short name and a one-line detail; same name updates the old entry.
-              </p>
+            <SettingsGroup
+              title="Memory"
+              description="Stable facts the assistant can use in every conversation. Pick a short name and a one-line detail; same name updates the old entry."
+            >
               <div className="settings-entry-list">
                 {Object.entries(userMemory).map(([k, v]) => (
                   <SettingsEntryRow
@@ -1239,7 +1179,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   />
                 ))}
               </div>
-              <div className="settings-actions">
+              <SettingsActions>
                 <button
                   type="button"
                   className="btn"
@@ -1248,17 +1188,20 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 >
                   Add memory
                 </button>
-              </div>
-            </section>
+              </SettingsActions>
+            </SettingsGroup>
 
-            <section className="settings-group">
-              <h3 className="settings-group__title">Nightly memory compile</h3>
-              <p className="settings-group__lead">
-                Once per day on first launch, Harness reviews conversations updated since the last run
-                and adds durable facts to your memory list above. Uses your OpenAI API key. Auto-merges
-                without asking — edit or remove entries above any time.
-              </p>
-              <div className="settings-actions">
+            <SettingsGroup
+              title="Nightly memory compile"
+              description={
+                <>
+                  Once per day on first launch, Harness reviews conversations updated since the last run
+                  and adds durable facts to your memory list above. Uses your OpenAI API key. Auto-merges
+                  without asking — edit or remove entries above any time.
+                </>
+              }
+            >
+              <SettingsActions>
                 <button
                   type="button"
                   className="btn"
@@ -1268,7 +1211,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 >
                   {compileBusy ? "Compiling…" : "Compile now"}
                 </button>
-              </div>
+              </SettingsActions>
               {compileStatus && (
                 <div className="settings-data-status" role="status">
                   <p>
@@ -1294,9 +1237,9 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 </div>
               )}
               {compileMessage && (
-                <p className="settings-group__hint settings-group__hint--flush">{compileMessage}</p>
+                <SettingsHint flush>{compileMessage}</SettingsHint>
               )}
-            </section>
+            </SettingsGroup>
           </section>}
 
           <Modal
@@ -1494,38 +1437,44 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
             role="tabpanel"
             aria-labelledby="settings-tab-data"
           >
-            <section className="settings-group">
-              <h3 className="settings-group__title">Storage layout</h3>
-              <p className="settings-group__lead">
-                Everything Harness saves on this device. Sync copies a snapshot of{" "}
-                <code>local-data</code> (except recordings) into your chosen backup folder;
-                your cloud provider moves that folder between machines.
-              </p>
+            <SettingsGroup
+              title="Storage layout"
+              description={
+                <>
+                  Everything Harness saves on this device. Sync copies a snapshot of{" "}
+                  <code>local-data</code> (except recordings) into your chosen backup folder;
+                  your cloud provider moves that folder between machines.
+                </>
+              }
+            >
               <figure className="settings-storage-diagram" aria-label="Storage layout diagram">
                 <pre className="settings-storage-diagram__pre">{DATA_STORAGE_DIAGRAM}</pre>
               </figure>
-              <div className="settings-actions">
+              <SettingsActions>
                 <button type="button" className="btn" onClick={() => window.electron.memory.openAppDataFolder()}>
                   Show app data folder <ExternalLink size={14} aria-hidden />
                 </button>
                 <button type="button" className="btn" onClick={() => void runCleanupLegacyMemory()} disabled={cleanupLegacyBusy}>
                   {cleanupLegacyBusy ? "Cleaning…" : "Clean legacy memory folder"}
                 </button>
-              </div>
+              </SettingsActions>
               {cleanupLegacyMessage && (
-                <p className="settings-group__hint settings-group__hint--flush">{cleanupLegacyMessage}</p>
+                <SettingsHint flush>{cleanupLegacyMessage}</SettingsHint>
               )}
-            </section>
+            </SettingsGroup>
 
-            <section className="settings-group">
-              <h3 className="settings-group__title">Backup folder</h3>
-              <p className="settings-group__lead">
-                Pick a folder Harness can read and write — anything inside iCloud Drive, Dropbox,
-                Google Drive, OneDrive, a network share, or an external drive works. Sync now writes
-                a single bundle + manifest there; your sync provider moves those files between
-                devices. Each device should point at the <strong>same</strong> folder.
-              </p>
-              <div className="settings-actions">
+            <SettingsGroup
+              title="Backup folder"
+              description={
+                <>
+                  Pick a folder Harness can read and write — anything inside iCloud Drive, Dropbox,
+                  Google Drive, OneDrive, a network share, or an external drive works. Sync now writes
+                  a single bundle + manifest there; your sync provider moves those files between
+                  devices. Each device should point at the <strong>same</strong> folder.
+                </>
+              }
+            >
+              <SettingsActions>
                 <button type="button" className="btn" onClick={() => void pickBackupFolder()}>
                   Choose folder…
                 </button>
@@ -1534,7 +1483,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                     Use default
                   </button>
                 )}
-              </div>
+              </SettingsActions>
               {dataStatus && (
                 <div className="settings-data-status" role="status">
                   <p>
@@ -1570,7 +1519,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   )}
                 </div>
               )}
-              <div className="settings-actions">
+              <SettingsActions>
                 <button
                   type="button"
                   className="btn"
@@ -1580,14 +1529,15 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 >
                   {syncBusy ? "Syncing…" : "Sync now"}
                 </button>
-              </div>
-              {syncMessage && <p className="settings-group__hint settings-group__hint--flush">{syncMessage}</p>}
-            </section>
+              </SettingsActions>
+              {syncMessage && <SettingsHint flush>{syncMessage}</SettingsHint>}
+            </SettingsGroup>
 
-            <section className="settings-group">
-              <h3 className="settings-group__title">Import from ChatGPT</h3>
-              <p className="settings-group__lead">Choose the folder from an unzipped ChatGPT export.</p>
-              <div className="settings-actions">
+            <SettingsGroup
+              title="Import from ChatGPT"
+              description="Choose the folder from an unzipped ChatGPT export."
+            >
+              <SettingsActions>
                 <button
                   type="button"
                   className="btn"
@@ -1596,7 +1546,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 >
                   {importing ? "Importing…" : "Import"}
                 </button>
-              </div>
+              </SettingsActions>
               {importStatus != null && (
                 <div className="settings-import-status" role="status">
                   {importStatus.imported > 0 && (
@@ -1616,15 +1566,18 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   )}
                 </div>
               )}
-            </section>
+            </SettingsGroup>
 
-            <section className="settings-group">
-              <h3 className="settings-group__title">Import from Claude</h3>
-              <p className="settings-group__lead">
-                Choose the folder from Claude.ai&apos;s &ldquo;Export data&rdquo; archive (contains{" "}
-                <code>conversations.json</code>). Re-imports skip threads already added.
-              </p>
-              <div className="settings-actions">
+            <SettingsGroup
+              title="Import from Claude"
+              description={
+                <>
+                  Choose the folder from Claude.ai&apos;s &ldquo;Export data&rdquo; archive (contains{" "}
+                  <code>conversations.json</code>). Re-imports skip threads already added.
+                </>
+              }
+            >
+              <SettingsActions>
                 <button
                   type="button"
                   className="btn"
@@ -1634,7 +1587,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 >
                   {claudeImporting ? "Importing…" : "Import"}
                 </button>
-              </div>
+              </SettingsActions>
               {claudeImportStatus != null && (
                 <div className="settings-import-status" role="status">
                   {claudeImportStatus.imported > 0 && (
@@ -1655,10 +1608,11 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   )}
                 </div>
               )}
-            </section>
+            </SettingsGroup>
 
           </section>}
         </div>
+        </SettingsSwitchProvider>
       </div>
     </div>
   );
