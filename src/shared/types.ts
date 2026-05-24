@@ -92,13 +92,11 @@ export interface Plan {
 
 export interface LayoutOptions {
   sidebar: "left" | "right";
-  density: "compact" | "comfortable";
   gridOverlay: "off" | "4" | "8" | "16";
 }
 
 export const DEFAULT_LAYOUT: LayoutOptions = {
   sidebar: "left",
-  density: "comfortable",
   gridOverlay: "off",
 };
 

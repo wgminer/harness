@@ -45,7 +45,7 @@ describe("normalizeThemeSettings", () => {
       accent: "#f2ff00",
       font: "lato",
       fontMono: "fira_code",
-      fontSize: 15,
+      fontSize: 16,
       fg: "#f0f6fc",
       bg: "#161b22",
     });
@@ -95,7 +95,7 @@ describe("themeMatchesColorPreset", () => {
       ...applyThemeColors(DEFAULT_THEME_SETTINGS, paper),
       font: "lora" as const,
       fontMono: "space_mono" as const,
-      fontSize: 18 as const,
+      fontSize: 16 as const,
     };
     expect(themeMatchesColorPreset(withDifferentFonts, paper)).toBe(true);
     expect(themeMatchesColorPreset(DEFAULT_THEME_SETTINGS, paper)).toBe(false);
@@ -104,8 +104,8 @@ describe("themeMatchesColorPreset", () => {
 
 describe("font size stepping", () => {
   it("steps through allowed sizes and clamps at ends", () => {
-    expect(stepFontSize(14, -1)).toBe(13);
-    expect(stepFontSize(14, 1)).toBe(15);
+    expect(stepFontSize(14, -1)).toBe(12);
+    expect(stepFontSize(14, 1)).toBe(16);
     expect(stepFontSize(FONT_SIZE_OPTIONS[0], -1)).toBe(FONT_SIZE_OPTIONS[0]);
     expect(stepFontSize(FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1], 1)).toBe(
       FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1],
@@ -116,6 +116,9 @@ describe("font size stepping", () => {
     expect(coerceFontSizePx(14)).toBe(14);
     expect(coerceFontSizePx(17)).toBe(16);
     expect(coerceFontSizePx(11)).toBe(12);
+    expect(coerceFontSizePx(13)).toBe(14);
+    expect(coerceFontSizePx(15)).toBe(16);
+    expect(coerceFontSizePx(18)).toBe(16);
   });
 });
 
@@ -145,6 +148,15 @@ describe("themeSettingsToCss", () => {
     expect(css).toContain("--font-family:");
     expect(css).toContain("--font-family-mono:");
     expect(css).toContain("--font-size:");
+    expect(css).toContain("--font-size-caption:");
+    expect(css).toContain("--font-size-body:");
+    expect(css).toContain("--font-size-ui:");
+    expect(css).toContain("--font-size-title:");
+    expect(css).toContain("--line-height-body:");
+    expect(css).toContain("--line-height-message:");
+    expect(css).toContain("--line-height-prose:");
+    expect(css).toMatch(/--line-height-body: 20px/);
+    expect(css).toMatch(/--line-height-message: 24px/);
   });
 });
 

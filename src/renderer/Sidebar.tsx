@@ -10,6 +10,7 @@ import {
   Loader2,
   RefreshCw,
   MessageCircle,
+  ListFilter,
 } from "lucide-react";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import type { SearchResult } from "../shared/types";
@@ -22,9 +23,12 @@ import {
   type Conversation,
   type View,
   type SidebarGroup,
+  type SidebarListSortMode,
   SIDEBAR_INITIAL_VISIBLE_COUNT,
   SIDEBAR_MORE_INCREMENT,
+  SIDEBAR_PREVIEW_COUNT_DEFAULT,
   groupConversations,
+  nextSidebarListSortMode,
   pickSidebarConversationsForList,
   sidebarItemPeekFadeLevel,
 } from "./sidebarUtils";
@@ -83,6 +87,7 @@ export function Sidebar({
   const prevSearchOpenRef = useRef<boolean | undefined>(undefined);
 
   const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_INITIAL_VISIBLE_COUNT);
+  const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("recent");
   const [syncConfigured, setSyncConfigured] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
 
@@ -162,9 +167,20 @@ export function Sidebar({
   );
 
   const { groups: sidebarGroups } = useMemo(
-    () => groupConversations(sidebarListConversations),
-    [sidebarListConversations]
+    () => groupConversations(sidebarListConversations, listSortMode),
+    [sidebarListConversations, listSortMode]
   );
+
+  const toggleListSortMode = useCallback(() => {
+    setListSortMode((mode) => nextSidebarListSortMode(mode));
+  }, []);
+
+  const nextSortModeHint =
+    listSortMode === "date"
+      ? { ariaLabel: "Switch to Recent list", title: "Sort by recent activity" }
+      : listSortMode === "recent"
+        ? { ariaLabel: "Switch to calendar day groups", title: "Group by calendar day" }
+        : { ariaLabel: "Switch to time-ago groups", title: "Group by time ago" };
 
   const showSidebarMoreControl = sidebarListConversations.length < conversations.length;
   const sidebarPeekFadeActive = sidebarVisibleLimit <= SIDEBAR_INITIAL_VISIBLE_COUNT;
@@ -172,6 +188,89 @@ export function Sidebar({
   const onSidebarShowMore = useCallback(() => {
     setSidebarVisibleLimit((n) => Math.min(conversations.length, n + SIDEBAR_MORE_INCREMENT));
   }, [conversations.length]);
+
+  const renderConversationItem = useCallback(
+    (c: Conversation, flatIndex: number) => {
+      const isActive = conversationId === c.id && view === "chat";
+      const peekFadeLevel =
+        !isActive && sidebarPeekFadeActive
+          ? sidebarItemPeekFadeLevel(flatIndex, sidebarVisibleLimit)
+          : null;
+      const titleGenerating = (titleGenInFlight[c.id] ?? 0) > 0;
+      const titlePending = isConversationTitlePending(c.title, titleGenerating);
+      const chatStreaming =
+        view === "chat" && conversationId === c.id && activeChatProcessing;
+      const iconKind = conversationSidebarIconKind(c);
+      const Icon = iconKind === "dictation" ? MicVocal : MessageCircle;
+      const isTailItem =
+        sidebarPeekFadeActive && flatIndex >= SIDEBAR_PREVIEW_COUNT_DEFAULT;
+      return (
+        <li
+          key={c.id}
+          className={[
+            "sidebar-item",
+            isActive ? "active" : "",
+            isTailItem ? "sidebar-list-tail-item" : "",
+            peekFadeLevel != null ? "sidebar-item--peek-fade" : "",
+            peekFadeLevel != null ? `sidebar-item--peek-fade-${peekFadeLevel}` : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          data-testid="sidebar-conversation"
+          data-conversation-id={c.id}
+          data-session-icon={iconKind}
+          onClick={() => {
+            onConversationSelect(c.id);
+            onViewChange("chat");
+          }}
+          aria-busy={titlePending || chatStreaming ? true : undefined}
+        >
+          {chatStreaming ? (
+            <span className="sidebar-item-spinner" aria-hidden>
+              <Loader2 size={16} className="voice-spinner" />
+            </span>
+          ) : (
+            <span
+              className="sidebar-item-icon"
+              aria-hidden
+              title={iconKind === "dictation" ? "Dictation" : "Chat"}
+            >
+              <Icon size={16} className="sidebar-item-icon__svg" />
+            </span>
+          )}
+          {titlePending ? (
+            <span className="sidebar-item-title-skeleton" aria-label="Generating title" />
+          ) : (
+            <span className="sidebar-item-title">
+              {conversationDisplayTitle(c.title, c.createdAt)}
+            </span>
+          )}
+          <button
+            type="button"
+            className="sidebar-item-delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              onConversationDelete(c.id);
+            }}
+            aria-label="Delete conversation"
+          >
+            ×
+          </button>
+        </li>
+      );
+    },
+    [
+      activeChatProcessing,
+      conversationId,
+      onConversationDelete,
+      onConversationSelect,
+      onViewChange,
+      sidebarPeekFadeActive,
+      sidebarVisibleLimit,
+      titleGenInFlight,
+      view,
+    ]
+  );
 
   return (
     <div className="sidebar-dock">
@@ -303,82 +402,40 @@ export function Sidebar({
             <>
               {(() => {
                 let flatConversationIndex = 0;
-                return sidebarGroups.map(({ key, label, items }: SidebarGroup) => (
+                return sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => (
                 <li key={key} className="sidebar-group">
-                  <span className="sidebar-group-label">{label}</span>
+                  {groupIndex === 0 ? (
+                    <div className="sidebar-group-header">
+                      <span className="sidebar-group-label">{label}</span>
+                      <button
+                        type="button"
+                        className="btn btn-icon sidebar-group-sort-toggle"
+                        data-testid="sidebar-list-sort-toggle"
+                        aria-label={nextSortModeHint.ariaLabel}
+                        title={nextSortModeHint.title}
+                        onClick={toggleListSortMode}
+                      >
+                        <ListFilter size={10} aria-hidden />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="sidebar-group-label">{label}</span>
+                  )}
                   <ul className="sidebar-group-items">
-                    {items.map((c) => {
-                      const flatIndex = flatConversationIndex++;
-                      const isActive = conversationId === c.id && view === "chat";
-                      const peekFadeLevel =
-                        !isActive && sidebarPeekFadeActive
-                          ? sidebarItemPeekFadeLevel(flatIndex, sidebarVisibleLimit)
-                          : null;
-                      const titleGenerating = (titleGenInFlight[c.id] ?? 0) > 0;
-                      const titlePending = isConversationTitlePending(c.title, titleGenerating);
-                      const chatStreaming =
-                        view === "chat" &&
-                        conversationId === c.id &&
-                        activeChatProcessing;
-                      const iconKind = conversationSidebarIconKind(c);
-                      const Icon = iconKind === "dictation" ? MicVocal : MessageCircle;
-                      return (
-                        <li
-                          key={c.id}
-                          className={[
-                            "sidebar-item",
-                            isActive ? "active" : "",
-                            peekFadeLevel != null ? "sidebar-item--peek-fade" : "",
-                            peekFadeLevel != null ? `sidebar-item--peek-fade-${peekFadeLevel}` : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                          data-testid="sidebar-conversation"
-                          data-conversation-id={c.id}
-                          data-session-icon={iconKind}
-                          onClick={() => { onConversationSelect(c.id); onViewChange("chat"); }}
-                          aria-busy={titlePending || chatStreaming ? true : undefined}
-                        >
-                          {chatStreaming ? (
-                            <span className="sidebar-item-spinner" aria-hidden>
-                              <Loader2 size={16} className="voice-spinner" />
-                            </span>
-                          ) : (
-                            <span
-                              className="sidebar-item-icon"
-                              aria-hidden
-                              title={iconKind === "dictation" ? "Dictation" : "Chat"}
-                            >
-                              <Icon size={16} className="sidebar-item-icon__svg" />
-                            </span>
-                          )}
-                          {titlePending ? (
-                            <span
-                              className="sidebar-item-title-skeleton"
-                              aria-label="Generating title"
-                            />
-                          ) : (
-                            <span className="sidebar-item-title">
-                              {conversationDisplayTitle(c.title, c.createdAt)}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            className="sidebar-item-delete"
-                            onClick={(e) => { e.stopPropagation(); onConversationDelete(c.id); }}
-                            aria-label="Delete conversation"
-                          >
-                            ×
-                          </button>
-                        </li>
-                      );
-                    })}
+                    {items.map((c) => renderConversationItem(c, flatConversationIndex++))}
                   </ul>
                 </li>
               ));
               })()}
               {showSidebarMoreControl ? (
-                <li className="sidebar-list-expand">
+                <li
+                  className={[
+                    "sidebar-list-expand",
+                    sidebarPeekFadeActive ? "sidebar-list-tail-item" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
                   <div className="sidebar-list-expand-row">
                     <button
                       type="button"

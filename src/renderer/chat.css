@@ -4,7 +4,7 @@
  * of the overlay composer while preserving a simple chronological flow.
  */
 .chat-pane {
-  --chat-composer-dock-height: 140px;
+  --chat-composer-dock-height: var(--space-35);
   position: relative;
   flex: 1;
   display: flex;
@@ -20,7 +20,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0 16px calc(var(--chat-composer-dock-height));
+  padding: 0 var(--space-4) calc(var(--chat-composer-dock-height));
 }
 
 /* Empty / placeholder panes (no conversation selected): same flex contract as an active chat */
@@ -38,6 +38,21 @@
   text-align: center;
 }
 
+/* Single-message threads (e.g. dictation): center the lone block in the viewport below the header. */
+.chat-scroll.chat-scroll--single-message .chat-area-inner {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-scroll.chat-scroll--single-message .chat-area-inner > :first-child {
+  margin-top: auto;
+}
+
+.chat-scroll.chat-scroll--single-message .chat-area-inner > :last-child {
+  margin-bottom: auto;
+}
+
 /* Transcript column: max-width + flex growth (replaces former chat-area → chat-area-inner chain). */
 .chat-area-inner {
   flex: 0 0 auto;
@@ -45,7 +60,7 @@
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   box-sizing: border-box;
   display: block;
 }
@@ -54,10 +69,10 @@
 .chat-messages-stack {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
   width: 100%;
   box-sizing: border-box;
-  padding: 0 0 calc(var(--space-unit) * 2);
+  padding: 0 0 calc(var(--space-2) * 2);
 }
 
 .message-block .content {
@@ -71,8 +86,8 @@
 .message-user-card {
   position: relative;
   background: var(--bg-elevated);
-  border-radius: 8px;
-  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
   line-height: var(--line-height-message);
 }
 
@@ -82,10 +97,10 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 2.75rem;
+  height: var(--space-10);
   pointer-events: none;
   z-index: 1;
-  border-radius: 0 0 7px 7px;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
   background: linear-gradient(to bottom, transparent, var(--bg-elevated));
 }
 
@@ -110,12 +125,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-top: 6px;
-  min-width: 2rem;
-  min-height: 2rem;
-  padding: 2px 6px;
+  margin-top: var(--space-2);
+  min-width: var(--space-7);
+  min-height: var(--space-7);
+  padding: var(--space-1) var(--space-2);
   font-family: var(--font-family);
-  font-size: 12px;
+  font-size: var(--font-size-caption);
   color: var(--accent-readable);
   background: none;
   border: none;
@@ -152,8 +167,8 @@
 }
 
 .message-user-card__toggle--less .message-user-card__toggle-text {
-  font-size: 10px;
-  line-height: 1.2;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
   letter-spacing: 0.01em;
 }
 
@@ -183,11 +198,11 @@
 .message-user-card__toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .message-block .content p {
-  margin: 0 0 0.75em;
+  margin: 0 0 var(--space-3);
 }
 
 .message-block .content p:last-child {
@@ -199,30 +214,30 @@
 }
 
 .message-block .content ul {
-  margin: 0.5em 0;
-  padding-left: 1.5em;
+  margin: var(--space-2) 0;
+  padding-left: var(--space-5);
 }
 
 .message-block .content ol {
-  margin: 0.5em 0;
-  padding-left: 2.5em;
+  margin: var(--space-2) 0;
+  padding-left: var(--input-height);
 }
 
 .message-block .content li {
-  margin: 0.25em 0;
+  margin: var(--space-1) 0;
 }
 
 .message-block .content code {
-  font-size: 0.9em;
-  padding: 0.15em 0.35em;
+  font-size: var(--font-size-caption);
+  padding: var(--space-1) var(--space-2);
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
   border-radius: 2px;
 }
 
 .message-block .content pre {
-  margin: 0.75em 0;
-  padding: 12px;
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
   overflow-x: auto;
   background: var(--bg);
   border: 1px solid var(--border-light);
@@ -247,7 +262,7 @@
   max-width: 50%;
   margin-bottom: 8px;
   margin-left: 0;
-  font-size: 12px;
+  font-size: var(--font-size-caption);
   opacity: 0.8;
 }
 
@@ -255,7 +270,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-height: 1rem;
 }
 
@@ -275,25 +290,25 @@
 }
 
 .tool-card-row:not(:last-child) {
-  margin-bottom: 6px;
+  margin-bottom: var(--space-2);
 }
 
 .tool-card-label {
-  font-size: 10px;
-  line-height: 1.35;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-normal);
   color: var(--fg-muted);
 }
 
 .tool-card-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
   margin-left: auto;
   flex-shrink: 0;
   align-self: center;
 }
 
 .btn-sm {
-  font-size: calc(var(--font-size) * 11 / 14);
+  font-size: var(--font-size-caption);
   padding: 2px 8px;
   height: 24px;
 }
@@ -305,7 +320,7 @@
   display: block;
   margin: 0 auto;
   font-family: var(--font-family);
-  font-size: 10px;
+  font-size: var(--font-size-caption);
   color: var(--fg-muted);
   background: none;
   border: none;
@@ -326,7 +341,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: var(--space-3);
   margin-top: 8px;
   padding: 0;
 }
@@ -334,8 +349,8 @@
 .message-block-meta {
   flex: 1;
   min-width: 0;
-  font-size: 10px;
-  line-height: 1.35;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-normal);
   letter-spacing: 0.01em;
   color: var(--fg-muted);
   opacity: 0.4;
@@ -356,8 +371,8 @@
 
 .message-footer-icon-btn,
 .message-copy-btn {
-  width: 22px;
-  height: 22px;
+  width: var(--space-6);
+  height: var(--space-6);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -365,7 +380,7 @@
   background: color-mix(in srgb, var(--fg) 6%, var(--bg-secondary));
   color: var(--fg-muted);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   box-shadow: var(--btn-shadow);
   transition:
@@ -436,8 +451,8 @@
   background: transparent;
   box-shadow: none;
   height: var(--input-height);
-  padding: 0 12px;
-  font-size: calc(var(--font-size) * 13 / 14);
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-ui);
 }
 
 .chat-pane-header .chat-pane-title.btn:hover:not(:disabled) {
@@ -477,7 +492,7 @@
   width: min(9rem, 42vw);
   height: 0.72em;
   vertical-align: middle;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--fg-muted) 28%, transparent);
   animation: title-skeleton-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
 }
@@ -487,15 +502,15 @@
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   padding: 4px 0 8px;
 }
 
 .btn-chat-secondary {
-  font-size: calc(var(--font-size) * 12 / 14);
-  padding: 0 12px;
-  height: 30px;
+  font-size: var(--font-size-caption);
+  padding: 0 var(--space-3);
+  height: calc(var(--grid) * 8 - var(--space-1));
 }
 
 .chat-pane-btn {
@@ -527,7 +542,7 @@
 .chat-pane-btn.chat-pane-btn--danger {
   background: color-mix(in srgb, var(--danger) 72%, var(--bg-secondary));
   color: #fff;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .chat-pane-btn.chat-pane-btn--danger:hover:not(:disabled) {
@@ -544,7 +559,7 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   margin: 0;
   z-index: 3;
   pointer-events: auto;
@@ -560,9 +575,9 @@
   align-items: stretch;
   min-width: 0;
   border-bottom: none;
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   border-bottom: none;
-  box-shadow: 0 -10px 36px rgba(0, 0, 0, 0.2), inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
+  box-shadow: 0 calc(var(--space-3) * -1) var(--input-height) rgba(0, 0, 0, 0.2), inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
 }
 
 .chat-audio-file-input {
@@ -573,18 +588,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px 0;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
 }
 
 .chat-attachment-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 0;
   max-width: 100%;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--fg-muted);
   background: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
 }
@@ -594,18 +609,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--font-size-caption);
 }
 
 .chat-attachment-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: var(--space-4);
+  height: var(--space-4);
   padding: 0;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: inherit;
   background: transparent;
   cursor: pointer;
@@ -627,7 +642,7 @@
   background: transparent;
   color: var(--fg);
   border: none;
-  padding: 16px;
+  padding: var(--space-4);
   resize: none;
   min-height: 24px;
   max-height: 200px;
@@ -645,12 +660,12 @@
   display: flex;
   align-items: center;
   justify-content: end;
-  gap: var(--space-unit);
-  padding: 16px;
+  gap: var(--space-2);
+  padding: var(--space-4);
 }
 
 .input-actions .btn:not(.btn-icon) {
-  padding: 0 12px;
+  padding: 0 var(--space-3);
 }
 
 .input-actions .btn {
@@ -693,9 +708,9 @@
   font-size: var(--font-size);
   color: var(--fg);
   background: none;
-  padding: 0 7px;
-  height: 36px;
-  line-height: 36px;
+  padding: 0 var(--space-2);
+  height: var(--input-height);
+  line-height: var(--input-height);
   letter-spacing: 0.02em;
   min-width: 80px;
   text-align: center;
@@ -704,9 +719,9 @@
 .voice-status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   font-family: var(--font-family);
-  font-size: 12px;
+  font-size: var(--font-size-caption);
   color: var(--fg-muted);
 }
 
@@ -715,8 +730,8 @@
 }
 
 .voice-save-link {
-  font-size: 12px;
-  padding: 0 10px;
+  font-size: var(--font-size-caption);
+  padding: 0 var(--space-3);
   color: var(--fg-muted);
   background: transparent;
   box-shadow: none;
@@ -729,9 +744,9 @@
 }
 
 .voice-error {
-  padding: 6px 16px;
+  padding: var(--space-2) var(--space-4);
   font-family: var(--font-family);
-  font-size: 12px;
+  font-size: var(--font-size-caption);
   color: #e05353;
   border-bottom: 1px solid var(--border-light);
 }

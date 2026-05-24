@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "main": "out/main/index.js",
   "author": "Your Name",
@@ -22,6 +22,7 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:watch": "vitest",
+    "grid:audit": "node scripts/grid-audit.js",
     "test:all": "npm run test && npm run test:e2e",
     "test:e2e": "electron-vite build && playwright test",
     "test:e2e:ui": "electron-vite build && playwright test --ui"

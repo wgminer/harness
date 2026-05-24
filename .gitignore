@@ -58,3 +58,8 @@ resources/HarnessFnMonitor
 # Swift Package build artifacts
 native/**/.build/
 native/**/.swiftpm/
+
+# Xcode (iOS app)
+**/xcuserdata/
+*.xcuserstate
+ios/**/DerivedData/

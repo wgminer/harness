@@ -7,15 +7,15 @@ export type View = "chat" | "settings" | "tasks" | "notes";
 /** Fully opaque conversations shown before the progressive fade peek rows. */
 export const SIDEBAR_PREVIEW_COUNT_DEFAULT = 7;
 /** Peek rows after the preview count; each fades further toward zero opacity. */
-export const SIDEBAR_FADE_PEEK_COUNT = 3;
+export const SIDEBAR_FADE_PEEK_COUNT = 5;
 /** Default sidebar list size: preview rows plus fade peek rows. */
 export const SIDEBAR_INITIAL_VISIBLE_COUNT =
   SIDEBAR_PREVIEW_COUNT_DEFAULT + SIDEBAR_FADE_PEEK_COUNT;
 /** Each "More" click adds this many conversations to the sidebar list. */
 export const SIDEBAR_MORE_INCREMENT = 20;
 
-/** Fade tier for peek rows (8th–10th item); null when the row is fully opaque. */
-export type SidebarPeekFadeLevel = 1 | 2 | 3;
+/** Fade tier for peek rows (8th–12th item); null when the row is fully opaque. */
+export type SidebarPeekFadeLevel = 1 | 2 | 3 | 4 | 5;
 
 export function sidebarItemPeekFadeLevel(
   flatIndex: number,
@@ -95,7 +95,62 @@ function getDateGroupLabel(key: string): string {
 
 export type SidebarGroup = { key: string; label: string; items: Conversation[] };
 
-export function groupConversations(conversations: Conversation[]): { groups: SidebarGroup[] } {
+export type SidebarListSortMode = "date" | "recent" | "day";
+
+export const SIDEBAR_LIST_SORT_MODES: SidebarListSortMode[] = ["date", "recent", "day"];
+
+export function nextSidebarListSortMode(mode: SidebarListSortMode): SidebarListSortMode {
+  const index = SIDEBAR_LIST_SORT_MODES.indexOf(mode);
+  return SIDEBAR_LIST_SORT_MODES[(index + 1) % SIDEBAR_LIST_SORT_MODES.length];
+}
+
+function getCalendarDayLabel(key: string): string {
+  const d = new Date(key + "T12:00:00");
+  const weekday = d.toLocaleDateString(undefined, { weekday: "long" });
+  const numericDate = d.toLocaleDateString(undefined, {
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${weekday}, ${numericDate}`;
+}
+
+function groupConversationsByCalendarDay(conversations: Conversation[]): { groups: SidebarGroup[] } {
+  const byKey = new Map<string, Conversation[]>();
+  for (const c of conversations) {
+    const key = localDateKey(new Date(c.createdAt));
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(c);
+  }
+  for (const items of byKey.values()) {
+    items.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  const groups: SidebarGroup[] = [];
+  for (const key of Array.from(byKey.keys()).sort((a, b) => b.localeCompare(a))) {
+    const items = byKey.get(key);
+    if (items?.length) {
+      groups.push({ key, label: getCalendarDayLabel(key), items });
+    }
+  }
+
+  return { groups };
+}
+
+export function groupConversations(
+  conversations: Conversation[],
+  sortMode: SidebarListSortMode = "recent"
+): { groups: SidebarGroup[] } {
+  if (sortMode === "recent") {
+    const items = [...conversations].sort((a, b) => b.createdAt - a.createdAt);
+    if (items.length === 0) return { groups: [] };
+    return { groups: [{ key: "recent", label: "Recent", items }] };
+  }
+
+  if (sortMode === "day") {
+    return groupConversationsByCalendarDay(conversations);
+  }
+
   const byKey = new Map<string, Conversation[]>();
   for (const c of conversations) {
     const key = getDateGroupKey(c.createdAt);
