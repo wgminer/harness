@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  NOTE_TEMPLATE_CURSOR_TOKEN,
   NOTE_TEMPLATE_TODAY_TOKEN,
   getListContinuationPrefixForLine,
   interpolateNoteTemplateContent,
+  interpolateNoteTemplateTitle,
   normalizeNoteTemplateDescription,
   normalizeNoteTemplates,
+  resolveNoteTemplateContent,
+  stripLeadingMarkdownHeading,
 } from "./writing";
 
 describe("interpolateNoteTemplateContent", () => {
@@ -36,6 +40,54 @@ describe("interpolateNoteTemplateContent", () => {
   it("returns the same string when the token is absent", () => {
     const body = "# Note\n\nNo variables here.\n";
     expect(interpolateNoteTemplateContent(body, fixed)).toBe(body);
+  });
+
+  it("removes cursor token from the stored content", () => {
+    expect(interpolateNoteTemplateContent(`# Note\n\n${NOTE_TEMPLATE_CURSOR_TOKEN}`, fixed)).toBe("# Note\n\n");
+  });
+});
+
+describe("resolveNoteTemplateContent", () => {
+  const fixed = {
+    now: new Date("2026-05-05T00:00:00.000Z"),
+    locales: "en-US" as const,
+    timeZone: "UTC",
+  };
+
+  it("returns cursor offset at the first marker position", () => {
+    const resolved = resolveNoteTemplateContent("Hello {{@cursor}}world {{@cursor}}again", fixed);
+    expect(resolved.content).toBe("Hello world again");
+    expect(resolved.cursorOffset).toBe(6);
+  });
+
+  it("supports optional whitespace inside the cursor token", () => {
+    const resolved = resolveNoteTemplateContent("A{{ @cursor }}B", fixed);
+    expect(resolved.content).toBe("AB");
+    expect(resolved.cursorOffset).toBe(1);
+  });
+
+  it("leaves unsupported cursor token variants unchanged", () => {
+    const resolved = resolveNoteTemplateContent("A{{ ::cursor:: }}B", fixed);
+    expect(resolved.content).toBe("A{{ ::cursor:: }}B");
+    expect(resolved.cursorOffset).toBeNull();
+  });
+
+  it("returns null cursor offset when no marker is present", () => {
+    const resolved = resolveNoteTemplateContent("No cursor marker here", fixed);
+    expect(resolved.content).toBe("No cursor marker here");
+    expect(resolved.cursorOffset).toBeNull();
+  });
+});
+
+describe("interpolateNoteTemplateTitle", () => {
+  it("replaces today tokens in title templates", () => {
+    expect(
+      interpolateNoteTemplateTitle("Daily log — {{today}}", {
+        now: new Date("2026-05-05T00:00:00.000Z"),
+        locales: "en-US",
+        timeZone: "UTC",
+      }),
+    ).toBe("Daily log — May 5, 2026");
   });
 });
 
@@ -81,5 +133,16 @@ describe("getListContinuationPrefixForLine", () => {
   it("does not continue blank or non-list lines", () => {
     expect(getListContinuationPrefixForLine("- ")).toBeNull();
     expect(getListContinuationPrefixForLine("plain text")).toBeNull();
+  });
+});
+
+describe("stripLeadingMarkdownHeading", () => {
+  it("removes a leading heading marker", () => {
+    expect(stripLeadingMarkdownHeading("# Weekly notes")).toBe("Weekly notes");
+    expect(stripLeadingMarkdownHeading("###   Tasks")).toBe("Tasks");
+  });
+
+  it("returns non-heading text unchanged", () => {
+    expect(stripLeadingMarkdownHeading("Meeting notes")).toBe("Meeting notes");
   });
 });

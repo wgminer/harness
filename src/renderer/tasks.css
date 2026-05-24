@@ -53,7 +53,7 @@
   width: var(--icon-size-lg);
   height: var(--icon-size-lg);
   color: var(--fg-muted);
-  transition: transform 0.15s ease;
+  transition: transform var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .tasks-section-heading:hover .tasks-section-caret {
@@ -95,6 +95,56 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.tasks-row-item {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--motion-duration-emphasis) var(--motion-ease-emphasis);
+}
+
+.tasks-row-item > .tasks-row {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tasks-row-item--completing {
+  grid-template-rows: 0fr;
+  pointer-events: none;
+}
+
+.tasks-row-item--completing > .tasks-row {
+  transform-origin: center;
+  animation: tasks-row-tv-off var(--motion-duration-emphasis) var(--motion-ease-emphasis) forwards;
+}
+
+@keyframes tasks-row-tv-off {
+  0% {
+    opacity: 1;
+    transform: scaleY(1);
+    filter: brightness(1) saturate(1);
+  }
+  55% {
+    opacity: 0.95;
+    transform: scaleY(0.04);
+    filter: brightness(1.6) saturate(1.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(0);
+    filter: brightness(2) saturate(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tasks-row-item,
+  .tasks-row-item--completing > .tasks-row {
+    transition: none;
+    animation: none;
+  }
+  .tasks-row-item--completing > .tasks-row {
+    opacity: 0;
+  }
 }
 
 .tasks-row {

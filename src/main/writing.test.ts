@@ -72,6 +72,39 @@ describe("notes storage", () => {
     const legacy = await readNoteIn(dir, notes[0].id);
     expect(legacy?.content).toContain("hello");
   });
+
+  it("strips markdown heading markers from derived note titles", async () => {
+    const dir = await makeDir();
+    const note = await createNoteIn(dir, undefined, "# Roadmap\n\nNext steps");
+    expect(note.title).toBe("Roadmap");
+
+    const saved = await saveNoteIn(dir, note.id, "## Updated plan\nMore text");
+    expect(saved.title).toBe("Updated plan");
+  });
+
+  it("applies title and content template tokens during create", async () => {
+    const dir = await makeDir();
+    const note = await createNoteIn(dir, "Daily log {{today}}", "# {{today}}\n\nNotes");
+    expect(note.title).not.toContain("{{today}}");
+    expect(note.content).not.toContain("{{today}}");
+  });
+
+  it("uses template cursor marker for initial caret placement", async () => {
+    const dir = await makeDir();
+    const note = await createNoteIn(dir, "Cursor test", "# Title\n\n{{ @cursor }}Start here");
+    expect(note.content).toBe("# Title\n\nStart here");
+    expect(note.initialCursorOffset).toBe(9);
+  });
+
+  it("derives create-time title from content instead of template card title", async () => {
+    const dir = await makeDir();
+    const note = await createNoteIn(
+      dir,
+      "Template card title",
+      "# Actual title from body\n\nBody text",
+    );
+    expect(note.title).toBe("Actual title from body");
+  });
 });
 
 describe("buildNotesEditPrompt", () => {

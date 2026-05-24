@@ -8,7 +8,6 @@
   overflow-x: hidden;
   max-height: 9999px;
   opacity: 1;
-  transition: max-height 0.2s ease, opacity 0.2s ease;
 }
 
 .sidebar-list-wrap {
@@ -73,8 +72,8 @@
   user-select: none;
 }
 
-/* Compact window-size control next to version (header control removed). */
-.sidebar .sidebar-footer__window-toggle {
+/* Compact sync control next to version. */
+.sidebar .sidebar-footer__sync-toggle {
   width: 24px;
   min-width: 24px;
   height: 24px;
@@ -82,25 +81,7 @@
   opacity: 0.75;
 }
 
-.sidebar .sidebar-footer__settings-toggle {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  color: var(--fg-muted);
-  opacity: 0.75;
-}
-
-.sidebar .sidebar-footer__settings-toggle.sidebar-footer__settings-toggle--active {
-  color: var(--fg);
-  opacity: 1;
-  background: var(--bg);
-}
-
-.sidebar .sidebar-footer__settings-toggle:hover:not(:disabled) {
-  opacity: 0.95;
-}
-
-.sidebar .sidebar-footer__window-toggle:hover:not(:disabled) {
+.sidebar .sidebar-footer__sync-toggle:hover:not(:disabled) {
   opacity: 0.95;
 }
 
@@ -131,7 +112,59 @@
   padding: 8px 12px 10px;
   display: flex;
   justify-content: center;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.sidebar-item--peek-fade {
+  transition: opacity var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-item--peek-fade-1 {
+    opacity: 0.66;
+  }
+
+  .sidebar-item--peek-fade-2 {
+    opacity: 0.33;
+  }
+
+  .sidebar-item--peek-fade-3 {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .sidebar:hover .sidebar-item--peek-fade-1,
+  .sidebar:focus-within .sidebar-item--peek-fade-1 {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: 0ms;
+  }
+
+  .sidebar:hover .sidebar-item--peek-fade-2,
+  .sidebar:focus-within .sidebar-item--peek-fade-2 {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: 60ms;
+  }
+
+  .sidebar:hover .sidebar-item--peek-fade-3,
+  .sidebar:focus-within .sidebar-item--peek-fade-3 {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: 120ms;
+  }
+
+  .sidebar-list-wrap--peek-fade .sidebar-list-expand {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .sidebar:hover .sidebar-list-wrap--peek-fade .sidebar-list-expand,
+  .sidebar:focus-within .sidebar-list-wrap--peek-fade .sidebar-list-expand {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: 180ms;
+  }
 }
 
 .sidebar-list-expand-row {
@@ -144,13 +177,13 @@
 
 /* Hide expand control until pointer hover or keyboard focus inside sidebar (touch: always visible). */
 @media (hover: hover) and (pointer: fine) {
-  .sidebar-list-expand {
+  .sidebar-list-wrap:not(.sidebar-list-wrap--peek-fade) .sidebar-list-expand {
     opacity: 0;
     pointer-events: none;
   }
 
-  .sidebar:hover .sidebar-list-expand,
-  .sidebar:focus-within .sidebar-list-expand {
+  .sidebar:hover .sidebar-list-wrap:not(.sidebar-list-wrap--peek-fade) .sidebar-list-expand,
+  .sidebar:focus-within .sidebar-list-wrap:not(.sidebar-list-wrap--peek-fade) .sidebar-list-expand {
     opacity: 1;
     pointer-events: auto;
   }
@@ -181,16 +214,31 @@
 .sidebar-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  position: relative;
   padding-right: 8px;
 }
 
-.sidebar-item-spinner {
+.sidebar-item-spinner,
+.sidebar-item-icon {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
   color: var(--fg-muted);
-  opacity: 0.85;
+  opacity: 0.9;
+}
+
+.sidebar-item-icon__svg,
+.sidebar-item-spinner svg {
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+}
+
+.sidebar-item:hover .sidebar-item-icon {
+  opacity: 1;
 }
 
 .sidebar-item-title {
@@ -198,9 +246,30 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--fg-muted);
+  opacity: 0.9;
+}
+
+.sidebar-item:hover .sidebar-item-title,
+.sidebar-item:focus-within .sidebar-item-title,
+.sidebar-item.active .sidebar-item-title {
+  color: var(--fg);
+  opacity: 1;
+}
+
+.sidebar-item-title-skeleton {
+  flex: 1;
+  height: 0.72em;
+  max-width: 68%;
+  margin: 0.14em 0;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--fg-muted) 28%, transparent);
+  animation: title-skeleton-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
 }
 
 .sidebar-item-delete {
+  position: relative;
+  z-index: 1;
   flex-shrink: 0;
   width: 20px;
   height: 20px;
@@ -216,7 +285,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition:
+    opacity var(--motion-duration-ui) var(--motion-ease-standard),
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .sidebar-item:hover .sidebar-item-delete {
@@ -248,7 +320,7 @@
   flex-shrink: 0;
 }
 
-/* Workspace nav (Tasks / Settings): list-row look — same type as .sidebar-item */
+/* Workspace nav (Tasks / Notes / Config): list-row look — same type as .sidebar-item */
 .sidebar-workspace {
   display: flex;
   flex-direction: column;
@@ -275,7 +347,7 @@
 
 .sidebar .sidebar-workspace__btn:hover:not(:disabled) {
   color: var(--fg);
-  background: var(--bg);
+  background: var(--list-row-hover-bg);
   box-shadow: none;
 }
 
@@ -325,19 +397,9 @@
   height: var(--icon-size-md);
 }
 
-.sidebar .sidebar-footer__window-toggle svg {
+.sidebar .sidebar-footer__sync-toggle svg {
   width: var(--icon-size-compact);
   height: var(--icon-size-compact);
-}
-
-.sidebar .sidebar-footer__settings-toggle svg {
-  width: var(--icon-size-compact);
-  height: var(--icon-size-compact);
-}
-
-.sidebar-item-spinner svg {
-  width: var(--icon-size-xs);
-  height: var(--icon-size-xs);
 }
 
 .sidebar-search-row {

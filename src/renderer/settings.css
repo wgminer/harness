@@ -1,4 +1,4 @@
-/* Settings page layout */
+/* Config page layout */
 .settings-page {
   overflow: hidden;
 }
@@ -186,9 +186,9 @@
   cursor: pointer;
   box-shadow: var(--btn-shadow);
   transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-ui) var(--motion-ease-standard);
   user-select: none;
 }
 
@@ -319,6 +319,19 @@
   font-weight: 600;
 }
 
+.settings-model-list {
+  margin-top: 12px;
+}
+
+.settings-model-list .usage-stats__row dd code {
+  font-family: var(--font-family-mono);
+  font-size: calc(var(--font-size) * 12 / 14);
+  background: none;
+  padding: 0;
+  border: none;
+  color: var(--fg);
+}
+
 /* iOS-style settings switches */
 .settings-switch-row {
   display: flex;
@@ -348,7 +361,7 @@
   height: 21px;
   border-radius: 21px;
   background: color-mix(in srgb, var(--fg) 18%, var(--bg-elevated));
-  transition: background 0.22s ease;
+  transition: background var(--motion-duration-switch) var(--motion-ease-standard);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent);
 }
 
@@ -363,7 +376,7 @@
   box-shadow:
     0 2px 6px rgba(0, 0, 0, 0.26),
     0 1px 1px rgba(0, 0, 0, 0.16);
-  transition: transform 0.22s cubic-bezier(0.34, 1.15, 0.64, 1);
+  transition: transform var(--motion-duration-switch) var(--motion-ease-switch-thumb);
 }
 
 .settings-switch-row--static .settings-switch-track,
@@ -585,7 +598,7 @@
 
 .settings-storage-diagram__pre {
   margin: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-family-mono);
   font-size: calc(var(--font-size) * 11 / 14);
   line-height: 1.35;
   color: var(--fg-muted);
@@ -610,6 +623,177 @@
 
 .settings-data-status p:last-child {
   margin-bottom: 0;
+}
+
+.settings-data-status--error {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-light));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+
+.settings-data-status__path-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+}
+
+.settings-data-status__path-row code {
+  word-break: break-all;
+}
+
+.settings-data-status__change-btn {
+  flex-shrink: 0;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: calc(var(--font-size) * 11 / 14);
+}
+
+.settings-sync-conflict {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-light));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+
+.settings-sync-conflict p {
+  margin: 0 0 8px;
+  color: var(--fg);
+  line-height: 1.4;
+}
+
+.settings-sync-review {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.settings-sync-review__summary {
+  margin: 0 0 10px;
+  color: var(--fg-muted);
+  font-size: calc(var(--font-size) * 12 / 14);
+}
+
+.settings-sync-review__list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.settings-sync-review__item {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--bg) 92%, var(--fg) 8%);
+}
+
+.settings-sync-review__row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-sync-review__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-sync-review__meta strong {
+  color: var(--fg);
+}
+
+.settings-sync-review__path {
+  font-family: var(--font-family-mono);
+  font-size: calc(var(--font-size) * 11 / 14);
+  color: var(--fg-muted);
+}
+
+.settings-sync-review__where-label {
+  margin-top: 3px;
+  font-size: calc(var(--font-size) * 10 / 14);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+}
+
+.settings-sync-review__kind {
+  display: inline-block;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: calc(var(--font-size) * 12 / 14);
+  font-weight: 700;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+}
+
+.settings-sync-review__kind--conflict {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-light));
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg));
+}
+
+.settings-sync-review__kind--local-only,
+.settings-sync-review__kind--remote-only {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border-light));
+}
+
+.settings-sync-review__choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.settings-sync-review__choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(var(--font-size) * 12 / 14);
+  color: var(--fg);
+}
+
+.settings-sync-review__preview-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: calc(var(--font-size) * 12 / 14);
+}
+
+.settings-sync-review__preview {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light);
+}
+
+.settings-sync-review__preview p {
+  margin: 0 0 4px;
+  font-size: calc(var(--font-size) * 11 / 14);
+  color: var(--fg-muted);
+  line-height: 1.35;
+}
+
+.settings-sync-review__mismatch {
+  color: var(--fg);
+}
+
+.settings-sync-review__mismatch code {
+  font-size: calc(var(--font-size) * 10 / 14);
+  color: var(--fg);
+  word-break: break-word;
 }
 
 .settings-suggestion-list {
@@ -667,7 +851,7 @@
   border-color: var(--accent);
 }
 
-/* Settings toast */
+/* Settings toast — outside scroll area; visibility toggled to avoid layout jumps */
 .settings-toast {
   position: fixed;
   top: 12px;
@@ -680,7 +864,15 @@
   border-radius: 4px;
   box-shadow: var(--shadow);
   z-index: 1000;
-  animation: toast-in 0.2s ease-out;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.settings-toast--visible {
+  opacity: 1;
+  visibility: visible;
+  animation: toast-in var(--motion-duration-normal) var(--motion-ease-out);
 }
 
 @keyframes toast-in {
@@ -830,8 +1022,8 @@
   gap: 4px;
   justify-content: center;
   transition:
-    border-color 0.12s ease,
-    box-shadow 0.12s ease;
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .settings-playground-theme-preview__line {

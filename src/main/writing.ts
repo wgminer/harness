@@ -5,6 +5,9 @@ import { join } from "path";
 import OpenAI from "openai";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import {
+  interpolateNoteTemplateTitle,
+  resolveNoteTemplateContent,
+  stripLeadingMarkdownHeading,
   UNTITLED_NOTE_TITLE,
   type Note,
   type NoteEditProposal,
@@ -65,7 +68,9 @@ function titleFromContent(content: string, fallback: string): string {
     .map((line) => line.trim())
     .find((line) => line.length > 0);
   if (!firstLine) return fallback;
-  return firstLine.length > 80 ? `${firstLine.slice(0, 80).trimEnd()}...` : firstLine;
+  const cleaned = stripLeadingMarkdownHeading(firstLine);
+  if (!cleaned) return fallback;
+  return cleaned.length > 80 ? `${cleaned.slice(0, 80).trimEnd()}...` : cleaned;
 }
 
 function countWords(content: string): number {
@@ -199,17 +204,29 @@ export async function createNoteIn(memoryDir: string, title?: string, content = 
   const index = await ensureNotesReadyIn(memoryDir);
   const id = randomUUID();
   const now = Date.now();
-  const normalizedContent = normalizeContent(content);
+  const resolvedTemplate = resolveNoteTemplateContent(content);
+  const normalizedContent = normalizeContent(resolvedTemplate.content);
+  const interpolatedTitle = typeof title === "string" ? interpolateNoteTemplateTitle(title) : title;
+  const fallbackTitle = normalizeTitle(interpolatedTitle, `${DEFAULT_NOTE_TITLE} ${index.notes.length + 1}`);
   const entry: NotesIndexEntry = {
     id,
-    title: normalizeTitle(title, titleFromContent(normalizedContent, `${DEFAULT_NOTE_TITLE} ${index.notes.length + 1}`)),
+    title: titleFromContent(normalizedContent, fallbackTitle),
     createdAt: now,
     updatedAt: now,
     wordCount: countWords(normalizedContent),
   };
   await writeFile(getNotePathIn(memoryDir, id), normalizedContent, "utf-8");
   await saveNotesIndexIn(memoryDir, { notes: [entry, ...index.notes] });
-  return { ...entry, content: normalizedContent };
+  const normalizedCursorOffset =
+    resolvedTemplate.cursorOffset == null
+      ? undefined
+      : normalizeContent(resolvedTemplate.content.slice(0, resolvedTemplate.cursorOffset)).length;
+  return {
+    ...entry,
+    content: normalizedContent,
+    initialCursorOffset:
+      normalizedCursorOffset == null ? undefined : Math.max(0, Math.min(normalizedCursorOffset, normalizedContent.length)),
+  };
 }
 
 export async function createNote(title?: string, content?: string): Promise<Note> {
@@ -369,7 +386,7 @@ export async function proposeNoteEdit(input: NoteEditProposalInput): Promise<Not
   const settings = await getSettings();
   const apiKey = settings.openai?.apiKey?.trim() ?? "";
   if (!apiKey) {
-    throw new Error("OpenAI API key not set. Configure it in Settings.");
+    throw new Error("OpenAI API key not set. Configure it in Config.");
   }
 
   const client = new OpenAI({ apiKey });

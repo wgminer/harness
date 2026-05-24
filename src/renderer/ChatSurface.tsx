@@ -18,6 +18,7 @@ interface ChatSurfaceProps {
   chatAreaRef: RefObject<HTMLDivElement>;
   composerRef: RefObject<HTMLDivElement>;
   headerContent: ReactNode;
+  headerCornerControl?: ReactNode;
   headerClassName?: string;
   displayMessages: Message[];
   copiedId: string | null;
@@ -55,6 +56,7 @@ export function ChatSurface({
   chatAreaRef,
   composerRef,
   headerContent,
+  headerCornerControl,
   headerClassName,
   displayMessages,
   copiedId,
@@ -152,6 +154,11 @@ export function ChatSurface({
    */
   return (
     <div ref={chatPaneRef} className="chat-pane">
+      {headerCornerControl ? (
+        <div className="chat-pane-corner-control">
+          {headerCornerControl}
+        </div>
+      ) : null}
       <div
         ref={chatAreaRef}
         className="chat-scroll"
