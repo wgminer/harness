@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { MutableRefObject } from "react";
-import { Mic, Square, Loader2, X, Paperclip } from "lucide-react";
+import { Mic, Check, Loader2, X, Paperclip, ArrowUp } from "lucide-react";
 import type { VoiceState } from "./chatHelpers";
 
 interface ChatComposerProps {
@@ -159,36 +159,38 @@ export function ChatComposer({
               title={voiceState === "recording" ? "Stop recording" : "Record voice message"}
               aria-label={voiceState === "recording" ? "Stop recording" : "Start recording"}
             >
-              {voiceState === "recording" ? <Square size={13} /> : <Mic size={15} />}
+              {voiceState === "recording" ? <Check size={15} /> : <Mic size={15} />}
             </button>
           )}
           {voiceState !== "idle" && (
             <button
               type="button"
-              className="btn chat-pane-btn chat-pane-btn--danger"
+              className="btn btn-icon chat-pane-btn chat-pane-btn--icon chat-pane-btn--danger"
               onClick={onCancelRecording}
               title="Cancel recording"
+              aria-label="Cancel recording"
             >
               <X size={15} />
-              Cancel
             </button>
           )}
           {sending ? (
             <button type="button" className="btn chat-pane-btn input-actions-stop" onClick={onStop}>
               Stop
             </button>
-          ) : (
+          ) : voiceState === "idle" ? (
             <button
               type="button"
-              className="btn chat-pane-btn"
+              className="btn btn-icon chat-pane-btn chat-pane-btn--icon"
               data-testid="chat-send"
               onMouseDown={(e) => e.preventDefault()}
               onClick={onSend}
               disabled={(!input.trim() && !attachedAudioName) || attachmentTranscribing}
+              title="Send message"
+              aria-label="Send message"
             >
-              Send
+              <ArrowUp size={16} strokeWidth={2.5} />
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </>

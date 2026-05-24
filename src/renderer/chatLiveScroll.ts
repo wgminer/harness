@@ -30,7 +30,7 @@ export function useFollowChatLiveEdge(args: {
     const justStartedTurn = !prevSendingRef.current && args.sending;
     prevSendingRef.current = args.sending;
 
-    if (justStartedTurn || args.followLiveEdge) {
+    if (justStartedTurn || args.sending || args.followLiveEdge) {
       scrollScrollContainerToLiveEdge(scroll);
     }
   }, [args.followLiveEdge, args.sending, args.streamingContent, args.messageCount, args.scrollRef]);

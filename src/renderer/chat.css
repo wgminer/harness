@@ -126,7 +126,7 @@
 .message-user-card__toggle svg {
   opacity: 0;
   flex-shrink: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .message-user-card__toggle--less {
@@ -138,7 +138,7 @@
   justify-content: center;
   color: var(--fg);
   opacity: 0.38;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .message-user-card__toggle--less:hover,
@@ -224,7 +224,7 @@
   margin: 0.75em 0;
   padding: 12px;
   overflow-x: auto;
-  background: var(--bg-secondary);
+  background: var(--bg);
   border: 1px solid var(--border-light);
   border-radius: 2px;
 }
@@ -233,6 +233,14 @@
   padding: 0;
   background: none;
   border: none;
+}
+
+/* Let highlight.js tokens color the text, but inherit the surrounding pre
+   background so we keep our themed surface instead of github-dark's #0d1117. */
+.message-block .content pre code.hljs {
+  background: transparent;
+  padding: 0;
+  color: inherit;
 }
 
 .tool-card {
@@ -304,7 +312,9 @@
   padding: 2px 8px;
   cursor: pointer;
   opacity: 0.6;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition:
+    opacity var(--motion-duration-ui) var(--motion-ease-standard),
+    color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .chat-scroll-top:hover {
@@ -358,7 +368,11 @@
   border-radius: 4px;
   cursor: pointer;
   box-shadow: var(--btn-shadow);
-  transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    opacity var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-ui) var(--motion-ease-standard);
   flex-shrink: 0;
   opacity: 0;
   pointer-events: none;
@@ -432,12 +446,50 @@
   box-shadow: var(--btn-shadow-hover);
 }
 
+.chat-pane-window-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--fg-muted);
+  opacity: 0.75;
+}
+
+.chat-pane-window-toggle:hover:not(:disabled) {
+  background: var(--sidebar-control-hover-bg);
+  box-shadow: var(--btn-shadow-hover);
+  opacity: 0.95;
+}
+
+.chat-pane-corner-control {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 4;
+}
+
+.chat-pane-title-skeleton {
+  display: inline-block;
+  width: min(9rem, 42vw);
+  height: 0.72em;
+  vertical-align: middle;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--fg-muted) 28%, transparent);
+  animation: title-skeleton-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
+}
+
 .chat-secondary-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  padding: 4px 0 8px;
 }
 
 .btn-chat-secondary {
@@ -456,6 +508,20 @@
   background: var(--sidebar-control-hover-bg);
   color: var(--fg);
   box-shadow: var(--btn-shadow-hover);
+}
+
+.chat-pane-btn.chat-pane-btn--subtle {
+  background: transparent;
+  color: color-mix(in srgb, var(--fg-muted) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  box-shadow: none;
+}
+
+.chat-pane-btn.chat-pane-btn--subtle:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 3%, transparent);
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--fg) 18%, transparent);
+  box-shadow: none;
 }
 
 .chat-pane-btn.chat-pane-btn--danger {
@@ -602,7 +668,10 @@
 /* Voice recording controls */
 .voice-btn {
   color: var(--fg);
-  transition: color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition:
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .voice-btn--recording {
@@ -610,7 +679,6 @@
     0 0 0 1px rgba(224, 83, 83, 0.9),
     var(--btn-shadow);
   color: #e05353;
-  animation: voice-pulse 1.2s ease-in-out infinite;
 }
 
 .voice-btn--recording:hover:not(:disabled) {
@@ -620,16 +688,10 @@
   color: #ff6b6b;
 }
 
-@keyframes voice-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
-}
-
 .voice-timer {
   font-family: var(--font-family);
-  font-size: 12px;
-  color: #e05353;
-  opacity: 0.3;
+  font-size: var(--font-size);
+  color: var(--fg);
   background: none;
   padding: 0 7px;
   height: 36px;
@@ -649,11 +711,7 @@
 }
 
 .voice-spinner {
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  animation: motion-spin var(--motion-duration-loading) var(--motion-ease-linear) infinite;
 }
 
 .voice-save-link {

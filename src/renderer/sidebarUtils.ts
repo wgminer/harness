@@ -1,11 +1,32 @@
-export type Conversation = { id: string; title: string | null; createdAt: number };
+import type { ConversationListRow } from "../shared/conversationSession";
+
+export type Conversation = ConversationListRow;
 
 export type View = "chat" | "settings" | "tasks" | "notes";
 
-/** Initial number of conversations shown before using "More". */
-export const SIDEBAR_PREVIEW_COUNT_DEFAULT = 20;
+/** Fully opaque conversations shown before the progressive fade peek rows. */
+export const SIDEBAR_PREVIEW_COUNT_DEFAULT = 7;
+/** Peek rows after the preview count; each fades further toward zero opacity. */
+export const SIDEBAR_FADE_PEEK_COUNT = 3;
+/** Default sidebar list size: preview rows plus fade peek rows. */
+export const SIDEBAR_INITIAL_VISIBLE_COUNT =
+  SIDEBAR_PREVIEW_COUNT_DEFAULT + SIDEBAR_FADE_PEEK_COUNT;
 /** Each "More" click adds this many conversations to the sidebar list. */
 export const SIDEBAR_MORE_INCREMENT = 20;
+
+/** Fade tier for peek rows (8th–10th item); null when the row is fully opaque. */
+export type SidebarPeekFadeLevel = 1 | 2 | 3;
+
+export function sidebarItemPeekFadeLevel(
+  flatIndex: number,
+  visibleLimit: number
+): SidebarPeekFadeLevel | null {
+  if (visibleLimit > SIDEBAR_INITIAL_VISIBLE_COUNT) return null;
+  if (flatIndex < SIDEBAR_PREVIEW_COUNT_DEFAULT) return null;
+  const peekIndex = flatIndex - SIDEBAR_PREVIEW_COUNT_DEFAULT;
+  if (peekIndex >= SIDEBAR_FADE_PEEK_COUNT) return null;
+  return (peekIndex + 1) as SidebarPeekFadeLevel;
+}
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -20,8 +41,9 @@ function localDateKey(d: Date): string {
  * Returns a sortable key:
  * - today | yesterday
  * - YYYY-MM-DD for each of the 7 calendar days 2–8 days ago (labeled by weekday in the UI)
- * - earlier-in:YYYY-MM for the rest of the current calendar month
- * - month:YYYY-MM for prior full months
+ * - weeks-ago:1 for days 9–15 ago
+ * - weeks-ago:2 for days 16–22 ago
+ * - month:YYYY-MM for anything older
  */
 function getDateGroupKey(ts: number): string {
   const date = new Date(ts);
@@ -35,10 +57,11 @@ function getDateGroupKey(ts: number): string {
   if (daysAgo >= 2 && daysAgo <= 8) {
     return localDateKey(date);
   }
-  const sameMonth =
-    date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
-  if (sameMonth && daysAgo >= 9) {
-    return `earlier-in:${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  if (daysAgo >= 9 && daysAgo <= 15) {
+    return "weeks-ago:1";
+  }
+  if (daysAgo >= 16 && daysAgo <= 22) {
+    return "weeks-ago:2";
   }
   const y = date.getFullYear();
   const mo = String(date.getMonth() + 1).padStart(2, "0");
@@ -52,12 +75,9 @@ function getDateGroupLabel(key: string): string {
     const d = new Date(key + "T12:00:00");
     return d.toLocaleDateString(undefined, { weekday: "long" });
   }
-  if (key.startsWith("earlier-in:")) {
-    const ym = key.slice("earlier-in:".length);
-    const [yStr, mStr] = ym.split("-");
-    const d = new Date(parseInt(yStr, 10), parseInt(mStr, 10) - 1, 1);
-    const monthName = d.toLocaleDateString(undefined, { month: "long" });
-    return `Earlier in ${monthName}`;
+  if (key.startsWith("weeks-ago:")) {
+    const n = parseInt(key.slice("weeks-ago:".length), 10);
+    return `${n} ${n === 1 ? "week" : "weeks"} ago`;
   }
   if (key.startsWith("month:")) {
     const ym = key.slice("month:".length);
@@ -93,9 +113,7 @@ export function groupConversations(conversations: Conversation[]): { groups: Sid
     t.setDate(t.getDate() - d);
     keyOrder.push(localDateKey(t));
   }
-  const cy = now.getFullYear();
-  const cm = String(now.getMonth() + 1).padStart(2, "0");
-  keyOrder.push(`earlier-in:${cy}-${cm}`);
+  keyOrder.push("weeks-ago:1", "weeks-ago:2");
 
   const monthKeys = Array.from(byKey.keys())
     .filter((k) => k.startsWith("month:"))

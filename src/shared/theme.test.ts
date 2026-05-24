@@ -61,6 +61,12 @@ describe("THEME_PRESETS", () => {
     expect(THEME_PRESETS).toHaveLength(5);
     expect(THEME_PRESETS.map((p) => p.id)).toEqual(["night", "paper", "matcha", "ik_blue", "bloomberg"]);
   });
+
+  it("keeps bloomberg off absolute black so hover layers remain visible", () => {
+    const bloomberg = THEME_PRESETS.find((p) => p.id === "bloomberg");
+    expect(bloomberg).toBeDefined();
+    expect(bloomberg?.colors.bg).not.toBe("#000000");
+  });
 });
 
 describe("applyThemeColors", () => {

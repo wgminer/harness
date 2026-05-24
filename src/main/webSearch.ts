@@ -1,3 +1,5 @@
+import { rigSection } from "../shared/rigPage";
+
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
 
 export interface WebSearchHit {
@@ -27,7 +29,7 @@ export async function searchWebTavily(
     return {
       query: q,
       results: [],
-      error: "Tavily API key is not set. Add it in Settings → Web search.",
+      error: `Tavily API key is not set. Add it in ${rigSection("Tools")}.`,
     };
   }
 

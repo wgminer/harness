@@ -1,13 +1,23 @@
 import { useState, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { ExternalLink, Eye, EyeOff, Minus, Plus, Settings as SettingsIcon } from "lucide-react";
-import { DEFAULT_SETTINGS } from "../shared/types";
-import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
+import { RIG_CONTEXT_TAB_LABEL, RIG_PAGE_TITLE } from "../shared/rigPage";
+import { DEFAULT_LAYOUT, DEFAULT_SETTINGS } from "../shared/types";
+import type { LayoutOptions, Settings, TranscriptDictionaryEntry } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import { EMPTY_USAGE_STATS } from "../shared/usageStats";
 import { DATA_STORAGE_DIAGRAM } from "../shared/dataStorageLayout";
-import type { SyncFolderSuggestion, SyncStatus } from "../shared/sync";
+import {
+  OPENAI_CHAT_MODEL,
+  OPENAI_TITLE_MODEL,
+  OPENAI_TRANSCRIPT_CLEANUP_MODEL,
+} from "../shared/openaiModels";
+import type { SyncConflict, SyncFolderSuggestion, SyncStatus } from "../shared/sync";
+import type { SyncFileChoice } from "../shared/syncMerge";
+import { SyncConflictReviewPanel } from "./SyncConflictReviewPanel";
 import {
   DEFAULT_NOTE_TEMPLATES,
+  NOTE_TEMPLATE_CURSOR_TOKEN,
+  NOTE_TEMPLATE_TODAY_TOKEN,
   normalizeNoteTemplateDescription,
   normalizeNoteTemplates,
   type NoteTemplateConfig,
@@ -30,6 +40,7 @@ import {
   DEFAULT_THEME_SETTINGS,
   enforceVeryLowContrastGuard,
   FONT_SIZE_OPTIONS,
+  parseHexColor,
   MONO_FONTS,
   stepFontSize,
   normalizeColorPickerValue,
@@ -57,7 +68,7 @@ const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: "tools", label: "Tools" },
   { id: "voice", label: "Voice" },
   { id: "notes", label: "Notes" },
-  { id: "memory", label: "Memory" },
+  { id: "memory", label: RIG_CONTEXT_TAB_LABEL },
   { id: "data", label: "Data" },
 ];
 
@@ -114,6 +125,8 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
   const [cleanupLegacyMessage, setCleanupLegacyMessage] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncConflict, setSyncConflict] = useState<SyncConflict | null>(null);
+  const [showSyncReview, setShowSyncReview] = useState(false);
   const [syncSuggestions, setSyncSuggestions] = useState<SyncFolderSuggestion[]>([]);
   const [dataStatus, setDataStatus] = useState<{
     localDataDir: string;
@@ -136,6 +149,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
   const [themeForm, setThemeForm] = useState<ThemeSettings>({ ...DEFAULT_THEME_SETTINGS });
   const [themeApplyError, setThemeApplyError] = useState<string | null>(null);
+  const [layoutOptions, setLayoutOptions] = useState<LayoutOptions>(DEFAULT_LAYOUT);
   const themeApplySeqRef = useRef(0);
   const settingsHydratedRef = useRef(false);
   const skipAutosaveRef = useRef(false);
@@ -182,6 +196,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
     void window.electron.usage.getStats().then(setUsageStats);
     window.electron.memory.getUserMemory().then(setUserMemory);
     window.electron.customization.getThemeSettings().then(setThemeForm);
+    window.electron.customization.getLayoutOptions().then(setLayoutOptions);
     return () => {
       cancelled = true;
     };
@@ -201,6 +216,14 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
     if (activeTab !== "memory") return;
     void refreshCompileStatus();
   }, [activeTab]);
+
+  useEffect(() => {
+    const unsub = window.electron.customization.onUpdated((payload) => {
+      if (payload.type !== "layout") return;
+      void window.electron.customization.getLayoutOptions().then(setLayoutOptions);
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     if (!settingsHydratedRef.current) return;
@@ -394,9 +417,15 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
   const runSyncNow = async () => {
     setSyncBusy(true);
     setSyncMessage(null);
+    setSyncConflict(null);
+    setShowSyncReview(false);
     try {
       const result = await window.electron.sync.runNow();
-      if (result.ok) {
+      if (result.conflict) {
+        setSyncConflict(result.conflict);
+        setShowSyncReview(false);
+        setSyncMessage("Local and backup both changed. Review changes or pick a side.");
+      } else if (result.ok) {
         const action = result.status.lastAction;
         const summary =
           action === "push"
@@ -407,6 +436,46 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
         setSyncMessage(summary);
       } else {
         setSyncMessage(result.status.lastError ?? "Sync failed.");
+      }
+      await refreshDataStatus();
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const resolveSyncConflict = async (resolution: "push" | "pull") => {
+    setSyncBusy(true);
+    setSyncMessage(null);
+    try {
+      const result = await window.electron.sync.resolveConflict(resolution);
+      setSyncConflict(null);
+      setShowSyncReview(false);
+      if (result.ok) {
+        const summary =
+          resolution === "push"
+            ? "Kept this device’s changes and updated the backup."
+            : "Used the backup. Your previous local data was saved under local-data/sync/backups/.";
+        setSyncMessage(summary);
+      } else {
+        setSyncMessage(result.status.lastError ?? "Sync failed.");
+      }
+      await refreshDataStatus();
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const applySyncMerge = async (choices: Record<string, SyncFileChoice>) => {
+    setSyncBusy(true);
+    setSyncMessage(null);
+    try {
+      const result = await window.electron.sync.resolveConflict({ mode: "merge", choices });
+      setSyncConflict(null);
+      setShowSyncReview(false);
+      if (result.ok) {
+        setSyncMessage("Merged changes applied and pushed to the backup folder.");
+      } else {
+        setSyncMessage(result.status.lastError ?? "Merge failed.");
       }
       await refreshDataStatus();
     } finally {
@@ -518,13 +587,25 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
     el.textContent = themeSettingsToCss(settings);
   };
 
-  const updateThemeForm = (updater: (prev: ThemeSettings) => ThemeSettings) => {
+  const areThemeColorsCompleteHex = (settings: ThemeSettings): boolean =>
+    parseHexColor(settings.bg) != null &&
+    parseHexColor(settings.fg) != null &&
+    parseHexColor(settings.accent) != null;
+
+  const updateThemeForm = (
+    updater: (prev: ThemeSettings) => ThemeSettings,
+    options?: { skipContrastGuard?: boolean },
+  ) => {
     setThemeForm((prev) => {
       const updated = updater(prev);
+      if (!areThemeColorsCompleteHex(updated)) {
+        setThemeApplyError(null);
+        return updated;
+      }
       const changedFg = updated.fg !== prev.fg;
       const changedBg = updated.bg !== prev.bg;
       const next =
-        changedFg !== changedBg
+        !options?.skipContrastGuard && changedFg !== changedBg
           ? {
               ...updated,
               ...enforceVeryLowContrastGuard(
@@ -544,6 +625,11 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
         });
       return next;
     });
+  };
+
+  const updateLayoutOptions = (patch: Partial<LayoutOptions>) => {
+    setLayoutOptions((prev) => ({ ...prev, ...patch }));
+    void window.electron.customization.setLayout(patch);
   };
 
   const switchTab = (id: SettingsTabId) => {
@@ -591,14 +677,14 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
   return (
     <div className="workspace-page settings-page">
       <WorkspaceHeader
-        title="Settings"
+        title={RIG_PAGE_TITLE}
         icon={<SettingsIcon size={18} />}
         scrolled={headerScrolled}
         actions={
           <div
             className={`settings-tabs settings-tabs--header${headerScrolled ? " settings-tabs--latched" : ""}`}
             role="tablist"
-            aria-label="Settings sections"
+            aria-label={`${RIG_PAGE_TITLE} sections`}
           >
             {SETTINGS_TABS.map((tab) => (
               <button
@@ -622,6 +708,14 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
           </div>
         }
       />
+      <div
+        className={`settings-toast${saveStatus !== "idle" ? " settings-toast--visible" : ""}`}
+        role="status"
+        aria-live="polite"
+        aria-hidden={saveStatus === "idle"}
+      >
+        {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : ""}
+      </div>
       <div ref={scrollRef} className="workspace-scroll settings-scroll" onScroll={onScroll}>
         <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
@@ -633,7 +727,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
           >
             <SettingsGroup
               title="Chat model"
-              description="Paste your key from OpenAI. Chat and titles use it; voice is handled on your Mac."
+              description="Paste your key from OpenAI. Chat replies, conversation titles, and transcript cleanup all use it; voice transcription runs on your Mac."
             >
               <SettingsField label="API key" htmlFor="settings-api-key">
                 <div className="settings-api-key-row">
@@ -660,6 +754,23 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   </button>
                 </div>
               </SettingsField>
+              <dl className="usage-stats settings-model-list" aria-label="Models in use">
+                <div className="usage-stats__row">
+                  <dt>Chat replies</dt>
+                  <dd><code>{OPENAI_CHAT_MODEL}</code></dd>
+                </div>
+                <div className="usage-stats__row">
+                  <dt>Conversation titles</dt>
+                  <dd><code>{OPENAI_TITLE_MODEL}</code></dd>
+                </div>
+                <div className="usage-stats__row">
+                  <dt>Transcript cleanup</dt>
+                  <dd><code>{OPENAI_TRANSCRIPT_CLEANUP_MODEL}</code></dd>
+                </div>
+              </dl>
+              <SettingsHint flush>
+                Models are pinned in this build — there&apos;s no in-app picker.
+              </SettingsHint>
             </SettingsGroup>
 
             <SettingsGroup
@@ -728,9 +839,15 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                           <input
                             type="text"
                             value={themeForm.bg}
-                            onChange={(e) => updateThemeForm((f) => ({ ...f, bg: e.target.value }))}
+                            onChange={(e) =>
+                              updateThemeForm((f) => ({ ...f, bg: e.target.value }), {
+                                skipContrastGuard: true,
+                              })
+                            }
                             spellCheck={false}
                             autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
                             aria-label="Background hex"
                           />
                         </div>
@@ -748,9 +865,15 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                           <input
                             type="text"
                             value={themeForm.fg}
-                            onChange={(e) => updateThemeForm((f) => ({ ...f, fg: e.target.value }))}
+                            onChange={(e) =>
+                              updateThemeForm((f) => ({ ...f, fg: e.target.value }), {
+                                skipContrastGuard: true,
+                              })
+                            }
                             spellCheck={false}
                             autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
                             aria-label="Text color hex"
                           />
                         </div>
@@ -768,9 +891,15 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                           <input
                             type="text"
                             value={themeForm.accent}
-                            onChange={(e) => updateThemeForm((f) => ({ ...f, accent: e.target.value }))}
+                            onChange={(e) =>
+                              updateThemeForm((f) => ({ ...f, accent: e.target.value }), {
+                                skipContrastGuard: true,
+                              })
+                            }
                             spellCheck={false}
                             autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
                             aria-label="Accent hex"
                           />
                         </div>
@@ -952,6 +1081,31 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 </div>
               </div>
             </SettingsGroup>
+
+            <SettingsGroup
+              title="Layout aids"
+              description="Optional visual grid overlay for alignment checks while designing screens."
+            >
+              <SettingsField label="Grid overlay" htmlFor="settings-grid-overlay">
+                <select
+                  id="settings-grid-overlay"
+                  value={layoutOptions.gridOverlay}
+                  onChange={(e) =>
+                    updateLayoutOptions({
+                      gridOverlay: e.target.value as LayoutOptions["gridOverlay"],
+                    })
+                  }
+                >
+                  <option value="off">Off</option>
+                  <option value="4">4px grid</option>
+                  <option value="8">8px grid</option>
+                  <option value="16">16px grid</option>
+                </select>
+              </SettingsField>
+              <SettingsHint flush>
+                Overlay is visual only and does not capture clicks.
+              </SettingsHint>
+            </SettingsGroup>
           </section>}
 
           {activeTab === "tools" && <section
@@ -1000,13 +1154,19 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 id="transcriptCleanupToggle"
                 label="Automatically tidy up dictation text"
                 checked={cleanupEnabled}
-                onChange={(e) => setCleanupEnabled(e.target.checked)}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  setCleanupEnabled(enabled);
+                  if (!enabled) setCleanupPromptModalOpen(false);
+                }}
               />
-              <SettingsActions>
-                <button type="button" className="btn" onClick={openCleanupPromptModal}>
-                  Edit prompt
-                </button>
-              </SettingsActions>
+              {cleanupEnabled ? (
+                <SettingsActions>
+                  <button type="button" className="btn" onClick={openCleanupPromptModal}>
+                    Edit prompt
+                  </button>
+                </SettingsActions>
+              ) : null}
             </SettingsGroup>
 
             <SettingsGroup
@@ -1125,12 +1285,6 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
             </SettingsGroup>
           </section>}
 
-          {saveStatus !== "idle" && (
-            <div className="settings-toast" role="status">
-              {saveStatus === "saving" ? "Saving…" : "Saved"}
-            </div>
-          )}
-
           {activeTab === "notes" && <section
             id="settings-panel-notes"
             className="settings-tab-panel"
@@ -1163,8 +1317,8 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
             aria-labelledby="settings-tab-memory"
           >
             <SettingsGroup
-              title="Memory"
-              description="Stable facts the assistant can use in every conversation. Pick a short name and a one-line detail; same name updates the old entry."
+              title="User facts"
+              description="Stable facts merged into the model context when relevant. Pick a short label and a one-line value; the same label updates the existing entry."
             >
               <div className="settings-entry-list">
                 {Object.entries(userMemory).map(([k, v]) => (
@@ -1186,18 +1340,18 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   data-testid="settings-add-memory"
                   onClick={openAddMemoryModal}
                 >
-                  Add memory
+                  Add entry
                 </button>
               </SettingsActions>
             </SettingsGroup>
 
             <SettingsGroup
-              title="Nightly memory compile"
+              title="Compile from conversations"
               description={
                 <>
-                  Once per day on first launch, Harness reviews conversations updated since the last run
-                  and adds durable facts to your memory list above. Uses your OpenAI API key. Auto-merges
-                  without asking — edit or remove entries above any time.
+                  Reviews conversations updated since the last run and adds durable facts to the list
+                  above. Uses your OpenAI API key. Auto-merges without asking — edit or remove entries
+                  any time. Manual-only for now; runs only when you press the button below.
                 </>
               }
             >
@@ -1329,7 +1483,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
           <Modal
             open={memoryModalOpen}
             onClose={closeMemoryModal}
-            title={editingMemoryKey ? "Edit memory" : "Add memory"}
+            title={editingMemoryKey ? "Edit entry" : "Add entry"}
             data-testid="settings-memory-modal"
             footer={
               <>
@@ -1418,8 +1572,8 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
               <label className="settings-entry-field">
                 <span className="settings-entry-field__label">Template body</span>
                 <p className="settings-group__hint settings-entry-hint">
-                  Use <code>{"{{today}}"}</code> to insert today&apos;s date when you create a note from this
-                  template (locale-formatted).
+                  Use <code>{NOTE_TEMPLATE_TODAY_TOKEN}</code> for today&apos;s date and{" "}
+                  <code>{NOTE_TEMPLATE_CURSOR_TOKEN}</code> to place the cursor when the note opens.
                 </p>
                 <textarea
                   value={templateContentDraft}
@@ -1474,62 +1628,148 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 </>
               }
             >
-              <SettingsActions>
-                <button type="button" className="btn" onClick={() => void pickBackupFolder()}>
-                  Choose folder…
-                </button>
-                {!dataStatus?.sync.backupFolderPath && defaultBackupPath && (
-                  <button type="button" className="btn" onClick={() => void useDefaultBackupFolder()}>
-                    Use default
-                  </button>
-                )}
-              </SettingsActions>
-              {dataStatus && (
-                <div className="settings-data-status" role="status">
+              {!dataStatus?.sync.backupFolderPath ? (
+                <>
+                  <SettingsActions>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void pickBackupFolder()}
+                    >
+                      Choose folder…
+                    </button>
+                    {defaultBackupPath && (
+                      <button type="button" className="btn" onClick={() => void useDefaultBackupFolder()}>
+                        Use iCloud Drive default
+                      </button>
+                    )}
+                  </SettingsActions>
+                  <SettingsHint flush>
+                    You&apos;ll be able to sync once you pick a folder.
+                  </SettingsHint>
+                </>
+              ) : dataStatus.sync.configured ? (
+                <>
+                  <div className="settings-data-status" role="status">
+                    <p className="settings-data-status__path-row">
+                      <strong>Backup folder:</strong>{" "}
+                      <code>{dataStatus.sync.backupFolderPath}</code>
+                      <button
+                        type="button"
+                        className="btn settings-data-status__change-btn"
+                        onClick={() => void pickBackupFolder()}
+                      >
+                        Change…
+                      </button>
+                    </p>
+                    {dataStatus.sync.lastSuccessAt && (
+                      <p>
+                        <strong>Last sync:</strong>{" "}
+                        {new Date(dataStatus.sync.lastSuccessAt).toLocaleString()}
+                        {dataStatus.sync.lastAction && (
+                          <> ({dataStatus.sync.lastAction})</>
+                        )}
+                      </p>
+                    )}
+                    {dataStatus.sync.lastError && (
+                      <p className="settings-import-status__errors">
+                        Last error: {dataStatus.sync.lastError}
+                      </p>
+                    )}
+                    {dataStatus.sync.conflictCopies.length > 0 && (
+                      <p className="settings-import-status__errors">
+                        Conflict copies in backup folder: {dataStatus.sync.conflictCopies.join(", ")}.
+                        Resolve them manually so future syncs stay clean.
+                      </p>
+                    )}
+                  </div>
+                  <SettingsActions>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void runSyncNow()}
+                      disabled={syncBusy}
+                    >
+                      {syncBusy ? "Syncing…" : "Sync now"}
+                    </button>
+                  </SettingsActions>
+                </>
+              ) : (
+                <>
+                  <div
+                    className="settings-data-status settings-data-status--error"
+                    role="alert"
+                  >
+                    <p className="settings-data-status__path-row">
+                      <strong>Backup folder:</strong>{" "}
+                      <code>{dataStatus.sync.backupFolderPath}</code>
+                    </p>
+                    {dataStatus.sync.folderError && (
+                      <p className="settings-import-status__errors">
+                        {dataStatus.sync.folderError}
+                      </p>
+                    )}
+                  </div>
+                  <SettingsActions>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void pickBackupFolder()}
+                    >
+                      Choose folder…
+                    </button>
+                    {defaultBackupPath && (
+                      <button type="button" className="btn" onClick={() => void useDefaultBackupFolder()}>
+                        Use iCloud Drive default
+                      </button>
+                    )}
+                  </SettingsActions>
+                </>
+              )}
+              {syncConflict && !showSyncReview && (
+                <div className="settings-sync-conflict" role="alert">
                   <p>
-                    <strong>Backup folder:</strong>{" "}
-                    {dataStatus.sync.backupFolderPath
-                      ? <code>{dataStatus.sync.backupFolderPath}</code>
-                      : "not set"}
+                    Both this device and the backup folder have changes since your last sync.
                   </p>
-                  {dataStatus.sync.folderError && (
-                    <p className="settings-import-status__errors">
-                      {dataStatus.sync.folderError}
-                    </p>
-                  )}
-                  {dataStatus.sync.lastSuccessAt && (
-                    <p>
-                      <strong>Last sync:</strong>{" "}
-                      {new Date(dataStatus.sync.lastSuccessAt).toLocaleString()}
-                      {dataStatus.sync.lastAction && (
-                        <> ({dataStatus.sync.lastAction})</>
-                      )}
-                    </p>
-                  )}
-                  {dataStatus.sync.lastError && (
-                    <p className="settings-import-status__errors">
-                      Last error: {dataStatus.sync.lastError}
-                    </p>
-                  )}
-                  {dataStatus.sync.conflictCopies.length > 0 && (
-                    <p className="settings-import-status__errors">
-                      Conflict copies in backup folder: {dataStatus.sync.conflictCopies.join(", ")}.
-                      Resolve them manually so future syncs stay clean.
-                    </p>
-                  )}
+                  <SettingsActions>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setShowSyncReview(true)}
+                      disabled={syncBusy}
+                    >
+                      Review &amp; merge
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void resolveSyncConflict("pull")}
+                      disabled={syncBusy}
+                    >
+                      Use backup
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void resolveSyncConflict("push")}
+                      disabled={syncBusy}
+                    >
+                      Keep this device
+                    </button>
+                  </SettingsActions>
+                  <SettingsHint flush>
+                    Review &amp; merge lets you combine conversations, tasks, notes, and other
+                    files file-by-file. Quick actions overwrite one side entirely.
+                  </SettingsHint>
                 </div>
               )}
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => void runSyncNow()}
-                  disabled={syncBusy || !dataStatus?.sync.configured}
-                  title={!dataStatus?.sync.configured ? "Pick a backup folder first" : undefined}
-                >
-                  {syncBusy ? "Syncing…" : "Sync now"}
-                </button>
-              </SettingsActions>
+              {syncConflict && showSyncReview && (
+                <SyncConflictReviewPanel
+                  busy={syncBusy}
+                  onApplyMerge={applySyncMerge}
+                  onCancel={() => setShowSyncReview(false)}
+                />
+              )}
               {syncMessage && <SettingsHint flush>{syncMessage}</SettingsHint>}
             </SettingsGroup>
 

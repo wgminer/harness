@@ -33,43 +33,43 @@ export const FONTS = [
   { id: "system", label: "System UI", stack: "system-ui, sans-serif", category: "ui" as const },
   {
     id: "ui_serif",
-    label: "UI serif (system)",
+    label: "UI serif - system",
     stack: 'ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif',
     category: "ui" as const,
   },
-  { id: "inter", label: "Inter (Google)", stack: '"Inter", system-ui, sans-serif', category: "ui" as const },
-  { id: "open_sans", label: "Open Sans (Google)", stack: '"Open Sans", system-ui, sans-serif', category: "ui" as const },
-  { id: "roboto", label: "Roboto (Google)", stack: '"Roboto", system-ui, sans-serif', category: "ui" as const },
-  { id: "lato", label: "Lato (Google)", stack: '"Lato", system-ui, sans-serif', category: "ui" as const },
-  { id: "nunito", label: "Nunito (Google)", stack: '"Nunito", system-ui, sans-serif', category: "ui" as const },
-  { id: "work_sans", label: "Work Sans (Google)", stack: '"Work Sans", system-ui, sans-serif', category: "ui" as const },
-  { id: "source_sans_3", label: "Source Sans 3 (Google)", stack: '"Source Sans 3", system-ui, sans-serif', category: "ui" as const },
-  { id: "plus_jakarta", label: "Plus Jakarta Sans (Google)", stack: '"Plus Jakarta Sans", system-ui, sans-serif', category: "ui" as const },
-  { id: "merriweather", label: "Merriweather (Google)", stack: '"Merriweather", ui-serif, Georgia, serif', category: "ui" as const },
-  { id: "lora", label: "Lora (Google)", stack: '"Lora", ui-serif, Georgia, serif', category: "ui" as const },
-  { id: "literata", label: "Literata (Google)", stack: '"Literata", ui-serif, Georgia, serif', category: "ui" as const },
+  { id: "inter", label: "Inter - Google", stack: '"Inter", system-ui, sans-serif', category: "ui" as const },
+  { id: "open_sans", label: "Open Sans - Google", stack: '"Open Sans", system-ui, sans-serif', category: "ui" as const },
+  { id: "roboto", label: "Roboto - Google", stack: '"Roboto", system-ui, sans-serif', category: "ui" as const },
+  { id: "lato", label: "Lato - Google", stack: '"Lato", system-ui, sans-serif', category: "ui" as const },
+  { id: "nunito", label: "Nunito - Google", stack: '"Nunito", system-ui, sans-serif', category: "ui" as const },
+  { id: "work_sans", label: "Work Sans - Google", stack: '"Work Sans", system-ui, sans-serif', category: "ui" as const },
+  { id: "source_sans_3", label: "Source Sans 3 - Google", stack: '"Source Sans 3", system-ui, sans-serif', category: "ui" as const },
+  { id: "plus_jakarta", label: "Plus Jakarta Sans - Google", stack: '"Plus Jakarta Sans", system-ui, sans-serif', category: "ui" as const },
+  { id: "merriweather", label: "Merriweather - Google", stack: '"Merriweather", ui-serif, Georgia, serif', category: "ui" as const },
+  { id: "lora", label: "Lora - Google", stack: '"Lora", ui-serif, Georgia, serif', category: "ui" as const },
+  { id: "literata", label: "Literata - Google", stack: '"Literata", ui-serif, Georgia, serif', category: "ui" as const },
   {
     id: "sf",
-    label: "System mono (SF / Cascadia)",
+    label: "System mono - SF / Cascadia",
     stack: 'ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Code", monospace',
     category: "mono" as const,
   },
   {
     id: "jetbrains",
-    label: "JetBrains Mono (Google)",
+    label: "JetBrains Mono - Google",
     stack: '"JetBrains Mono", ui-monospace, Menlo, monospace',
     category: "mono" as const,
   },
-  { id: "fira_code", label: "Fira Code (Google)", stack: '"Fira Code", ui-monospace, monospace', category: "mono" as const },
-  { id: "source_code", label: "Source Code Pro (Google)", stack: '"Source Code Pro", ui-monospace, monospace', category: "mono" as const },
+  { id: "fira_code", label: "Fira Code - Google", stack: '"Fira Code", ui-monospace, monospace', category: "mono" as const },
+  { id: "source_code", label: "Source Code Pro - Google", stack: '"Source Code Pro", ui-monospace, monospace', category: "mono" as const },
   {
     id: "ibm_plex",
-    label: "IBM Plex Mono (Google)",
+    label: "IBM Plex Mono - Google",
     stack: '"IBM Plex Mono", ui-monospace, Menlo, Monaco, monospace',
     category: "mono" as const,
   },
-  { id: "roboto_mono", label: "Roboto Mono (Google)", stack: '"Roboto Mono", ui-monospace, monospace', category: "mono" as const },
-  { id: "space_mono", label: "Space Mono (Google)", stack: '"Space Mono", ui-monospace, monospace', category: "mono" as const },
+  { id: "roboto_mono", label: "Roboto Mono - Google", stack: '"Roboto Mono", ui-monospace, monospace', category: "mono" as const },
+  { id: "space_mono", label: "Space Mono - Google", stack: '"Space Mono", ui-monospace, monospace', category: "mono" as const },
 ] as const;
 
 export type FontId = (typeof FONTS)[number]["id"];
@@ -224,8 +224,8 @@ export const DEFAULT_THEME_COLORS: ThemeColors = {
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   ...DEFAULT_THEME_COLORS,
-  font: "inter",
-  fontMono: "jetbrains",
+  font: "system",
+  fontMono: "sf",
   fontSize: 14,
 };
 
@@ -256,7 +256,7 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
   {
     id: "bloomberg",
     label: "Bloomberg",
-    colors: { accent: "#ffb000", fg: "#ff9900", bg: "#000000" },
+    colors: { accent: "#ffb000", fg: "#ffb347", bg: "#101010" },
   },
 ];
 

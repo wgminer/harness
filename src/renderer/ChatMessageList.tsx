@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { resolveDictationReplyLabel } from "../shared/dictationReplyStrip";
 import {
   type Message,
   type ToolCallDisplay,
@@ -70,6 +71,7 @@ export function ChatMessageList({
     displayMessages[displayMessages.length - 1].role === "user" &&
     !streamingContent;
   const showPolishInStrip = showReplyActions && polishHintAfterDictation;
+  const replyLabel = resolveDictationReplyLabel();
 
   return (
     <>
@@ -208,14 +210,19 @@ export function ChatMessageList({
         })}
       </div>
       {showReplyActions && (
-        <div className="chat-secondary-actions">
+        <div className="chat-secondary-actions" data-testid="chat-secondary-actions">
           {showPolishInStrip && (
             <button type="button" className="btn btn-chat-secondary chat-pane-btn" onClick={onPolish}>
               Polish
             </button>
           )}
-          <button type="button" className="btn btn-chat-secondary chat-pane-btn" onClick={onGenerateReply}>
-            Reply
+          <button
+            type="button"
+            className="btn btn-chat-secondary chat-pane-btn chat-pane-btn--subtle"
+            onClick={onGenerateReply}
+            data-testid="chat-generate-reply"
+          >
+            {replyLabel}
           </button>
         </div>
       )}

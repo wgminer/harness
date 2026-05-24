@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Minimize2 } from "lucide-react";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import { audioFileToWav } from "./audioFileToWav";
@@ -17,6 +18,8 @@ interface ChatViewProps {
   conversationId: string | null;
   /** Shown in header; matches sidebar label for this conversation. */
   displayTitle: string;
+  /** When true, header shows a skeleton instead of placeholder title text. */
+  titlePending?: boolean;
   onConversationCreated: () => void;
   /** Text from the global hotkey — send vs pre-fill follows recording.autoSend unless draft-only. */
   pendingHotkeyText?: string | null;
@@ -27,24 +30,28 @@ interface ChatViewProps {
   onChatActivityChange?: (active: boolean) => void;
   /** Parent increments when the composer should be focused (e.g. switching to small window). */
   focusComposerNonce?: number;
+  onWindowSizeToggle: () => void;
   onOpenNotesView?: (noteId: string) => void;
 }
 
 export function ChatView({
   conversationId,
   displayTitle,
+  titlePending = false,
   onConversationCreated,
   pendingHotkeyText,
   pendingHotkeyDraftOnly,
   onPendingHotkeyTextConsumed,
   onChatActivityChange,
   focusComposerNonce,
+  onWindowSizeToggle,
   onOpenNotesView,
 }: ChatViewProps) {
   const MAX_RECORDING_MS = 5 * 60 * 1000;
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<string | null>(null);
+  const activeAssistantMessageIdRef = useRef<string | null>(null);
   const [isTurnPending, setIsTurnPending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -95,6 +102,9 @@ export function ChatView({
     sendingRef.current = sending;
   }, [sending]);
   useEffect(() => {
+    activeAssistantMessageIdRef.current = activeAssistantMessageId;
+  }, [activeAssistantMessageId]);
+  useEffect(() => {
     isStreamingRef.current = isStreaming;
   }, [isStreaming]);
 
@@ -120,10 +130,46 @@ export function ChatView({
     if (activeTurnIdRef.current !== turnId) return;
     activeTurnIdRef.current = null;
     streamAbortRef.current = null;
+    isStreamingRef.current = false;
+    activeAssistantMessageIdRef.current = null;
     setIsTurnPending(false);
     setIsStreaming(false);
     setActiveAssistantMessageId(null);
     requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const syncAssistantFromStorage = useCallback(async (convId: string, assistantId: string | null) => {
+    const list = await window.electron.memory.getMessages(convId);
+    const lastAssistant = [...list].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistant?.content?.trim()) return;
+    setMessages((prev) => {
+      let patched = false;
+      const next = prev.map((m) => {
+        if (m.id !== assistantId) return m;
+        if (m.content.length >= lastAssistant.content.length) return m;
+        patched = true;
+        return {
+          ...m,
+          content: lastAssistant.content,
+          toolCalls: (lastAssistant as Message).toolCalls ?? m.toolCalls,
+          model: (lastAssistant as Message).model ?? m.model,
+        };
+      });
+      if (patched) return next;
+      const last = prev[prev.length - 1];
+      if (last?.role === "assistant" && !last.content.trim()) {
+        return [
+          ...prev.slice(0, -1),
+          {
+            ...last,
+            content: lastAssistant.content,
+            toolCalls: (lastAssistant as Message).toolCalls ?? last.toolCalls,
+            model: (lastAssistant as Message).model ?? last.model,
+          },
+        ];
+      }
+      return prev;
+    });
   }, []);
 
   const beginNewTurn = useCallback(() => {
@@ -237,6 +283,8 @@ export function ChatView({
     activeTurnIdRef.current = null;
     void window.electron.chat.stop().catch(() => {});
     setMessages([]);
+    activeAssistantMessageIdRef.current = null;
+    isStreamingRef.current = false;
     setActiveAssistantMessageId(null);
     setIsTurnPending(false);
     setIsStreaming(false);
@@ -294,7 +342,7 @@ export function ChatView({
     const unsubChunk = window.electron.chat.onStreamChunk((cid, chunk) => {
       if (cid !== conversationIdRef.current) return;
       if (!isStreamingRef.current) return;
-      const assistantId = activeAssistantMessageId;
+      const assistantId = activeAssistantMessageIdRef.current;
       const turnId = activeTurnIdRef.current;
       const signal = streamAbortRef.current?.signal;
       if (!assistantId || turnId == null || !isTurnCurrent(turnId, signal)) return;
@@ -304,13 +352,18 @@ export function ChatView({
       if (cid !== conversationIdRef.current) return;
       const turnId = activeTurnIdRef.current;
       if (turnId == null) return;
-      completeTurn(turnId);
+      const assistantId = activeAssistantMessageIdRef.current;
+      void syncAssistantFromStorage(cid, assistantId).finally(() => {
+        if (activeTurnIdRef.current === turnId) {
+          completeTurn(turnId);
+        }
+      });
     });
     return () => {
       unsubChunk();
       unsubEnd();
     };
-  }, [activeAssistantMessageId, applyAssistantChunk, completeTurn, isTurnCurrent]);
+  }, [applyAssistantChunk, completeTurn, isTurnCurrent, syncAssistantFromStorage]);
 
   useEffect(() => {
     return () => {
@@ -374,6 +427,7 @@ export function ChatView({
       const { turnId, signal } = beginNewTurn();
       const userMessageId = makeMessageId("user");
       const assistantMessageId = makeMessageId("assistant");
+      activeAssistantMessageIdRef.current = null;
       setActiveAssistantMessageId(null);
       setMessages((prev) => [
         ...prev,
@@ -381,11 +435,13 @@ export function ChatView({
       ]);
       if (!isTurnCurrent(turnId, signal)) return;
 
+      activeAssistantMessageIdRef.current = assistantMessageId;
       setActiveAssistantMessageId(assistantMessageId);
       appendAssistantPlaceholder(assistantMessageId);
       if (!isTurnCurrent(turnId, signal)) return;
 
       setIsTurnPending(false);
+      isStreamingRef.current = true;
       setIsStreaming(true);
       requestAnimationFrame(() => inputRef.current?.focus());
       await runAssistantTurn({
@@ -419,6 +475,7 @@ export function ChatView({
     const instructionId = makeMessageId("user");
     const transcriptId = makeMessageId("user");
     const assistantMessageId = makeMessageId("assistant");
+    activeAssistantMessageIdRef.current = null;
     setActiveAssistantMessageId(null);
     setMessages((prev) => [
       ...prev.slice(0, -1),
@@ -426,10 +483,12 @@ export function ChatView({
       { id: transcriptId, role: "user", content: transcript, timestamp: t2 },
     ]);
     if (!isTurnCurrent(turnId, signal)) return;
+    activeAssistantMessageIdRef.current = assistantMessageId;
     setActiveAssistantMessageId(assistantMessageId);
     appendAssistantPlaceholder(assistantMessageId);
     if (!isTurnCurrent(turnId, signal)) return;
     setIsTurnPending(false);
+    isStreamingRef.current = true;
     setIsStreaming(true);
     await runAssistantTurn({
       turnId,
@@ -492,9 +551,11 @@ export function ChatView({
     if (!conversationId) return;
     const { turnId, signal } = beginNewTurn();
     const assistantMessageId = makeMessageId("assistant");
+    activeAssistantMessageIdRef.current = assistantMessageId;
     setActiveAssistantMessageId(assistantMessageId);
     appendAssistantPlaceholder(assistantMessageId);
     setIsTurnPending(false);
+    isStreamingRef.current = true;
     setIsStreaming(true);
     await runAssistantTurn({
       turnId,
@@ -659,8 +720,24 @@ export function ChatView({
             className="btn chat-pane-title"
             onClick={openTitleModal}
             title="Edit title"
+            aria-busy={titlePending ? true : undefined}
           >
-            {displayTitle}
+            {titlePending ? (
+              <span className="chat-pane-title-skeleton" aria-label="Generating title" />
+            ) : (
+              displayTitle
+            )}
+          </button>
+        )}
+        headerCornerControl={(
+          <button
+            type="button"
+            className="btn btn-icon chat-pane-window-toggle"
+            onClick={onWindowSizeToggle}
+            aria-label="Shrink window"
+            title="Shrink window"
+          >
+            <Minimize2 size={14} />
           </button>
         )}
         displayMessages={messages}

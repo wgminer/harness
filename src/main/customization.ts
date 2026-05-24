@@ -76,6 +76,10 @@ function getLayoutOptions(): LayoutOptions {
     return {
       sidebar: data.sidebar === "right" ? "right" : "left",
       density: data.density === "compact" ? "compact" : "comfortable",
+      gridOverlay:
+        data.gridOverlay === "4" || data.gridOverlay === "8" || data.gridOverlay === "16"
+          ? data.gridOverlay
+          : "off",
     };
   } catch {
     return DEFAULT_LAYOUT;
@@ -87,6 +91,7 @@ function setLayout(options: Partial<LayoutOptions>): void {
   const next: LayoutOptions = {
     sidebar: options.sidebar ?? current.sidebar,
     density: options.density ?? current.density,
+    gridOverlay: options.gridOverlay ?? current.gridOverlay,
   };
   writeFileSync(getLayoutPath(), JSON.stringify(next, null, 2), "utf-8");
   notifyRenderer("customization:updated", { type: "layout" });
@@ -122,6 +127,7 @@ export function executeCustomizationTool(name: string, args: Record<string, unkn
       setLayout({
         sidebar: args.sidebar as LayoutOptions["sidebar"] | undefined,
         density: args.density as LayoutOptions["density"] | undefined,
+        gridOverlay: args.gridOverlay as LayoutOptions["gridOverlay"] | undefined,
       });
       return JSON.stringify({ ok: true, message: "Layout updated" });
     }

@@ -99,12 +99,14 @@ export const TOOL_DEFINITIONS = [
     type: "function" as const,
     function: {
       name: "set_layout",
-      description: "Change app layout: sidebar position (left/right) and density (compact/comfortable).",
+      description:
+        "Change app layout: sidebar position (left/right), density (compact/comfortable), and optional grid overlay (off/4/8/16).",
       parameters: {
         type: "object",
         properties: {
           sidebar: { type: "string", enum: ["left", "right"], description: "Sidebar position" },
           density: { type: "string", enum: ["compact", "comfortable"], description: "Layout density" },
+          gridOverlay: { type: "string", enum: ["off", "4", "8", "16"], description: "Design grid overlay spacing in px" },
         },
       },
     },
@@ -244,14 +246,14 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "get_weather",
       description:
-        "Get current conditions and a short daily forecast for a US ZIP code. Temperatures in °F, wind in mph, precipitation in inches. If the user does not specify a location, call this with no arguments to use their Settings default ZIP.",
+        "Get current conditions and a short daily forecast for a US ZIP code. Temperatures in °F, wind in mph, precipitation in inches. If the user does not specify a location, call this with no arguments to use their default ZIP from Config (Tools).",
       parameters: {
         type: "object",
         properties: {
           zip: {
             type: "string",
             description:
-              "Optional US ZIP code (5 digits). Omit to use the user's default ZIP from Settings.",
+              "Optional US ZIP code (5 digits). Omit to use the user's default ZIP from Config (Tools).",
           },
           days: {
             type: "number",

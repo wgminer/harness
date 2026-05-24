@@ -4,7 +4,7 @@
  * - Zippopotam.us for US ZIP → place + lat/lon geocoding.
  * - Open-Meteo for current conditions + daily forecast.
  *
- * Kept deliberately small: input is a US ZIP (or the user's Settings default),
+ * Kept deliberately small: input is a US ZIP (or the user's Config default),
  * output is a single JSON blob with current + next few days so the model can
  * phrase whatever the user asked for ("is it raining", "what's the high",
  * "do I need a jacket", etc.) without needing a second call.

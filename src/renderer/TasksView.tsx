@@ -11,6 +11,7 @@ import {
 import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { TASK_COMPLETE_MS } from "../shared/motion";
 
 const taskDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 const taskRelativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
@@ -69,10 +70,12 @@ function TaskRow({
   task: t,
   onToggleDone,
   onOpen,
+  completing = false,
 }: {
   task: TaskItem;
   onToggleDone: (t: TaskItem) => void;
   onOpen: (t: TaskItem) => void;
+  completing?: boolean;
 }) {
   const tags = normalizeTags(t.tags);
   const displayTags = taskTagsWithoutLegacyStatus(tags);
@@ -80,30 +83,41 @@ function TaskRow({
   const dateAdded = formatDateAdded(t.createdAt);
   const timeAgo = formatTimeAgo(t.createdAt);
   return (
-    <li className="tasks-row">
-      <button
-        type="button"
-        className="tasks-row-check"
-        onClick={() => onToggleDone(t)}
-        aria-label={done ? "Mark as not done" : "Mark as done"}
-        title={done ? "Mark as not done" : "Mark as done"}
-      >
-        {done ? (
-          <SquareCheck size={20} strokeWidth={2} className="tasks-check-icon tasks-check-icon--on" />
-        ) : (
-          <Square size={20} strokeWidth={2} className="tasks-check-icon" />
-        )}
-      </button>
-      <button type="button" className="tasks-row-body" onClick={() => onOpen(t)}>
-        <div className={`tasks-row-title ${done ? "tasks-row-title--done" : ""}`}>{t.title}</div>
-        {dateAdded ? (
-          <div className={`tasks-row-subtext ${done ? "tasks-row-subtext--done" : ""}`}>
-            <span className="tasks-row-subtext-default">{dateAdded}</span>
-            {timeAgo ? <span className="tasks-row-subtext-hover">{timeAgo}</span> : null}
-          </div>
-        ) : null}
-        <TagChips tags={displayTags} className="tasks-row-tags" />
-      </button>
+    <li
+      className={`tasks-row-item${completing ? " tasks-row-item--completing" : ""}`}
+      aria-hidden={completing || undefined}
+    >
+      <div className="tasks-row">
+        <button
+          type="button"
+          className="tasks-row-check"
+          onClick={() => onToggleDone(t)}
+          aria-label={done ? "Mark as not done" : "Mark as done"}
+          title={done ? "Mark as not done" : "Mark as done"}
+          disabled={completing}
+        >
+          {done ? (
+            <SquareCheck size={20} strokeWidth={2} className="tasks-check-icon tasks-check-icon--on" />
+          ) : (
+            <Square size={20} strokeWidth={2} className="tasks-check-icon" />
+          )}
+        </button>
+        <button
+          type="button"
+          className="tasks-row-body"
+          onClick={() => onOpen(t)}
+          disabled={completing}
+        >
+          <div className={`tasks-row-title ${done ? "tasks-row-title--done" : ""}`}>{t.title}</div>
+          {dateAdded ? (
+            <div className={`tasks-row-subtext ${done ? "tasks-row-subtext--done" : ""}`}>
+              <span className="tasks-row-subtext-default">{dateAdded}</span>
+              {timeAgo ? <span className="tasks-row-subtext-hover">{timeAgo}</span> : null}
+            </div>
+          ) : null}
+          <TagChips tags={displayTags} className="tasks-row-tags" />
+        </button>
+      </div>
     </li>
   );
 }
@@ -123,6 +137,8 @@ export function TasksView() {
   const tagFieldRef = useRef<HTMLInputElement>(null);
   const [activeOpen, setActiveOpen] = useState(true);
   const [completedOpen, setCompletedOpen] = useState(false);
+  const [completingIds, setCompletingIds] = useState<Set<string>>(() => new Set());
+  const completionTimeoutsRef = useRef<Map<string, number>>(new Map());
   const tasksPaneRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
 
@@ -131,6 +147,16 @@ export function TasksView() {
       newTaskInputRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
+  }, []);
+
+  useEffect(() => {
+    const timeouts = completionTimeoutsRef.current;
+    return () => {
+      for (const handle of timeouts.values()) {
+        window.clearTimeout(handle);
+      }
+      timeouts.clear();
+    };
   }, []);
 
   const adjustNewTaskInputHeight = useCallback(() => {
@@ -211,7 +237,40 @@ export function TasksView() {
   };
 
   const toggleDone = (t: TaskItem) => {
-    void updateTaskTags(t.id, toggleCompletedTag(t.tags));
+    const wasDone = taskIsDone(normalizeTags(t.tags));
+    if (wasDone) {
+      void updateTaskTags(t.id, toggleCompletedTag(t.tags));
+      return;
+    }
+    if (completingIds.has(t.id)) return;
+
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (reduceMotion) {
+      void updateTaskTags(t.id, toggleCompletedTag(t.tags));
+      return;
+    }
+
+    setCompletingIds((prev) => {
+      const next = new Set(prev);
+      next.add(t.id);
+      return next;
+    });
+
+    const handle = window.setTimeout(() => {
+      completionTimeoutsRef.current.delete(t.id);
+      void updateTaskTags(t.id, toggleCompletedTag(t.tags));
+      setCompletingIds((prev) => {
+        if (!prev.has(t.id)) return prev;
+        const next = new Set(prev);
+        next.delete(t.id);
+        return next;
+      });
+    }, TASK_COMPLETE_MS);
+    completionTimeoutsRef.current.set(t.id, handle);
   };
 
   const openModal = (t: TaskItem) => {
@@ -319,7 +378,13 @@ export function TasksView() {
               ) : (
                 <ul className="tasks-list">
                   {activeTasks.map((t) => (
-                    <TaskRow key={t.id} task={t} onToggleDone={toggleDone} onOpen={openModal} />
+                    <TaskRow
+                      key={t.id}
+                      task={t}
+                      onToggleDone={toggleDone}
+                      onOpen={openModal}
+                      completing={completingIds.has(t.id)}
+                    />
                   ))}
                 </ul>
               )}
@@ -373,7 +438,7 @@ export function TasksView() {
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 void createTask();
               }

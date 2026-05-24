@@ -269,7 +269,7 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
   }
 
   if (!settings.openai?.apiKey) {
-    throw new Error("OpenAI API key not set. Configure it in Settings.");
+    throw new Error("OpenAI API key not set. Configure it in Config.");
   }
 
   const win = getMainWindow();

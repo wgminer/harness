@@ -1,6 +1,7 @@
 import { Check, Copy, Loader2, NotebookText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 
 export interface ToolCallDisplay {
   toolName: string;
@@ -39,6 +40,7 @@ export function MarkdownContent({ content }: { content: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
       components={{
         h1: ({ children, ...props }) => <p {...props}>{children}</p>,
         h2: ({ children, ...props }) => <p {...props}>{children}</p>,
@@ -60,8 +62,8 @@ export function toolLabel(name: string): string {
     task_update: "Updated task",
     task_delete: "Deleted task",
     task_clear_completed: "Cleared completed",
-    memory_set_fact: "Updated memory",
-    memory_list_facts: "Listed memories",
+    memory_set_fact: "Updated context",
+    memory_list_facts: "Listed context",
     memory_search_conversations: "Searched history",
     get_datetime: "Checked date & time",
     note_list: "Listed notes",

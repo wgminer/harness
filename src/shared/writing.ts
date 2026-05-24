@@ -8,6 +8,11 @@ export interface NoteSummary {
 
 export interface Note extends NoteSummary {
   content: string;
+  /**
+   * Optional initial caret position to use immediately after creating a note.
+   * Not persisted; only returned by create flows.
+   */
+  initialCursorOffset?: number;
 }
 
 export interface NoteEditProposalInput {
@@ -85,6 +90,8 @@ export const DEFAULT_NOTE_TEMPLATES: NoteTemplateConfig[] = [
 
 /** Inserted in template body; replaced with a locale-formatted date when a new note is created. */
 export const NOTE_TEMPLATE_TODAY_TOKEN = "{{today}}";
+/** Inserted in template body; removed at create-time and used as initial caret position. */
+export const NOTE_TEMPLATE_CURSOR_TOKEN = "{{@cursor}}";
 
 /** Collapse stored template descriptions to a single trimmed line. */
 export function normalizeNoteTemplateDescription(raw: string): string {
@@ -104,6 +111,55 @@ export function formatNoteTemplateToday(options?: {
   }).format(now);
 }
 
+function interpolateNoteTemplateString(
+  value: string,
+  options?: {
+    now?: Date;
+    locales?: Intl.LocalesArgument;
+    timeZone?: string;
+  },
+): string {
+  if (!value.includes(NOTE_TEMPLATE_TODAY_TOKEN)) return value;
+  const formatted = formatNoteTemplateToday(options);
+  return value.split(NOTE_TEMPLATE_TODAY_TOKEN).join(formatted);
+}
+
+function stripTemplateCursorToken(content: string): { content: string; cursorOffset: number | null } {
+  const cursorTokenPattern = /\{\{\s*@cursor\s*\}\}/g;
+  let cursorOffset: number | null = null;
+  let removedChars = 0;
+  let next = "";
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = cursorTokenPattern.exec(content)) != null) {
+    const matchIndex = match.index;
+    const rawToken = match[0];
+    next += content.slice(lastIndex, matchIndex);
+    if (cursorOffset == null) {
+      cursorOffset = matchIndex - removedChars;
+    }
+    removedChars += rawToken.length;
+    lastIndex = matchIndex + rawToken.length;
+  }
+  if (lastIndex === 0) {
+    return { content, cursorOffset: null };
+  }
+  next += content.slice(lastIndex);
+  return { content: next, cursorOffset };
+}
+
+export function resolveNoteTemplateContent(
+  content: string,
+  options?: {
+    now?: Date;
+    locales?: Intl.LocalesArgument;
+    timeZone?: string;
+  },
+): { content: string; cursorOffset: number | null } {
+  const interpolated = interpolateNoteTemplateString(content, options);
+  return stripTemplateCursorToken(interpolated);
+}
+
 /**
  * Resolves template variables in note template content at creation time.
  * Unknown tokens are left unchanged.
@@ -116,9 +172,19 @@ export function interpolateNoteTemplateContent(
     timeZone?: string;
   },
 ): string {
-  if (!content.includes(NOTE_TEMPLATE_TODAY_TOKEN)) return content;
-  const formatted = formatNoteTemplateToday(options);
-  return content.split(NOTE_TEMPLATE_TODAY_TOKEN).join(formatted);
+  return resolveNoteTemplateContent(content, options).content;
+}
+
+/** Resolves template variables in a note template title at creation time. */
+export function interpolateNoteTemplateTitle(
+  title: string,
+  options?: {
+    now?: Date;
+    locales?: Intl.LocalesArgument;
+    timeZone?: string;
+  },
+): string {
+  return interpolateNoteTemplateString(title, options);
 }
 
 export function normalizeNoteTemplates(input: unknown): NoteTemplateConfig[] {
@@ -150,6 +216,16 @@ export function normalizeNoteTemplates(input: unknown): NoteTemplateConfig[] {
 }
 
 export const UNTITLED_NOTE_TITLE = "Untitled note";
+
+/**
+ * Removes a leading markdown heading marker from note title text.
+ * Examples: "# Note" -> "Note", "##Todo" -> "Todo".
+ */
+export function stripLeadingMarkdownHeading(text: string): string {
+  const trimmed = String(text ?? "").trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/^\s{0,3}#{1,6}\s*/, "").trim();
+}
 
 /**
  * Returns the markdown list prefix to continue on the next line, if the given

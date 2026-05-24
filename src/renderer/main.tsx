@@ -9,6 +9,7 @@ import "./workspaceShell.css";
 import "./settings.css";
 import "./tasks.css";
 import "./notes.css";
+import "highlight.js/styles/github-dark.css";
 import { GOOGLE_FONTS_HREF } from "../shared/theme";
 
 /* Vite injects base.css before this runs; keep custom theme *after* all bundled CSS so :root overrides apply. */

@@ -1,4 +1,4 @@
-/** ASCII overview of Harness on-disk layout (shown on Settings → Data). */
+/** ASCII overview of Harness on-disk layout (shown on Config → Data). */
 export const DATA_STORAGE_DIAGRAM = `Harness app data folder (Electron userData)
 │
 ├─ local-data/ ........................ primary storage

@@ -2,7 +2,13 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { AppendMessageMeta } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import type { NoteEditProposal, NoteEditProposalInput } from "../shared/writing";
-import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "../shared/sync";
+import type {
+  SyncConflictResolution,
+  SyncFolderSuggestion,
+  SyncResult,
+  SyncStatus,
+} from "../shared/sync";
+import type { SyncConflictReview } from "../shared/sync";
 
 const e2eBridge =
   process.env.HARNESS_E2E === "1"
@@ -101,8 +107,8 @@ contextBridge.exposeInMainWorld("electron", {
     cleanupLegacyMemory: () => ipcRenderer.invoke("memory:cleanupLegacyMemory") as Promise<{ removed: boolean }>,
     setConversationTitle: (conversationId: string, title: string) =>
       ipcRenderer.invoke("memory:setConversationTitle", conversationId, title),
-    setVoiceDictationTitle: (conversationId: string) =>
-      ipcRenderer.invoke("memory:setVoiceDictationTitle", conversationId) as Promise<string>,
+    markVoiceDictationSession: (conversationId: string) =>
+      ipcRenderer.invoke("memory:markVoiceDictationSession", conversationId) as Promise<string>,
   },
   plans: {
     list: () => ipcRenderer.invoke("plans:list"),
@@ -162,6 +168,10 @@ contextBridge.exposeInMainWorld("electron", {
       return () => ipcRenderer.removeListener("chat:titleGenerationEnded", sub);
     },
   },
+  uiSession: {
+    get: () => ipcRenderer.invoke("uiSession:get"),
+    set: (partial: unknown) => ipcRenderer.invoke("uiSession:set", partial),
+  },
   customization: {
     getActiveTheme: () => ipcRenderer.invoke("customization:getActiveTheme"),
     getThemeSettings: () => ipcRenderer.invoke("customization:getThemeSettings"),
@@ -218,6 +228,8 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("notes:print", html, jobName) as Promise<{ success: boolean }>,
   },
   recording: {
+    setGlobalEnabled: (enabled: boolean) =>
+      ipcRenderer.invoke("recording:setGlobalEnabled", enabled) as Promise<void>,
     requestMicrophoneAccess: () =>
       ipcRenderer.invoke("recording:requestMicrophoneAccess") as Promise<boolean>,
     saveWav: (data: ArrayBuffer) =>
@@ -255,6 +267,10 @@ contextBridge.exposeInMainWorld("electron", {
   sync: {
     getStatus: () => ipcRenderer.invoke("sync:getStatus") as Promise<SyncStatus>,
     runNow: () => ipcRenderer.invoke("sync:runNow") as Promise<SyncResult>,
+    getConflictReview: () =>
+      ipcRenderer.invoke("sync:getConflictReview") as Promise<SyncConflictReview | { error: string }>,
+    resolveConflict: (resolution: SyncConflictResolution) =>
+      ipcRenderer.invoke("sync:resolveConflict", resolution) as Promise<SyncResult>,
     pickFolder: () => ipcRenderer.invoke("sync:pickFolder") as Promise<string | null>,
     setFolder: (path: string) =>
       ipcRenderer.invoke("sync:setFolder", path) as Promise<string | null>,

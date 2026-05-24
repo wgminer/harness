@@ -10,6 +10,7 @@ import {
   tagsFromLegacyStatus,
   taskIsClearable,
 } from "../shared/taskTags";
+import { rigSection } from "../shared/rigPage";
 import { getSettings } from "./settings";
 import { getWeatherForZip } from "./weather";
 import { executeNoteTool } from "./writing";
@@ -335,7 +336,7 @@ async function fetchWeather(args: Record<string, unknown>): Promise<unknown> {
   }
   if (!zip) {
     return {
-      error: "No ZIP provided and no default ZIP is set. Add one in Settings → Weather.",
+      error: `No ZIP provided and no default ZIP is set. Add one in ${rigSection("Tools")}.`,
     };
   }
   const daysRaw = typeof args.days === "number" ? args.days : Number.parseInt(String(args.days ?? ""), 10);

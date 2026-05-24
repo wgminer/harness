@@ -6,17 +6,18 @@ import { NotesView } from "./WritingSurfaceView";
 import { Sidebar } from "./Sidebar";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
-import type { LayoutOptions, Plan } from "../shared/types";
+import { DEFAULT_LAYOUT, type LayoutOptions, type Plan } from "../shared/types";
 import type {} from "../shared/electronAPI";
-import { conversationDisplayTitle } from "./chatDisplayTitle";
+import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
 import type { Conversation, View } from "./sidebarUtils";
 import { useViewportLayout } from "./useViewportLayout";
+import { isGlobalFnRecordingEnabledForView } from "../shared/globalFnRecording";
 
 export default function App() {
   const [view, setView] = useState<View>("chat");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [layout, setLayout] = useState<LayoutOptions>({ sidebar: "left", density: "comfortable" });
+  const [layout, setLayout] = useState<LayoutOptions>(DEFAULT_LAYOUT);
   const { presetSmall } = useViewportLayout();
   /** Incremented when entering small window on chat so ChatView focuses the composer. */
   const [focusComposerNonce, setFocusComposerNonce] = useState(0);
@@ -30,7 +31,9 @@ export default function App() {
   /** Note id to open when entering Notes from chat message action. */
   const [pendingOpenNoteId, setPendingOpenNoteId] = useState<string | null>(null);
   const [notesScreen, setNotesScreen] = useState<"list" | "detail">("list");
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [notesOverviewNonce, setNotesOverviewNonce] = useState(0);
+  const [uiSessionReady, setUiSessionReady] = useState(false);
 
   // Hotkey recorder — owns the background mic capture for the global shortcut path
   const hotkeyRecorder = useRecorder();
@@ -52,19 +55,41 @@ export default function App() {
   }, []);
 
   const loadConversations = useCallback(async () => {
-    const list = await window.electron.memory.listConversations();
+    const [list, session] = await Promise.all([
+      window.electron.memory.listConversations(),
+      window.electron.uiSession.get(),
+    ]);
     setConversations(list);
-    setConversationId((current) => {
-      if (list.length === 0) return null;
-      if (!current) return list[0].id;
-      if (list.some((c) => c.id === current)) return current;
-      return list[0].id;
-    });
+    const preferredId = session.conversationId;
+    if (list.length === 0) {
+      setConversationId(null);
+    } else if (preferredId && list.some((c) => c.id === preferredId)) {
+      setConversationId(preferredId);
+    } else {
+      setConversationId(list[0].id);
+    }
+    setView(session.view);
+    if (session.notesOpenNoteId) {
+      setPendingOpenNoteId(session.notesOpenNoteId);
+    }
+    setUiSessionReady(true);
   }, []);
 
   useEffect(() => {
-    loadConversations();
+    void loadConversations();
   }, [loadConversations]);
+
+  useEffect(() => {
+    if (!uiSessionReady) return;
+    const timer = window.setTimeout(() => {
+      void window.electron.uiSession.set({
+        view,
+        conversationId,
+        notesOpenNoteId: view === "notes" && notesScreen === "detail" ? activeNoteId : null,
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [uiSessionReady, view, conversationId, notesScreen, activeNoteId]);
 
   useEffect(() => {
     const unsub = window.electron.chat.onConversationTitleUpdated(() => {
@@ -137,7 +162,10 @@ export default function App() {
   const createNew = useCallback(async () => {
     const id = await window.electron.memory.createConversation();
     setConversationId(id);
-    setConversations((prev) => [{ id, title: null, createdAt: Date.now() }, ...prev]);
+    setConversations((prev) => [
+      { id, title: null, createdAt: Date.now(), sessionKind: "chat" },
+      ...prev,
+    ]);
     setView("chat");
     setFocusComposerNonce((n) => n + 1);
   }, []);
@@ -168,9 +196,14 @@ export default function App() {
 
   const handleNotesClick = useCallback(() => {
     setPendingOpenNoteId(null);
+    setActiveNoteId(null);
     setNotesOverviewNonce((n) => n + 1);
     setView("notes");
   }, []);
+
+  useEffect(() => {
+    void window.electron.recording.setGlobalEnabled(isGlobalFnRecordingEnabledForView(view));
+  }, [view]);
 
   useEffect(() => {
     const unsub = window.electron.recording.onStartSilent(async () => {
@@ -213,14 +246,18 @@ export default function App() {
               setFocusComposerNonce((n) => n + 1);
             }
             setView("chat");
+            setFocusComposerNonce((n) => n + 1);
             setPendingHotkeyDraftOnly(false);
             setPendingHotkeyText(text);
           } else {
             await window.electron.recording.pasteText(text);
             const newId = await window.electron.memory.createConversation();
             await window.electron.memory.appendMessage(newId, "user", text, { timestamp: Date.now() });
-            const voiceTitle = await window.electron.memory.setVoiceDictationTitle(newId);
-            setConversations((prev) => [{ id: newId, title: voiceTitle, createdAt: Date.now() }, ...prev]);
+            const voiceTitle = await window.electron.memory.markVoiceDictationSession(newId);
+            setConversations((prev) => [
+              { id: newId, title: voiceTitle, createdAt: Date.now(), sessionKind: "dictation" },
+              ...prev,
+            ]);
             setConversationId(newId);
             setView("chat");
             setFocusComposerNonce((n) => n + 1);
@@ -274,8 +311,6 @@ export default function App() {
         onConversationSelect={setConversationId}
         onConversationDelete={handleConversationDelete}
         onNewChat={createNew}
-        windowPresetSmall={presetSmall}
-        onWindowSizeToggle={handleWindowSizeToggle}
         activeChatProcessing={activeChatProcessing}
         titleGenInFlight={titleGenInFlight}
         appVersion={appVersion}
@@ -283,14 +318,25 @@ export default function App() {
         onNotesClick={handleNotesClick}
       />
       <main className="main">
-        {view === "chat" && (
+        {(view === "chat" || activeChatProcessing) && (
+          <div className="main-chat-host" hidden={view !== "chat"}>
           <ChatView
             key={conversationId ?? "none"}
             conversationId={conversationId}
             displayTitle={
               activeChatConversation
-                ? conversationDisplayTitle(activeChatConversation.title, activeChatConversation.createdAt)
+                ? conversationDisplayTitle(
+                    activeChatConversation.title,
+                    activeChatConversation.createdAt
+                  )
                 : ""
+            }
+            titlePending={
+              activeChatConversation != null &&
+              isConversationTitlePending(
+                activeChatConversation.title,
+                (titleGenInFlight[activeChatConversation.id] ?? 0) > 0
+              )
             }
             onConversationCreated={loadConversations}
             pendingHotkeyText={pendingHotkeyText}
@@ -301,11 +347,13 @@ export default function App() {
             }}
             onChatActivityChange={handleChatActivityChange}
             focusComposerNonce={focusComposerNonce}
+            onWindowSizeToggle={handleWindowSizeToggle}
             onOpenNotesView={(noteId) => {
               setPendingOpenNoteId(noteId);
               setView("notes");
             }}
           />
+          </div>
         )}
         {view === "settings" && (
           <SettingsView onImportComplete={loadConversations} />
@@ -317,9 +365,13 @@ export default function App() {
             onInitialOpenNoteHandled={() => setPendingOpenNoteId(null)}
             resetToOverviewNonce={notesOverviewNonce}
             onScreenChange={setNotesScreen}
+            onActiveNoteChange={setActiveNoteId}
           />
         )}
       </main>
+      {layout.gridOverlay !== "off" && (
+        <div className="app-grid-overlay" data-grid-overlay={layout.gridOverlay} aria-hidden />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-/* Default: dark mode; Inter for app typography (--font-family).
+/* Default: dark mode; system font for app typography (--font-family).
    User theme overrides live in #custom-theme (moved after bundled CSS in main.tsx). */
 :root {
   color-scheme: dark;
@@ -26,7 +26,7 @@
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   --btn-shadow: none;
   --btn-shadow-hover: none;
-  --font-family: "Inter", system-ui, sans-serif;
+  --font-family: system-ui, sans-serif;
   --font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
     monospace;
   --font-size: 14px;
@@ -43,6 +43,9 @@
   --space-unit: 8px;
   --sidebar-control-hover-bg: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
   --sidebar-control-active-hover-bg: color-mix(in srgb, var(--accent) 72%, var(--bg-secondary));
+  /** Universal list-row hover (sidebar nav, notes rows, search results). */
+  --list-row-hover-bg: color-mix(in srgb, var(--fg) 6%, transparent);
+  --list-row-hover-border: color-mix(in oklab, var(--border-light) 68%, transparent);
   --scrollbar-thumb: color-mix(in oklab, var(--fg) 42%, var(--bg));
   --scrollbar-thumb-hover: color-mix(in oklab, var(--accent) 40%, var(--fg) 35%, var(--bg));
   --scrollbar-track: color-mix(in oklab, var(--bg) 88%, var(--fg));
@@ -51,10 +54,27 @@
   --line-height-message: 1.7;
   /** Sidebar column; keep in sync with `.sidebar` rules. */
   --sidebar-width: 280px;
-  /** Primary reading column (chat messages, settings, tasks body). Overridden on `.app`. */
+  /** Primary reading column (chat messages, config page, tasks body). Overridden on `.app`. */
   --content-width: 600px;
   /** Sidebar + content (viewport width when main column ≈ `--content-width` with sidebar open). Not usable in `@media` — CSS does not resolve `var()` there. */
   --layout-viewport-max: calc(var(--sidebar-width) + var(--content-width));
+
+  /* Motion — shared durations and easings (renderer UI transitions). */
+  --motion-duration-fast: 120ms;
+  --motion-duration-ui: 150ms;
+  --motion-duration-normal: 200ms;
+  --motion-duration-switch: 220ms;
+  --motion-duration-expressive: 420ms;
+  --motion-duration-emphasis: 360ms;
+  --motion-duration-loading: 900ms;
+  --motion-duration-skeleton: 1150ms;
+  --motion-ease-standard: ease;
+  --motion-ease-out: ease-out;
+  --motion-ease-in-out: ease-in-out;
+  --motion-ease-linear: linear;
+  --motion-ease-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --motion-ease-emphasis: cubic-bezier(0.55, 0, 0.65, 0.4);
+  --motion-ease-switch-thumb: cubic-bezier(0.34, 1.15, 0.64, 1);
 }
 
 * {
@@ -152,9 +172,9 @@ hr {
   cursor: pointer;
   box-shadow: var(--btn-shadow);
   transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .sidebar .btn {
@@ -241,8 +261,8 @@ hr {
 .chat-composer-inner,
 .notes-aside-panel__textarea {
   background: transparent;
-  -webkit-backdrop-filter: blur(16px) saturate(1.45);
-  backdrop-filter: blur(8px) saturate(1.45);
+  -webkit-backdrop-filter: blur(16px) saturate(.80);
+  backdrop-filter: blur(8px) saturate(.80);
   border: 1px solid color-mix(in oklab, var(--border-light) 68%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
 }
@@ -260,7 +280,7 @@ hr {
 .list-item-base:hover,
 .sidebar-item:hover,
 .search-result-item:hover {
-  background: var(--bg);
+  background: var(--list-row-hover-bg);
 }
 
 .list-item-base.active,
@@ -279,6 +299,44 @@ hr {
   /* Fluid type and reading width: scale up on large viewports, tighten when compact. */
   /* font-size: clamp(13px, 0.3vw + 12px, 16px); */
   /* --content-width: min(72ch, min(960px, 94vw)); */
+}
+
+.app-grid-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483000;
+  opacity: 0.2;
+}
+
+.app-grid-overlay[data-grid-overlay="4"] {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px);
+  background-size: 4px 4px, 4px 4px, 16px 16px, 16px 16px;
+  background-position: 0 0, 0 0, 0 0, 0 0;
+}
+
+.app-grid-overlay[data-grid-overlay="8"] {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px);
+  background-size: 8px 8px, 8px 8px, 32px 32px, 32px 32px;
+  background-position: 0 0, 0 0, 0 0, 0 0;
+}
+
+.app-grid-overlay[data-grid-overlay="16"] {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px);
+  background-size: 16px 16px, 16px 16px, 64px 64px, 64px 64px;
+  background-position: 0 0, 0 0, 0 0, 0 0;
 }
 
 /* Narrow viewport (768px): sidebar hidden; type and column width tighten. */
@@ -337,6 +395,35 @@ hr {
   container-name: main;
 }
 
+/** Keeps chat mounted (and streaming) while another main view is visible. */
+.main-chat-host {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.main-chat-host[hidden] {
+  display: none !important;
+}
+
 .message-block {
   /* padding: calc(var(--space-unit) * 2) 16px; */
+}
+
+@keyframes title-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.38;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes motion-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

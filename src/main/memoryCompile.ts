@@ -376,11 +376,11 @@ export async function runMemoryCompileIfDue(now: Date = new Date()): Promise<Com
   }
 }
 
-/** Manual trigger from Settings → Memory. Bypasses the once-per-day gate. */
+/** Manual trigger from Config → Context. Bypasses the once-per-day gate. */
 export async function runMemoryCompileNow(): Promise<{ ok: true; result: CompileResult } | { ok: false; error: string }> {
   const memoryDir = getMemoryDir();
   const llm = await buildLLMFromSettings();
-  if (llm == null) return { ok: false, error: "Add an OpenAI API key in Settings before compiling memories." };
+  if (llm == null) return { ok: false, error: "Add an OpenAI API key in Config before compiling context." };
   try {
     const result = await compileMemoriesIn(memoryDir, llm, new Date());
     return { ok: true, result };

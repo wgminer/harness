@@ -2,7 +2,14 @@ import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./typ
 import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
 import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSummary } from "./writing";
-import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "./sync";
+import type {
+  SyncConflictResolution,
+  SyncConflictReview,
+  SyncFolderSuggestion,
+  SyncResult,
+  SyncStatus,
+} from "./sync";
+import type { UiSession } from "./uiSession";
 
 export interface TaskItem {
   id: string;
@@ -50,7 +57,15 @@ export interface ElectronAPI {
   memory: {
     createConversation: () => Promise<string>;
     getConversation: (id: string) => Promise<unknown>;
-    listConversations: () => Promise<{ id: string; title: string | null; createdAt: number }[]>;
+    listConversations: () => Promise<
+      {
+        id: string;
+        title: string | null;
+        createdAt: number;
+        sessionKind?: "dictation" | "chat";
+        hasAssistantReply?: boolean;
+      }[]
+    >;
     deleteConversation: (id: string) => Promise<void>;
     getMessages: (id: string) => Promise<
       { role: string; content: string; toolCalls?: unknown; timestamp?: number; model?: string }[]
@@ -93,7 +108,7 @@ export interface ElectronAPI {
     }>;
     cleanupLegacyMemory: () => Promise<{ removed: boolean }>;
     setConversationTitle: (conversationId: string, title: string) => Promise<void>;
-    setVoiceDictationTitle: (conversationId: string) => Promise<string>;
+    markVoiceDictationSession: (conversationId: string) => Promise<string>;
   };
   plans: {
     list: () => Promise<Plan[]>;
@@ -124,6 +139,10 @@ export interface ElectronAPI {
     onTitleGenerationStarted: (cb: (conversationId: string) => void) => () => void;
     onTitleGenerationEnded: (cb: (conversationId: string) => void) => () => void;
   };
+  uiSession: {
+    get: () => Promise<UiSession>;
+    set: (partial: Partial<UiSession>) => Promise<UiSession>;
+  };
   customization: {
     /** CSS from persisted theme (empty when using built-in base.css only). */
     getActiveTheme: () => Promise<string>;
@@ -148,6 +167,8 @@ export interface ElectronAPI {
     print: (html: string, jobName?: string) => Promise<{ success: boolean }>;
   };
   recording: {
+    /** When false, Fn dictation is ignored while the app window is focused. */
+    setGlobalEnabled: (enabled: boolean) => Promise<void>;
     requestMicrophoneAccess: () => Promise<boolean>;
     saveWav: (data: ArrayBuffer) => Promise<{ path: string }>;
     showInFolder: (path: string) => Promise<void>;
@@ -164,6 +185,8 @@ export interface ElectronAPI {
   sync: {
     getStatus: () => Promise<SyncStatus>;
     runNow: () => Promise<SyncResult>;
+    getConflictReview: () => Promise<SyncConflictReview | { error: string }>;
+    resolveConflict: (resolution: SyncConflictResolution) => Promise<SyncResult>;
     /** Open a folder picker; persists the chosen path. Returns the chosen path or null if cancelled. */
     pickFolder: () => Promise<string | null>;
     /** Persist a backup folder path directly (used by Suggestions and Reset). Empty string clears it. */

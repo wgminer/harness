@@ -14,7 +14,9 @@
   padding: 14px 0;
   background: var(--bg-secondary);
   border-bottom: 1px solid transparent;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color var(--motion-duration-normal) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-normal) var(--motion-ease-standard);
 }
 
 .workspace-header--scrolled {

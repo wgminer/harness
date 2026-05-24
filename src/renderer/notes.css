@@ -1,29 +1,19 @@
-.notes-surface {
-  min-height: 0;
-
-}
-
-.notes-surface__scroll {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding-top: 0;
-  height: 100%;
-}
-
-.notes-surface__scroll--detail {
-  padding: 0;
-}
-
+/* List view: rely on .workspace-scroll for vertical scrolling so the panel
+   can size to its natural content height + bottom padding. */
 .notes-surface__panel {
   max-width: var(--content-width);
   width: 100%;
   margin: 0 auto;
-  min-height: 0;
-  flex: 1;
+  padding: 8px 16px 33vh;
+}
+
+/* Detail view: turn the scroll container into a flex column with hidden
+   overflow so the editor (.notes-surface__detail) can fill the viewport. */
+.notes-surface__scroll--detail {
   display: flex;
   flex-direction: column;
-  padding: 8px 16px 24px;
+  overflow: hidden;
+  padding: 0;
 }
 
 .notes-surface__notes {
@@ -33,52 +23,161 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  min-height: 0;
 }
 
 .notes-surface__templates {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 8px 0 14px;
+  gap: 14px 12px;
+  margin: 0 0 18px;
 }
 
+/* Minimal pull-ticket cards with a tear-line motif. */
 .notes-surface__template-btn {
-  border: 1px solid color-mix(in oklab, var(--border-light) 68%, transparent);
-  border-radius: 10px;
+  --ticket-ink: var(--fg);
+  --ticket-ink-muted: var(--fg-muted);
+  --ticket-border: var(--border-light);
+  --ticket-lift: 8px;
+  --ticket-scale: 1;
+  --ticket-shadow: none;
+  position: relative;
+  width: calc(100% - 12px);
+  margin-inline: auto;
+  min-height: 92px;
+  border: 1px solid var(--ticket-border);
+  border-radius: 8px 8px 0 0;
   background: transparent;
-  color: var(--fg);
-  padding: 10px 12px;
+  color: var(--ticket-ink);
+  padding: 12px 11px 24px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  /* justify-content: flex-end; */
+  gap: 3px;
   text-align: left;
   font: inherit;
   cursor: pointer;
+  transform: translateY(var(--ticket-lift)) scale(var(--ticket-scale));
+  transform-origin: 50% 50%;
+  box-shadow: var(--ticket-shadow);
+  transition:
+    transform var(--motion-duration-expressive) var(--motion-ease-spring),
+    border-color var(--motion-duration-normal) var(--motion-ease-standard),
+    background-color var(--motion-duration-normal) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-expressive) var(--motion-ease-spring);
+  overflow: visible;
+  isolation: isolate;
 }
 
-.notes-surface__template-btn:hover,
-.notes-surface__template-btn:focus-visible {
+.notes-surface__template-btn::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 19px;
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    to right,
+    color-mix(in srgb, var(--ticket-border) 80%, transparent) 0 3px,
+    transparent 3px 8px
+  );
+  pointer-events: none;
+  opacity: 0.95;
+  z-index: 0;
+}
+
+.notes-surface__template-btn::after {
+  content: "";
+  position: absolute;
+  left: -12px;
+  right: -12px;
+  bottom: -11px;
+  height: 13px;
+  background: var(--bg-secondary);
+  transform: translateY(calc(var(--ticket-lift) * -1));
+  transition:
+    transform var(--motion-duration-expressive) var(--motion-ease-spring);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.notes-surface__template-btn--blank {
+  --ticket-border: var(--border-light);
+}
+
+.notes-surface__template-btn--one-on-one {
+  --ticket-border: var(--border-light);
+}
+
+.notes-surface__template-btn--daily-log {
+  --ticket-border: var(--border-light);
+}
+
+.notes-surface__template-tab {
+  position: absolute;
+  bottom: 1px;
+  left: -8px;
+  right: -8px;
+  height: 1px;
+  /* border-radius: 999px; */
+  background: color-mix(in srgb, var(--border-light) 96%, transparent);
+  box-shadow: none;
+  transform-origin: 50% 50%;
+  transform: translateY(calc(var(--ticket-lift) * -1));
+  transition:
+    transform var(--motion-duration-expressive) var(--motion-ease-spring);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.notes-surface__template-btn:hover:not(:disabled),
+.notes-surface__template-btn:focus-visible:not(:disabled) {
   outline: none;
-  background: transparent;
-  -webkit-backdrop-filter: blur(16px) saturate(1.45);
-  backdrop-filter: blur(8px) saturate(1.45);
+  --ticket-lift: 4px;
+  --ticket-scale: 1;
+}
+
+.notes-surface__template-btn:active:not(:disabled) {
+  --ticket-lift: 6px;
+  --ticket-scale: 1;
+  transition-duration: var(--motion-duration-fast);
+}
+
+.notes-surface__template-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: saturate(0.65);
 }
 
 .notes-surface__template-title {
   font-size: var(--font-size);
-  line-height: 1.35;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .notes-surface__template-description {
   font-size: calc(var(--font-size) * 11 / 14);
-  line-height: 1.3;
-  color: var(--fg-muted);
+  line-height: 1.25;
+  color: var(--ticket-ink-muted);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notes-surface__template-btn,
+  .notes-surface__template-tab,
+  .notes-surface__template-btn::after {
+    transition: none;
+  }
+
+  .notes-surface__template-btn:hover:not(:disabled),
+  .notes-surface__template-btn:focus-visible:not(:disabled) {
+    --ticket-lift: 6px;
+    --ticket-scale: 1;
+  }
 }
 
 .notes-surface__new-note {
@@ -120,7 +219,7 @@
   color: var(--fg);
   border-radius: 0;
   text-align: left;
-  padding: 10px 12px;
+  padding: 10px 16px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -154,11 +253,15 @@
 .notes-surface__note-item:hover,
 .notes-surface__note-item:focus-visible {
   outline: none;
-  background: transparent;
+  background: var(--list-row-hover-bg);
   -webkit-backdrop-filter: blur(16px) saturate(1.45);
   backdrop-filter: blur(8px) saturate(1.45);
-  border-radius: 10px;
-  border-color: color-mix(in oklab, var(--border-light) 68%, transparent);
+  border-color: var(--list-row-hover-border);
+}
+
+.notes-surface__note-item:hover,
+.notes-surface__note-item:focus-visible {
+  border-radius: 8px;
 }
 
 .notes-surface__note-title {
@@ -262,7 +365,7 @@
   min-width: 220px;
   padding: 4px;
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: 1px;
   background: var(--bg);
   box-shadow: 0 14px 30px color-mix(in srgb, #000 26%, transparent);
   z-index: 10;
@@ -315,7 +418,7 @@
   height: 100%;
   font-family: var(--font-family-mono);
   font-size: var(--font-size);
-  line-height: var(--line-height);
+  line-height: 1.85;
   background: transparent;
   color: var(--fg);
 }
@@ -359,7 +462,7 @@
   padding-inline: var(--notes-editor-inline-pad);
   font-family: var(--font-family-mono);
   font-size: var(--font-size);
-  line-height: var(--line-height);
+  line-height: 1.85;
   white-space: pre-wrap;
   word-break: break-word;
   color: transparent;
@@ -420,7 +523,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  border-radius: 10px;
+  border-radius: 1px;
   overflow: hidden;
   box-shadow: 0 14px 30px color-mix(in srgb, #000 26%, transparent);
 }
@@ -513,7 +616,7 @@
 
 .notes-aside-panel__input-wrap .notes-aside-panel__textarea {
   padding-bottom: 34px;
-  border-radius: 0 0 10px 10px;
+  border-radius: 0 0 8px 8px;
 }
 
 .notes-aside-panel__corner-btn {
@@ -528,7 +631,7 @@
 }
 
 .notes-aside-panel__regen-icon--spinning {
-  animation: notes-aside-panel-spin 0.9s linear infinite;
+  animation: motion-spin var(--motion-duration-loading) var(--motion-ease-linear) infinite;
 }
 
 .notes-aside-panel__corner-btn--approve {
@@ -550,7 +653,7 @@
 }
 
 .notes-aside-panel__preview .notes-aside-panel__textarea--output {
-  border-radius: 10px 10px 0 0;
+  border-radius: 8px 8px 0 0;
   border-left: 0;
   border-right: 0;
   margin: 0;
@@ -561,15 +664,6 @@
   margin: 0;
   color: var(--danger, #d04747);
   font-size: calc(var(--font-size) * 12 / 14);
-}
-
-@keyframes notes-aside-panel-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .notes-surface__empty {
@@ -587,16 +681,23 @@
 }
 
 @media (max-width: 768px) {
-  .notes-surface__panel {
-    width: 100%;
-  }
-
   .notes-surface__templates {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 8px;
+    padding: 8px 2px 4px;
   }
 
-  .notes-surface__meta-title {
-    display: none;
+  .notes-surface__template-btn {
+    min-height: 80px;
+    padding: 18px 8px 9px;
+  }
+
+  .notes-surface__template-title {
+    font-size: calc(var(--font-size) * 12 / 14);
+  }
+
+  .notes-surface__template-description {
+    font-size: calc(var(--font-size) * 10 / 14);
   }
 
   .notes-aside-panel {

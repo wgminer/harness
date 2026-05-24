@@ -1,15 +1,32 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Settings, Minimize2, Plus, Search, NotebookText, X, ListTodo, Loader2 } from "lucide-react";
+import {
+  MicVocal,
+  Settings,
+  Plus,
+  Search,
+  NotebookText,
+  X,
+  ListTodo,
+  Loader2,
+  RefreshCw,
+  MessageCircle,
+} from "lucide-react";
+import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import type { SearchResult } from "../shared/types";
-import { formatNewChatLabel } from "./chatDisplayTitle";
+import {
+  conversationDisplayTitle,
+  conversationSidebarIconKind,
+  isConversationTitlePending,
+} from "../shared/conversationSession";
 import {
   type Conversation,
   type View,
   type SidebarGroup,
+  SIDEBAR_INITIAL_VISIBLE_COUNT,
   SIDEBAR_MORE_INCREMENT,
-  SIDEBAR_PREVIEW_COUNT_DEFAULT,
   groupConversations,
   pickSidebarConversationsForList,
+  sidebarItemPeekFadeLevel,
 } from "./sidebarUtils";
 
 interface SidebarProps {
@@ -20,9 +37,6 @@ interface SidebarProps {
   onConversationSelect: (id: string) => void;
   onConversationDelete: (id: string) => void;
   onNewChat: () => void;
-  /** When true (compact window), shrink control is hidden — no in-app expand control. */
-  windowPresetSmall: boolean;
-  onWindowSizeToggle: () => void;
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
   appVersion: string | null;
@@ -53,8 +67,6 @@ export function Sidebar({
   onConversationSelect,
   onConversationDelete,
   onNewChat,
-  windowPresetSmall,
-  onWindowSizeToggle,
   activeChatProcessing,
   titleGenInFlight,
   appVersion,
@@ -70,7 +82,38 @@ export function Sidebar({
   /** Avoid focusing the search toggle on mount — composer should receive initial focus. */
   const prevSearchOpenRef = useRef<boolean | undefined>(undefined);
 
-  const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_PREVIEW_COUNT_DEFAULT);
+  const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_INITIAL_VISIBLE_COUNT);
+  const [syncConfigured, setSyncConfigured] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+
+  const refreshSyncConfigured = useCallback(() => {
+    void window.electron.sync.getStatus().then((status) => {
+      setSyncConfigured(status.configured);
+    });
+  }, []);
+
+  useEffect(() => {
+    refreshSyncConfigured();
+  }, [refreshSyncConfigured]);
+
+  useEffect(() => {
+    if (view === "settings") return;
+    refreshSyncConfigured();
+  }, [view, refreshSyncConfigured]);
+
+  const runSidebarSync = useCallback(async () => {
+    if (syncBusy || !syncConfigured) return;
+    setSyncBusy(true);
+    try {
+      const result = await window.electron.sync.runNow();
+      setSyncConfigured(result.status.configured);
+      if (result.conflict) {
+        onViewChange("settings");
+      }
+    } finally {
+      setSyncBusy(false);
+    }
+  }, [syncBusy, syncConfigured, onViewChange]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -124,6 +167,7 @@ export function Sidebar({
   );
 
   const showSidebarMoreControl = sidebarListConversations.length < conversations.length;
+  const sidebarPeekFadeActive = sidebarVisibleLimit <= SIDEBAR_INITIAL_VISIBLE_COUNT;
 
   const onSidebarShowMore = useCallback(() => {
     setSidebarVisibleLimit((n) => Math.min(conversations.length, n + SIDEBAR_MORE_INCREMENT));
@@ -201,9 +245,22 @@ export function Sidebar({
               <NotebookText size={16} className="sidebar-workspace__icon" aria-hidden />
               <span className="sidebar-workspace__label">Notes</span>
             </button>
+            <button
+              type="button"
+              className={`btn list-item-base sidebar-workspace__btn${view === "settings" ? " active" : ""}`}
+              data-testid="sidebar-settings"
+              onClick={() => onViewChange("settings")}
+              aria-label={RIG_PAGE_TITLE}
+              aria-current={view === "settings" ? "page" : undefined}
+            >
+              <Settings size={16} className="sidebar-workspace__icon" aria-hidden />
+              <span className="sidebar-workspace__label">{RIG_PAGE_TITLE}</span>
+            </button>
           </nav>
         )}
-        <div className="sidebar-list-wrap">
+        <div
+          className={`sidebar-list-wrap${sidebarPeekFadeActive ? " sidebar-list-wrap--peek-fade" : ""}`}
+        >
           <div className="sidebar-list__fade-top" aria-hidden />
           <div className="sidebar-list__fade-bottom" aria-hidden />
           <ul className="sidebar-list">
@@ -222,7 +279,7 @@ export function Sidebar({
                   >
                     <span className="search-result-title">
                       <HighlightText
-                        text={r.title || formatNewChatLabel(r.createdAt)}
+                        text={conversationDisplayTitle(r.title, r.createdAt)}
                         range={r.titleMatched ? r.titleMatchRange ?? undefined : undefined}
                       />
                     </span>
@@ -244,30 +301,67 @@ export function Sidebar({
             )
           ) : (
             <>
-              {sidebarGroups.map(({ key, label, items }: SidebarGroup) => (
+              {(() => {
+                let flatConversationIndex = 0;
+                return sidebarGroups.map(({ key, label, items }: SidebarGroup) => (
                 <li key={key} className="sidebar-group">
                   <span className="sidebar-group-label">{label}</span>
                   <ul className="sidebar-group-items">
                     {items.map((c) => {
-                      const rowBusy =
+                      const flatIndex = flatConversationIndex++;
+                      const isActive = conversationId === c.id && view === "chat";
+                      const peekFadeLevel =
+                        !isActive && sidebarPeekFadeActive
+                          ? sidebarItemPeekFadeLevel(flatIndex, sidebarVisibleLimit)
+                          : null;
+                      const titleGenerating = (titleGenInFlight[c.id] ?? 0) > 0;
+                      const titlePending = isConversationTitlePending(c.title, titleGenerating);
+                      const chatStreaming =
                         view === "chat" &&
                         conversationId === c.id &&
-                        (activeChatProcessing || (titleGenInFlight[c.id] ?? 0) > 0);
+                        activeChatProcessing;
+                      const iconKind = conversationSidebarIconKind(c);
+                      const Icon = iconKind === "dictation" ? MicVocal : MessageCircle;
                       return (
                         <li
                           key={c.id}
-                          className={`sidebar-item ${conversationId === c.id && view === "chat" ? "active" : ""}`}
+                          className={[
+                            "sidebar-item",
+                            isActive ? "active" : "",
+                            peekFadeLevel != null ? "sidebar-item--peek-fade" : "",
+                            peekFadeLevel != null ? `sidebar-item--peek-fade-${peekFadeLevel}` : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
                           data-testid="sidebar-conversation"
                           data-conversation-id={c.id}
+                          data-session-icon={iconKind}
                           onClick={() => { onConversationSelect(c.id); onViewChange("chat"); }}
-                          aria-busy={rowBusy ? true : undefined}
+                          aria-busy={titlePending || chatStreaming ? true : undefined}
                         >
-                          {rowBusy ? (
+                          {chatStreaming ? (
                             <span className="sidebar-item-spinner" aria-hidden>
-                              <Loader2 size={11} strokeWidth={2.5} className="voice-spinner" />
+                              <Loader2 size={16} className="voice-spinner" />
                             </span>
-                          ) : null}
-                          <span className="sidebar-item-title">{c.title || formatNewChatLabel(c.createdAt)}</span>
+                          ) : (
+                            <span
+                              className="sidebar-item-icon"
+                              aria-hidden
+                              title={iconKind === "dictation" ? "Dictation" : "Chat"}
+                            >
+                              <Icon size={16} className="sidebar-item-icon__svg" />
+                            </span>
+                          )}
+                          {titlePending ? (
+                            <span
+                              className="sidebar-item-title-skeleton"
+                              aria-label="Generating title"
+                            />
+                          ) : (
+                            <span className="sidebar-item-title">
+                              {conversationDisplayTitle(c.title, c.createdAt)}
+                            </span>
+                          )}
                           <button
                             type="button"
                             className="sidebar-item-delete"
@@ -281,7 +375,8 @@ export function Sidebar({
                     })}
                   </ul>
                 </li>
-              ))}
+              ));
+              })()}
               {showSidebarMoreControl ? (
                 <li className="sidebar-list-expand">
                   <div className="sidebar-list-expand-row">
@@ -311,26 +406,21 @@ export function Sidebar({
           </div>
           <button
             type="button"
-            className={`btn btn-icon sidebar-footer__settings-toggle${view === "settings" ? " sidebar-footer__settings-toggle--active" : ""}`}
-            data-testid="sidebar-settings"
-            onClick={() => onViewChange("settings")}
-            aria-label="Settings"
-            aria-current={view === "settings" ? "page" : undefined}
-            title="Settings"
+            className="btn btn-icon sidebar-footer__sync-toggle"
+            data-testid="sidebar-sync"
+            onClick={() => void runSidebarSync()}
+            disabled={syncBusy || !syncConfigured}
+            aria-label={syncBusy ? "Syncing" : "Sync now"}
+            title={
+              syncBusy
+                ? "Syncing…"
+                : syncConfigured
+                  ? "Sync now"
+                  : `Set up a backup folder in ${RIG_PAGE_TITLE}`
+            }
           >
-            <Settings size={14} />
+            {syncBusy ? <Loader2 size={14} className="voice-spinner" /> : <RefreshCw size={14} />}
           </button>
-          {!windowPresetSmall ? (
-            <button
-              type="button"
-              className="btn btn-icon sidebar-footer__window-toggle"
-              onClick={onWindowSizeToggle}
-              aria-label="Shrink window"
-              title="Shrink window"
-            >
-              <Minimize2 size={14} />
-            </button>
-          ) : null}
         </div>
       </aside>
     </div>

@@ -16,8 +16,9 @@ import { registerGlobalFnRecording } from "./globalRecordingMain";
 import { registerSystemHandlers } from "./systemHandlers";
 import { importFromFolder as importFromChatGPTFolder } from "./importChatGPT";
 import { importFromFolder as importFromClaudeFolder } from "./importClaude";
-import { registerMemoryCompileHandlers, runMemoryCompileIfDue } from "./memoryCompile";
+import { registerMemoryCompileHandlers } from "./memoryCompile";
 import { registerSyncHandlers } from "./sync";
+import { registerUiSessionHandlers } from "./uiSession";
 import {
   WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
 } from "../shared/windowLayout";
@@ -163,6 +164,7 @@ app.whenReady().then(() => {
   registerRecordingHandlers();
   registerSystemHandlers();
   registerSyncHandlers();
+  registerUiSessionHandlers();
 
   if (process.platform === "darwin") {
     app.dock.setIcon(nativeImage.createFromPath(iconPath));
@@ -189,15 +191,7 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
-  // Nightly memory compile: deferred briefly so it never blocks first paint.
-  // Skipped under E2E to keep tests deterministic and offline.
-  if (!isHarnessE2E()) {
-    setTimeout(() => {
-      void runMemoryCompileIfDue().catch(() => {
-        // Failures are persisted to compile state; intentionally silent here.
-      });
-    }, 5000);
-  }
+  // Memory compile is manual-only for now (triggered from Config → Context).
 });
 
 app.on("will-quit", () => {
