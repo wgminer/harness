@@ -1,0 +1,35 @@
+name: HarnessMobile
+options:
+  bundleIdPrefix: com.harness
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+targets:
+  HarnessMobile:
+    type: application
+    platform: iOS
+    sources:
+      - path: HarnessMobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.harness.mobile
+        INFOPLIST_FILE: HarnessMobile/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies: []
+  HarnessMobileTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: HarnessMobileTests
+    dependencies:
+      - target: HarnessMobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.harness.mobile.tests
+        GENERATE_INFOPLIST_FILE: YES

@@ -1,3 +1,4 @@
+import { snapToGrid } from "../shared/grid";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode, RefObject, UIEvent } from "react";
 import { ChatComposer } from "./ChatComposer";
@@ -92,14 +93,22 @@ export function ChatSurface({
   const [hasScrolled, setHasScrolled] = useState(false);
   const [followLiveEdge, setFollowLiveEdge] = useState(true);
   const chatPaneRef = useRef<HTMLDivElement>(null);
+  const centerSingleMessage =
+    displayMessages.length === 1 && !sending && !streamingContent;
 
   useFollowChatLiveEdge({
     scrollRef: chatAreaRef,
-    followLiveEdge,
-    sending,
+    followLiveEdge: followLiveEdge && !centerSingleMessage,
+    sending: sending && !centerSingleMessage,
     streamingContent,
     messageCount: displayMessages.length,
   });
+
+  useLayoutEffect(() => {
+    if (!centerSingleMessage) return;
+    const scroll = chatAreaRef.current;
+    if (scroll) scroll.scrollTop = 0;
+  }, [centerSingleMessage, chatAreaRef, displayMessages]);
 
   useLayoutEffect(() => {
     if (!sending) return;
@@ -114,7 +123,7 @@ export function ChatSurface({
 
     const sync = () => {
       const h = Math.ceil(dock.getBoundingClientRect().height);
-      pane.style.setProperty("--chat-composer-dock-height", `${h}px`);
+      pane.style.setProperty("--chat-composer-dock-height", `${snapToGrid(h)}px`);
     };
 
     sync();
@@ -161,7 +170,7 @@ export function ChatSurface({
       ) : null}
       <div
         ref={chatAreaRef}
-        className="chat-scroll"
+        className={centerSingleMessage ? "chat-scroll chat-scroll--single-message" : "chat-scroll"}
         data-scrolled={hasScrolled || undefined}
         onScroll={onChatAreaScroll}
       >

@@ -1,0 +1,533 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0C589F7682102FA21D67D7C8 /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106BB0C874DBAF12707F4E03 /* ConversationListView.swift */; };
+		0F94B33BFE9E0B2164A11134 /* SyncStatusSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E61F0E1B823D181A12D870A /* SyncStatusSnapshot.swift */; };
+		123C6A2C1FC6A2CF01EC2854 /* LocalDataLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 361B6AE42210AB6F48120319 /* LocalDataLayout.swift */; };
+		1EB8FDB999DA78035672F5E3 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 735F192909EFBDD686711560 /* KeychainStore.swift */; };
+		1EFD28660E2D9C49A9251014 /* MobileSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 323C3ABD7C267651D0E38D59 /* MobileSettingsView.swift */; };
+		357D3D4146091B409203F23D /* SyncScopes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4730A624D3A95A9CB16A575B /* SyncScopes.swift */; };
+		43DD804E517D5D529F751E1C /* SyncDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C55D83964459C45EFAF4E9 /* SyncDecision.swift */; };
+		4E1EF2930783BB50E1D5222D /* BackupManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7C9D0416E9ECD23AE827A4D /* BackupManifest.swift */; };
+		610642E64681640235A564C9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E10B07F1BF607A227328880 /* ContentView.swift */; };
+		610E828B5C69BA4F1187A16D /* PreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14859E7C56E1266044C8B120 /* PreviewSupport.swift */; };
+		6BF72AA3B20A7ABF5C20BE7C /* ConversationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A2381055E5D605C3B6F813 /* ConversationModels.swift */; };
+		79F1B0D88F6B255459E7F98C /* BookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2DB25CB351FA506A1BDCD4 /* BookmarkStore.swift */; };
+		7A11C4A228A569F2230230B6 /* ChatThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B902543D8716C83660DCB1 /* ChatThreadView.swift */; };
+		7B28310EB93D34E6352ED9AB /* BundleCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0AF1D9F3C9BB9FACBE6CDE /* BundleCodec.swift */; };
+		7D5F29005FFD4816F4D2F0FF /* SyncChangeSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A707405489446956F32F0A /* SyncChangeSummaryTests.swift */; };
+		85B08CA7CD6E602039B3B96C /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130EB856B4947319E3ED74A6 /* AppModel.swift */; };
+		97941B84CF5AC90DCF4CF5E6 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B4EBBBE10E0C397F313E3F /* ChatService.swift */; };
+		9EF57575B8FA4F2E75020278 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4851B4A7D4121CE8BECE89F3 /* SyncEngine.swift */; };
+		A65C2B2CC4F854E86B42AF9C /* MemorySelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D9AB8496CA62C7D9F89D61D /* MemorySelector.swift */; };
+		AF2401D07E5FDE37E222DB17 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6520E198C97E49C22A8AE024 /* ConversationStore.swift */; };
+		B86A5D8CC2397A5E8BD0B2B7 /* SyncChangeSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533229EA4E1BECE9636B6F31 /* SyncChangeSummary.swift */; };
+		C9D00755BB7BB7E19E44C2BC /* SyncStatusBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CD2A086ADCBCB170D857E3E /* SyncStatusBanner.swift */; };
+		D310CA6926A5B016FAB34DF8 /* HarnessMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 060D0E272118A569F2C349BE /* HarnessMobileApp.swift */; };
+		D89741D868A85BCA5EBD181B /* FolderPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCDBC49250A09E607955B97 /* FolderPicker.swift */; };
+		DFF4049D373E788583FC18DF /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F5172174F6290F6B320171 /* OpenAIClient.swift */; };
+		E175849E389B13D5263D80E1 /* ChatComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC6BFAD81034F85FABBC3129 /* ChatComposerView.swift */; };
+		F19BCAC462DFC28A5EE6F55B /* SyncConflictView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C387C60E0999C9AED4B966CB /* SyncConflictView.swift */; };
+		F4EFC0CD1F466858AF56D025 /* BundleCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62768ADC96668EC05B169A6F /* BundleCodecTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		172822E1A3E240F9EEE576BB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 24F012BB8A8FD1B659A7D2ED /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 215D609463B675FEAD8AD518;
+			remoteInfo = HarnessMobile;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		060D0E272118A569F2C349BE /* HarnessMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessMobileApp.swift; sourceTree = "<group>"; };
+		07B902543D8716C83660DCB1 /* ChatThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatThreadView.swift; sourceTree = "<group>"; };
+		106BB0C874DBAF12707F4E03 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
+		130EB856B4947319E3ED74A6 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		14859E7C56E1266044C8B120 /* PreviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewSupport.swift; sourceTree = "<group>"; };
+		1CCDBC49250A09E607955B97 /* FolderPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderPicker.swift; sourceTree = "<group>"; };
+		1CD2A086ADCBCB170D857E3E /* SyncStatusBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusBanner.swift; sourceTree = "<group>"; };
+		1E10B07F1BF607A227328880 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		323C3ABD7C267651D0E38D59 /* MobileSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileSettingsView.swift; sourceTree = "<group>"; };
+		34CBE812DD59E5B40836635B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		361B6AE42210AB6F48120319 /* LocalDataLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDataLayout.swift; sourceTree = "<group>"; };
+		3D9AB8496CA62C7D9F89D61D /* MemorySelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemorySelector.swift; sourceTree = "<group>"; };
+		454658974ADDE8DA72E85D10 /* HarnessMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HarnessMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4730A624D3A95A9CB16A575B /* SyncScopes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncScopes.swift; sourceTree = "<group>"; };
+		4851B4A7D4121CE8BECE89F3 /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
+		533229EA4E1BECE9636B6F31 /* SyncChangeSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncChangeSummary.swift; sourceTree = "<group>"; };
+		5C2DB25CB351FA506A1BDCD4 /* BookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkStore.swift; sourceTree = "<group>"; };
+		5E61F0E1B823D181A12D870A /* SyncStatusSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusSnapshot.swift; sourceTree = "<group>"; };
+		62768ADC96668EC05B169A6F /* BundleCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundleCodecTests.swift; sourceTree = "<group>"; };
+		6520E198C97E49C22A8AE024 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
+		735F192909EFBDD686711560 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		86F5172174F6290F6B320171 /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
+		9FBAE9F76A8F49349D173680 /* HarnessMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HarnessMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1A707405489446956F32F0A /* SyncChangeSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncChangeSummaryTests.swift; sourceTree = "<group>"; };
+		B2C55D83964459C45EFAF4E9 /* SyncDecision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncDecision.swift; sourceTree = "<group>"; };
+		BB0AF1D9F3C9BB9FACBE6CDE /* BundleCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundleCodec.swift; sourceTree = "<group>"; };
+		C387C60E0999C9AED4B966CB /* SyncConflictView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncConflictView.swift; sourceTree = "<group>"; };
+		CC6BFAD81034F85FABBC3129 /* ChatComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatComposerView.swift; sourceTree = "<group>"; };
+		D3A2381055E5D605C3B6F813 /* ConversationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationModels.swift; sourceTree = "<group>"; };
+		D7C9D0416E9ECD23AE827A4D /* BackupManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupManifest.swift; sourceTree = "<group>"; };
+		D9B4EBBBE10E0C397F313E3F /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		082F5680F277CC33C42930DF /* HarnessMobile */ = {
+			isa = PBXGroup;
+			children = (
+				060D0E272118A569F2C349BE /* HarnessMobileApp.swift */,
+				34CBE812DD59E5B40836635B /* Info.plist */,
+				3689040061AB26C6F3F61ADF /* App */,
+				2CC256CE5CD3B1800D6C3FBE /* Chat */,
+				534B4DA5E71B662D7CCE3A74 /* Data */,
+				83AE6CEA45EEFB29D860B8F0 /* Sync */,
+				F450C91293438FC53F495222 /* UI */,
+			);
+			path = HarnessMobile;
+			sourceTree = "<group>";
+		};
+		2CC256CE5CD3B1800D6C3FBE /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				D9B4EBBBE10E0C397F313E3F /* ChatService.swift */,
+				735F192909EFBDD686711560 /* KeychainStore.swift */,
+				3D9AB8496CA62C7D9F89D61D /* MemorySelector.swift */,
+				86F5172174F6290F6B320171 /* OpenAIClient.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		3689040061AB26C6F3F61ADF /* App */ = {
+			isa = PBXGroup;
+			children = (
+				130EB856B4947319E3ED74A6 /* AppModel.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		4C3F4D71FBC06A31C5CFF272 = {
+			isa = PBXGroup;
+			children = (
+				082F5680F277CC33C42930DF /* HarnessMobile */,
+				857B04E594D188682697A7AE /* HarnessMobileTests */,
+				F8DE83FA9BF33674DABB06F7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		534B4DA5E71B662D7CCE3A74 /* Data */ = {
+			isa = PBXGroup;
+			children = (
+				D3A2381055E5D605C3B6F813 /* ConversationModels.swift */,
+				6520E198C97E49C22A8AE024 /* ConversationStore.swift */,
+				361B6AE42210AB6F48120319 /* LocalDataLayout.swift */,
+			);
+			path = Data;
+			sourceTree = "<group>";
+		};
+		83AE6CEA45EEFB29D860B8F0 /* Sync */ = {
+			isa = PBXGroup;
+			children = (
+				D7C9D0416E9ECD23AE827A4D /* BackupManifest.swift */,
+				5C2DB25CB351FA506A1BDCD4 /* BookmarkStore.swift */,
+				BB0AF1D9F3C9BB9FACBE6CDE /* BundleCodec.swift */,
+				533229EA4E1BECE9636B6F31 /* SyncChangeSummary.swift */,
+				B2C55D83964459C45EFAF4E9 /* SyncDecision.swift */,
+				4851B4A7D4121CE8BECE89F3 /* SyncEngine.swift */,
+				4730A624D3A95A9CB16A575B /* SyncScopes.swift */,
+				5E61F0E1B823D181A12D870A /* SyncStatusSnapshot.swift */,
+			);
+			path = Sync;
+			sourceTree = "<group>";
+		};
+		857B04E594D188682697A7AE /* HarnessMobileTests */ = {
+			isa = PBXGroup;
+			children = (
+				62768ADC96668EC05B169A6F /* BundleCodecTests.swift */,
+				A1A707405489446956F32F0A /* SyncChangeSummaryTests.swift */,
+			);
+			path = HarnessMobileTests;
+			sourceTree = "<group>";
+		};
+		F450C91293438FC53F495222 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				CC6BFAD81034F85FABBC3129 /* ChatComposerView.swift */,
+				07B902543D8716C83660DCB1 /* ChatThreadView.swift */,
+				1E10B07F1BF607A227328880 /* ContentView.swift */,
+				106BB0C874DBAF12707F4E03 /* ConversationListView.swift */,
+				1CCDBC49250A09E607955B97 /* FolderPicker.swift */,
+				323C3ABD7C267651D0E38D59 /* MobileSettingsView.swift */,
+				14859E7C56E1266044C8B120 /* PreviewSupport.swift */,
+				C387C60E0999C9AED4B966CB /* SyncConflictView.swift */,
+				1CD2A086ADCBCB170D857E3E /* SyncStatusBanner.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		F8DE83FA9BF33674DABB06F7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9FBAE9F76A8F49349D173680 /* HarnessMobile.app */,
+				454658974ADDE8DA72E85D10 /* HarnessMobileTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		215D609463B675FEAD8AD518 /* HarnessMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4B65B79E19293354770A0FC5 /* Build configuration list for PBXNativeTarget "HarnessMobile" */;
+			buildPhases = (
+				F077295E720A4B3B260355DE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HarnessMobile;
+			packageProductDependencies = (
+			);
+			productName = HarnessMobile;
+			productReference = 9FBAE9F76A8F49349D173680 /* HarnessMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A0864F7614913F9EA08A3B85 /* HarnessMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FB22490FE1645741939E8277 /* Build configuration list for PBXNativeTarget "HarnessMobileTests" */;
+			buildPhases = (
+				A3BBF58E9E2A120A88035BE9 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				74BAEBABF10DCA7A5B9AC719 /* PBXTargetDependency */,
+			);
+			name = HarnessMobileTests;
+			packageProductDependencies = (
+			);
+			productName = HarnessMobileTests;
+			productReference = 454658974ADDE8DA72E85D10 /* HarnessMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		24F012BB8A8FD1B659A7D2ED /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+			};
+			buildConfigurationList = 214C15A6EA9E3340F69D23C5 /* Build configuration list for PBXProject "HarnessMobile" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 4C3F4D71FBC06A31C5CFF272;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = F8DE83FA9BF33674DABB06F7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				215D609463B675FEAD8AD518 /* HarnessMobile */,
+				A0864F7614913F9EA08A3B85 /* HarnessMobileTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A3BBF58E9E2A120A88035BE9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F4EFC0CD1F466858AF56D025 /* BundleCodecTests.swift in Sources */,
+				7D5F29005FFD4816F4D2F0FF /* SyncChangeSummaryTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F077295E720A4B3B260355DE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				85B08CA7CD6E602039B3B96C /* AppModel.swift in Sources */,
+				4E1EF2930783BB50E1D5222D /* BackupManifest.swift in Sources */,
+				79F1B0D88F6B255459E7F98C /* BookmarkStore.swift in Sources */,
+				7B28310EB93D34E6352ED9AB /* BundleCodec.swift in Sources */,
+				E175849E389B13D5263D80E1 /* ChatComposerView.swift in Sources */,
+				97941B84CF5AC90DCF4CF5E6 /* ChatService.swift in Sources */,
+				7A11C4A228A569F2230230B6 /* ChatThreadView.swift in Sources */,
+				610642E64681640235A564C9 /* ContentView.swift in Sources */,
+				0C589F7682102FA21D67D7C8 /* ConversationListView.swift in Sources */,
+				6BF72AA3B20A7ABF5C20BE7C /* ConversationModels.swift in Sources */,
+				AF2401D07E5FDE37E222DB17 /* ConversationStore.swift in Sources */,
+				D89741D868A85BCA5EBD181B /* FolderPicker.swift in Sources */,
+				D310CA6926A5B016FAB34DF8 /* HarnessMobileApp.swift in Sources */,
+				1EB8FDB999DA78035672F5E3 /* KeychainStore.swift in Sources */,
+				123C6A2C1FC6A2CF01EC2854 /* LocalDataLayout.swift in Sources */,
+				A65C2B2CC4F854E86B42AF9C /* MemorySelector.swift in Sources */,
+				1EFD28660E2D9C49A9251014 /* MobileSettingsView.swift in Sources */,
+				DFF4049D373E788583FC18DF /* OpenAIClient.swift in Sources */,
+				610E828B5C69BA4F1187A16D /* PreviewSupport.swift in Sources */,
+				B86A5D8CC2397A5E8BD0B2B7 /* SyncChangeSummary.swift in Sources */,
+				F19BCAC462DFC28A5EE6F55B /* SyncConflictView.swift in Sources */,
+				43DD804E517D5D529F751E1C /* SyncDecision.swift in Sources */,
+				9EF57575B8FA4F2E75020278 /* SyncEngine.swift in Sources */,
+				357D3D4146091B409203F23D /* SyncScopes.swift in Sources */,
+				C9D00755BB7BB7E19E44C2BC /* SyncStatusBanner.swift in Sources */,
+				0F94B33BFE9E0B2164A11134 /* SyncStatusSnapshot.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		74BAEBABF10DCA7A5B9AC719 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 215D609463B675FEAD8AD518 /* HarnessMobile */;
+			targetProxy = 172822E1A3E240F9EEE576BB /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		189F0F60A1B052C09D776219 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		6047FC34E53336E86D26A036 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.harness.mobile.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HarnessMobile.app/HarnessMobile";
+			};
+			name = Debug;
+		};
+		67A9237974142D3FECDDA3E1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		78C661BF53CA587F42640A31 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.harness.mobile.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HarnessMobile.app/HarnessMobile";
+			};
+			name = Release;
+		};
+		D79E0A9BDDDC1A03016BEE0B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = C64DYYG928;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HarnessMobile/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.harness.mobile;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F412B9DA67D5E2846A4A511A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = C64DYYG928;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HarnessMobile/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.harness.mobile;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		214C15A6EA9E3340F69D23C5 /* Build configuration list for PBXProject "HarnessMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				189F0F60A1B052C09D776219 /* Debug */,
+				67A9237974142D3FECDDA3E1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4B65B79E19293354770A0FC5 /* Build configuration list for PBXNativeTarget "HarnessMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D79E0A9BDDDC1A03016BEE0B /* Debug */,
+				F412B9DA67D5E2846A4A511A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FB22490FE1645741939E8277 /* Build configuration list for PBXNativeTarget "HarnessMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6047FC34E53336E86D26A036 /* Debug */,
+				78C661BF53CA587F42640A31 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 24F012BB8A8FD1B659A7D2ED /* Project object */;
+}

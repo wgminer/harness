@@ -1,3 +1,4 @@
+import { snapToGrid } from "../shared/grid";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight, ListTodo, Square, SquareCheck, Trash2, X } from "lucide-react";
 import type { TaskItem, TasksPayload } from "../shared/electronAPI";
@@ -189,7 +190,7 @@ export function TasksView() {
 
     const sync = () => {
       const h = Math.ceil(dock.getBoundingClientRect().height);
-      pane.style.setProperty("--tasks-composer-dock-height", `${h}px`);
+      pane.style.setProperty("--tasks-composer-dock-height", `${snapToGrid(h)}px`);
     };
 
     sync();

@@ -100,12 +100,11 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "set_layout",
       description:
-        "Change app layout: sidebar position (left/right), density (compact/comfortable), and optional grid overlay (off/4/8/16).",
+        "Change app layout: sidebar position (left/right) and optional grid overlay (off/4/8/16).",
       parameters: {
         type: "object",
         properties: {
           sidebar: { type: "string", enum: ["left", "right"], description: "Sidebar position" },
-          density: { type: "string", enum: ["compact", "comfortable"], description: "Layout density" },
           gridOverlay: { type: "string", enum: ["off", "4", "8", "16"], description: "Design grid overlay spacing in px" },
         },
       },

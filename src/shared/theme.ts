@@ -2,7 +2,121 @@
  * Theme settings (persisted as theme.json), Google Fonts URL, and CSS generation.
  */
 
-export const FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16, 18] as const;
+export const FONT_SIZE_OPTIONS = [12, 14, 16] as const;
+
+export type FontSizePx = (typeof FONT_SIZE_OPTIONS)[number];
+
+/** Semantic type and icon sizes on the 4px grid for each user base font size. */
+export function typeScaleCssVars(fontSize: FontSizePx): Record<string, string> {
+  const scales: Record<
+    FontSizePx,
+    {
+      caption: number;
+      body: number;
+      ui: number;
+      title: number;
+      iconXs: number;
+      iconSm: number;
+      iconMd: number;
+      iconLg: number;
+      iconXl: number;
+      lhCaption: number;
+      lhUi: number;
+      lhBody: number;
+      lhTitle: number;
+      lhMessage: number;
+      lhProse: number;
+      lhCompact: number;
+      lhSnug: number;
+      lhNormal: number;
+    }
+  > = {
+    12: {
+      caption: 12,
+      body: 12,
+      ui: 12,
+      title: 14,
+      iconXs: 12,
+      iconSm: 12,
+      iconMd: 12,
+      iconLg: 16,
+      iconXl: 16,
+      lhCaption: 16,
+      lhUi: 16,
+      lhBody: 16,
+      lhTitle: 20,
+      lhMessage: 20,
+      lhProse: 24,
+      lhCompact: 16,
+      lhSnug: 16,
+      lhNormal: 20,
+    },
+    14: {
+      caption: 12,
+      body: 14,
+      ui: 12,
+      title: 16,
+      iconXs: 12,
+      iconSm: 12,
+      iconMd: 16,
+      iconLg: 16,
+      iconXl: 20,
+      lhCaption: 16,
+      lhUi: 16,
+      lhBody: 20,
+      lhTitle: 24,
+      lhMessage: 24,
+      lhProse: 28,
+      lhCompact: 16,
+      lhSnug: 20,
+      lhNormal: 20,
+    },
+    16: {
+      caption: 12,
+      body: 16,
+      ui: 16,
+      title: 20,
+      iconXs: 12,
+      iconSm: 12,
+      iconMd: 16,
+      iconLg: 20,
+      iconXl: 20,
+      lhCaption: 16,
+      lhUi: 24,
+      lhBody: 24,
+      lhTitle: 28,
+      lhMessage: 28,
+      lhProse: 32,
+      lhCompact: 20,
+      lhSnug: 20,
+      lhNormal: 24,
+    },
+  };
+  const s = scales[fontSize];
+  return {
+    "--font-size-caption": `${s.caption}px`,
+    "--font-size-body": `${s.body}px`,
+    "--font-size-ui": `${s.ui}px`,
+    "--font-size-title": `${s.title}px`,
+    "--icon-size-xs": `${s.iconXs}px`,
+    "--icon-size-sm": `${s.iconSm}px`,
+    "--icon-size-md": `${s.iconMd}px`,
+    "--icon-size-lg": `${s.iconLg}px`,
+    "--icon-size-xl": `${s.iconXl}px`,
+    "--icon-size-compact": `${s.body}px`,
+    "--line-height-tight": "16px",
+    "--line-height-caption": `${s.lhCaption}px`,
+    "--line-height-ui": `${s.lhUi}px`,
+    "--line-height-body": `${s.lhBody}px`,
+    "--line-height-title": `${s.lhTitle}px`,
+    "--line-height-message": `${s.lhMessage}px`,
+    "--line-height-prose": `${s.lhProse}px`,
+    "--line-height-compact": `${s.lhCompact}px`,
+    "--line-height-snug": `${s.lhSnug}px`,
+    "--line-height-normal": `${s.lhNormal}px`,
+    "--line-height": `${s.lhBody}px`,
+  };
+}
 
 const GOOGLE_QUERY_PARTS = [
   "Inter:wght@400;500;600;700",
@@ -213,7 +327,7 @@ export type ThemeColors = {
 export type ThemeSettings = ThemeColors & {
   font: UiFontId;
   fontMono: MonoFontId;
-  fontSize: (typeof FONT_SIZE_OPTIONS)[number];
+  fontSize: FontSizePx;
 };
 
 export const DEFAULT_THEME_COLORS: ThemeColors = {
@@ -265,19 +379,13 @@ export function applyThemeColors(settings: ThemeSettings, colors: ThemeColors): 
   return { ...settings, ...colors };
 }
 
-function parseFontSizePx(raw: unknown): (typeof FONT_SIZE_OPTIONS)[number] | undefined {
+function parseFontSizePx(raw: unknown): FontSizePx | undefined {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
-  const n = Math.round(raw);
-  return FONT_SIZE_OPTIONS.includes(n as (typeof FONT_SIZE_OPTIONS)[number])
-    ? (n as (typeof FONT_SIZE_OPTIONS)[number])
-    : undefined;
+  return coerceFontSizePx(Math.round(raw));
 }
 
 /** Step base font size through allowed px values. */
-export function stepFontSize(
-  current: (typeof FONT_SIZE_OPTIONS)[number],
-  delta: -1 | 1,
-): (typeof FONT_SIZE_OPTIONS)[number] {
+export function stepFontSize(current: FontSizePx, delta: -1 | 1): FontSizePx {
   const idx = FONT_SIZE_OPTIONS.indexOf(current);
   const baseIdx = idx >= 0 ? idx : FONT_SIZE_OPTIONS.indexOf(DEFAULT_THEME_SETTINGS.fontSize);
   const next = baseIdx + delta;
@@ -287,14 +395,12 @@ export function stepFontSize(
 }
 
 /** Snap an arbitrary px value to the nearest allowed base font size. */
-export function coerceFontSizePx(raw: number): (typeof FONT_SIZE_OPTIONS)[number] {
-  const exact = parseFontSizePx(raw);
-  if (exact !== undefined) return exact;
-  let closest: (typeof FONT_SIZE_OPTIONS)[number] = FONT_SIZE_OPTIONS[0];
+export function coerceFontSizePx(raw: number): FontSizePx {
+  let closest: FontSizePx = FONT_SIZE_OPTIONS[0];
   let minDist = Math.abs(raw - closest);
   for (const opt of FONT_SIZE_OPTIONS) {
     const dist = Math.abs(raw - opt);
-    if (dist < minDist) {
+    if (dist < minDist || (dist === minDist && opt > closest)) {
       minDist = dist;
       closest = opt;
     }
@@ -323,6 +429,7 @@ function themeResolvedCssVars(s: ThemeSettings): Record<string, string> {
     "--font-family": FONT_STACKS[s.font],
     "--font-family-mono": FONT_STACKS[s.fontMono],
     "--font-size": `${s.fontSize}px`,
+    ...typeScaleCssVars(s.fontSize),
   };
 }
 

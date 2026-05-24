@@ -53,7 +53,20 @@ Packaged installers (macOS, signing/notarization): see [BUILD.md](BUILD.md).
 | `src/preload/`  | Preload bridge exposing `window.electron`.                                                                                                                |
 | `src/renderer/` | React UI (chat, settings, tasks, styles).                                                                                                                 |
 | `src/shared/`   | Shared TypeScript types and the typed `ElectronAPI` / `window.electron` contract.                                                                         |
+| `ios/`          | **Harness Mobile** — native iOS chat app synced via the same backup folder as desktop ([ios/README.md](ios/README.md)).                                  |
 
+
+## Harness Mobile (iOS)
+
+Chat-only companion: OpenAI streaming, iCloud backup-folder sync (`bundle.json.gz` / `manifest.json`), no tools. See [ios/README.md](ios/README.md) for setup and the desktop ↔ phone sync workflow.
+
+## Layout grid (desktop)
+
+Primary UI spacing and line heights snap to a **4px grid** (theme type scale + shared CSS tokens). Details: [docs/4PX_GRID.md](docs/4PX_GRID.md). Check renderer CSS:
+
+```bash
+npm run grid:audit
+```
 
 ## Roadmap
 

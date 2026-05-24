@@ -3,7 +3,7 @@
 Living document with two layers:
 
 1. **Outcomes** — what the project is *for* (steer ideas and compare work here first).
-2. **Execution** — what shipped (**Completed**), what’s active (**v0.5**), and what’s queued (**Post v0.5**).
+2. **Execution** — what shipped (**Completed**), what’s active (**v0.6**), and what’s queued (**Post v0.6**).
 
 When considering a feature, ask: *which outcome does it serve, and does anything already on the execution track do it better?*
 
@@ -20,8 +20,8 @@ Harness should feel like a deliberate product: typography, spacing, motion, and 
 | | |
 |---|---|
 | **Success picture** | Someone opening the app notices craft: readable density, coherent theme, surfaces that scale with the window, chat/notes/settings that feel designed—not bolted on. |
-| **Signals today** | Theme studio (color + typography split), `--accent-readable`, theme-linked font/icon tokens across surfaces, dedicated Notes/Settings shells, tray branding. |
-| **Gaps** | Chat column height and sticky composer; sidebar motion/focus; deeper viewport scaling (fluid width, breakpoints); polish pass on empty/loading/error states. |
+| **Signals today** | **4px layout grid** + `grid:audit`; theme type scale (font + icon + line-height tokens); Theme studio; `--accent-readable`; dedicated Notes/Config shells; session restore; sidebar sort modes + peek fade; chat single-message layout; motion audit doc; tray branding. |
+| **Gaps** | Deeper viewport breakpoints; sidebar focus traps; empty/loading/error polish; run `grid:audit` in CI. |
 | **Anti-goals** | Feature sprawl that ignores layout debt; one-off screens that don’t share tokens; “good enough” spacing in primary flows. |
 
 ### O2 — Replace paid AI subscriptions
@@ -31,7 +31,7 @@ One personal harness should absorb daily workflows currently spread across chat 
 | | |
 |---|---|
 | **Success picture** | You reach for Harness first for chat, memory, notes, tasks, and imports; fewer standalone AI SaaS tabs; data lives locally with clear sync/backup. |
-| **Signals today** | Chat + tools + memory; tasks & plans; Notes + `proposeEdit`; ChatGPT + Claude import; nightly memory compile; folder backup sync; conversation search; weather tool; provider picker (OpenAI / Ollama). |
+| **Signals today** | Chat + tools + memory; tasks & plans; Notes + `proposeEdit`; ChatGPT + Claude import; nightly memory compile; folder backup sync with **per-file conflict review**; conversation search; weather tool; provider picker (OpenAI / Ollama); dictation sessions. |
 | **Gaps** | More chat providers (Claude/Gemini APIs); backlog/inbox primitive; richer notes (metadata, search, guided actions); semantic memory; agent mode with guardrails. |
 | **Anti-goals** | Thin wrappers that still require the original app; black-box memory; importing without a path to *use* data inside Harness. |
 
@@ -42,8 +42,8 @@ A small mobile surface for capture and Q&A—not desktop parity.
 | | |
 |---|---|
 | **Success picture** | Capture ideas on the go (voice/text → inbox); ask Harness a question; optional Telegram-style bridge before a full app. |
-| **Signals today** | Desktop backlog + sync foundation (folder bundle); product direction notes in v0.5. |
-| **Gaps** | Everything mobile-specific; shared backlog model across devices. |
+| **Signals today** | **Harness Mobile (iOS)** — SwiftUI chat, OpenAI streaming, same `bundle.json.gz` / `manifest.json` backup folder as desktop; conflict sheet on phone; Keychain API key. Desktop sync/conflict UI for thorough merges. |
+| **Gaps** | Capture-first inbox on mobile; voice capture; Android; parity only where it reduces friction. |
 | **Anti-goals** | Rebuilding desktop recording/transcription on phone v1; feature parity that doubles maintenance. |
 
 ### O4 — Learning lab for building AI tools
@@ -53,8 +53,8 @@ Harness is where you practice the full stack: providers, tools, streaming, persi
 | | |
 |---|---|
 | **Success picture** | Each meaningful feature teaches something reusable: a new tool, IPC boundary, test pattern, or provider adapter you could lift into another project. |
-| **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; memory compile pipeline; import parsers; typed `window.electron`; unit + e2e coverage on persistence. |
-| **Gaps** | CI on PRs; plugin/tool registry; documented patterns for adding tools/providers; optional eval fixtures for prompts. |
+| **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; memory compile pipeline; import parsers; typed `window.electron`; unit + e2e coverage; iOS sync codec tests; `docs/4PX_GRID.md` + motion audit. |
+| **Gaps** | CI on PRs (lint, tsc, Playwright, `grid:audit`); plugin/tool registry; documented patterns for adding tools/providers. |
 | **Anti-goals** | Opaque magic (no tests, no boundaries); one giant file per feature; skipping the “why” in favor of copy-paste. |
 
 ---
@@ -65,17 +65,10 @@ Quick read on **May 2026**—refresh when major work lands.
 
 | Outcome | Posture | Notes |
 |---------|---------|--------|
-| **O1** UI craft | **Building** | Strong theme/notes/settings; chat shell still the weak link. |
-| **O2** Subscription cannibal | **Building** | Core harness + imports + memory compile; providers and backlog still open. |
-| **O3** Mobile | **Later** | Intentionally deferred; sync/backlog groundwork only. |
+| **O1** UI craft | **Building** | 4px grid + type scale landed; shell/session/motion improved; chat column still has room for breakpoint work. |
+| **O2** Subscription cannibal | **Building** | Core harness + imports + sync conflict review; providers and backlog still open. |
+| **O3** Mobile | **Started** | iOS chat companion ships; capture/inbox still desktop-first. |
 | **O4** Learning lab | **Building** | Good architecture and tests; CI/docs for patterns still thin. |
-
-**Recent commit (`7ef4b01`) vs outcomes:**
-
-- **O1** — Theme presets + data-tab diagram help; not a layout overhaul.
-- **O2** — Claude import + memory compile + note print directly reduce external-tool dependence.
-- **O3** — No change (desktop-only).
-- **O4** — New parsers, compile pipeline, IPC, and tests are solid learning artifacts.
 
 ---
 
@@ -95,6 +88,22 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 ---
 
 ## Completed
+
+### 2026-05-24 — 4px grid, Harness Mobile iOS, v0.6 `[O1][O3][O4]`
+
+- **4px layout grid** `[O1]` — `src/shared/grid.ts` (`snapToGrid`, `space`, `lineHeightForFont`); theme `typeScaleCssVars` emits grid-aligned font, icon, and line-height tokens; renderer CSS normalized; `npm run grid:audit` (`scripts/grid-audit.js`); [docs/4PX_GRID.md](docs/4PX_GRID.md).
+- **Layout cleanup** `[O1]` — Removed `compact` / `comfortable` layout density; spacing driven by theme font size + grid. Chat composer dock and tasks composer heights snap to grid.
+- **Chat & sidebar UX** `[O1]` — Single-message chat centers in scroll area; sidebar default sort “Recent” with date-bucket and calendar-day modes; progressive fade on peek rows 8–12.
+- **Harness Mobile (iOS)** `[O3][O4]` — Native SwiftUI app: conversation list + thread, OpenAI streaming, Keychain, iCloud backup-folder sync (`bundle.json.gz`, manifest), conflict sheet; [ios/README.md](ios/README.md). Xcode project via `project.yml` / XcodeGen.
+- **Version** — Desktop package `0.6.0`.
+
+### 2026-05 (shell line) — Session restore, sync review, motion, dictation `[O1][O2][O4]`
+
+- **UI session persistence** — `ui-session.json` restores last view, conversation, and open note across restarts.
+- **Sync conflict review** — Per-file local / remote / merged choice when backup folder diverges; explicit pull/push/conflict paths.
+- **Shell polish** — Settings renamed to Config; task completion animation; code block highlighting in chat; sidebar/theme CSS refresh; [docs/UI_TRANSITION_AUDIT.md](docs/UI_TRANSITION_AUDIT.md).
+- **Dictation sessions** — Conversation `kind` for dictation vs chat; title policy for user-only dictation threads; Fn recording gated to chat view.
+- **Release tooling** — `dist` runner with timed steps and patch bump (`8d501a2`).
 
 ### 2026-05-17 — Claude import, memory compile, note print, settings & data UX `[O2][O4]`
 
@@ -138,25 +147,25 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 
 ---
 
-## v0.5.0 — release line (in progress)
+## v0.6.0 — release line (in progress)
 
-Near-term execution under the outcomes above. **Shipped on this line** is summarized in **Completed (2026-05\*)**.
+Near-term execution under the outcomes above. **Shipped on this line** is summarized in **Completed (2026-05-24\*)** and the shell line above.
 
 ### Layout, scaling, and shell `[O1]` — remaining
 
-- **Viewport-aware UI scaling (deeper pass)** — Fluid max-width, breakpoints, chat layout that uses large windows well (theme-linked size is step one).
-- **Sidebar behavior** — Open/close animation, focus traps, lighter affordances.
-- **Chat page structure** — Scroll regions, sticky composer, stable column height; fix streaming/layout quirks in one pass.
+- **Viewport-aware UI scaling (deeper pass)** — Fluid max-width, breakpoints, chat layout that uses large windows well.
+- **Sidebar behavior** — Focus traps, keyboard nav; motion items from [UI_TRANSITION_AUDIT.md](docs/UI_TRANSITION_AUDIT.md).
+- **Grid in CI** — Run `npm run grid:audit` on PRs.
 
 ### Tools
 
 - ~~**Weather**~~ — **Done** `[O2]`.
 
-### Mobile direction `[O3]` — not v0.5 scope
+### Mobile direction `[O3]`
 
-- **iOS (or cross-platform shell)** — Simple chat + Q&A; not parity.
-- **Audio** — Voice-to-text / OS dictation into chat; avoid duplicating desktop recording unless trivial.
+- ~~**iOS chat companion**~~ — **Done** (v0.6); see [ios/README.md](ios/README.md).
 - **Capture-first UX** — One-tap capture → backlog inbox (depends on backlog primitive `[O2]`).
+- **Audio on mobile** — OS dictation into chat; avoid duplicating desktop recording unless trivial.
 
 ### Trust & consolidation (cross-cutting) `[O2]`
 
@@ -177,7 +186,7 @@ Near-term execution under the outcomes above. **Shipped on this line** is summar
 
 ---
 
-## Post v0.5 — backlog
+## Post v0.6 — backlog
 
 Ordered loosely by outcome; not a commitment sequence.
 
@@ -185,7 +194,7 @@ Ordered loosely by outcome; not a commitment sequence.
 
 | Item | Outcomes |
 |------|----------|
-| **CI hardening** (lint, tsc, Playwright on PR) | O4 |
+| **CI hardening** (lint, tsc, Playwright, `grid:audit` on PR) | O4 |
 | **Chat providers** — Anthropic, Gemini APIs (≠ export import) | O2, O4 |
 | **Agent mode** with human-in-the-loop before destructive actions | O2, O4 |
 | **Semantic memory** (vectors + retrieval) | O2, O4 |
@@ -197,7 +206,7 @@ Ordered loosely by outcome; not a commitment sequence.
 | Item | Outcomes |
 |------|----------|
 | **Telegram** (or similar) as mobile bridge | O3 |
-| **Backup / sync (deeper)** — scheduled sync, conflict UI, merge rules | O2, O3 |
+| **Backup / sync (deeper)** — scheduled sync, richer merge rules | O2, O3 |
 | **Richer tasks** — due dates, priority, conversation links | O2 |
 | **Model params in Settings** — temperature, max tokens, top-p | O4 |
 | **Auto-update** — `autoUpdater` for shipped builds | O2 |
@@ -212,4 +221,4 @@ Ordered loosely by outcome; not a commitment sequence.
 
 ---
 
-*Last updated: 2026-05-17*
+*Last updated: 2026-05-24*
