@@ -1,3 +1,4 @@
+import { shouldRefineConversationTitle } from "../shared/conversationTitlePolicy";
 import type { ChatMessage } from "../shared/types";
 import { generateThreadTitleWithOpenAI } from "./providers/openai";
 import {
@@ -14,20 +15,6 @@ import {
 import { isHarnessE2E } from "./e2eStub";
 
 const CONTEXT_MAX_CHARS = 2400;
-const REFINE_EVERY = 4;
-
-/**
- * Run title LLM when there is at least one assistant reply (so we have real context),
- * and either it's the first assistant message (replaces placeholders like voice dictation)
- * or we're at a periodic refinement milestone.
- */
-function shouldRefineTitle(messages: ChatMessage[]): boolean {
-  const users = messages.filter((m) => m.role === "user").length;
-  const assistants = messages.filter((m) => m.role === "assistant").length;
-  if (users < 1 || assistants < 1) return false;
-  if (assistants === 1) return true;
-  return users > 1 && users % REFINE_EVERY === 0;
-}
 
 function cleanTitle(raw: string): string {
   return raw.replace(/["'`]/g, "").replace(/\s+/g, " ").trim();
@@ -48,7 +35,7 @@ function buildContext(messages: ChatMessage[]): string {
 
 /**
  * Fire-and-forget: generate or refine the conversation title after an assistant reply is persisted.
- * Gating uses message roles (assistant present / first reply), not whether a title string is empty.
+ * Gating uses message roles (including user-only dictation threads).
  * Never touches user-set or imported titles.
  * Requires an OpenAI API key; skips silently when missing.
  */
@@ -58,10 +45,9 @@ export function scheduleConversationTitleRefinement(conversationId: string): voi
     let notifiedStart = false;
     try {
       const messages = await getMessages(conversationId);
-      if (!shouldRefineTitle(messages)) return;
-
       const meta = await getConversationMetaForId(conversationId);
       if (!meta || meta.titleSource === "user" || meta.titleSource === "imported") return;
+      if (!shouldRefineConversationTitle(messages, meta.title)) return;
 
       const context = buildContext(messages);
       if (!context.trim()) return;

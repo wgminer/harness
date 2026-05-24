@@ -25,6 +25,8 @@ export function registerGlobalFnRecording(refs: GlobalRecordingTrayRefs): void {
   const { tray, trayIcon, trayRecordingIcon, trayProcessingIcon } = refs;
   let fnState: FnRecordingState = createInitialFnRecordingState();
   let fnMonitor: FnMonitorProcess | null = null;
+  /** When false, Fn is ignored while the Harness window is focused (e.g. Notes, Settings). */
+  let globalRecordingEnabled = true;
 
   function setReadyTray(): void {
     tray.setImage(trayIcon);
@@ -88,10 +90,24 @@ export function registerGlobalFnRecording(refs: GlobalRecordingTrayRefs): void {
   }
 
   function onFnEdge(phase: "down" | "up", ms: number): void {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) return;
+    const focusedInApp = isHarnessE2E() ? true : win.isFocused();
+    if (focusedInApp && !globalRecordingEnabled) return;
+
     const { next, effects } = reduceFnEdge(fnState, phase, ms);
     fnState = next;
     applyEffects(effects);
   }
+
+  ipcMain.handle("recording:setGlobalEnabled", (_e, enabled: boolean) => {
+    globalRecordingEnabled = enabled;
+    if (!enabled && fnState.session !== "none") {
+      const { next, effects } = reduceEscape(fnState);
+      fnState = next;
+      applyEffects(effects);
+    }
+  });
 
   ipcMain.handle("recording:done", () => {
     setReadyTray();
