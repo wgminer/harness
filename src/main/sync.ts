@@ -10,27 +10,46 @@
  *   - bundle.json.gz : gzipped JSON archive of the synced scopes
  *   - manifest.json  : { revision, updatedAt, version, bundleHash }
  *
- * Sync now compares manifests and pushes (when local is newer) or pulls
- * (with a local backup-then-extract step when remote is newer).
+ * Sync now compares revisions against the last synced revision: pull when
+ * only the backup changed, push when only local changed, and prompt when both
+ * diverged (via Settings UI).
  */
 
 import { BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { existsSync } from "fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
 import { join } from "path";
-import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "../shared/sync";
+import type {
+  SyncConflictResolution,
+  SyncConflictReview,
+  SyncFolderSuggestion,
+  SyncResult,
+  SyncStatus,
+} from "../shared/sync";
+import {
+  buildDefaultMergeChoices,
+  buildMergedFileMap,
+  buildSyncConflictReview,
+  decideSyncAction,
+} from "../shared/sync";
+import type { SyncFileChoice } from "../shared/syncMerge";
 import { getLocalDataDir, getLocalDataSyncDir } from "./localDataPaths";
 import { getSettings, setSettings } from "./settings";
 import {
   atomicWriteFile,
+  applyMergedFiles,
   backupScopedFiles,
   buildBundle,
+  computeContentRevisionFromBundle,
+  computeLocalMaxMtime,
   computeRevision,
   DEFAULT_SYNC_SCOPES,
   extractBundle,
   hashBundleBytes,
+  listScopedFiles,
   parseBundle,
   placeholderSiblingFor,
+  USER_CONTENT_SYNC_SCOPES,
 } from "./syncBundle";
 import { listFolderSuggestions } from "./syncSuggestions";
 import { fileExists } from "./utils";
@@ -47,11 +66,13 @@ interface PersistedState {
   lastError: string | null;
   lastAction: SyncStatus["lastAction"];
   lastSyncedRevision: string | null;
+  lastSyncedContentRevision: string | null;
 }
 
 interface BackupManifest {
   version: number;
   revision: string;
+  contentRevision?: string;
   updatedAt: number;
   bundleHash: string;
 }
@@ -62,6 +83,7 @@ const DEFAULT_STATE: PersistedState = {
   lastError: null,
   lastAction: null,
   lastSyncedRevision: null,
+  lastSyncedContentRevision: null,
 };
 
 function getStatePath(): string {
@@ -87,6 +109,10 @@ async function loadState(): Promise<PersistedState> {
           : null,
       lastSyncedRevision:
         typeof raw.lastSyncedRevision === "string" ? raw.lastSyncedRevision : null,
+      lastSyncedContentRevision:
+        typeof raw.lastSyncedContentRevision === "string"
+          ? raw.lastSyncedContentRevision
+          : null,
     };
   } catch {
     return { ...DEFAULT_STATE, lastError: "Invalid sync state file" };
@@ -219,12 +245,129 @@ async function bundlePlaceholderError(folder: string): Promise<string | null> {
   return null;
 }
 
+async function readRemoteContentRevision(
+  folder: string,
+  manifest: BackupManifest,
+): Promise<string> {
+  if (typeof manifest.contentRevision === "string") return manifest.contentRevision;
+  const bytes = await readFile(join(folder, BUNDLE_FILENAME));
+  return computeContentRevisionFromBundle(parseBundle(bytes));
+}
+
+async function resolveSyncDecision(params: {
+  localRevision: string;
+  localContentRevision: string;
+  remoteManifest: BackupManifest;
+  remoteContentRevision: string;
+  lastSyncedRevision: string | null;
+  lastSyncedContentRevision: string | null;
+  localMaxMtimeMs: number;
+}): Promise<"push" | "pull" | "noop" | "conflict"> {
+  const {
+    localRevision,
+    localContentRevision,
+    remoteManifest,
+    remoteContentRevision,
+    lastSyncedRevision,
+    lastSyncedContentRevision,
+    localMaxMtimeMs,
+  } = params;
+
+  if (localRevision === remoteManifest.revision) return "noop";
+
+  const contentDecision = decideSyncAction({
+    localRevision: localContentRevision,
+    remoteRevision: remoteContentRevision,
+    lastSyncedRevision: lastSyncedContentRevision ?? lastSyncedRevision,
+    remoteUpdatedAt: remoteManifest.updatedAt,
+    localMaxMtimeMs,
+  });
+
+  if (contentDecision !== "noop") return contentDecision;
+
+  return decideSyncAction({
+    localRevision,
+    remoteRevision: remoteManifest.revision,
+    lastSyncedRevision,
+    remoteUpdatedAt: remoteManifest.updatedAt,
+    localMaxMtimeMs: 0,
+  });
+}
+
+async function loadLocalScopedFileMap(): Promise<Record<string, Buffer>> {
+  const localDataDir = getLocalDataDir();
+  const files = await listScopedFiles(localDataDir, DEFAULT_SYNC_SCOPES);
+  const out: Record<string, Buffer> = {};
+  for (const rel of files) {
+    out[rel] = await readFile(join(localDataDir, rel));
+  }
+  return out;
+}
+
+async function loadRemoteScopedFileMap(
+  folder: string,
+  manifest: BackupManifest,
+): Promise<Record<string, Buffer>> {
+  const bundlePath = join(folder, BUNDLE_FILENAME);
+  const bytes = await readFile(bundlePath);
+  const actualHash = hashBundleBytes(bytes);
+  if (actualHash !== manifest.bundleHash) {
+    throw new Error(
+      "Backup bundle hash does not match its manifest — the bundle may still be syncing. Try again shortly.",
+    );
+  }
+  const doc = parseBundle(bytes);
+  const out: Record<string, Buffer> = {};
+  for (const entry of doc.entries) {
+    out[entry.path] = Buffer.from(entry.contents, "base64");
+  }
+  return out;
+}
+
+export async function getConflictReview(): Promise<SyncConflictReview | { error: string }> {
+  const folderPath = await getBackupFolderPath();
+  const folderCheck = await checkFolderAccessible(folderPath);
+  if (!folderPath || !folderCheck.configured) {
+    return { error: folderCheck.error ?? "Pick a backup folder in Config." };
+  }
+
+  const placeholderError = await bundlePlaceholderError(folderPath);
+  if (placeholderError) return { error: placeholderError };
+
+  const remoteManifest = await readManifestFromBackup(folderPath);
+  if (!remoteManifest) return { error: "Backup manifest is missing." };
+
+  try {
+    const localFiles = await loadLocalScopedFileMap();
+    const remoteFiles = await loadRemoteScopedFileMap(folderPath, remoteManifest);
+    return buildSyncConflictReview(localFiles, remoteFiles);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function mergeConflictResolution(
+  folderPath: string,
+  remoteManifest: BackupManifest,
+  choices: Record<string, SyncFileChoice>,
+  now: number,
+): Promise<void> {
+  const localFiles = await loadLocalScopedFileMap();
+  const remoteFiles = await loadRemoteScopedFileMap(folderPath, remoteManifest);
+  const mergedFiles = buildMergedFileMap(localFiles, remoteFiles, choices);
+  const localData = getLocalDataDir();
+  const backupSnapshotDir = join(getLocalBackupsRoot(), String(now));
+  await backupScopedFiles(localData, backupSnapshotDir, DEFAULT_SYNC_SCOPES);
+  await applyMergedFiles(localData, mergedFiles, DEFAULT_SYNC_SCOPES);
+}
+
 async function pushLocalToBackup(
   folder: string,
   localRevision: string,
   now: number,
 ): Promise<{ bundleHash: string }> {
   const { bytes, bundleHash } = await buildBundle(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
+  const contentRevision = await computeRevision(getLocalDataDir(), USER_CONTENT_SYNC_SCOPES);
   await mkdir(folder, { recursive: true });
   // Write bundle first, then manifest (so a partially-synced peer never sees
   // a manifest that points at an old or missing bundle). Both writes are
@@ -233,6 +376,7 @@ async function pushLocalToBackup(
   const manifest: BackupManifest = {
     version: MANIFEST_VERSION,
     revision: localRevision,
+    contentRevision,
     updatedAt: now,
     bundleHash,
   };
@@ -263,14 +407,24 @@ async function pullBackupIntoLocal(
   return extractBundle(localData, doc, DEFAULT_SYNC_SCOPES);
 }
 
+const SYNC_CONFLICT_MESSAGE = "Local and backup both changed since last sync.";
+
 let inFlight: Promise<SyncResult> | null = null;
 
-export async function runSyncNow(): Promise<SyncResult> {
+function runExclusive(task: () => Promise<SyncResult>): Promise<SyncResult> {
   if (inFlight) return inFlight;
-  inFlight = runSyncNowInner().finally(() => {
+  inFlight = task().finally(() => {
     inFlight = null;
   });
   return inFlight;
+}
+
+export async function runSyncNow(): Promise<SyncResult> {
+  return runExclusive(() => runSyncNowInner());
+}
+
+export async function resolveSyncConflict(resolution: SyncConflictResolution): Promise<SyncResult> {
+  return runExclusive(() => resolveSyncConflictInner(resolution));
 }
 
 async function runSyncNowInner(): Promise<SyncResult> {
@@ -285,7 +439,7 @@ async function runSyncNowInner(): Promise<SyncResult> {
     : [];
 
   if (!folderPath) {
-    next.lastError = "Pick a backup folder in Settings.";
+    next.lastError = "Pick a backup folder in Config.";
     await saveState(next);
     return {
       ok: false,
@@ -314,6 +468,10 @@ async function runSyncNowInner(): Promise<SyncResult> {
   try {
     const remoteManifest = await readManifestFromBackup(folderPath);
     const localRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
+    const localContentRevision = await computeRevision(
+      getLocalDataDir(),
+      USER_CONTENT_SYNC_SCOPES,
+    );
 
     if (!remoteManifest) {
       // Nothing in the backup folder yet (or unreadable manifest) → push.
@@ -321,6 +479,7 @@ async function runSyncNowInner(): Promise<SyncResult> {
       next.lastSuccessAt = now;
       next.lastAction = "push";
       next.lastSyncedRevision = localRevision;
+      next.lastSyncedContentRevision = localContentRevision;
       await saveState(next);
       return {
         ok: true,
@@ -328,45 +487,49 @@ async function runSyncNowInner(): Promise<SyncResult> {
       };
     }
 
-    if (remoteManifest.revision === localRevision) {
-      next.lastSuccessAt = now;
-      next.lastAction = "noop";
-      next.lastSyncedRevision = localRevision;
+    const localMaxMtimeMs = await computeLocalMaxMtime(
+      getLocalDataDir(),
+      USER_CONTENT_SYNC_SCOPES,
+    );
+    const remoteContentRevision = await readRemoteContentRevision(folderPath, remoteManifest);
+    const decision = await resolveSyncDecision({
+      localRevision,
+      localContentRevision,
+      remoteManifest,
+      remoteContentRevision,
+      lastSyncedRevision: state.lastSyncedRevision,
+      lastSyncedContentRevision: state.lastSyncedContentRevision,
+      localMaxMtimeMs,
+    });
+
+    if (decision === "conflict") {
+      next.lastError = SYNC_CONFLICT_MESSAGE;
       await saveState(next);
       return {
-        ok: true,
+        ok: false,
         status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+        conflict: {
+          localRevision,
+          remoteRevision: remoteManifest.revision,
+          remoteUpdatedAt: remoteManifest.updatedAt,
+          lastSyncedRevision: state.lastSyncedRevision,
+          localMaxMtimeMs,
+        },
       };
     }
 
-    // Decide who wins. If `updatedAt` agrees (or favors remote), and the
-    // backup revision differs from the last revision we synced from, treat
-    // the backup as newer. Otherwise we push.
-    const remoteIsNewer =
-      remoteManifest.updatedAt > (state.lastSuccessAt ?? 0) &&
-      remoteManifest.revision !== state.lastSyncedRevision;
-
-    if (remoteIsNewer) {
-      await pullBackupIntoLocal(folderPath, remoteManifest, now);
-      next.lastSuccessAt = now;
-      next.lastAction = "pull";
-      next.lastSyncedRevision = remoteManifest.revision;
-      await saveState(next);
-      return {
-        ok: true,
-        status: buildStatus(next, folderPath, folderCheck, conflictCopies),
-      };
-    }
-
-    await pushLocalToBackup(folderPath, localRevision, now);
-    next.lastSuccessAt = now;
-    next.lastAction = "push";
-    next.lastSyncedRevision = localRevision;
-    await saveState(next);
-    return {
-      ok: true,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
-    };
+    return finishSyncAction({
+      decision,
+      folderPath,
+      folderCheck,
+      conflictCopies,
+      remoteManifest,
+      localRevision,
+      localContentRevision,
+      remoteContentRevision,
+      now,
+      state: next,
+    });
   } catch (err) {
     next.lastError = err instanceof Error ? err.message : String(err);
     await saveState(next);
@@ -417,9 +580,167 @@ function listSuggestions(): SyncFolderSuggestion[] {
   return listFolderSuggestions();
 }
 
+async function resolveSyncConflictInner(resolution: SyncConflictResolution): Promise<SyncResult> {
+  const now = Date.now();
+  const folderPath = await getBackupFolderPath();
+  const folderCheck = await checkFolderAccessible(folderPath);
+  const state = await loadState();
+  const next: PersistedState = { ...state, lastAttemptAt: now, lastError: null };
+  const conflictCopies = folderCheck.configured
+    ? await listConflictCopies(folderPath)
+    : [];
+
+  if (!folderPath || !folderCheck.configured) {
+    next.lastError = folderCheck.error ?? "Pick a backup folder in Config.";
+    await saveState(next);
+    return {
+      ok: false,
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+    };
+  }
+
+  const placeholderError = await bundlePlaceholderError(folderPath);
+  if (placeholderError) {
+    next.lastError = placeholderError;
+    await saveState(next);
+    return {
+      ok: false,
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+    };
+  }
+
+  const remoteManifest = await readManifestFromBackup(folderPath);
+  if (!remoteManifest) {
+    next.lastError = "Backup manifest is missing.";
+    await saveState(next);
+    return {
+      ok: false,
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+    };
+  }
+
+  try {
+    if (typeof resolution === "object" && resolution.mode === "merge") {
+      await mergeConflictResolution(folderPath, remoteManifest, resolution.choices, now);
+      const localRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
+      const localContentRevision = await computeRevision(
+        getLocalDataDir(),
+        USER_CONTENT_SYNC_SCOPES,
+      );
+      await pushLocalToBackup(folderPath, localRevision, now);
+      next.lastSuccessAt = now;
+      next.lastAction = "push";
+      next.lastSyncedRevision = localRevision;
+      next.lastSyncedContentRevision = localContentRevision;
+      next.lastError = null;
+      await saveState(next);
+      return {
+        ok: true,
+        status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+      };
+    }
+
+    const decision = resolution === "push" || resolution === "pull" ? resolution : "pull";
+    const localRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
+    const localContentRevision = await computeRevision(
+      getLocalDataDir(),
+      USER_CONTENT_SYNC_SCOPES,
+    );
+    const remoteContentRevision = await readRemoteContentRevision(folderPath, remoteManifest);
+    return finishSyncAction({
+      decision,
+      folderPath,
+      folderCheck,
+      conflictCopies,
+      remoteManifest,
+      localRevision,
+      localContentRevision,
+      remoteContentRevision,
+      now,
+      state: next,
+    });
+  } catch (err) {
+    next.lastError = err instanceof Error ? err.message : String(err);
+    await saveState(next);
+    return {
+      ok: false,
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+    };
+  }
+}
+
+async function finishSyncAction(params: {
+  decision: "push" | "pull" | "noop";
+  folderPath: string;
+  folderCheck: { configured: boolean; error: string | null };
+  conflictCopies: string[];
+  remoteManifest: BackupManifest;
+  localRevision: string;
+  localContentRevision: string;
+  remoteContentRevision: string;
+  now: number;
+  state: PersistedState;
+}): Promise<SyncResult> {
+  const {
+    decision,
+    folderPath,
+    folderCheck,
+    conflictCopies,
+    remoteManifest,
+    localRevision,
+    localContentRevision,
+    remoteContentRevision,
+    now,
+  } = params;
+  const next = params.state;
+
+  if (decision === "noop") {
+    next.lastSuccessAt = now;
+    next.lastAction = "noop";
+    next.lastSyncedRevision = localRevision;
+    next.lastSyncedContentRevision = localContentRevision;
+    next.lastError = null;
+    await saveState(next);
+    return {
+      ok: true,
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+    };
+  }
+
+  if (decision === "pull") {
+    await pullBackupIntoLocal(folderPath, remoteManifest, now);
+    next.lastSuccessAt = now;
+    next.lastAction = "pull";
+    next.lastSyncedRevision = remoteManifest.revision;
+    next.lastSyncedContentRevision = remoteContentRevision;
+    next.lastError = null;
+    await saveState(next);
+    return {
+      ok: true,
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+    };
+  }
+
+  await pushLocalToBackup(folderPath, localRevision, now);
+  next.lastSuccessAt = now;
+  next.lastAction = "push";
+  next.lastSyncedRevision = localRevision;
+  next.lastSyncedContentRevision = localContentRevision;
+  next.lastError = null;
+  await saveState(next);
+  return {
+    ok: true,
+    status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+  };
+}
+
 export function registerSyncHandlers(): void {
   ipcMain.handle("sync:getStatus", () => getSyncStatus());
   ipcMain.handle("sync:runNow", () => runSyncNow());
+  ipcMain.handle("sync:getConflictReview", () => getConflictReview());
+  ipcMain.handle("sync:resolveConflict", (_e, resolution: SyncConflictResolution) =>
+    resolveSyncConflict(resolution),
+  );
   ipcMain.handle("sync:pickFolder", () => pickBackupFolder());
   ipcMain.handle("sync:setFolder", (_e, path: string) => setBackupFolder(path));
   ipcMain.handle("sync:revealFolder", () => revealBackupFolder());
