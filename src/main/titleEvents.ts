@@ -1,7 +1,11 @@
 import { BrowserWindow } from "electron";
 
-function mainWindow() {
-  return BrowserWindow.getAllWindows()[0];
+function mainWindow(): BrowserWindow | undefined {
+  try {
+    return BrowserWindow.getAllWindows()[0];
+  } catch {
+    return undefined;
+  }
 }
 
 export function notifyConversationTitleUpdated(conversationId: string): void {

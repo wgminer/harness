@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import type { AppendMessageMeta, ChatMessage, SearchResult } from "../shared/types";
+import { scheduleConversationTitleRefinement } from "./conversationTitle";
 import { notifyConversationTitleUpdated } from "./titleEvents";
 import { generateId, fileExists } from "./utils";
 import {
@@ -48,6 +49,8 @@ function getUserMemoryPath(memoryDir: string): string {
 /** Stored per-conversation; optional isFromChatGPT/chatgptId/claudeId used for import dedupe. */
 export type ConversationTitleSource = "auto" | "user" | "imported";
 
+export type ConversationSessionKind = "dictation" | "chat";
+
 export interface ConversationMeta {
   title: string | null;
   createdAt: number;
@@ -56,6 +59,10 @@ export interface ConversationMeta {
   isFromClaude?: boolean;
   claudeId?: string;
   titleSource?: ConversationTitleSource;
+  /** Voice capture saved as a thread without opening chat first. */
+  sessionKind?: ConversationSessionKind;
+  /** Set when an assistant message is persisted (dictation → chat). */
+  hasAssistantReply?: boolean;
 }
 
 interface MessageRecord {
@@ -116,7 +123,7 @@ async function saveMessages(conversationId: string, messages: MessageRecord[]): 
 export async function createConversationIn(memoryDir: string): Promise<string> {
   const id = generateId("conv");
   const conv = await loadConversationsIn(memoryDir);
-  conv[id] = { title: null, createdAt: Date.now() };
+  conv[id] = { title: null, createdAt: Date.now(), sessionKind: "chat" };
   await saveConversationsIn(memoryDir, conv);
   await saveMessagesIn(memoryDir, id, []);
   return id;
@@ -181,19 +188,39 @@ async function setConversationTitle(
   return setConversationTitleIn(getMemoryDir(), conversationId, title, source);
 }
 
-/** Placeholder title for voice-dictation threads; `titleSource: "auto"` so LLM refinement can replace it. */
-export async function setVoiceDictationTitle(conversationId: string): Promise<string> {
+/** Legacy time label for voice-dictation threads; LLM may replace when configured. */
+export async function markVoiceDictationSession(conversationId: string): Promise<string> {
   const time = new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const title = `Dictation @ ${time}`;
-  await patchConversationMetaIn(getMemoryDir(), conversationId, { title, titleSource: "auto" });
-  notifyConversationTitleUpdated(conversationId);
+  await patchConversationMetaIn(getMemoryDir(), conversationId, {
+    title,
+    titleSource: "auto",
+    sessionKind: "dictation",
+  });
+  scheduleConversationTitleRefinement(conversationId);
   return title;
 }
 
-export async function listConversationsIn(memoryDir: string): Promise<{ id: string; title: string | null; createdAt: number }[]> {
+export async function listConversationsIn(
+  memoryDir: string
+): Promise<
+  {
+    id: string;
+    title: string | null;
+    createdAt: number;
+    sessionKind?: ConversationSessionKind;
+    hasAssistantReply?: boolean;
+  }[]
+> {
   const conv = await loadConversationsIn(memoryDir);
   return Object.entries(conv)
-    .map(([id, c]) => ({ id, title: c.title, createdAt: c.createdAt }))
+    .map(([id, c]) => ({
+      id,
+      title: c.title,
+      createdAt: c.createdAt,
+      sessionKind: c.sessionKind,
+      hasAssistantReply: c.hasAssistantReply,
+    }))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -247,9 +274,12 @@ export async function importConversationsIn(
   const ids: string[] = [];
   for (const item of items) {
     const id = generateId("conv");
+    const hasAssistantReply = item.messages.some((m) => m.role === "assistant");
     const meta: ConversationMeta = {
       title: item.title,
       createdAt: item.createdAt,
+      sessionKind: "chat",
+      ...(hasAssistantReply ? { hasAssistantReply: true } : {}),
       ...(item.title ? { titleSource: "imported" as const } : {}),
     };
     if (item.chatgptId != null) {
@@ -394,6 +424,17 @@ export async function appendMessageIn(
   if (typeof options?.model === "string" && options.model) record.model = options.model;
   messages.push(record);
   await saveMessagesIn(memoryDir, conversationId, messages);
+  if (role === "user") {
+    scheduleConversationTitleRefinement(conversationId);
+  } else if (role === "assistant") {
+    const conv = await loadConversationsIn(memoryDir);
+    const meta = conv[conversationId];
+    if (meta && meta.hasAssistantReply !== true) {
+      conv[conversationId] = { ...meta, hasAssistantReply: true };
+      await saveConversationsIn(memoryDir, conv);
+      notifyConversationTitleUpdated(conversationId);
+    }
+  }
 }
 
 async function appendMessage(
@@ -560,7 +601,9 @@ export function registerMemoryHandlers(): void {
     await setConversationTitle(conversationId, title, "user");
     notifyConversationTitleUpdated(conversationId);
   });
-  ipcMain.handle("memory:setVoiceDictationTitle", (_e, conversationId: string) => setVoiceDictationTitle(conversationId));
+  ipcMain.handle("memory:markVoiceDictationSession", (_e, conversationId: string) =>
+    markVoiceDictationSession(conversationId)
+  );
 }
 
 export {
