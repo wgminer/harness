@@ -46,7 +46,13 @@ function main() {
 
   console.log("Building macOS distribution (notarization required)...");
   run("npm", ["run", "dist:mac"], {
-    env: { ...process.env, REQUIRE_NOTARIZE: "1" },
+    env: {
+      ...process.env,
+      REQUIRE_NOTARIZE: "1",
+      // Releases manage their own version bumping; never let the dist runner
+      // auto-bump the patch number underneath the release flow.
+      HARNESS_SKIP_VERSION_BUMP: "1",
+    },
   });
 
   console.log("Next steps:");
