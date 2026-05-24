@@ -47,6 +47,12 @@ export const DEFAULT_SYNC_SCOPES: readonly SyncScope[] = [
   { relPath: "themes", kind: "dir" },
 ] as const;
 
+/** Scopes used to detect local edits for sync conflict decisions (excludes settings). */
+export const USER_CONTENT_SYNC_SCOPES: readonly SyncScope[] = [
+  { relPath: "app-state", kind: "dir" },
+  { relPath: "themes", kind: "dir" },
+] as const;
+
 function toPosix(p: string): string {
   return p.split(sep).join(posix.sep);
 }
@@ -115,6 +121,39 @@ export async function computeRevision(
     hasher.update(rel);
     hasher.update("\u0000");
     hasher.update(data);
+    hasher.update("\u0000");
+  }
+  return hasher.digest("hex");
+}
+
+/** Latest modification time (ms) among files included in sync scopes. */
+export async function computeLocalMaxMtime(
+  localDataDir: string,
+  scopes: readonly SyncScope[] = DEFAULT_SYNC_SCOPES,
+): Promise<number> {
+  const files = await listScopedFiles(localDataDir, scopes);
+  let max = 0;
+  for (const rel of files) {
+    try {
+      const s = await stat(join(localDataDir, rel));
+      if (s.mtimeMs > max) max = s.mtimeMs;
+    } catch {
+      // Missing between list and stat — skip.
+    }
+  }
+  return max;
+}
+
+/** Content revision for user-facing data inside a bundle (app-state + themes). */
+export function computeContentRevisionFromBundle(doc: BundleDocument): string {
+  const hasher = createHash("sha256");
+  const entries = doc.entries
+    .filter((entry) => isInScope(entry.path, USER_CONTENT_SYNC_SCOPES))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  for (const entry of entries) {
+    hasher.update(entry.path);
+    hasher.update("\u0000");
+    hasher.update(Buffer.from(entry.contents, "base64"));
     hasher.update("\u0000");
   }
   return hasher.digest("hex");
@@ -232,6 +271,29 @@ function isInScope(relPath: string, scopes: readonly SyncScope[]): boolean {
     }
   }
   return false;
+}
+
+export async function applyMergedFiles(
+  localDataDir: string,
+  mergedFiles: Record<string, Buffer>,
+  scopes: readonly SyncScope[] = DEFAULT_SYNC_SCOPES,
+): Promise<{ filesWritten: number; filesRemoved: number }> {
+  const existing = await listScopedFiles(localDataDir, scopes);
+  let filesWritten = 0;
+  for (const [rel, data] of Object.entries(mergedFiles)) {
+    if (!isInScope(rel, scopes)) continue;
+    const abs = join(localDataDir, rel);
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, data);
+    filesWritten += 1;
+  }
+  let filesRemoved = 0;
+  for (const rel of existing) {
+    if (mergedFiles[rel]) continue;
+    await rm(join(localDataDir, rel), { force: true });
+    filesRemoved += 1;
+  }
+  return { filesWritten, filesRemoved };
 }
 
 /** Atomic write: write to `<path>.tmp` first, then rename into place. */

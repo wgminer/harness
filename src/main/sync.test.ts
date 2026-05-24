@@ -16,7 +16,7 @@ vi.mock("electron", () => ({
   shell: { openPath: vi.fn(async () => "") },
 }));
 
-import { BUNDLE_FILENAME, MANIFEST_FILENAME, getSyncStatus, runSyncNow } from "./sync";
+import { BUNDLE_FILENAME, MANIFEST_FILENAME, getConflictReview, getSyncStatus, resolveSyncConflict, runSyncNow } from "./sync";
 import { setSettings } from "./settings";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -95,7 +95,6 @@ describe("folder-backup sync", () => {
   it("a second device pulls the backup, restoring the synced files locally", async () => {
     const backup = await makeDir("sync-backup-");
 
-    // Device A pushes its data.
     currentUserDataDir = await makeDevice({
       "app-state/conversations.json": '{"from":"A"}',
       "settings/settings.json": '{"version":1,"openai":{"apiKey":"k1"}}',
@@ -105,7 +104,6 @@ describe("folder-backup sync", () => {
     const pushResult = await runSyncNow();
     expect(pushResult.status.lastAction).toBe("push");
 
-    // Device B starts blank, points at the same backup, and syncs.
     currentUserDataDir = await makeDevice({});
     await setBackupFolderInSettings(backup);
     const pullResult = await runSyncNow();
@@ -124,39 +122,184 @@ describe("folder-backup sync", () => {
     expect(themeRestored).toBe('{"accent":"#fff"}');
   });
 
-  it("backs up local data into local-data/sync/backups/<ts>/ before extracting", async () => {
+  it("conflicts when a device has local edits and the backup also changed", async () => {
     const backup = await makeDir("sync-backup-");
 
-    // Device A pushes.
-    currentUserDataDir = await makeDevice({
-      "app-state/conversations.json": '{"from":"A"}',
+    const deviceA = await makeDevice({
+      "app-state/conversations.json": '{"from":"shared"}',
     });
+    currentUserDataDir = deviceA;
     await setBackupFolderInSettings(backup);
     await runSyncNow();
 
-    // Device B has a different local file that will be overwritten.
-    currentUserDataDir = await makeDevice({
-      "app-state/conversations.json": '{"from":"B-original"}',
-      "app-state/notes.json": '{"keep":"only on B"}',
-    });
+    const deviceB = await makeDevice({});
+    currentUserDataDir = deviceB;
     await setBackupFolderInSettings(backup);
-    const pullResult = await runSyncNow();
+    await runSyncNow();
+
+    await writeFile(
+      join(deviceB, "local-data", "app-state", "conversations.json"),
+      '{"from":"B-local"}',
+      "utf-8",
+    );
+
+    await writeFile(
+      join(deviceA, "local-data", "app-state", "conversations.json"),
+      '{"from":"A"}',
+      "utf-8",
+    );
+    currentUserDataDir = deviceA;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    currentUserDataDir = deviceB;
+    await setBackupFolderInSettings(backup);
+    const result = await runSyncNow();
+    expect(result.ok).toBe(false);
+    expect(result.conflict).toBeTruthy();
+    expect(result.status.lastError).toMatch(/both changed/);
+  });
+
+  it("resolveSyncConflict pull restores backup after a conflict", async () => {
+    const backup = await makeDir("sync-backup-");
+
+    const deviceA = await makeDevice({
+      "app-state/conversations.json": '{"from":"shared"}',
+    });
+    currentUserDataDir = deviceA;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    const deviceB = await makeDevice({});
+    currentUserDataDir = deviceB;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    await writeFile(
+      join(deviceB, "local-data", "app-state", "conversations.json"),
+      '{"from":"B-local"}',
+      "utf-8",
+    );
+
+    await writeFile(
+      join(deviceA, "local-data", "app-state", "conversations.json"),
+      '{"from":"A"}',
+      "utf-8",
+    );
+    currentUserDataDir = deviceA;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    currentUserDataDir = deviceB;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    const pullResult = await resolveSyncConflict("pull");
+    expect(pullResult.ok).toBe(true);
     expect(pullResult.status.lastAction).toBe("pull");
 
-    const backupsDir = join(currentUserDataDir, "local-data", "sync", "backups");
-    const snapshots = await readdir(backupsDir);
-    expect(snapshots.length).toBe(1);
+    const restored = await readFile(
+      join(deviceB, "local-data", "app-state", "conversations.json"),
+      "utf-8",
+    );
+    expect(restored).toBe('{"from":"A"}');
+  });
+
+  it("backs up local data into local-data/sync/backups/<ts>/ before extracting", async () => {
+    const backup = await makeDir("sync-backup-");
+
+    const deviceA = await makeDevice({
+      "app-state/conversations.json": '{"from":"A-v1"}',
+    });
+    currentUserDataDir = deviceA;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    const deviceB = await makeDevice({});
+    currentUserDataDir = deviceB;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    await writeFile(
+      join(deviceA, "local-data", "app-state", "conversations.json"),
+      '{"from":"A-v2"}',
+      "utf-8",
+    );
+    currentUserDataDir = deviceA;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    currentUserDataDir = deviceB;
+    await setBackupFolderInSettings(backup);
+    const pullResult = await runSyncNow();
+    expect(pullResult.ok).toBe(true);
+    expect(pullResult.status.lastAction).toBe("pull");
+
+    const backupsDir = join(deviceB, "local-data", "sync", "backups");
+    const snapshots = (await readdir(backupsDir)).sort();
+    expect(snapshots.length).toBeGreaterThanOrEqual(1);
     const savedConv = await readFile(
-      join(backupsDir, snapshots[0], "app-state", "conversations.json"),
+      join(backupsDir, snapshots[snapshots.length - 1], "app-state", "conversations.json"),
       "utf-8",
     );
-    expect(savedConv).toBe('{"from":"B-original"}');
-    // The locally-only file gets archived too.
-    const savedNotes = await readFile(
-      join(backupsDir, snapshots[0], "app-state", "notes.json"),
+    expect(savedConv).toBe('{"from":"A-v1"}');
+  });
+
+  it("resolveSyncConflict merge combines both sides and pushes", async () => {
+    const backup = await makeDir("sync-backup-");
+
+    const deviceA = await makeDevice({
+      "app-state/conversations.json": '{"shared":{"title":"Shared","createdAt":1}}',
+    });
+    currentUserDataDir = deviceA;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    const deviceB = await makeDevice({});
+    currentUserDataDir = deviceB;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    await writeFile(
+      join(deviceB, "local-data", "app-state", "conversations.json"),
+      '{"local-only":{"title":"B only","createdAt":2}}',
       "utf-8",
     );
-    expect(savedNotes).toBe('{"keep":"only on B"}');
+
+    await writeFile(
+      join(deviceA, "local-data", "app-state", "conversations.json"),
+      '{"shared":{"title":"Shared","createdAt":1},"remote-only":{"title":"A only","createdAt":3}}',
+      "utf-8",
+    );
+    currentUserDataDir = deviceA;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    currentUserDataDir = deviceB;
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    const review = await getConflictReview();
+    expect("error" in review).toBe(false);
+    if ("error" in review) return;
+
+    const mergeResult = await resolveSyncConflict({
+      mode: "merge",
+      choices: {
+        "app-state/conversations.json": "merge",
+      },
+    });
+    expect(mergeResult.ok).toBe(true);
+    expect(mergeResult.status.lastAction).toBe("push");
+
+    const merged = JSON.parse(
+      await readFile(join(deviceB, "local-data", "app-state", "conversations.json"), "utf-8"),
+    );
+    expect(merged).toMatchObject({
+      shared: { title: "Shared", createdAt: 1 },
+      "local-only": { title: "B only", createdAt: 2 },
+      "remote-only": { title: "A only", createdAt: 3 },
+    });
   });
 
   it("returns a no-op when local and backup revisions match", async () => {
