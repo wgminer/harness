@@ -158,60 +158,19 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .sidebar-item--peek-fade-1 {
-    opacity: 0.8;
+  .sidebar-item--peek-fade {
+    opacity: var(--sidebar-peek-opacity, 0.8);
   }
 
-  .sidebar-item--peek-fade-2 {
-    opacity: 0.6;
-  }
-
-  .sidebar-item--peek-fade-3 {
-    opacity: 0.4;
-  }
-
-  .sidebar-item--peek-fade-4 {
-    opacity: 0.2;
-  }
-
-  .sidebar-item--peek-fade-5 {
-    opacity: 0;
+  .sidebar-item--peek-fade[data-peek-inert="true"] {
     pointer-events: none;
   }
 
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:hover) .sidebar-item--peek-fade-1,
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:focus-within) .sidebar-item--peek-fade-1 {
+  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:hover) .sidebar-item--peek-fade,
+  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:focus-within) .sidebar-item--peek-fade {
     opacity: 1;
     pointer-events: auto;
-    transition-delay: 0ms;
-  }
-
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:hover) .sidebar-item--peek-fade-2,
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:focus-within) .sidebar-item--peek-fade-2 {
-    opacity: 1;
-    pointer-events: auto;
-    transition-delay: 60ms;
-  }
-
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:hover) .sidebar-item--peek-fade-3,
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:focus-within) .sidebar-item--peek-fade-3 {
-    opacity: 1;
-    pointer-events: auto;
-    transition-delay: 120ms;
-  }
-
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:hover) .sidebar-item--peek-fade-4,
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:focus-within) .sidebar-item--peek-fade-4 {
-    opacity: 1;
-    pointer-events: auto;
-    transition-delay: 180ms;
-  }
-
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:hover) .sidebar-item--peek-fade-5,
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:focus-within) .sidebar-item--peek-fade-5 {
-    opacity: 1;
-    pointer-events: auto;
-    transition-delay: 240ms;
+    transition-delay: var(--sidebar-peek-reveal-delay, 0ms);
   }
 
   .sidebar-list-wrap--peek-fade .sidebar-list-expand.sidebar-list-tail-item {
@@ -223,7 +182,7 @@
   .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:focus-within) .sidebar-list-expand.sidebar-list-tail-item {
     opacity: 1;
     pointer-events: auto;
-    transition-delay: 300ms;
+    transition-delay: var(--sidebar-peek-expand-reveal-delay, 300ms);
   }
 }
 

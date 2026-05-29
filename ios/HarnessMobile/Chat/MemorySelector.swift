@@ -1,5 +1,17 @@
 import Foundation
 
+enum MemoryInjectionStrategy: String {
+    case all
+    case relevant
+    case budget
+    case none
+
+    static func parse(_ raw: String?) -> MemoryInjectionStrategy {
+        guard let raw, let value = MemoryInjectionStrategy(rawValue: raw) else { return .all }
+        return value
+    }
+}
+
 enum MemorySelector {
     private static let stopwords: Set<String> = [
         "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "how",
@@ -8,36 +20,31 @@ enum MemorySelector {
     ]
 
     private static let alwaysRelevant = ["writing", "tone", "style", "voice", "goal", "audience", "constraint"]
-    private static let maxEntries = 6
-    private static let maxChars = 900
-    private static let minScore = 0.65
+    private static let relevantMaxEntries = 6
+    private static let relevantMaxChars = 900
+    private static let relevantMinScore = 0.65
+    private static let budgetMaxChars = 900
+    private static let relevantFallbackCount = 3
 
-    static func selectRelevant(memory: [String: String], userContent: String) -> [(String, String)] {
-        let entries = memory.filter { !$0.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    static func selectForPrompt(
+        strategy: MemoryInjectionStrategy,
+        memory: [String: String],
+        userContent: String
+    ) -> [(String, String)] {
+        if strategy == .none { return [] }
+        let entries = sortedEntries(memory: memory)
         guard !entries.isEmpty else { return [] }
-        let trimmed = userContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            return Array(entries.prefix(3).map { ($0.key, $0.value) })
+
+        switch strategy {
+        case .all:
+            return entries
+        case .relevant:
+            return selectRelevant(entries: entries, userContent: userContent)
+        case .budget:
+            return applyCharBudget(rows: entries.map { (key: $0.0, value: $0.1) }, maxChars: budgetMaxChars)
+        case .none:
+            return []
         }
-
-        let userTokens = Set(tokenize(trimmed))
-        if userTokens.isEmpty { return Array(entries.prefix(3).map { ($0.key, $0.value) }) }
-
-        let scored = entries
-            .map { key, value in (key, value, score(key: key, value: value, userTokens: userTokens)) }
-            .filter { $0.2 >= minScore }
-            .sorted { $0.2 > $1.2 }
-            .prefix(maxEntries)
-
-        var used = 0
-        var selected: [(String, String)] = []
-        for row in scored {
-            let line = "- \(row.0): \(row.1)"
-            if !selected.isEmpty, used + line.count > maxChars { break }
-            selected.append((row.0, row.1))
-            used += line.count
-        }
-        return selected
     }
 
     static func formatBlock(selected: [(String, String)]) -> String {
@@ -54,6 +61,47 @@ enum MemorySelector {
         lines.append("- Treat memory as hints, not absolute truth.")
         lines.append("- If memory conflicts with the user's current message, follow the current message.")
         return lines.joined(separator: "\n")
+    }
+
+    private static func sortedEntries(memory: [String: String]) -> [(String, String)] {
+        memory
+            .filter { !$0.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+            .map { ($0.key, $0.value) }
+    }
+
+    private static func selectRelevant(entries: [(String, String)], userContent: String) -> [(String, String)] {
+        let trimmed = userContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return Array(entries.prefix(relevantFallbackCount))
+        }
+
+        let userTokens = Set(tokenize(trimmed))
+        if userTokens.isEmpty { return Array(entries.prefix(relevantFallbackCount)) }
+
+        let scored = entries
+            .map { key, value in (key, value, score(key: key, value: value, userTokens: userTokens)) }
+            .filter { $0.2 >= relevantMinScore }
+            .sorted { $0.2 > $1.2 }
+            .prefix(relevantMaxEntries)
+            .map { (key: $0.0, value: $0.1) }
+
+        return applyCharBudget(rows: scored, maxChars: relevantMaxChars)
+    }
+
+    private static func applyCharBudget(
+        rows: [(key: String, value: String)],
+        maxChars: Int
+    ) -> [(String, String)] {
+        var used = 0
+        var selected: [(String, String)] = []
+        for row in rows {
+            let line = "- \(row.key): \(row.value)"
+            if !selected.isEmpty, used + line.count > maxChars { break }
+            selected.append((row.key, row.value))
+            used += line.count
+        }
+        return selected
     }
 
     private static func tokenize(_ text: String) -> [String] {

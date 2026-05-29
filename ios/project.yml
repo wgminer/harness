@@ -9,6 +9,13 @@ settings:
     SWIFT_VERSION: "5.0"
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 0.1.0
+packages:
+  MarkdownUI:
+    url: https://github.com/gonzalezreal/swift-markdown-ui
+    from: 2.4.1
+  Highlightr:
+    url: https://github.com/raspu/Highlightr
+    from: 2.2.0
 targets:
   HarnessMobile:
     type: application
@@ -21,7 +28,9 @@ targets:
         INFOPLIST_FILE: HarnessMobile/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1,2"
-    dependencies: []
+    dependencies:
+      - package: MarkdownUI
+      - package: Highlightr
   HarnessMobileTests:
     type: bundle.unit-test
     platform: iOS

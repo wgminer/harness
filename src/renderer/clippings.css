@@ -1,0 +1,38 @@
+/* Clippings list/filter UI; bottom composer uses tasks.css (tasks-page, tasks-composer-dock). */
+
+.clippings-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.clippings-filter-chip {
+  padding: 4px 10px;
+  font-size: var(--font-size-sm);
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.clippings-filter-chip:hover {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.clippings-filter-chip.active {
+  color: var(--accent-readable);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.tasks-row-subtext--copied .tasks-row-subtext-hover {
+  display: none;
+}
+
+.tasks-row-body:hover .tasks-row-subtext--copied .tasks-row-subtext-default,
+.tasks-row-body:focus-visible .tasks-row-subtext--copied .tasks-row-subtext-default {
+  display: inline;
+}

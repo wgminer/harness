@@ -37,7 +37,7 @@ export async function generateThreadTitleWithOpenAI(
   );
 
   if (completion.usage) {
-    recordOpenAIUsage(completion.usage);
+    recordOpenAIUsage(completion.usage, OPENAI_TITLE_MODEL);
   }
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? "";
@@ -118,7 +118,7 @@ export function createOpenAIProvider(apiKey: string): LLMProvider {
           let message: Partial<ChatCompletionMessage> = {};
           for await (const chunk of stream) {
             if (chunk.usage) {
-              recordOpenAIUsage(chunk.usage);
+              recordOpenAIUsage(chunk.usage, model);
             }
             message = messageReducer(message, chunk);
             const delta = chunk.choices[0]?.delta?.content;

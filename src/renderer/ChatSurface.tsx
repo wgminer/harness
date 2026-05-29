@@ -1,6 +1,6 @@
 import { snapToGrid } from "../shared/grid";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { MutableRefObject, ReactNode, RefObject, UIEvent } from "react";
+import type { MutableRefObject, ReactNode, RefObject, UIEvent, WheelEvent } from "react";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessageList } from "./ChatMessageList";
 import {
@@ -148,6 +148,15 @@ export function ChatSurface({
     setFollowLiveEdge(nearLiveEdge);
   }, [chatAreaRef]);
 
+  /**
+   * Release the streaming follow-lock the moment the user wheels upward. Without this, a
+   * streaming chunk's layout effect can re-scroll to the live edge before the async `scroll`
+   * event from the user's wheel has had a chance to flip `followLiveEdge` off.
+   */
+  const onChatAreaWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY < 0) setFollowLiveEdge(false);
+  }, []);
+
   const scrollToTop = useCallback(() => {
     chatAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [chatAreaRef]);
@@ -173,6 +182,7 @@ export function ChatSurface({
         className={centerSingleMessage ? "chat-scroll chat-scroll--single-message" : "chat-scroll"}
         data-scrolled={hasScrolled || undefined}
         onScroll={onChatAreaScroll}
+        onWheel={onChatAreaWheel}
       >
         {hasScrolled && (
           <button

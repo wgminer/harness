@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChatView } from "./ChatView";
 import { SettingsView } from "./SettingsView";
 import { TasksView } from "./TasksView";
+import { ClippingsView } from "./ClippingsView";
 import { NotesView } from "./WritingSurfaceView";
 import { Sidebar } from "./Sidebar";
 import { useRecorder } from "./useRecorder";
@@ -73,6 +74,17 @@ export default function App() {
       setPendingOpenNoteId(session.notesOpenNoteId);
     }
     setUiSessionReady(true);
+  }, []);
+
+  /** Reload sidebar list after sync/import without resetting view from session. */
+  const refreshConversations = useCallback(async () => {
+    const list = await window.electron.memory.listConversations();
+    setConversations(list);
+    setConversationId((current) => {
+      if (list.length === 0) return null;
+      if (current && list.some((c) => c.id === current)) return current;
+      return list[0].id;
+    });
   }, []);
 
   useEffect(() => {
@@ -316,6 +328,7 @@ export default function App() {
         appVersion={appVersion}
         notesItemActive={view === "notes" && notesScreen === "list"}
         onNotesClick={handleNotesClick}
+        onSyncComplete={refreshConversations}
       />
       <main className="main">
         {(view === "chat" || activeChatProcessing) && (
@@ -356,9 +369,13 @@ export default function App() {
           </div>
         )}
         {view === "settings" && (
-          <SettingsView onImportComplete={loadConversations} />
+          <SettingsView
+            onImportComplete={loadConversations}
+            onSyncComplete={refreshConversations}
+          />
         )}
         {view === "tasks" && <TasksView />}
+        {view === "clippings" && <ClippingsView />}
         {view === "notes" && (
           <NotesView
             initialOpenNoteId={pendingOpenNoteId}

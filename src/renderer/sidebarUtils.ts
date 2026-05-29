@@ -2,30 +2,152 @@ import type { ConversationListRow } from "../shared/conversationSession";
 
 export type Conversation = ConversationListRow;
 
-export type View = "chat" | "settings" | "tasks" | "notes";
+export type View = "chat" | "settings" | "tasks" | "notes" | "clippings";
 
 /** Fully opaque conversations shown before the progressive fade peek rows. */
 export const SIDEBAR_PREVIEW_COUNT_DEFAULT = 7;
+export const SIDEBAR_PREVIEW_COUNT_MIN = 3;
 /** Peek rows after the preview count; each fades further toward zero opacity. */
 export const SIDEBAR_FADE_PEEK_COUNT = 5;
+export const SIDEBAR_FADE_PEEK_COUNT_MIN = 2;
+export const SIDEBAR_FADE_PEEK_COUNT_MAX = 12;
 /** Default sidebar list size: preview rows plus fade peek rows. */
 export const SIDEBAR_INITIAL_VISIBLE_COUNT =
   SIDEBAR_PREVIEW_COUNT_DEFAULT + SIDEBAR_FADE_PEEK_COUNT;
 /** Each "More" click adds this many conversations to the sidebar list. */
 export const SIDEBAR_MORE_INCREMENT = 20;
 
-/** Fade tier for peek rows (8th–12th item); null when the row is fully opaque. */
-export type SidebarPeekFadeLevel = 1 | 2 | 3 | 4 | 5;
+export type SidebarListLayout = {
+  previewCount: number;
+  fadePeekCount: number;
+  initialVisibleCount: number;
+};
 
+export type SidebarListLayoutMetrics = {
+  listAreaHeightPx: number;
+  rowHeightPx: number;
+  groupHeaderHeightPx: number;
+  expandRowHeightPx: number;
+  listPaddingPx: number;
+};
+
+export const SIDEBAR_LIST_LAYOUT_DEFAULTS: SidebarListLayoutMetrics = {
+  listAreaHeightPx: 0,
+  rowHeightPx: 36,
+  groupHeaderHeightPx: 28,
+  expandRowHeightPx: 40,
+  listPaddingPx: 16,
+};
+
+/** Opacity for a peek-fade row (level 1 = lightest fade, level N = invisible). */
+export function sidebarPeekFadeOpacity(level: number, fadePeekCount: number): number {
+  if (fadePeekCount <= 0 || level <= 0) return 1;
+  return Math.max(0, (fadePeekCount - level) / fadePeekCount);
+}
+
+/**
+ * Conversation rows that fit in the sidebar list area (opaque preview + fade peek band).
+ * Uses measured chrome when `listAreaHeightPx` is known; otherwise returns the static default.
+ */
+function mergeSidebarLayoutMetrics(
+  metrics: Partial<SidebarListLayoutMetrics>
+): SidebarListLayoutMetrics {
+  const merged = { ...SIDEBAR_LIST_LAYOUT_DEFAULTS };
+  for (const key of Object.keys(metrics) as (keyof SidebarListLayoutMetrics)[]) {
+    const value = metrics[key];
+    if (value !== undefined) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+export function computeSidebarListLayout(
+  metrics: Partial<SidebarListLayoutMetrics> = {}
+): SidebarListLayout {
+  const {
+    listAreaHeightPx,
+    rowHeightPx,
+    groupHeaderHeightPx,
+    expandRowHeightPx,
+    listPaddingPx,
+  } = mergeSidebarLayoutMetrics(metrics);
+
+  const defaultLayout: SidebarListLayout = {
+    previewCount: SIDEBAR_PREVIEW_COUNT_DEFAULT,
+    fadePeekCount: SIDEBAR_FADE_PEEK_COUNT,
+    initialVisibleCount: SIDEBAR_INITIAL_VISIBLE_COUNT,
+  };
+
+  if (listAreaHeightPx <= 0 || rowHeightPx <= 0) {
+    return defaultLayout;
+  }
+
+  const chrome = listPaddingPx + groupHeaderHeightPx + expandRowHeightPx;
+  const rowBudget = listAreaHeightPx - chrome;
+  const minRows = SIDEBAR_PREVIEW_COUNT_MIN + SIDEBAR_FADE_PEEK_COUNT_MIN;
+  if (rowBudget < rowHeightPx * minRows) {
+    return {
+      previewCount: SIDEBAR_PREVIEW_COUNT_MIN,
+      fadePeekCount: SIDEBAR_FADE_PEEK_COUNT_MIN,
+      initialVisibleCount: minRows,
+    };
+  }
+
+  const totalRows = Math.floor(rowBudget / rowHeightPx);
+  let fadePeekCount = Math.round(totalRows * 0.35);
+  fadePeekCount = Math.min(
+    SIDEBAR_FADE_PEEK_COUNT_MAX,
+    Math.max(SIDEBAR_FADE_PEEK_COUNT_MIN, fadePeekCount)
+  );
+  let previewCount = Math.max(SIDEBAR_PREVIEW_COUNT_MIN, totalRows - fadePeekCount);
+  if (previewCount + fadePeekCount > totalRows) {
+    fadePeekCount = Math.max(SIDEBAR_FADE_PEEK_COUNT_MIN, totalRows - previewCount);
+  }
+
+  return {
+    previewCount,
+    fadePeekCount,
+    initialVisibleCount: previewCount + fadePeekCount,
+  };
+}
+
+/**
+ * Peek-fade band for the rows actually on screen. When the viewport fits more rows than
+ * there are conversations, shrink the opaque preview band so tail rows still fade.
+ */
+export function effectiveSidebarPeekLayout(
+  layout: SidebarListLayout,
+  displayedCount: number
+): SidebarListLayout {
+  if (displayedCount <= 0) {
+    return { previewCount: 0, fadePeekCount: 0, initialVisibleCount: 0 };
+  }
+  const fadePeekCount = Math.min(
+    layout.fadePeekCount,
+    Math.max(SIDEBAR_FADE_PEEK_COUNT_MIN, displayedCount - 1)
+  );
+  const previewCount = Math.min(
+    layout.previewCount,
+    Math.max(1, displayedCount - fadePeekCount)
+  );
+  return {
+    previewCount,
+    fadePeekCount,
+    initialVisibleCount: previewCount + fadePeekCount,
+  };
+}
+
+/** Fade tier for peek rows; null when the row is fully opaque. */
 export function sidebarItemPeekFadeLevel(
   flatIndex: number,
-  visibleLimit: number
-): SidebarPeekFadeLevel | null {
-  if (visibleLimit > SIDEBAR_INITIAL_VISIBLE_COUNT) return null;
-  if (flatIndex < SIDEBAR_PREVIEW_COUNT_DEFAULT) return null;
-  const peekIndex = flatIndex - SIDEBAR_PREVIEW_COUNT_DEFAULT;
-  if (peekIndex >= SIDEBAR_FADE_PEEK_COUNT) return null;
-  return (peekIndex + 1) as SidebarPeekFadeLevel;
+  previewCount: number,
+  fadePeekCount: number
+): number | null {
+  if (flatIndex < previewCount) return null;
+  const peekIndex = flatIndex - previewCount;
+  if (peekIndex >= fadePeekCount) return null;
+  return peekIndex + 1;
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

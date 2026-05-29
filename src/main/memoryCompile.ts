@@ -230,7 +230,7 @@ const SYSTEM_PROMPT = [
   "If nothing durable surfaces, output { \"facts\": [] }.",
 ].join("\n");
 
-function parseFactsResponse(raw: string): DistilledFact[] {
+export function parseFactsResponse(raw: string): DistilledFact[] {
   if (!raw) return [];
   // Some models wrap JSON in ``` fences despite instructions; strip them.
   const trimmed = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
@@ -268,7 +268,7 @@ export function createOpenAIDistiller(apiKey: string): MemoryCompileLLM {
         },
         { signal: AbortSignal.timeout(60_000) }
       );
-      if (completion.usage) recordOpenAIUsage(completion.usage);
+      if (completion.usage) recordOpenAIUsage(completion.usage, OPENAI_TRANSCRIPT_CLEANUP_MODEL);
       const raw = completion.choices[0]?.message?.content?.trim() ?? "";
       return parseFactsResponse(raw);
     },

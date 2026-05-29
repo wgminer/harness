@@ -2,6 +2,7 @@ import {
   FONT_MONO_IDS_FOR_SCHEMA,
   FONT_SIZE_OPTIONS,
   FONT_UI_IDS_FOR_SCHEMA,
+  THEME_PRESET_IDS_FOR_SCHEMA,
 } from "../../shared/theme";
 
 export const TOOL_DEFINITIONS = [
@@ -71,9 +72,21 @@ export const TOOL_DEFINITIONS = [
   {
     type: "function" as const,
     function: {
+      name: "get_theme",
+      description:
+        "Read the current app theme and list built-in color presets. Call before changing colors or typography so you know the starting point.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "update_theme",
       description:
-        "Update the app theme (accent, text/background colors, UI font, monospace font for code/notes, base size). Omit fields you do not want to change. Call when colors, typography, or appearance are requested.",
+        "Update the app theme (accent, text/background colors, UI font, monospace font for code/notes, base size). Omit fields you do not want to change. Returns the applied settings. Prefer get_theme first when unsure of current values.",
       parameters: {
         type: "object",
         properties: {
@@ -92,6 +105,25 @@ export const TOOL_DEFINITIONS = [
             description: "Base UI font size in px",
           },
         },
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "apply_theme_preset",
+      description:
+        "Apply a built-in color palette by preset id (typography is unchanged). Use get_theme to list presets. Presets: night, paper, matcha, ik_blue, bloomberg.",
+      parameters: {
+        type: "object",
+        properties: {
+          preset: {
+            type: "string",
+            enum: THEME_PRESET_IDS_FOR_SCHEMA,
+            description: "Color palette preset id",
+          },
+        },
+        required: ["preset"],
       },
     },
   },
@@ -132,11 +164,16 @@ export const TOOL_DEFINITIONS = [
         type: "object",
         properties: {
           title: { type: "string", description: "Short description of the task" },
+          status: {
+            type: "string",
+            enum: ["pending", "in_progress", "completed", "cancelled"],
+            description:
+              "Workflow state for the task. Defaults to pending. Use completed/cancelled for done work; do not encode status in tags.",
+          },
           tags: {
             type: "array",
             items: { type: "string" },
-            description:
-              "Labels for the task (e.g. pending, in_progress, completed, cancelled, or custom tags like urgent). Defaults to [pending] if omitted.",
+            description: "Optional filterable labels (e.g. urgent, research). Not used for completion state.",
           },
           metadata: {
             type: "object",
@@ -152,16 +189,31 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "task_update",
       description:
-        "Update an existing persistent assistant task (for example, change tags, rename, or attach metadata). Pass tags to replace the full tag list.",
+        "Update an existing persistent assistant task (rename, change status, edit filterable tags, or attach metadata). Use status for workflow (pending/in_progress/completed/cancelled). Use tags to replace all labels, or add_tags/remove_tags to patch labels without touching status.",
       parameters: {
         type: "object",
         properties: {
           id: { type: "string", description: "ID of the task to update (from task_list/task_create results)" },
           title: { type: "string", description: "New title, if you want to rename the task" },
+          status: {
+            type: "string",
+            enum: ["pending", "in_progress", "completed", "cancelled"],
+            description: "Workflow state (not stored in tags).",
+          },
           tags: {
             type: "array",
             items: { type: "string" },
-            description: "Complete replacement tag list for the task (normalized to lowercase labels).",
+            description: "Replace the full filterable tag list (normalized to lowercase labels).",
+          },
+          add_tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Add one or more filterable tags without replacing existing tags.",
+          },
+          remove_tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Remove filterable tags by name (normalized match).",
           },
           metadata: {
             type: "object",
@@ -191,7 +243,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "task_clear_completed",
       description:
-        "Remove all tasks tagged completed or cancelled to keep the task list tidy.",
+        "Remove all tasks whose status is completed or cancelled to keep the task list tidy.",
       parameters: {
         type: "object",
         properties: {},
@@ -259,6 +311,28 @@ export const TOOL_DEFINITIONS = [
             description: "Number of forecast days to include (1–7). Defaults to 3.",
           },
         },
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "web_search",
+      description:
+        "Search the web for current information via Tavily and return top results with title, URL, and snippet. Use for fresh facts, news, documentation, or anything outside the user's local data. Requires a Tavily API key in Config (Tools).",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Search query text.",
+          },
+          max_results: {
+            type: "number",
+            description: "Number of results to return (1–10). Defaults to 5.",
+          },
+        },
+        required: ["query"],
       },
     },
   },
@@ -347,6 +421,105 @@ export const TOOL_DEFINITIONS = [
           id: {
             type: "string",
             description: "ID of the note to delete.",
+          },
+        },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "clipping_list",
+      description:
+        "List saved clippings (short text snippets with tags). Optionally filter by tag.",
+      parameters: {
+        type: "object",
+        properties: {
+          tag: {
+            type: "string",
+            description: "Optional tag to filter clippings (normalized to lowercase).",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "clipping_create",
+      description:
+        "Save a new text clipping with optional tags for organization.",
+      parameters: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "Text content to save as a clipping.",
+          },
+          tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional labels for sorting and filtering.",
+          },
+          kind: {
+            type: "string",
+            enum: ["text", "url", "image"],
+            description: "Clipping type. Only text is supported in v1.",
+          },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "clipping_update",
+      description:
+        "Update an existing clipping's content or tags. Use tags to replace all labels, or add_tags/remove_tags to patch labels without replacing the full list.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description: "ID of the clipping to update.",
+          },
+          content: {
+            type: "string",
+            description: "New text content.",
+          },
+          tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Replace the full tag list (normalized to lowercase labels).",
+          },
+          add_tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Add one or more tags without replacing existing tags.",
+          },
+          remove_tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Remove tags by name (normalized match).",
+          },
+        },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "clipping_delete",
+      description: "Delete a clipping by id when it is no longer needed.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description: "ID of the clipping to delete.",
           },
         },
         required: ["id"],

@@ -10,50 +10,13 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let id = app.selectedConversationId {
-                    ChatThreadView(app: app, conversationId: id)
-                } else {
-                    ConversationListView(app: app) { conversationId in
-                        app.selectedConversationId = conversationId
-                    }
-                }
+            ConversationListView(app: app) { conversationId in
+                app.selectedConversationId = conversationId
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 16) {
-                        if app.selectedConversationId != nil {
-                            SyncToolbarButton(app: app) {
-                                Task { await app.performSync() }
-                            }
-                        }
-                        NavigationLink {
-                            MobileSettingsView(app: app)
-                        } label: {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: "gearshape")
-                                if let settingsAttentionColor {
-                                    SyncAttentionDot(color: settingsAttentionColor)
-                                }
-                            }
-                        }
-                    }
-                }
-                if app.selectedConversationId != nil {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Chats") {
-                            app.selectedConversationId = nil
-                        }
-                    }
-                }
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                SyncStatusBanner(status: app.syncStatus) {
-                    app.dismissSyncStatus()
-                }
+            .navigationDestination(item: selectedConversationBinding) { conversationId in
+                ChatThreadView(app: app, conversationId: conversationId)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: app.syncStatus)
         .task {
             await app.bootstrap()
         }
@@ -61,9 +24,6 @@ struct ContentView: View {
             if phase == .active {
                 Task { await app.syncOnForeground() }
             }
-        }
-        .sheet(isPresented: $app.showConflictSheet) {
-            SyncConflictView(app: app)
         }
         .alert("Setup required", isPresented: setupAlertBinding) {
             Button("Settings") {
@@ -92,14 +52,11 @@ struct ContentView: View {
         return parts.joined(separator: " ")
     }
 
-    private var settingsAttentionColor: Color? {
-        if app.syncStatus.showsAttentionDot {
-            return app.syncStatus.kind == .conflict ? .orange : .red
-        }
-        if app.store.hasLocalEdits {
-            return .orange
-        }
-        return nil
+    private var selectedConversationBinding: Binding<String?> {
+        Binding(
+            get: { app.selectedConversationId },
+            set: { app.selectedConversationId = $0 }
+        )
     }
 }
 
@@ -119,8 +76,4 @@ struct ContentView: View {
 
 #Preview("Setup required") {
     ContentView(app: PreviewSupport.emptyApp())
-}
-
-#Preview("Sync status banner") {
-    ContentView(app: PreviewSupport.populatedApp(syncStatus: PreviewSupport.pulledStatus))
 }

@@ -31,13 +31,6 @@ enum PreviewSupport {
         return app
     }
 
-    static let pulledStatus = SyncStatusSnapshot(
-        kind: .pulled,
-        title: "Downloaded from backup folder",
-        detail: "1 new: Trip planning · 4 files applied",
-        occurredAt: Date()
-    )
-
     static func emptyApp(
         syncStatus: SyncStatusSnapshot? = nil,
         needsBackupFolder: Bool = true,
@@ -79,16 +72,36 @@ enum PreviewSupport {
         let threadMessages: [MessageRecord] = [
             MessageRecord(
                 role: "user",
-                content: "What should I pack for a week in Tokyo in April?",
+                content: """
+                What should I pack for a week in **Tokyo** in April? \
+                I care about `rain` and walking a lot.
+                """,
                 timestamp: now - 120_000,
                 model: nil
             ),
             MessageRecord(
                 role: "assistant",
                 content: """
-                Pack layers: light rain jacket, comfortable walking shoes, and a compact umbrella. \
-                April is mild (roughly 50–65°F) with occasional showers. Bring a universal adapter \
-                and a small day bag for transit.
+                ### Packing for Tokyo in April
+
+                April is mild (roughly 50–65°F) with occasional showers. Pack layers:
+
+                - Light rain jacket
+                - Comfortable walking shoes
+                - Compact umbrella
+                - Universal adapter
+
+                Example checklist helper:
+
+                ```swift
+                struct PackItem: Identifiable {
+                    let id = UUID()
+                    let name: String
+                    let packed: Bool
+                }
+                ```
+
+                See [Japan weather](https://www.jma.go.jp/) for updates.
                 """,
                 timestamp: now - 60_000,
                 model: OpenAIModel.chat
@@ -96,8 +109,14 @@ enum PreviewSupport {
         ]
         try app.store.saveMessages(conversationId: sampleConversationId, messages: threadMessages)
         try app.store.saveMessages(conversationId: secondConversationId, messages: [])
+        _ = try app.clippingsStore.create(content: "Sample clipping for previews", tags: ["preview", "sample"])
+        _ = try app.clippingsStore.create(
+            content: "Waste no more time arguing what a good man should be.",
+            tags: ["quotes"]
+        )
         app.store.clearLocalEditsFlag()
         try app.store.reload()
+        try app.clippingsStore.reload()
     }
 }
 
@@ -110,5 +129,6 @@ struct PreviewNavigationRoot<Content: View>: View {
         NavigationStack {
             content()
         }
+        .preferredColorScheme(.dark)
     }
 }

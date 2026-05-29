@@ -1,25 +1,10 @@
 import Foundation
 
-enum SyncDirection: String {
-    case push
-    case pull
-    case noop
-}
-
 enum SyncDecision {
     case push
     case pull
     case noop
     case conflict
-
-    var direction: SyncDirection? {
-        switch self {
-        case .push: return .push
-        case .pull: return .pull
-        case .noop: return .noop
-        case .conflict: return nil
-        }
-    }
 }
 
 /// Port of `decideSyncAction` from `src/shared/sync.ts`.
@@ -50,5 +35,36 @@ enum SyncDecisionEngine {
             return .conflict
         }
         return .pull
+    }
+
+    /// Port of desktop `resolveSyncDecision` — content changes first, then full revision.
+    static func resolve(params: (
+        localRevision: String,
+        localContentRevision: String,
+        remoteRevision: String,
+        remoteContentRevision: String,
+        lastSyncedRevision: String?,
+        lastSyncedContentRevision: String?,
+        remoteUpdatedAt: Int64?,
+        localMaxMtimeMs: Int64
+    )) -> SyncDecision {
+        if params.localRevision == params.remoteRevision { return .noop }
+
+        let contentDecision = decide(params: (
+            localRevision: params.localContentRevision,
+            remoteRevision: params.remoteContentRevision,
+            lastSyncedRevision: params.lastSyncedContentRevision ?? params.lastSyncedRevision,
+            remoteUpdatedAt: params.remoteUpdatedAt,
+            localMaxMtimeMs: params.localMaxMtimeMs
+        ))
+        if contentDecision != .noop { return contentDecision }
+
+        return decide(params: (
+            localRevision: params.localRevision,
+            remoteRevision: params.remoteRevision,
+            lastSyncedRevision: params.lastSyncedRevision,
+            remoteUpdatedAt: params.remoteUpdatedAt,
+            localMaxMtimeMs: 0
+        ))
     }
 }

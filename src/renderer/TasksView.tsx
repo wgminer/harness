@@ -1,14 +1,17 @@
 import { snapToGrid } from "../shared/grid";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, ListTodo, Square, SquareCheck, Trash2, X } from "lucide-react";
 import type { TaskItem, TasksPayload } from "../shared/electronAPI";
+import { normalizeTags } from "../shared/tags";
 import {
-  mergeCustomTaskTags,
-  normalizeTags,
+  migrateTaskFields,
+  resolveTaskStatus,
+  taskIsActive,
   taskIsDone,
-  taskTagsWithoutLegacyStatus,
-  toggleCompletedTag,
-} from "../shared/taskTags";
+  taskIsInCompletedSection,
+  toggleTaskCompleted,
+  type TaskStatus,
+} from "../shared/taskStatus";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
@@ -78,9 +81,9 @@ function TaskRow({
   onOpen: (t: TaskItem) => void;
   completing?: boolean;
 }) {
-  const tags = normalizeTags(t.tags);
-  const displayTags = taskTagsWithoutLegacyStatus(tags);
-  const done = taskIsDone(tags);
+  const displayTags = normalizeTags(t.tags);
+  const status = resolveTaskStatus(t);
+  const done = taskIsDone(status);
   const dateAdded = formatDateAdded(t.createdAt);
   const timeAgo = formatTimeAgo(t.createdAt);
   return (
@@ -133,6 +136,7 @@ export function TasksView() {
   const [modalTags, setModalTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [modalSaving, setModalSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const newTaskInputRef = useRef<HTMLTextAreaElement>(null);
   const tagFieldRef = useRef<HTMLInputElement>(null);
@@ -171,17 +175,22 @@ export function TasksView() {
     adjustNewTaskInputHeight();
   }, [newTitle, adjustNewTaskInputHeight]);
 
+  const normalizeTask = useCallback((task: TaskItem): TaskItem => {
+    const { status, tags } = migrateTaskFields(task);
+    return { ...task, status, tags };
+  }, []);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
         const payload = await window.electron.tasks.list();
-        setTasks(payload.tasks ?? []);
+        setTasks((payload.tasks ?? []).map(normalizeTask));
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [normalizeTask]);
 
   useLayoutEffect(() => {
     const pane = tasksPaneRef.current;
@@ -210,7 +219,7 @@ export function TasksView() {
   const refreshFromPayload = (payload: unknown) => {
     const p = payload as Partial<TasksPayload> | null;
     if (p && Array.isArray(p.tasks)) {
-      setTasks(p.tasks);
+      setTasks(p.tasks.map(normalizeTask));
     }
   };
 
@@ -227,8 +236,11 @@ export function TasksView() {
     }
   };
 
-  const updateTaskTags = async (id: string, tags: string[]) => {
-    const payload = await window.electron.tasks.update({ id, tags });
+  const patchTask = async (
+    id: string,
+    patch: { title?: string; status?: TaskStatus; tags?: string[] },
+  ) => {
+    const payload = await window.electron.tasks.update({ id, ...patch });
     refreshFromPayload(payload);
   };
 
@@ -238,9 +250,10 @@ export function TasksView() {
   };
 
   const toggleDone = (t: TaskItem) => {
-    const wasDone = taskIsDone(normalizeTags(t.tags));
+    const status = resolveTaskStatus(t);
+    const wasDone = taskIsDone(status);
     if (wasDone) {
-      void updateTaskTags(t.id, toggleCompletedTag(t.tags));
+      void patchTask(t.id, { status: toggleTaskCompleted(status) });
       return;
     }
     if (completingIds.has(t.id)) return;
@@ -251,7 +264,7 @@ export function TasksView() {
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (reduceMotion) {
-      void updateTaskTags(t.id, toggleCompletedTag(t.tags));
+      void patchTask(t.id, { status: toggleTaskCompleted(status) });
       return;
     }
 
@@ -263,7 +276,7 @@ export function TasksView() {
 
     const handle = window.setTimeout(() => {
       completionTimeoutsRef.current.delete(t.id);
-      void updateTaskTags(t.id, toggleCompletedTag(t.tags));
+      void patchTask(t.id, { status: toggleTaskCompleted(status) });
       setCompletingIds((prev) => {
         if (!prev.has(t.id)) return prev;
         const next = new Set(prev);
@@ -277,7 +290,7 @@ export function TasksView() {
   const openModal = (t: TaskItem) => {
     setModalTask(t);
     setModalTitle(t.title);
-    setModalTags(taskTagsWithoutLegacyStatus(t.tags));
+    setModalTags(normalizeTags(t.tags));
     setTagInput("");
     requestAnimationFrame(() => tagFieldRef.current?.focus());
   };
@@ -320,11 +333,10 @@ export function TasksView() {
     if (!trimmed) return;
     setModalSaving(true);
     try {
-      const tags = mergeCustomTaskTags(modalTask.tags, modalTags);
       const payload = await window.electron.tasks.update({
         id: modalTask.id,
         title: trimmed,
-        tags,
+        tags: modalTags,
       });
       refreshFromPayload(payload);
       setModalTask(null);
@@ -344,14 +356,35 @@ export function TasksView() {
     }
   };
 
-  const activeTasks = tasks.filter((t) => !taskIsDone(normalizeTags(t.tags)));
-  const completedTasks = tasks.filter((t) => taskIsDone(normalizeTags(t.tags)));
+  const filteredTasks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return tasks;
+    const tagQuery = q.replace(/\s+/g, "_");
+    return tasks.filter(
+      (t) =>
+        t.title.toLowerCase().includes(q) ||
+        normalizeTags(t.tags).some((tag) => tag.includes(tagQuery)),
+    );
+  }, [tasks, searchQuery]);
+
+  const activeTasks = filteredTasks.filter((t) => taskIsActive(resolveTaskStatus(t)));
+  const completedTasks = filteredTasks.filter((t) => taskIsInCompletedSection(resolveTaskStatus(t)));
+  const searching = searchQuery.trim().length > 0;
+  const showCompletedExpanded = searching ? true : completedOpen;
 
   return (
     <div ref={tasksPaneRef} className="workspace-page tasks-page">
       <WorkspaceHeader title="Tasks" icon={<ListTodo size={18} />} scrolled={headerScrolled} />
       <div ref={scrollRef} className="workspace-scroll tasks-scroll" onScroll={onScroll}>
         <div className="workspace-content tasks-content">
+          <input
+            type="search"
+            className="workspace-search-input"
+            placeholder="Search tasks…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search tasks"
+          />
           <div className="tasks-section">
             <button
               type="button"
@@ -374,7 +407,11 @@ export function TasksView() {
                 <p className="tasks-section-lead">Loading tasks…</p>
               ) : activeTasks.length === 0 ? (
                 <p className="tasks-section-lead">
-                  {tasks.length === 0 ? "No tasks yet." : "No active tasks."}
+                  {tasks.length === 0
+                    ? "No tasks yet."
+                    : searching
+                      ? "No active tasks match your search."
+                      : "No active tasks."}
                 </p>
               ) : (
                 <ul className="tasks-list">
@@ -397,7 +434,7 @@ export function TasksView() {
               <button
                 type="button"
                 className="tasks-section-heading"
-                aria-expanded={completedOpen}
+                aria-expanded={showCompletedExpanded}
                 aria-controls="tasks-completed-panel"
                 id="tasks-completed-heading"
                 onClick={() => setCompletedOpen((o) => !o)}
@@ -405,7 +442,7 @@ export function TasksView() {
                 <ChevronRight
                   size={18}
                   strokeWidth={2}
-                  className={`tasks-section-caret${completedOpen ? " tasks-section-caret--open" : ""}`}
+                  className={`tasks-section-caret${showCompletedExpanded ? " tasks-section-caret--open" : ""}`}
                   aria-hidden
                 />
                 <span>Completed</span>
@@ -414,7 +451,7 @@ export function TasksView() {
                 id="tasks-completed-panel"
                 role="region"
                 aria-labelledby="tasks-completed-heading"
-                hidden={!completedOpen}
+                hidden={!showCompletedExpanded}
               >
                 <ul className="tasks-list">
                   {completedTasks.map((t) => (

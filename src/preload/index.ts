@@ -2,13 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { AppendMessageMeta } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import type { NoteEditProposal, NoteEditProposalInput } from "../shared/writing";
-import type {
-  SyncConflictResolution,
-  SyncFolderSuggestion,
-  SyncResult,
-  SyncStatus,
-} from "../shared/sync";
-import type { SyncConflictReview } from "../shared/sync";
+import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "../shared/sync";
 
 const e2eBridge =
   process.env.HARNESS_E2E === "1"
@@ -64,6 +58,14 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("memory:importFromChatGPTFolder") as Promise<{ imported: number; errors: string[] }>,
     importFromClaudeFolder: () =>
       ipcRenderer.invoke("memory:importFromClaudeFolder") as Promise<{ imported: number; errors: string[] }>,
+    importLlmContext: (exportText: string) =>
+      ipcRenderer.invoke("memory:importLlmContext", exportText) as Promise<
+        | {
+            ok: true;
+            result: { added: number; updated: number; truncated: boolean; importSource: string | null };
+          }
+        | { ok: false; error: string }
+      >,
     runCompileNow: () =>
       ipcRenderer.invoke("memory:runCompileNow") as Promise<
         | {
@@ -123,11 +125,19 @@ contextBridge.exposeInMainWorld("electron", {
   },
   tasks: {
     list: () => ipcRenderer.invoke("tasks:list"),
-    create: (title: string, tags?: string[]) => ipcRenderer.invoke("tasks:create", title, tags),
+    create: (title: string, tags?: string[], status?: string) =>
+      ipcRenderer.invoke("tasks:create", title, tags, status),
     update: (payload: { id: string; title?: string; tags?: string[] }) =>
       ipcRenderer.invoke("tasks:update", payload),
     delete: (id: string) => ipcRenderer.invoke("tasks:delete", id),
     clearCompleted: () => ipcRenderer.invoke("tasks:clearCompleted"),
+  },
+  clippings: {
+    list: (tag?: string) => ipcRenderer.invoke("clippings:list", tag),
+    create: (content: string, tags?: string[]) => ipcRenderer.invoke("clippings:create", content, tags),
+    update: (payload: { id: string; content?: string; tags?: string[] }) =>
+      ipcRenderer.invoke("clippings:update", payload),
+    delete: (id: string) => ipcRenderer.invoke("clippings:delete", id),
   },
   chat: {
     send: (conversationId: string, userContent: string) => ipcRenderer.invoke("chat:send", conversationId, userContent),
@@ -267,10 +277,6 @@ contextBridge.exposeInMainWorld("electron", {
   sync: {
     getStatus: () => ipcRenderer.invoke("sync:getStatus") as Promise<SyncStatus>,
     runNow: () => ipcRenderer.invoke("sync:runNow") as Promise<SyncResult>,
-    getConflictReview: () =>
-      ipcRenderer.invoke("sync:getConflictReview") as Promise<SyncConflictReview | { error: string }>,
-    resolveConflict: (resolution: SyncConflictResolution) =>
-      ipcRenderer.invoke("sync:resolveConflict", resolution) as Promise<SyncResult>,
     pickFolder: () => ipcRenderer.invoke("sync:pickFolder") as Promise<string | null>,
     setFolder: (path: string) =>
       ipcRenderer.invoke("sync:setFolder", path) as Promise<string | null>,

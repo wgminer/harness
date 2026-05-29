@@ -5,6 +5,28 @@
   width: 100%;
   margin: 0 auto;
   padding: var(--space-2) var(--space-4) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Small muted eyebrow above each block. Sits on the panel's outer rail (no
+   horizontal padding) so its left edge aligns with the header icon above,
+   forming one continuous 16px column from header → label → card edge → row. */
+.notes-surface__section-label {
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  font-size: var(--font-size-caption);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+}
+
+.notes-surface__section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 /* Detail view: turn the scroll container into a flex column with hidden
@@ -25,128 +47,60 @@
   gap: 0;
 }
 
+/* Templates row: flexbox so cards fill their slot edge-to-edge and wrap on
+   narrow widths instead of cramping below a legible width. The 12px gap
+   matches the label-to-content rhythm so the small-spacing unit is consistent
+   throughout the templates region. */
 .notes-surface__templates {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-4) var(--space-3);
-  margin: 0 0 var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
 }
 
-/* Minimal pull-ticket cards with a tear-line motif. */
+/* Calm card style. Shares hover tokens with .notes-surface__note-item so the
+   two stacked blocks read as one consistent list-of-actions. */
 .notes-surface__template-btn {
-  --ticket-ink: var(--fg);
-  --ticket-ink-muted: var(--fg-muted);
-  --ticket-border: var(--border-light);
-  --ticket-lift: 8px;
-  --ticket-scale: 1;
-  --ticket-shadow: none;
-  position: relative;
-  width: calc(100% - var(--space-3));
-  margin-inline: auto;
-  min-height: calc(var(--grid) * 23);
-  border: 1px solid var(--ticket-border);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-  background: transparent;
-  color: var(--ticket-ink);
-  padding: var(--space-3) var(--space-3) var(--space-6);
+  flex: 1 1 160px;
+  min-width: 0;
+  min-height: calc(var(--grid) * 16);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  /* justify-content: flex-end; */
-  gap: var(--space-1);
+  justify-content: center;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg);
   text-align: left;
   font: inherit;
   cursor: pointer;
-  transform: translateY(var(--ticket-lift)) scale(var(--ticket-scale));
-  transform-origin: 50% 50%;
-  box-shadow: var(--ticket-shadow);
   transition:
-    transform var(--motion-duration-expressive) var(--motion-ease-spring),
-    border-color var(--motion-duration-normal) var(--motion-ease-standard),
     background-color var(--motion-duration-normal) var(--motion-ease-standard),
-    box-shadow var(--motion-duration-expressive) var(--motion-ease-spring);
-  overflow: visible;
-  isolation: isolate;
-}
-
-.notes-surface__template-btn::before {
-  content: "";
-  position: absolute;
-  left: var(--space-3);
-  right: var(--space-3);
-  bottom: var(--space-5);
-  height: 2px;
-  background-image: repeating-linear-gradient(
-    to right,
-    color-mix(in srgb, var(--ticket-border) 80%, transparent) 0 var(--space-1),
-    transparent var(--space-1) var(--space-2)
-  );
-  pointer-events: none;
-  opacity: 0.95;
-  z-index: 0;
-}
-
-.notes-surface__template-btn::after {
-  content: "";
-  position: absolute;
-  left: calc(var(--space-3) * -1);
-  right: calc(var(--space-3) * -1);
-  bottom: calc(var(--space-3) * -1);
-  height: var(--space-4);
-  background: var(--bg-secondary);
-  transform: translateY(calc(var(--ticket-lift) * -1));
-  transition:
-    transform var(--motion-duration-expressive) var(--motion-ease-spring);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.notes-surface__template-btn--blank {
-  --ticket-border: var(--border-light);
-}
-
-.notes-surface__template-btn--one-on-one {
-  --ticket-border: var(--border-light);
-}
-
-.notes-surface__template-btn--daily-log {
-  --ticket-border: var(--border-light);
-}
-
-.notes-surface__template-tab {
-  position: absolute;
-  bottom: 1px;
-  left: -8px;
-  right: -8px;
-  height: 1px;
-  /* border-radius: var(--radius-pill); */
-  background: color-mix(in srgb, var(--border-light) 96%, transparent);
-  box-shadow: none;
-  transform-origin: 50% 50%;
-  transform: translateY(calc(var(--ticket-lift) * -1));
-  transition:
-    transform var(--motion-duration-expressive) var(--motion-ease-spring);
-  pointer-events: none;
-  z-index: 3;
+    border-color var(--motion-duration-normal) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-normal) var(--motion-ease-standard);
 }
 
 .notes-surface__template-btn:hover:not(:disabled),
 .notes-surface__template-btn:focus-visible:not(:disabled) {
   outline: none;
-  --ticket-lift: 4px;
-  --ticket-scale: 1;
+  background: var(--list-row-hover-bg);
+  border-color: var(--list-row-hover-border);
+}
+
+.notes-surface__template-btn:focus-visible:not(:disabled) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .notes-surface__template-btn:active:not(:disabled) {
-  --ticket-lift: var(--space-2);
-  --ticket-scale: 1;
-  transition-duration: var(--motion-duration-fast);
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
 }
 
 .notes-surface__template-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-  filter: saturate(0.65);
 }
 
 .notes-surface__template-title {
@@ -159,25 +113,11 @@
 .notes-surface__template-description {
   font-size: var(--font-size-caption);
   line-height: var(--line-height-snug);
-  color: var(--ticket-ink-muted);
-  max-width: 100%;
+  color: var(--fg-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .notes-surface__template-btn,
-  .notes-surface__template-tab,
-  .notes-surface__template-btn::after {
-    transition: none;
-  }
-
-  .notes-surface__template-btn:hover:not(:disabled),
-  .notes-surface__template-btn:focus-visible:not(:disabled) {
-    --ticket-lift: var(--space-2);
-    --ticket-scale: 1;
-  }
 }
 
 .notes-surface__new-note {
@@ -219,7 +159,7 @@
   color: var(--fg);
   border-radius: 0;
   text-align: left;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -667,7 +607,8 @@
 }
 
 .notes-surface__empty {
-  margin: var(--space-3) 0 0;
+  margin: var(--space-2) 0 0;
+  padding: 0 var(--space-3);
   color: var(--fg-muted);
   font-size: var(--font-size-ui);
 }
@@ -682,22 +623,17 @@
 
 @media (max-width: 768px) {
   .notes-surface__templates {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-3) 8px;
-    padding: 8px 2px 4px;
+    gap: var(--space-2);
   }
 
   .notes-surface__template-btn {
-    min-height: 80px;
-    padding: var(--space-5) var(--space-2) var(--space-2);
-  }
-
-  .notes-surface__template-title {
-    font-size: var(--font-size-caption);
+    flex-basis: calc(50% - var(--space-1));
+    min-height: calc(var(--grid) * 14);
+    padding: var(--space-3);
   }
 
   .notes-surface__template-description {
-    font-size: var(--font-size-caption);
+    -webkit-line-clamp: 1;
   }
 
   .notes-aside-panel {

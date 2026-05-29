@@ -30,12 +30,15 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "lucide-react": "^0.575.0",
+    "mermaid": "^11.15.0",
     "openai": "^4.73.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
-    "remark-gfm": "^4.0.1"
+    "remark-directive": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
     "@electron/notarize": "^2.2.2",

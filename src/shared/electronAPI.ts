@@ -2,18 +2,15 @@ import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./typ
 import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
 import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSummary } from "./writing";
-import type {
-  SyncConflictResolution,
-  SyncConflictReview,
-  SyncFolderSuggestion,
-  SyncResult,
-  SyncStatus,
-} from "./sync";
+import type { ClippingItem, ClippingsPayload } from "./clippings";
+import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "./sync";
+import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
 
 export interface TaskItem {
   id: string;
   title: string;
+  status: TaskStatus;
   tags: string[];
   createdAt?: number;
   updatedAt?: number;
@@ -26,6 +23,8 @@ export interface TasksPayload {
   affectedIds?: string[];
   error?: string;
 }
+
+export type { ClippingItem, ClippingsPayload };
 
 export interface ElectronAPI {
   app: {
@@ -77,6 +76,14 @@ export interface ElectronAPI {
     searchConversations: (query: string) => Promise<SearchResult[]>;
     importFromChatGPTFolder: () => Promise<{ imported: number; errors: string[] }>;
     importFromClaudeFolder: () => Promise<{ imported: number; errors: string[] }>;
+    /** Distill user-memory facts from a pasted export produced by another assistant. */
+    importLlmContext: (exportText: string) => Promise<
+      | {
+          ok: true;
+          result: { added: number; updated: number; truncated: boolean; importSource: string | null };
+        }
+      | { ok: false; error: string }
+    >;
     /** Distill durable user-memory facts from recent conversations (auto-merge). */
     runCompileNow: () => Promise<
       | { ok: true; result: { ranAt: number; considered: number; added: number; updated: number; skipped: boolean } }
@@ -120,10 +127,29 @@ export interface ElectronAPI {
   };
   tasks: {
     list: () => Promise<TasksPayload>;
-    create: (title: string, tags?: string[]) => Promise<TasksPayload>;
-    update: (payload: { id: string; title?: string; tags?: string[] }) => Promise<TasksPayload>;
+    create: (title: string, tags?: string[], status?: TaskStatus) => Promise<TasksPayload>;
+    update: (payload: {
+      id: string;
+      title?: string;
+      status?: TaskStatus;
+      tags?: string[];
+      add_tags?: string[];
+      remove_tags?: string[];
+    }) => Promise<TasksPayload>;
     delete: (id: string) => Promise<TasksPayload>;
     clearCompleted: () => Promise<TasksPayload>;
+  };
+  clippings: {
+    list: (tag?: string) => Promise<ClippingsPayload>;
+    create: (content: string, tags?: string[]) => Promise<ClippingsPayload>;
+    update: (payload: {
+      id: string;
+      content?: string;
+      tags?: string[];
+      add_tags?: string[];
+      remove_tags?: string[];
+    }) => Promise<ClippingsPayload>;
+    delete: (id: string) => Promise<ClippingsPayload>;
   };
   chat: {
     send: (conversationId: string, content: string) => Promise<void>;
@@ -185,8 +211,6 @@ export interface ElectronAPI {
   sync: {
     getStatus: () => Promise<SyncStatus>;
     runNow: () => Promise<SyncResult>;
-    getConflictReview: () => Promise<SyncConflictReview | { error: string }>;
-    resolveConflict: (resolution: SyncConflictResolution) => Promise<SyncResult>;
     /** Open a folder picker; persists the chosen path. Returns the chosen path or null if cancelled. */
     pickFolder: () => Promise<string | null>;
     /** Persist a backup folder path directly (used by Suggestions and Reset). Empty string clears it. */

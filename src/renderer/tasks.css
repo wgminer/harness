@@ -161,6 +161,11 @@
   color: var(--fg-muted);
 }
 
+.tasks-section-lead--error {
+  color: var(--danger, #e55);
+  margin-bottom: var(--space-3);
+}
+
 .tasks-row-check {
   flex-shrink: 0;
   margin: 0 0 0;
@@ -178,6 +183,10 @@
 
 .tasks-row-check:hover {
   color: var(--fg);
+}
+
+.tasks-row-check:hover .tasks-check-icon {
+  color: var(--accent-readable);
 }
 
 .tasks-row-check:focus-visible {

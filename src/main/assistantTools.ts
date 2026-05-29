@@ -4,20 +4,25 @@ import { join } from "path";
 import { getUserMemory, setUserMemory, searchConversations, getMemoryDir, TASKS_FILE } from "./memory";
 import { generateId, fileExists } from "./utils";
 import type { SearchResult } from "../shared/types";
+import { applyTagPatch, normalizeTags } from "../shared/tags";
 import {
-  coerceTaskTags,
-  normalizeTags,
-  tagsFromLegacyStatus,
+  migrateTaskFields,
+  normalizeTaskStatus,
   taskIsClearable,
-} from "../shared/taskTags";
+  taskNeedsStatusMigration,
+} from "../shared/taskStatus";
+import type { TaskStatus } from "../shared/taskStatus";
 import { rigSection } from "../shared/rigPage";
 import { getSettings } from "./settings";
 import { getWeatherForZip } from "./weather";
+import { searchWebTavily } from "./webSearch";
 import { executeNoteTool } from "./writing";
+import { executeClippingTool } from "./clippings";
 
 export interface TaskItem {
   id: string;
   title: string;
+  status: TaskStatus;
   tags: string[];
   createdAt: number;
   updatedAt: number;
@@ -62,12 +67,13 @@ function migrateRawTask(raw: unknown): TaskItem | null {
   if (!id || !title) return null;
   const createdAt = typeof r.createdAt === "number" ? r.createdAt : Date.now();
   const updatedAt = typeof r.updatedAt === "number" ? r.updatedAt : createdAt;
-  const tags = coerceTaskTags(r);
+  const { status, tags } = migrateTaskFields(r);
   const metadata =
     r.metadata && typeof r.metadata === "object" ? (r.metadata as Record<string, unknown>) : undefined;
   return {
     id,
     title,
+    status,
     tags,
     createdAt,
     updatedAt,
@@ -87,7 +93,7 @@ export async function loadTasksIn(memoryDir: string): Promise<TaskState> {
         ? parsed
         : [];
     const needsLegacyRewrite = rows.some(
-      (r) => !!r && typeof r === "object" && "status" in (r as Record<string, unknown>)
+      (r) => !!r && typeof r === "object" && taskNeedsStatusMigration(r as Record<string, unknown>),
     );
     const tasks = rows.map(migrateRawTask).filter((t): t is TaskItem => t !== null);
     const state: TaskState = { tasks };
@@ -141,15 +147,12 @@ export function applyTaskAction(
     if (!title) {
       return { ...nextState, lastAction: "create", error: "Task title is required" };
     }
-    let tags = normalizeTags(action.args.tags);
-    if (tags.length === 0 && typeof action.args.status === "string") {
-      const fromStatus = tagsFromLegacyStatus(action.args.status);
-      if (fromStatus) tags = fromStatus;
-    }
-    if (tags.length === 0) tags = ["pending"];
+    const status = normalizeTaskStatus(action.args.status) ?? "pending";
+    const tags = normalizeTags(action.args.tags);
     const task: TaskItem = {
       id: idFactory(),
       title,
+      status,
       tags,
       createdAt: nowMs,
       updatedAt: nowMs,
@@ -171,13 +174,12 @@ export function applyTaskAction(
       const title = action.args.title.trim();
       if (title) next.title = title;
     }
-    if (action.args.tags !== undefined && Array.isArray(action.args.tags)) {
-      next.tags = normalizeTags(action.args.tags);
-      if (next.tags.length === 0) next.tags = ["pending"];
-    } else if (typeof action.args.status === "string") {
-      const fromStatus = tagsFromLegacyStatus(action.args.status);
-      if (fromStatus) next.tags = fromStatus;
+    if (typeof action.args.status === "string") {
+      const status = normalizeTaskStatus(action.args.status);
+      if (status) next.status = status;
     }
+    const tagPatch = applyTagPatch(next.tags, action.args);
+    if (tagPatch !== undefined) next.tags = tagPatch;
     if (action.args.metadata && typeof action.args.metadata === "object") {
       const metaPatch = action.args.metadata as Record<string, unknown>;
       next.metadata = { ...(next.metadata ?? {}), ...metaPatch };
@@ -200,7 +202,7 @@ export function applyTaskAction(
   const remaining: TaskItem[] = [];
   const removedIds: string[] = [];
   for (const t of nextState.tasks) {
-    if (taskIsClearable(t.tags)) removedIds.push(t.id);
+    if (taskIsClearable(t.status)) removedIds.push(t.id);
     else remaining.push(t);
   }
   nextState.tasks = remaining;
@@ -344,6 +346,18 @@ async function fetchWeather(args: Record<string, unknown>): Promise<unknown> {
   return getWeatherForZip(zip, days);
 }
 
+async function fetchWebSearch(args: Record<string, unknown>): Promise<unknown> {
+  const query = typeof args.query === "string" ? args.query.trim() : "";
+  const settings = await getSettings();
+  const apiKey = settings.search?.tavilyApiKey?.trim() ?? "";
+  const maxResultsRaw =
+    typeof args.max_results === "number"
+      ? args.max_results
+      : Number.parseInt(String(args.max_results ?? ""), 10);
+  const maxResults = Number.isFinite(maxResultsRaw) && maxResultsRaw > 0 ? maxResultsRaw : 5;
+  return searchWebTavily(apiKey, query, maxResults);
+}
+
 export function isAssistantToolName(name: string): boolean {
   return [
     "task_list",
@@ -356,11 +370,16 @@ export function isAssistantToolName(name: string): boolean {
     "memory_search_conversations",
     "get_datetime",
     "get_weather",
+    "web_search",
     "note_list",
     "note_create",
     "note_read",
     "note_save",
     "note_delete",
+    "clipping_list",
+    "clipping_create",
+    "clipping_update",
+    "clipping_delete",
   ].includes(name);
 }
 
@@ -386,12 +405,19 @@ export async function executeAssistantTool(name: string, args: Record<string, un
       return JSON.stringify(getDatetime(args));
     case "get_weather":
       return JSON.stringify(await fetchWeather(args));
+    case "web_search":
+      return JSON.stringify(await fetchWebSearch(args));
     case "note_list":
     case "note_create":
     case "note_read":
     case "note_save":
     case "note_delete":
       return JSON.stringify(await executeNoteTool(name, args));
+    case "clipping_list":
+    case "clipping_create":
+    case "clipping_update":
+    case "clipping_delete":
+      return JSON.stringify(await executeClippingTool(name, args));
     default:
       return JSON.stringify({ error: `Unknown assistant tool: ${name}` });
   }
@@ -399,15 +425,19 @@ export async function executeAssistantTool(name: string, args: Record<string, un
 
 export function registerAssistantToolsHandlers(): void {
   ipcMain.handle("tasks:list", () => listTasks());
-  ipcMain.handle(
-    "tasks:create",
-    (_e, title: string, tags?: string[]) =>
-      createTask({ title, tags })
+  ipcMain.handle("tasks:create", (_e, title: string, tags?: string[], status?: TaskStatus) =>
+    createTask({ title, tags, status }),
   );
   ipcMain.handle(
     "tasks:update",
-    (_e, payload: { id: string; title?: string; tags?: string[] }) =>
-      updateTask(payload as Record<string, unknown>)
+    (_e, payload: {
+      id: string;
+      title?: string;
+      status?: TaskStatus;
+      tags?: string[];
+      add_tags?: string[];
+      remove_tags?: string[];
+    }) => updateTask(payload as Record<string, unknown>),
   );
   ipcMain.handle(
     "tasks:delete",

@@ -1,7 +1,14 @@
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { Check, Copy, Loader2, NotebookText } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkDirective from "remark-directive";
 import rehypeHighlight from "rehype-highlight";
+import {
+  MermaidBlock,
+  directiveComponents,
+  remarkDirectiveToHast,
+} from "./markdownDirectives";
 
 export interface ToolCallDisplay {
   toolName: string;
@@ -35,24 +42,86 @@ export function ReplyingIndicator() {
   );
 }
 
-/** Renders markdown (bold, lists, code, etc.) without headers (they render as paragraphs). */
+function extractCodeText(node: ReactNode): string {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractCodeText).join("");
+  if (isValidElement(node)) {
+    const props = node.props as { children?: ReactNode };
+    return extractCodeText(props.children);
+  }
+  return "";
+}
+
+/**
+ * Renders assistant/user markdown.
+ *
+ * Headers h1-h6 are intentionally squashed to paragraphs so the model can't
+ * accidentally blow up the type scale; section structure is signalled instead
+ * via the custom layout directives in `markdownDirectives.tsx`.
+ *
+ * We also intercept ```mermaid fenced blocks at the `<pre>` level and route them
+ * to a lazy-loaded mermaid renderer; everything else flows through highlight.js.
+ */
 export function MarkdownContent({ content }: { content: string }) {
+  const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
+    <p {...props}>{children}</p>
+  );
+  const preComponent = ({ children, ...rest }: { children?: ReactNode }) => {
+    const kids = Children.toArray(children);
+    const first = kids[0];
+    if (isValidElement(first)) {
+      const codeEl = first as ReactElement<{ className?: string; children?: ReactNode }>;
+      const cls = codeEl.props.className ?? "";
+      if (typeof cls === "string" && /\blanguage-mermaid\b/.test(cls)) {
+        return <MermaidBlock source={extractCodeText(codeEl.props.children)} />;
+      }
+    }
+    return <pre {...rest}>{children}</pre>;
+  };
+
+  const components = {
+    h1: headingAsParagraph,
+    h2: headingAsParagraph,
+    h3: headingAsParagraph,
+    h4: headingAsParagraph,
+    h5: headingAsParagraph,
+    h6: headingAsParagraph,
+    pre: preComponent,
+    ...directiveComponents,
+  } as unknown as Components;
+
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
       rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
-      components={{
-        h1: ({ children, ...props }) => <p {...props}>{children}</p>,
-        h2: ({ children, ...props }) => <p {...props}>{children}</p>,
-        h3: ({ children, ...props }) => <p {...props}>{children}</p>,
-        h4: ({ children, ...props }) => <p {...props}>{children}</p>,
-        h5: ({ children, ...props }) => <p {...props}>{children}</p>,
-        h6: ({ children, ...props }) => <p {...props}>{children}</p>,
-      }}
+      components={components}
     >
       {content}
     </ReactMarkdown>
   );
+}
+
+/** Minimum tool rows before the card collapses into a summary (inclusive). */
+export const TOOL_CALLS_COMPRESS_THRESHOLD = 2;
+
+export function isToolCallPending(call: ToolCallDisplay): boolean {
+  const p = call.payload as { pending?: boolean } | undefined;
+  return !!p?.pending;
+}
+
+/** Short summary for a collapsed multi-tool card, e.g. "Listed notes (3), Read note". */
+export function summarizeToolCalls(calls: ToolCallDisplay[]): string {
+  if (calls.length === 0) return "";
+  const counts = new Map<string, number>();
+  for (const call of calls) {
+    counts.set(call.toolName, (counts.get(call.toolName) ?? 0) + 1);
+  }
+  const parts = [...counts.entries()].map(([name, count]) =>
+    count > 1 ? `${toolLabel(name)} (${count})` : toolLabel(name)
+  );
+  if (parts.length <= 4) return parts.join(", ");
+  return `${calls.length} actions`;
 }
 
 export function toolLabel(name: string): string {
@@ -71,6 +140,14 @@ export function toolLabel(name: string): string {
     note_read: "Read note",
     note_save: "Saved note",
     note_delete: "Deleted note",
+    clipping_list: "Listed clippings",
+    clipping_create: "Saved clipping",
+    clipping_update: "Updated clipping",
+    clipping_delete: "Deleted clipping",
+    get_theme: "Read theme",
+    update_theme: "Updated theme",
+    apply_theme_preset: "Applied theme preset",
+    set_layout: "Updated layout",
   };
   return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
