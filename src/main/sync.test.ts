@@ -11,12 +11,12 @@ vi.mock("electron", () => ({
   app: {
     getPath: vi.fn(() => currentUserDataDir),
   },
-  BrowserWindow: { getAllWindows: vi.fn(() => []) },
+  BrowserWindow: { getAllWindows: vi.fn() },
   dialog: { showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })) },
   shell: { openPath: vi.fn(async () => "") },
 }));
 
-import { BUNDLE_FILENAME, MANIFEST_FILENAME, getConflictReview, getSyncStatus, resolveSyncConflict, runSyncNow } from "./sync";
+import { BUNDLE_FILENAME, MANIFEST_FILENAME, getSyncStatus, runSyncNow } from "./sync";
 import { setSettings } from "./settings";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -122,7 +122,7 @@ describe("folder-backup sync", () => {
     expect(themeRestored).toBe('{"accent":"#fff"}');
   });
 
-  it("conflicts when a device has local edits and the backup also changed", async () => {
+  it("auto-merges when a device has local edits and the backup also changed", async () => {
     const backup = await makeDir("sync-backup-");
 
     const deviceA = await makeDevice({
@@ -155,16 +155,15 @@ describe("folder-backup sync", () => {
     currentUserDataDir = deviceB;
     await setBackupFolderInSettings(backup);
     const result = await runSyncNow();
-    expect(result.ok).toBe(false);
-    expect(result.conflict).toBeTruthy();
-    expect(result.status.lastError).toMatch(/both changed/);
+    expect(result.ok).toBe(true);
+    expect(result.status.lastAction).toBe("merge");
   });
 
-  it("resolveSyncConflict pull restores backup after a conflict", async () => {
+  it("auto-merge combines both sides and pushes", async () => {
     const backup = await makeDir("sync-backup-");
 
     const deviceA = await makeDevice({
-      "app-state/conversations.json": '{"from":"shared"}',
+      "app-state/conversations.json": '{"shared":{"title":"Shared","createdAt":1}}',
     });
     currentUserDataDir = deviceA;
     await setBackupFolderInSettings(backup);
@@ -177,13 +176,13 @@ describe("folder-backup sync", () => {
 
     await writeFile(
       join(deviceB, "local-data", "app-state", "conversations.json"),
-      '{"from":"B-local"}',
+      '{"local-only":{"title":"B only","createdAt":2}}',
       "utf-8",
     );
 
     await writeFile(
       join(deviceA, "local-data", "app-state", "conversations.json"),
-      '{"from":"A"}',
+      '{"shared":{"title":"Shared","createdAt":1},"remote-only":{"title":"A only","createdAt":3}}',
       "utf-8",
     );
     currentUserDataDir = deviceA;
@@ -192,17 +191,18 @@ describe("folder-backup sync", () => {
 
     currentUserDataDir = deviceB;
     await setBackupFolderInSettings(backup);
-    await runSyncNow();
+    const mergeResult = await runSyncNow();
+    expect(mergeResult.ok).toBe(true);
+    expect(mergeResult.status.lastAction).toBe("merge");
 
-    const pullResult = await resolveSyncConflict("pull");
-    expect(pullResult.ok).toBe(true);
-    expect(pullResult.status.lastAction).toBe("pull");
-
-    const restored = await readFile(
-      join(deviceB, "local-data", "app-state", "conversations.json"),
-      "utf-8",
+    const merged = JSON.parse(
+      await readFile(join(deviceB, "local-data", "app-state", "conversations.json"), "utf-8"),
     );
-    expect(restored).toBe('{"from":"A"}');
+    expect(merged).toMatchObject({
+      shared: { title: "Shared", createdAt: 1 },
+      "local-only": { title: "B only", createdAt: 2 },
+      "remote-only": { title: "A only", createdAt: 3 },
+    });
   });
 
   it("backs up local data into local-data/sync/backups/<ts>/ before extracting", async () => {
@@ -243,63 +243,6 @@ describe("folder-backup sync", () => {
       "utf-8",
     );
     expect(savedConv).toBe('{"from":"A-v1"}');
-  });
-
-  it("resolveSyncConflict merge combines both sides and pushes", async () => {
-    const backup = await makeDir("sync-backup-");
-
-    const deviceA = await makeDevice({
-      "app-state/conversations.json": '{"shared":{"title":"Shared","createdAt":1}}',
-    });
-    currentUserDataDir = deviceA;
-    await setBackupFolderInSettings(backup);
-    await runSyncNow();
-
-    const deviceB = await makeDevice({});
-    currentUserDataDir = deviceB;
-    await setBackupFolderInSettings(backup);
-    await runSyncNow();
-
-    await writeFile(
-      join(deviceB, "local-data", "app-state", "conversations.json"),
-      '{"local-only":{"title":"B only","createdAt":2}}',
-      "utf-8",
-    );
-
-    await writeFile(
-      join(deviceA, "local-data", "app-state", "conversations.json"),
-      '{"shared":{"title":"Shared","createdAt":1},"remote-only":{"title":"A only","createdAt":3}}',
-      "utf-8",
-    );
-    currentUserDataDir = deviceA;
-    await setBackupFolderInSettings(backup);
-    await runSyncNow();
-
-    currentUserDataDir = deviceB;
-    await setBackupFolderInSettings(backup);
-    await runSyncNow();
-
-    const review = await getConflictReview();
-    expect("error" in review).toBe(false);
-    if ("error" in review) return;
-
-    const mergeResult = await resolveSyncConflict({
-      mode: "merge",
-      choices: {
-        "app-state/conversations.json": "merge",
-      },
-    });
-    expect(mergeResult.ok).toBe(true);
-    expect(mergeResult.status.lastAction).toBe("push");
-
-    const merged = JSON.parse(
-      await readFile(join(deviceB, "local-data", "app-state", "conversations.json"), "utf-8"),
-    );
-    expect(merged).toMatchObject({
-      shared: { title: "Shared", createdAt: 1 },
-      "local-only": { title: "B only", createdAt: 2 },
-      "remote-only": { title: "A only", createdAt: 3 },
-    });
   });
 
   it("returns a no-op when local and backup revisions match", async () => {

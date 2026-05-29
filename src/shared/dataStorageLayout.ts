@@ -5,7 +5,7 @@ export const DATA_STORAGE_DIAGRAM = `Harness app data folder (Electron userData)
 │  ├─ app-state/
 │  │  ├─ conversations.json
 │  │  ├─ messages_<id>.json
-│  │  ├─ user_memory.json, tasks.json, plans.json
+│  │  ├─ user_memory.json, tasks.json, clippings.json, plans.json
 │  │  ├─ writing.md
 │  │  └─ notes/*.md
 │  ├─ settings/settings.json

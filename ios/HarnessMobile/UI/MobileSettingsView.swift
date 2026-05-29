@@ -58,7 +58,7 @@ struct MobileSettingsView: View {
                         } else if app.syncStatus.showsAttentionDot {
                             Label("Issue", systemImage: "circle.fill")
                                 .labelStyle(.iconOnly)
-                                .foregroundStyle(app.syncStatus.kind == .conflict ? .orange : .red)
+                                .foregroundStyle(.red)
                                 .font(.caption2)
                         } else if app.store.hasLocalEdits {
                             Label("Pending", systemImage: "circle.fill")

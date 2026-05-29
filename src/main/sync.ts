@@ -11,21 +11,15 @@
  *   - manifest.json  : { revision, updatedAt, version, bundleHash }
  *
  * Sync now compares revisions against the last synced revision: pull when
- * only the backup changed, push when only local changed, and prompt when both
- * diverged (via Settings UI).
+ * only the backup changed, push when only local changed, and auto-merge when
+ * both diverged.
  */
 
 import { BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { existsSync } from "fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
 import { join } from "path";
-import type {
-  SyncConflictResolution,
-  SyncConflictReview,
-  SyncFolderSuggestion,
-  SyncResult,
-  SyncStatus,
-} from "../shared/sync";
+import type { SyncConflictReview, SyncFolderSuggestion, SyncResult, SyncStatus } from "../shared/sync";
 import {
   buildDefaultMergeChoices,
   buildMergedFileMap,
@@ -104,7 +98,10 @@ async function loadState(): Promise<PersistedState> {
       lastSuccessAt: typeof raw.lastSuccessAt === "number" ? raw.lastSuccessAt : null,
       lastError: typeof raw.lastError === "string" ? raw.lastError : null,
       lastAction:
-        raw.lastAction === "push" || raw.lastAction === "pull" || raw.lastAction === "noop"
+        raw.lastAction === "push" ||
+        raw.lastAction === "pull" ||
+        raw.lastAction === "noop" ||
+        raw.lastAction === "merge"
           ? raw.lastAction
           : null,
       lastSyncedRevision:
@@ -324,26 +321,11 @@ async function loadRemoteScopedFileMap(
   return out;
 }
 
-export async function getConflictReview(): Promise<SyncConflictReview | { error: string }> {
-  const folderPath = await getBackupFolderPath();
-  const folderCheck = await checkFolderAccessible(folderPath);
-  if (!folderPath || !folderCheck.configured) {
-    return { error: folderCheck.error ?? "Pick a backup folder in Config." };
-  }
-
-  const placeholderError = await bundlePlaceholderError(folderPath);
-  if (placeholderError) return { error: placeholderError };
-
-  const remoteManifest = await readManifestFromBackup(folderPath);
-  if (!remoteManifest) return { error: "Backup manifest is missing." };
-
-  try {
-    const localFiles = await loadLocalScopedFileMap();
-    const remoteFiles = await loadRemoteScopedFileMap(folderPath, remoteManifest);
-    return buildSyncConflictReview(localFiles, remoteFiles);
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
-  }
+function mergeWarningFromReview(review: SyncConflictReview): string | undefined {
+  const skipped = review.files.filter((file) => file.kind === "conflict" && !file.supportsMerge);
+  if (skipped.length === 0) return undefined;
+  const labels = skipped.map((file) => file.label).join(", ");
+  return `Some files could not be merged (${labels}); this device's copies were kept.`;
 }
 
 async function mergeConflictResolution(
@@ -359,6 +341,22 @@ async function mergeConflictResolution(
   const backupSnapshotDir = join(getLocalBackupsRoot(), String(now));
   await backupScopedFiles(localData, backupSnapshotDir, DEFAULT_SYNC_SCOPES);
   await applyMergedFiles(localData, mergedFiles, DEFAULT_SYNC_SCOPES);
+}
+
+async function autoMergeAndPush(
+  folderPath: string,
+  remoteManifest: BackupManifest,
+  now: number,
+): Promise<{ mergeWarning?: string }> {
+  const localFiles = await loadLocalScopedFileMap();
+  const remoteFiles = await loadRemoteScopedFileMap(folderPath, remoteManifest);
+  const review = buildSyncConflictReview(localFiles, remoteFiles);
+  const choices = buildDefaultMergeChoices(review);
+  await mergeConflictResolution(folderPath, remoteManifest, choices, now);
+  const mergeWarning = mergeWarningFromReview(review);
+  const localRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
+  await pushLocalToBackup(folderPath, localRevision, now);
+  return { mergeWarning };
 }
 
 async function pushLocalToBackup(
@@ -407,8 +405,6 @@ async function pullBackupIntoLocal(
   return extractBundle(localData, doc, DEFAULT_SYNC_SCOPES);
 }
 
-const SYNC_CONFLICT_MESSAGE = "Local and backup both changed since last sync.";
-
 let inFlight: Promise<SyncResult> | null = null;
 
 function runExclusive(task: () => Promise<SyncResult>): Promise<SyncResult> {
@@ -421,10 +417,6 @@ function runExclusive(task: () => Promise<SyncResult>): Promise<SyncResult> {
 
 export async function runSyncNow(): Promise<SyncResult> {
   return runExclusive(() => runSyncNowInner());
-}
-
-export async function resolveSyncConflict(resolution: SyncConflictResolution): Promise<SyncResult> {
-  return runExclusive(() => resolveSyncConflictInner(resolution));
 }
 
 async function runSyncNowInner(): Promise<SyncResult> {
@@ -503,18 +495,22 @@ async function runSyncNowInner(): Promise<SyncResult> {
     });
 
     if (decision === "conflict") {
-      next.lastError = SYNC_CONFLICT_MESSAGE;
+      const { mergeWarning } = await autoMergeAndPush(folderPath, remoteManifest, now);
+      const mergedRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
+      const mergedContentRevision = await computeRevision(
+        getLocalDataDir(),
+        USER_CONTENT_SYNC_SCOPES,
+      );
+      next.lastSuccessAt = now;
+      next.lastAction = "merge";
+      next.lastSyncedRevision = mergedRevision;
+      next.lastSyncedContentRevision = mergedContentRevision;
+      next.lastError = null;
       await saveState(next);
       return {
-        ok: false,
+        ok: true,
         status: buildStatus(next, folderPath, folderCheck, conflictCopies),
-        conflict: {
-          localRevision,
-          remoteRevision: remoteManifest.revision,
-          remoteUpdatedAt: remoteManifest.updatedAt,
-          lastSyncedRevision: state.lastSyncedRevision,
-          localMaxMtimeMs,
-        },
+        mergeWarning,
       };
     }
 
@@ -578,95 +574,6 @@ async function revealBackupFolder(): Promise<void> {
 
 function listSuggestions(): SyncFolderSuggestion[] {
   return listFolderSuggestions();
-}
-
-async function resolveSyncConflictInner(resolution: SyncConflictResolution): Promise<SyncResult> {
-  const now = Date.now();
-  const folderPath = await getBackupFolderPath();
-  const folderCheck = await checkFolderAccessible(folderPath);
-  const state = await loadState();
-  const next: PersistedState = { ...state, lastAttemptAt: now, lastError: null };
-  const conflictCopies = folderCheck.configured
-    ? await listConflictCopies(folderPath)
-    : [];
-
-  if (!folderPath || !folderCheck.configured) {
-    next.lastError = folderCheck.error ?? "Pick a backup folder in Config.";
-    await saveState(next);
-    return {
-      ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
-    };
-  }
-
-  const placeholderError = await bundlePlaceholderError(folderPath);
-  if (placeholderError) {
-    next.lastError = placeholderError;
-    await saveState(next);
-    return {
-      ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
-    };
-  }
-
-  const remoteManifest = await readManifestFromBackup(folderPath);
-  if (!remoteManifest) {
-    next.lastError = "Backup manifest is missing.";
-    await saveState(next);
-    return {
-      ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
-    };
-  }
-
-  try {
-    if (typeof resolution === "object" && resolution.mode === "merge") {
-      await mergeConflictResolution(folderPath, remoteManifest, resolution.choices, now);
-      const localRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
-      const localContentRevision = await computeRevision(
-        getLocalDataDir(),
-        USER_CONTENT_SYNC_SCOPES,
-      );
-      await pushLocalToBackup(folderPath, localRevision, now);
-      next.lastSuccessAt = now;
-      next.lastAction = "push";
-      next.lastSyncedRevision = localRevision;
-      next.lastSyncedContentRevision = localContentRevision;
-      next.lastError = null;
-      await saveState(next);
-      return {
-        ok: true,
-        status: buildStatus(next, folderPath, folderCheck, conflictCopies),
-      };
-    }
-
-    const decision = resolution === "push" || resolution === "pull" ? resolution : "pull";
-    const localRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
-    const localContentRevision = await computeRevision(
-      getLocalDataDir(),
-      USER_CONTENT_SYNC_SCOPES,
-    );
-    const remoteContentRevision = await readRemoteContentRevision(folderPath, remoteManifest);
-    return finishSyncAction({
-      decision,
-      folderPath,
-      folderCheck,
-      conflictCopies,
-      remoteManifest,
-      localRevision,
-      localContentRevision,
-      remoteContentRevision,
-      now,
-      state: next,
-    });
-  } catch (err) {
-    next.lastError = err instanceof Error ? err.message : String(err);
-    await saveState(next);
-    return {
-      ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
-    };
-  }
 }
 
 async function finishSyncAction(params: {
@@ -737,10 +644,6 @@ async function finishSyncAction(params: {
 export function registerSyncHandlers(): void {
   ipcMain.handle("sync:getStatus", () => getSyncStatus());
   ipcMain.handle("sync:runNow", () => runSyncNow());
-  ipcMain.handle("sync:getConflictReview", () => getConflictReview());
-  ipcMain.handle("sync:resolveConflict", (_e, resolution: SyncConflictResolution) =>
-    resolveSyncConflict(resolution),
-  );
   ipcMain.handle("sync:pickFolder", () => pickBackupFolder());
   ipcMain.handle("sync:setFolder", (_e, path: string) => setBackupFolder(path));
   ipcMain.handle("sync:revealFolder", () => revealBackupFolder());

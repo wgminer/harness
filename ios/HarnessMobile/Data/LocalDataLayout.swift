@@ -3,6 +3,7 @@ import Foundation
 enum LocalDataLayout {
     static let appStateDir = "app-state"
     static let conversationsFile = "app-state/conversations.json"
+    static let clippingsFile = "app-state/clippings.json"
     static let userMemoryFile = "app-state/user_memory.json"
     static let settingsFile = "settings/settings.json"
 

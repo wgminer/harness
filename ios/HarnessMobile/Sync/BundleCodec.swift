@@ -131,6 +131,21 @@ enum BundleCodec {
         return hasher.finalize().hexString
     }
 
+    static func computeContentRevisionFromBundle(_ doc: BundleDocument) -> String {
+        var hasher = SHA256()
+        let entries = doc.entries
+            .filter { SyncScopes.isInScope($0.path, scopes: SyncScopes.userContentScopes) }
+            .sorted { $0.path < $1.path }
+        for entry in entries {
+            guard let data = Data(base64Encoded: entry.contents), data.count == entry.size else { continue }
+            hasher.update(data: Data(entry.path.utf8))
+            hasher.update(data: Data([0]))
+            hasher.update(data: data)
+            hasher.update(data: Data([0]))
+        }
+        return hasher.finalize().hexString
+    }
+
     static func computeLocalMaxMtime(localDataDir: URL, scopes: [SyncScopes.Scope] = SyncScopes.defaultScopes) throws -> Int64 {
         let files = try listScopedFiles(localDataDir: localDataDir, scopes: scopes)
         var maxMtime: Int64 = 0

@@ -24,17 +24,17 @@ async function makeDir(): Promise<string> {
 }
 
 describe("task reducer and persistence", () => {
-  it("creates, updates, deletes tasks", () => {
+  it("creates, updates status and tags, deletes tasks", () => {
     const created = applyTaskAction({ tasks: [] }, { kind: "create", args: { title: "Write tests" } }, 10, () => "t1");
     expect(created.error).toBeUndefined();
-    expect(created.tasks[0].id).toBe("t1");
+    expect(created.tasks[0]).toMatchObject({ id: "t1", status: "pending", tags: [] });
 
     const updated = applyTaskAction(
       { tasks: created.tasks },
-      { kind: "update", args: { id: "t1", status: "completed" } },
-      20
+      { kind: "update", args: { id: "t1", status: "completed", add_tags: ["ci"] } },
+      20,
     );
-    expect(updated.tasks[0].tags).toContain("completed");
+    expect(updated.tasks[0]).toMatchObject({ status: "completed", tags: ["ci"] });
 
     const deleted = applyTaskAction({ tasks: updated.tasks }, { kind: "delete", args: { id: "t1" } }, 30);
     expect(deleted.tasks).toEqual([]);
@@ -43,9 +43,9 @@ describe("task reducer and persistence", () => {
   it("clear_completed preserves active tasks", () => {
     const state = {
       tasks: [
-        { id: "a", title: "Done", tags: ["completed"], createdAt: 1, updatedAt: 1 },
-        { id: "b", title: "In progress", tags: ["in_progress"], createdAt: 1, updatedAt: 1 },
-        { id: "c", title: "Cancelled", tags: ["cancelled"], createdAt: 1, updatedAt: 1 },
+        { id: "a", title: "Done", status: "completed" as const, tags: [], createdAt: 1, updatedAt: 1 },
+        { id: "b", title: "In progress", status: "in_progress" as const, tags: [], createdAt: 1, updatedAt: 1 },
+        { id: "c", title: "Cancelled", status: "cancelled" as const, tags: [], createdAt: 1, updatedAt: 1 },
       ],
     };
     const cleared = applyTaskAction(state, { kind: "clear_completed" }, 2);
@@ -53,13 +53,13 @@ describe("task reducer and persistence", () => {
     expect(cleared.tasks.map((t) => t.id)).toEqual(["b"]);
   });
 
-  it("migrates legacy status when loading", async () => {
+  it("migrates legacy status-in-tags when loading", async () => {
     const dir = await makeDir();
     await saveTasksIn(dir, {
-      tasks: [{ id: "x", title: "Legacy", tags: ["pending"], createdAt: 1, updatedAt: 1 }],
+      tasks: [{ id: "x", title: "Legacy", tags: ["pending", "work"], createdAt: 1, updatedAt: 1 }],
     });
     const loaded = await loadTasksIn(dir);
     expect(loaded.tasks).toHaveLength(1);
-    expect(loaded.tasks[0].tags).toEqual(["pending"]);
+    expect(loaded.tasks[0]).toMatchObject({ status: "pending", tags: ["work"] });
   });
 });

@@ -37,7 +37,7 @@ xcodegen generate
 | iCloud syncs the folder | Automatic (may take a minute) |
 | **Sync now** | Desktop Harness → Settings → Data |
 
-If both Mac and phone edited since the last sync, the app shows a **conflict** sheet: replace phone from cloud, or upload phone copy (desktop merge UI is still the thorough path).
+If both Mac and phone edited since the last sync, the app **auto-merges** both sides (combining conversations, messages, tasks, clippings, and settings) and pushes the result. Mergeable JSON stores are unioned; binary files that cannot be merged keep this device's copy.
 
 ## Run tests
 
@@ -57,7 +57,7 @@ Unit tests assert the sync **revision hash** matches desktop (`syncBundle.test.t
 | `HarnessMobile/Sync/` | `bundle.json.gz` codec, manifest, iCloud folder bookmarks |
 | `HarnessMobile/Data/` | `conversations.json` + `messages_*.json` (desktop format) |
 | `HarnessMobile/Chat/` | OpenAI streaming, memory selection, Keychain |
-| `HarnessMobile/UI/` | SwiftUI list, thread, settings, conflict sheet |
+| `HarnessMobile/UI/` | SwiftUI list, thread, settings |
 
 ## Model
 

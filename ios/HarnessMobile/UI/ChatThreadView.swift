@@ -1,51 +1,61 @@
 import SwiftUI
 
+private enum ChatScrollAnchor {
+    static let replying = "replying"
+    static let streaming = "streaming"
+}
+
 struct ChatThreadView: View {
     @ObservedObject var app: AppModel
     let conversationId: String
 
     @State private var messages: [MessageRecord] = []
-    @State private var input = ""
-    @State private var streamingText = ""
+    @State private var streamingMessageTimestamp: Int64?
     @State private var loadError: String?
+    @State private var scrollProxy: ScrollViewProxy?
+
+    private var isAwaitingFirstToken: Bool {
+        app.chatService.isStreaming && streamingMessageTimestamp == nil
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(messages.enumerated()), id: \.offset) { _, msg in
-                        messageBubble(msg)
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(messages) { msg in
+                        MessageRowView(
+                            message: msg,
+                            isStreaming: msg.timestamp == streamingMessageTimestamp
+                        )
+                        .id(rowId(for: msg))
                     }
-                    if !streamingText.isEmpty {
-                        messageBubble(MessageRecord(
-                            role: "assistant",
-                            content: streamingText,
-                            timestamp: nil,
-                            model: OpenAIModel.chat
-                        ))
-                        .id("streaming")
+                    if isAwaitingFirstToken {
+                        ReplyingIndicatorView()
+                            .id(ChatScrollAnchor.replying)
                     }
                 }
+                .frame(maxWidth: 600)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
-                .padding(.bottom, 8)
+                .padding(.bottom, 16)
             }
+            .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
-            .onChange(of: messages.count) { _, _ in
-                scrollToBottom(proxy: proxy)
-            }
-            .onChange(of: streamingText) { _, _ in
-                scrollToBottom(proxy: proxy)
-            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composerDock
             }
+            .onAppear { scrollProxy = proxy }
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(titleForConversation)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: conversationId) {
             reloadMessages()
+            scrollToBottom(animated: false)
+            if let text = app.takePendingOutboundMessage(conversationId: conversationId) {
+                await send(text: text)
+            }
         }
         .alert("Error", isPresented: .constant(loadError != nil)) {
             Button("OK") { loadError = nil }
@@ -56,17 +66,15 @@ struct ChatThreadView: View {
 
     private var composerDock: some View {
         ChatComposerView(
-            text: $input,
+            conversationId: conversationId,
             isStreaming: app.chatService.isStreaming,
-            focusTrigger: conversationId,
-            onSend: { Task { await send() } },
+            onSend: { text in Task { await send(text: text) } },
             onStop: { app.chatService.stop() }
         )
         .padding(.horizontal, 20)
         .padding(.top, 14)
         .padding(.bottom, 10)
         .background {
-            // Soft fade so messages don't clash with the glass dock
             LinearGradient(
                 colors: [
                     Color(.systemGroupedBackground).opacity(0),
@@ -84,19 +92,11 @@ struct ChatThreadView: View {
         app.store.conversations.first(where: { $0.id == conversationId })?.displayTitle ?? "Chat"
     }
 
-    @ViewBuilder
-    private func messageBubble(_ msg: MessageRecord) -> some View {
-        let isUser = msg.messageRole == .user
-        HStack(alignment: .bottom, spacing: 0) {
-            if isUser { Spacer(minLength: 48) }
-            Text(msg.content)
-                .font(.body)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(isUser ? Color.accentColor.opacity(0.14) : Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            if !isUser { Spacer(minLength: 48) }
+    private func rowId(for message: MessageRecord) -> String {
+        if message.timestamp == streamingMessageTimestamp {
+            return ChatScrollAnchor.streaming
         }
+        return message.id
     }
 
     private func reloadMessages() {
@@ -107,27 +107,80 @@ struct ChatThreadView: View {
         }
     }
 
-    private func send() async {
-        let text = input
-        input = ""
-        streamingText = ""
+    private func appendOptimisticUserMessage(_ text: String) {
+        let record = MessageRecord(
+            role: MessageRole.user.rawValue,
+            content: text,
+            timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+            model: nil
+        )
+        if messages.last?.content == text, messages.last?.messageRole == .user {
+            return
+        }
+        messages.append(record)
+    }
+
+    private func appendStreamingChunk(_ chunk: String) {
+        guard !chunk.isEmpty else { return }
+        if let ts = streamingMessageTimestamp,
+           let index = messages.firstIndex(where: { $0.timestamp == ts && $0.messageRole == .assistant }) {
+            let current = messages[index]
+            messages[index] = MessageRecord(
+                role: MessageRole.assistant.rawValue,
+                content: current.content + chunk,
+                timestamp: ts,
+                model: current.model ?? OpenAIModel.chat
+            )
+            return
+        }
+
+        let ts = Int64(Date().timeIntervalSince1970 * 1000)
+        streamingMessageTimestamp = ts
+        messages.append(
+            MessageRecord(
+                role: MessageRole.assistant.rawValue,
+                content: chunk,
+                timestamp: ts,
+                model: OpenAIModel.chat
+            )
+        )
+    }
+
+    private func finishStreaming() {
+        streamingMessageTimestamp = nil
+    }
+
+    private func send(text: String) async {
+        guard !text.isEmpty else { return }
+
+        appendOptimisticUserMessage(text)
+        finishStreaming()
+        scrollToBottom(animated: true)
+
         do {
             try await app.chatService.send(conversationId: conversationId, userContent: text) { chunk in
-                streamingText += chunk
+                appendStreamingChunk(chunk)
             }
-            streamingText = ""
+            finishStreaming()
             reloadMessages()
             await app.pushAfterChat()
         } catch {
             loadError = error.localizedDescription
+            finishStreaming()
             reloadMessages()
         }
     }
 
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        withAnimation(.easeOut(duration: 0.2)) {
-            if !streamingText.isEmpty {
-                proxy.scrollTo("streaming", anchor: .bottom)
+    private func scrollToBottom(animated: Bool) {
+        guard let proxy = scrollProxy, let last = messages.last else { return }
+        let targetId = rowId(for: last)
+        Task { @MainActor in
+            if animated {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(targetId, anchor: .bottom)
+                }
+            } else {
+                proxy.scrollTo(targetId, anchor: .bottom)
             }
         }
     }

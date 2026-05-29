@@ -56,7 +56,7 @@ async function runTranscriptCleanup(
     { signal }
   );
   if (completion.usage) {
-    recordOpenAIUsage(completion.usage);
+    recordOpenAIUsage(completion.usage, OPENAI_TRANSCRIPT_CLEANUP_MODEL);
   }
 
   const cleaned = completion.choices[0]?.message?.content?.trim() ?? "";

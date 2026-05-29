@@ -130,6 +130,7 @@ const GOOGLE_QUERY_PARTS = [
   "Merriweather:wght@400;700",
   "Lora:wght@400;600;700",
   "Literata:wght@400;600;700",
+  "Coral+Pixels:wght@400",
   "JetBrains+Mono:wght@400;500;600",
   "Fira+Code:wght@400;500;600",
   "Source+Code+Pro:wght@400;600",
@@ -162,6 +163,7 @@ export const FONTS = [
   { id: "merriweather", label: "Merriweather - Google", stack: '"Merriweather", ui-serif, Georgia, serif', category: "ui" as const },
   { id: "lora", label: "Lora - Google", stack: '"Lora", ui-serif, Georgia, serif', category: "ui" as const },
   { id: "literata", label: "Literata - Google", stack: '"Literata", ui-serif, Georgia, serif', category: "ui" as const },
+  { id: "coral_pixels", label: "Coral Pixels - Google", stack: '"Coral Pixels", system-ui, sans-serif', category: "ui" as const },
   {
     id: "sf",
     label: "System mono - SF / Cascadia",
@@ -507,3 +509,6 @@ export const FONT_UI_IDS_FOR_SCHEMA: string[] = [...UI_FONTS.map((f) => f.id)];
 
 /** Monospace font ids only (for update_theme.fontMono). */
 export const FONT_MONO_IDS_FOR_SCHEMA: string[] = [...MONO_FONTS.map((f) => f.id)];
+
+/** Theme preset ids (for apply_theme_preset). */
+export const THEME_PRESET_IDS_FOR_SCHEMA: string[] = THEME_PRESETS.map((p) => p.id);

@@ -1,3 +1,4 @@
+import type { MemoryInjectionStrategy } from "./memoryInjection";
 import { DEFAULT_NOTE_TEMPLATES } from "./writing";
 
 export type MessageRole = "user" | "assistant" | "system";
@@ -70,6 +71,10 @@ export interface Settings {
     /** Absolute path to the chosen backup folder. Empty string = unset. */
     folderPath: string;
   };
+  /** How stored user facts are injected into the chat system prompt. */
+  memory?: {
+    injectionStrategy: MemoryInjectionStrategy;
+  };
 }
 
 export interface SearchResult {
@@ -127,5 +132,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   backup: {
     folderPath: "",
+  },
+  memory: {
+    injectionStrategy: "all",
   },
 };

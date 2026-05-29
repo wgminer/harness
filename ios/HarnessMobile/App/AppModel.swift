@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -7,28 +8,47 @@ final class AppModel: ObservableObject {
 
     @Published var syncStatus = SyncStatusSnapshot(kind: .idle, title: "", detail: nil, occurredAt: nil)
     @Published var isSyncing = false
-    @Published var showConflictSheet = false
-    @Published var syncConflictContext: SyncConflictContext?
     @Published var selectedConversationId: String?
+    private var pendingOutboundMessages: [String: String] = [:]
     @Published var needsBackupFolder = false
     @Published var needsAPIKey = false
     @Published var lastSuccessfulSyncAt: Date?
+    @Published private(set) var headerQuoteRotationIndex = 0
 
     let localDataDir: URL
     let store: ConversationStore
+    let clippingsStore: ClippingsStore
     let syncEngine: SyncEngine
     let chatService: ChatService
 
-    private var dismissStatusTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
 
     init(localDataSubpath: String = "local-data") {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         localDataDir = docs.appendingPathComponent(localDataSubpath, isDirectory: true)
         store = ConversationStore(localDataDir: localDataDir)
+        clippingsStore = ClippingsStore(localDataDir: localDataDir, conversationStore: store)
         syncEngine = SyncEngine(localDataDir: localDataDir)
         chatService = ChatService(store: store)
         syncEngine.store = store
         lastSuccessfulSyncAt = UserDefaults.standard.object(forKey: Self.lastSuccessfulSyncAtKey) as? Date
+        forwardObjectWillChange(from: store)
+        forwardObjectWillChange(from: clippingsStore)
+    }
+
+    private func forwardObjectWillChange<P: ObservableObject>(from publisher: P) {
+        publisher.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+    }
+
+    func queueOutboundMessage(conversationId: String, text: String) {
+        pendingOutboundMessages[conversationId] = text
+    }
+
+    func takePendingOutboundMessage(conversationId: String) -> String? {
+        pendingOutboundMessages.removeValue(forKey: conversationId)
     }
 
     func bootstrap() async {
@@ -36,6 +56,7 @@ final class AppModel: ObservableObject {
         try? LocalDataLayout.ensureConversationsFile(at: localDataDir)
         do {
             try store.reload()
+            try clippingsStore.reload()
         } catch {
             syncStatus = SyncStatusSnapshot(
                 kind: .error,
@@ -53,6 +74,7 @@ final class AppModel: ObservableObject {
     }
 
     func syncOnForeground() async {
+        bumpHeaderQuoteRotation()
         guard BookmarkStore.hasBookmark else {
             needsBackupFolder = true
             return
@@ -60,41 +82,36 @@ final class AppModel: ObservableObject {
         await performSync()
     }
 
-    func performSync(forcePull: Bool = false, forcePush: Bool = false) async {
-        dismissStatusTask?.cancel()
+    func bumpHeaderQuoteRotation() {
+        headerQuoteRotationIndex += 1
+    }
+
+    func performSync(forcePull: Bool = false) async {
         isSyncing = true
-        syncStatus = SyncStatusSnapshot(
-            kind: .syncing,
-            title: "Syncing with backup folder…",
-            detail: pendingChangesDetail,
-            occurredAt: Date()
-        )
         defer { isSyncing = false }
 
         do {
-            let outcome = try await syncEngine.syncNow(forcePull: forcePull, forcePush: forcePush)
+            let outcome = try await syncEngine.syncNow(forcePull: forcePull)
             applyOutcome(outcome)
             try store.reload()
+            try clippingsStore.reload()
             chatService.refreshClient()
         } catch {
             applyError(error)
             try? store.reload()
+            try? clippingsStore.reload()
             chatService.refreshClient()
         }
     }
 
-    func dismissSyncStatus() {
-        dismissStatusTask?.cancel()
-        syncStatus = SyncStatusSnapshot(kind: .idle, title: "", detail: nil, occurredAt: nil)
-    }
-
     func pushAfterChat() async {
         guard BookmarkStore.hasBookmark else { return }
-        await performSync(forcePush: false)
-        if showConflictSheet { return }
-        if store.hasLocalEdits {
-            await performSync(forcePush: true)
-        }
+        await performSync()
+    }
+
+    func pushAfterClippingEdit() async {
+        guard BookmarkStore.hasBookmark else { return }
+        await performSync()
     }
 
     func importAPIKeyFromSyncedSettings() throws -> Bool {
@@ -121,30 +138,11 @@ final class AppModel: ObservableObject {
     }
 
     private func applyOutcome(_ outcome: SyncOutcome) {
-        let kind: SyncStatusSnapshot.Kind
         switch outcome.kind {
-        case .noop:
-            kind = .upToDate
+        case .noop, .pulled, .pushed:
             recordSuccessfulSync()
-        case .pulled:
-            kind = .pulled
-            recordSuccessfulSync()
-        case .pushed:
-            kind = .pushed
-            recordSuccessfulSync()
-        case .conflict:
-            kind = .conflict
+            syncStatus = SyncStatusSnapshot(kind: .idle, title: "", detail: nil, occurredAt: nil)
         }
-
-        syncStatus = SyncStatusSnapshot(
-            kind: kind,
-            title: outcome.message,
-            detail: outcome.detail,
-            occurredAt: Date()
-        )
-        syncConflictContext = outcome.conflictContext
-        showConflictSheet = outcome.kind == .conflict
-        scheduleAutoDismiss(for: kind)
     }
 
     private func applyError(_ error: Error) {
@@ -154,34 +152,11 @@ final class AppModel: ObservableObject {
             detail: error.localizedDescription,
             occurredAt: Date()
         )
-        syncConflictContext = nil
-        showConflictSheet = false
     }
 
     private func recordSuccessfulSync() {
         let now = Date()
         lastSuccessfulSyncAt = now
         UserDefaults.standard.set(now, forKey: Self.lastSuccessfulSyncAtKey)
-    }
-
-    private func scheduleAutoDismiss(for kind: SyncStatusSnapshot.Kind) {
-        let delay: TimeInterval?
-        switch kind {
-        case .upToDate:
-            delay = 4
-        case .pulled, .pushed:
-            delay = 8
-        default:
-            delay = nil
-        }
-        guard let delay else { return }
-
-        dismissStatusTask = Task {
-            try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
-            if syncStatus.kind == kind {
-                dismissSyncStatus()
-            }
-        }
     }
 }

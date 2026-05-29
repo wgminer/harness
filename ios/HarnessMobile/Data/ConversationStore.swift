@@ -25,6 +25,10 @@ final class ConversationStore: ObservableObject {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
+    func loadConversationMeta(conversationId: String) throws -> ConversationMeta? {
+        try loadConversationMapRaw()[conversationId]
+    }
+
     func loadMessages(conversationId: String) throws -> [MessageRecord] {
         let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.messagesPath(conversationId: conversationId))
         guard FileManager.default.fileExists(atPath: path.path) else { return [] }
@@ -52,6 +56,35 @@ final class ConversationStore: ObservableObject {
         return id
     }
 
+    func patchConversationMeta(
+        conversationId: String,
+        title: String? = nil,
+        titleSource: String? = nil
+    ) throws {
+        var map = try loadConversationMapRaw()
+        guard var meta = map[conversationId] else { return }
+        if meta.titleSource == "user" || meta.titleSource == "imported" { return }
+        if let title { meta.title = title }
+        if let titleSource { meta.titleSource = titleSource }
+        map[conversationId] = meta
+        try saveConversationMap(map)
+        try reload()
+    }
+
+    func setProvisionalTitleIfNeeded(conversationId: String, fromUserMessage content: String) throws {
+        var map = try loadConversationMapRaw()
+        guard var meta = map[conversationId] else { return }
+        if meta.titleSource == "user" || meta.titleSource == "imported" { return }
+        let existing = meta.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !existing.isEmpty, !ConversationTitlePolicy.isTimePlaceholderTitle(meta.title) { return }
+        guard let provisional = ConversationTitlePolicy.provisionalTitle(from: content) else { return }
+        meta.title = provisional
+        meta.titleSource = "auto"
+        map[conversationId] = meta
+        try saveConversationMap(map)
+        try reload()
+    }
+
     func appendMessage(
         conversationId: String,
         role: MessageRole,
@@ -66,6 +99,9 @@ final class ConversationStore: ObservableObject {
             model: model
         ))
         try saveMessages(conversationId: conversationId, messages: messages)
+        if role == .user {
+            try setProvisionalTitleIfNeeded(conversationId: conversationId, fromUserMessage: content)
+        }
         if role == .assistant {
             var map = try loadConversationMapRaw()
             if var meta = map[conversationId] {
@@ -94,6 +130,17 @@ final class ConversationStore: ObservableObject {
               !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return nil }
         return key
+    }
+
+    func loadMemoryInjectionStrategy() throws -> MemoryInjectionStrategy {
+        let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.settingsFile)
+        guard FileManager.default.fileExists(atPath: path.path) else { return .all }
+        let data = try LocalDataLayout.readRegularFileData(at: path)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let memory = json["memory"] as? [String: Any],
+              let raw = memory["injectionStrategy"] as? String
+        else { return .all }
+        return MemoryInjectionStrategy.parse(raw)
     }
 
     func markSynced(revision: String) {

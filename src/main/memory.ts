@@ -5,6 +5,7 @@ import { join } from "path";
 import type { AppendMessageMeta, ChatMessage, SearchResult } from "../shared/types";
 import { scheduleConversationTitleRefinement } from "./conversationTitle";
 import { notifyConversationTitleUpdated } from "./titleEvents";
+import { readJsonObjectFile, atomicWriteUtf8 } from "./jsonFile";
 import { generateId, fileExists } from "./utils";
 import {
   cleanupLegacyMemoryDir,
@@ -21,6 +22,7 @@ import { getSyncStatus } from "./sync";
 const CONVERSATIONS_FILE = "conversations.json";
 const USER_MEMORY_FILE = "user_memory.json";
 export const TASKS_FILE = "tasks.json";
+export const CLIPPINGS_FILE = "clippings.json";
 export const PLANS_FILE = "plans.json";
 
 export function getMemoryDir(): string {
@@ -76,8 +78,8 @@ interface MessageRecord {
 
 export async function loadConversationsIn(memoryDir: string): Promise<Record<string, ConversationMeta>> {
   const path = getConversationsPath(ensureDir(memoryDir));
-  if (!(await fileExists(path))) return {};
-  return JSON.parse(await readFile(path, "utf-8"));
+  const { value } = await readJsonObjectFile<Record<string, ConversationMeta>>(path);
+  return value ?? {};
 }
 
 async function loadConversations(): Promise<Record<string, ConversationMeta>> {
@@ -86,7 +88,7 @@ async function loadConversations(): Promise<Record<string, ConversationMeta>> {
 
 export async function saveConversationsIn(memoryDir: string, conv: Record<string, ConversationMeta>): Promise<void> {
   const path = getConversationsPath(ensureDir(memoryDir));
-  await writeFile(path, JSON.stringify(conv, null, 2), "utf-8");
+  await atomicWriteUtf8(path, JSON.stringify(conv, null, 2));
 }
 
 async function saveConversations(conv: Record<string, ConversationMeta>): Promise<void> {

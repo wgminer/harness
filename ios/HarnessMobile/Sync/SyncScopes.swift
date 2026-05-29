@@ -23,6 +23,12 @@ enum SyncScopes {
         Scope(relPath: "themes", kind: .directory),
     ]
 
+    /// Matches desktop `USER_CONTENT_SYNC_SCOPES` (excludes settings for conflict detection).
+    static let userContentScopes: [Scope] = [
+        Scope(relPath: "app-state", kind: .directory),
+        Scope(relPath: "themes", kind: .directory),
+    ]
+
     /// Chat MVP push scope: app-state + settings (desktop-compatible bundle).
     static let mobilePushScopes: [Scope] = defaultScopes
 

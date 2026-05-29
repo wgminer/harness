@@ -3,6 +3,7 @@ import {
   LIVE_EDGE_TOLERANCE_PX,
   distanceFromLiveEdge,
   scrollScrollContainerToLiveEdge,
+  shouldScrollToLiveEdge,
 } from "./chatLiveScroll";
 
 describe("chatLiveScroll", () => {
@@ -30,25 +31,28 @@ describe("chatLiveScroll", () => {
   });
 });
 
-/** Mirrors scroll gating in useFollowChatLiveEdge (keep in sync). */
-function shouldScrollToLiveEdge(args: {
-  justStartedTurn: boolean;
-  sending: boolean;
-  followLiveEdge: boolean;
-}): boolean {
-  return args.justStartedTurn || args.sending || args.followLiveEdge;
-}
-
 describe("shouldScrollToLiveEdge", () => {
-  it("follows the live edge for the whole model turn even when the user had scrolled up", () => {
+  it("snaps to the live edge on the first frame of a new turn", () => {
     expect(
-      shouldScrollToLiveEdge({ justStartedTurn: false, sending: true, followLiveEdge: false })
+      shouldScrollToLiveEdge({ justStartedTurn: true, followLiveEdge: false })
     ).toBe(true);
+  });
+
+  it("keeps following the live edge while the user stays near the bottom", () => {
+    expect(
+      shouldScrollToLiveEdge({ justStartedTurn: false, followLiveEdge: true })
+    ).toBe(true);
+  });
+
+  it("releases the lock when the user scrolls up mid-stream", () => {
+    expect(
+      shouldScrollToLiveEdge({ justStartedTurn: false, followLiveEdge: false })
+    ).toBe(false);
   });
 
   it("does not scroll when idle and away from the live edge", () => {
     expect(
-      shouldScrollToLiveEdge({ justStartedTurn: false, sending: false, followLiveEdge: false })
+      shouldScrollToLiveEdge({ justStartedTurn: false, followLiveEdge: false })
     ).toBe(false);
   });
 });

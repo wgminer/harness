@@ -5,8 +5,10 @@ import { app } from "electron";
 import type { LayoutOptions } from "../shared/types";
 import { DEFAULT_LAYOUT } from "../shared/types";
 import {
+  applyThemeColors,
   DEFAULT_THEME_SETTINGS,
   normalizeThemeSettings,
+  THEME_PRESETS,
   themeSettingsToCss,
   type ThemeSettings,
 } from "../shared/theme";
@@ -103,8 +105,19 @@ function notifyRenderer(channel: string, payload: unknown): void {
   }
 }
 
-function applyThemePatch(args: Record<string, unknown>): void {
-  const current = readThemeSettings() ?? DEFAULT_THEME_SETTINGS;
+function getEffectiveThemeSettings(): ThemeSettings {
+  return readThemeSettings() ?? DEFAULT_THEME_SETTINGS;
+}
+
+function themeToolPayload() {
+  return {
+    settings: getEffectiveThemeSettings(),
+    presets: THEME_PRESETS.map((p) => ({ id: p.id, label: p.label, colors: p.colors })),
+  };
+}
+
+function applyThemePatch(args: Record<string, unknown>): ThemeSettings {
+  const current = getEffectiveThemeSettings();
   const merged: Record<string, unknown> = { ...current };
   if (typeof args.accent === "string") merged.accent = args.accent;
   if (args.font !== undefined) merged.font = args.font;
@@ -112,21 +125,52 @@ function applyThemePatch(args: Record<string, unknown>): void {
   if (args.fontSize !== undefined) merged.fontSize = args.fontSize;
   if (typeof args.fg === "string") merged.fg = args.fg;
   if (typeof args.bg === "string") merged.bg = args.bg;
-  setThemeSettings(normalizeThemeSettings(merged));
+  const next = normalizeThemeSettings(merged);
+  setThemeSettings(next);
+  return next;
+}
+
+export const CUSTOMIZATION_TOOL_NAMES = [
+  "get_theme",
+  "update_theme",
+  "apply_theme_preset",
+  "set_layout",
+] as const;
+
+export type CustomizationToolName = (typeof CUSTOMIZATION_TOOL_NAMES)[number];
+
+export function isCustomizationToolName(name: string): name is CustomizationToolName {
+  return (CUSTOMIZATION_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 export function executeCustomizationTool(name: string, args: Record<string, unknown>): string {
   try {
+    if (name === "get_theme") {
+      return JSON.stringify({ ok: true, ...themeToolPayload() });
+    }
     if (name === "update_theme") {
-      applyThemePatch(args);
-      return JSON.stringify({ ok: true, message: "Theme updated" });
+      const settings = applyThemePatch(args);
+      return JSON.stringify({ ok: true, settings });
+    }
+    if (name === "apply_theme_preset") {
+      const presetId = typeof args.preset === "string" ? args.preset.trim() : "";
+      const preset = THEME_PRESETS.find((p) => p.id === presetId);
+      if (!preset) {
+        return JSON.stringify({
+          error: `Unknown preset: ${presetId || "(missing)"}`,
+          presets: THEME_PRESETS.map((p) => p.id),
+        });
+      }
+      const settings = applyThemeColors(getEffectiveThemeSettings(), preset.colors);
+      setThemeSettings(settings);
+      return JSON.stringify({ ok: true, preset: preset.id, settings });
     }
     if (name === "set_layout") {
       setLayout({
         sidebar: args.sidebar as LayoutOptions["sidebar"] | undefined,
         gridOverlay: args.gridOverlay as LayoutOptions["gridOverlay"] | undefined,
       });
-      return JSON.stringify({ ok: true, message: "Layout updated" });
+      return JSON.stringify({ ok: true, layout: getLayoutOptions() });
     }
     return JSON.stringify({ error: `Unknown tool: ${name}` });
   } catch (err) {

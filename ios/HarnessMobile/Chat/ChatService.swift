@@ -23,8 +23,9 @@ final class ChatService: ObservableObject {
     func buildMessages(conversationId: String) throws -> [ChatCompletionMessage] {
         let history = try store.loadMessages(conversationId: conversationId)
         let lastUser = history.last(where: { $0.messageRole == .user })?.content ?? ""
+        let strategy = try store.loadMemoryInjectionStrategy()
         let memory = try store.loadUserMemory()
-        let selected = MemorySelector.selectRelevant(memory: memory, userContent: lastUser)
+        let selected = MemorySelector.selectForPrompt(strategy: strategy, memory: memory, userContent: lastUser)
         let memoryBlock = MemorySelector.formatBlock(selected: selected)
 
         var system = """
@@ -35,10 +36,15 @@ final class ChatService: ObservableObject {
         if !memoryBlock.isEmpty {
             system += "\n\n" + memoryBlock
         }
+        system += "\n\n" + ChatTemporalContext.temporalContextBlock()
 
         var messages: [ChatCompletionMessage] = [ChatCompletionMessage(role: "system", content: system)]
         for record in history {
-            messages.append(ChatCompletionMessage(role: record.role, content: record.content))
+            let content = ChatTemporalContext.annotateMessageContentForModel(
+                record.content,
+                timestampMs: record.timestamp
+            )
+            messages.append(ChatCompletionMessage(role: record.role, content: content))
         }
         return messages
     }
@@ -66,6 +72,42 @@ final class ChatService: ObservableObject {
             content: full,
             model: OpenAIModel.chat
         )
+        scheduleTitleRefinement(conversationId: conversationId)
+    }
+
+    func scheduleTitleRefinement(conversationId: String) {
+        Task {
+            guard let client else { return }
+            do {
+                let messages = try store.loadMessages(conversationId: conversationId)
+                let map = try store.loadConversationMeta(conversationId: conversationId)
+                guard let meta = map else { return }
+                if meta.titleSource == "user" || meta.titleSource == "imported" { return }
+                guard ConversationTitlePolicy.shouldRefine(messages: messages, title: meta.title) else { return }
+
+                let context = ConversationTitlePolicy.buildContext(messages: messages)
+                guard !context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+                let previousTitle: String? = {
+                    let t = meta.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if t.isEmpty || ConversationTitlePolicy.isTimePlaceholderTitle(meta.title) { return nil }
+                    return t
+                }()
+
+                guard let rawTitle = try await client.generateThreadTitle(
+                    previousTitle: previousTitle,
+                    context: context
+                ), !rawTitle.isEmpty else { return }
+
+                try store.patchConversationMeta(
+                    conversationId: conversationId,
+                    title: rawTitle,
+                    titleSource: "auto"
+                )
+            } catch {
+                // Title generation is best-effort; chat already succeeded.
+            }
+        }
     }
 
     func stop() {

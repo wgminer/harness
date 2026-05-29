@@ -1,10 +1,7 @@
 /** Provider-agnostic backup-folder sync. */
 export type SyncProvider = "folderBackup";
 
-export type SyncDirection = "push" | "pull" | "noop";
-
-/** User choice when local and backup have both diverged since the last sync. */
-export type SyncConflictResolution = "push" | "pull" | { mode: "merge"; choices: Record<string, import("./syncMerge").SyncFileChoice> };
+export type SyncDirection = "push" | "pull" | "noop" | "merge";
 
 export type SyncDecision = SyncDirection | "conflict";
 
@@ -19,7 +16,7 @@ export interface SyncStatus {
   lastAttemptAt: number | null;
   lastSuccessAt: number | null;
   lastError: string | null;
-  /** Last action performed by Sync now (push wrote to backup, pull restored from backup). */
+  /** Last action performed by Sync now. */
   lastAction: SyncDirection | null;
   /** Local revision after the last successful sync. */
   lastSyncedRevision: string | null;
@@ -27,21 +24,18 @@ export interface SyncStatus {
   conflictCopies: string[];
 }
 
-/** Returned when local and backup both changed — the user must pick a winner. */
-export interface SyncConflict {
-  localRevision: string;
-  remoteRevision: string;
-  remoteUpdatedAt: number;
-  lastSyncedRevision: string | null;
-  /** Latest mtime among synced local files (ms since epoch). */
-  localMaxMtimeMs: number;
-}
-
 export interface SyncResult {
   ok: boolean;
   status: SyncStatus;
-  /** Set when `ok` is false because both sides changed since the last sync. */
-  conflict?: SyncConflict;
+  /** Non-blocking note when non-mergeable file conflicts kept the local copy. */
+  mergeWarning?: string;
+}
+
+/** True when a successful sync wrote remote conversation data into local storage. */
+export function syncResultChangedLocalData(result: SyncResult): boolean {
+  if (!result.ok) return false;
+  const action = result.status.lastAction;
+  return action === "pull" || action === "merge";
 }
 
 /**

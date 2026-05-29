@@ -7,11 +7,10 @@ import {
   MarkdownContent,
   CopyButton,
   SaveToNotesButton,
-  toolLabel,
-  toolIcon,
   formatMessageTime,
   ReplyingIndicator,
 } from "./chatHelpers";
+import { ToolCallsCard } from "./ToolCallsCard";
 
 interface ChatMessageListProps {
   displayMessages: Message[];
@@ -41,11 +40,21 @@ export function ChatMessageList({
   onGenerateReply,
 }: ChatMessageListProps) {
   const [expandedUserCards, setExpandedUserCards] = useState<Set<string>>(new Set());
+  const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set());
   const [overflowedUserCards, setOverflowedUserCards] = useState<Set<string>>(new Set());
   const userCardContentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const toggleUserCardExpanded = useCallback((messageId: string) => {
     setExpandedUserCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+  }, []);
+
+  const toggleToolCardExpanded = useCallback((messageId: string) => {
+    setExpandedToolCards((prev) => {
       const next = new Set(prev);
       if (next.has(messageId)) next.delete(messageId);
       else next.add(messageId);
@@ -140,38 +149,12 @@ export function ChatMessageList({
                 ) : (
                   <>
                     {hasToolCalls && (
-                      <div className="tool-card">
-                        {m.toolCalls!.map((call, j) => {
-                          const p = call.payload as { pending?: boolean } | undefined;
-                          const isPending = !!p?.pending;
-                          return (
-                            <div key={j} className="tool-card-row">
-                              <span className="tool-card-icon">{toolIcon()}</span>
-                              <div className="tool-card-row-text">
-                                <span className="tool-card-label">{toolLabel(call.toolName)}</span>
-                              </div>
-                              {isPending && (
-                                <span className="tool-card-actions">
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm"
-                                    onClick={() => onToolConfirm(call, "proceed")}
-                                  >
-                                    Proceed
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm"
-                                    onClick={() => onToolConfirm(call, "cancel")}
-                                  >
-                                    Cancel
-                                  </button>
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <ToolCallsCard
+                        toolCalls={m.toolCalls!}
+                        expanded={expandedToolCards.has(m.id)}
+                        onToggleExpanded={() => toggleToolCardExpanded(m.id)}
+                        onToolConfirm={onToolConfirm}
+                      />
                     )}
                     {assistantBubbleBody}
                   </>

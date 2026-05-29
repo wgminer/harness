@@ -2,29 +2,26 @@ import SwiftUI
 
 /// Message composer — liquid glass shell aligned with desktop `.chat-composer-inner`.
 struct ChatComposerView: View {
-    @Binding var text: String
+    var conversationId: String
     var isStreaming: Bool
-    var focusTrigger: String
-    var onSend: () -> Void
+    var onSend: (String) -> Void
     var onStop: () -> Void
 
+    @State private var draft = ""
     @FocusState private var isFocused: Bool
 
-    private let minTextHeight: CGFloat = 24
-    private let maxTextLines = 8
-
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TextField("Type a message…", text: $text, axis: .vertical)
-                .lineLimit(1 ... maxTextLines)
+            TextField("Type a message…", text: $draft, axis: .vertical)
+                .lineLimit(1 ... 8)
                 .focused($isFocused)
                 .font(.body)
                 .textFieldStyle(.plain)
-                .frame(minHeight: minTextHeight, alignment: .topLeading)
+                .frame(minHeight: 24, alignment: .topLeading)
                 .padding(.horizontal, 18)
                 .padding(.top, 18)
                 .padding(.bottom, 10)
@@ -47,7 +44,9 @@ struct ChatComposerView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Button(action: onSend) {
+                    Button {
+                        submitDraft()
+                    } label: {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(canSend ? Color(.systemBackground) : Color.secondary)
@@ -66,33 +65,51 @@ struct ChatComposerView: View {
             .padding(.bottom, 14)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .composerGlassBackground()
-        .task(id: focusTrigger) {
+        .composerGlassBackground(cornerRadius: 20)
+        .onChange(of: conversationId) { _, _ in
+            draft = ""
+        }
+        .onChange(of: isStreaming) { _, streaming in
+            if streaming {
+                isFocused = false
+            }
+        }
+        .task(id: conversationId) {
+            draft = ""
             try? await Task.sleep(for: .milliseconds(150))
             isFocused = true
         }
+    }
+
+    private func submitDraft() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        isFocused = false
+        draft = ""
+        onSend(trimmed)
     }
 }
 
 // MARK: - Liquid glass surface (desktop `.surface-elevated-glass`)
 
 private struct ComposerGlassBackground: ViewModifier {
+    let cornerRadius: CGFloat
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
             .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .strokeBorder(
                                 Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.10),
                                 lineWidth: 1
                             )
                     }
                     .overlay(alignment: .top) {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .strokeBorder(
                                 Color.white.opacity(colorScheme == .dark ? 0.12 : 0.35),
                                 lineWidth: 1
@@ -113,22 +130,20 @@ private struct ComposerGlassBackground: ViewModifier {
 }
 
 private extension View {
-    func composerGlassBackground() -> some View {
-        modifier(ComposerGlassBackground())
+    func composerGlassBackground(cornerRadius: CGFloat = 20) -> some View {
+        modifier(ComposerGlassBackground(cornerRadius: cornerRadius))
     }
 }
 
 #Preview("Empty") {
     struct Host: View {
-        @State private var text = ""
         var body: some View {
             VStack {
                 Spacer()
                 ChatComposerView(
-                    text: $text,
+                    conversationId: "preview",
                     isStreaming: false,
-                    focusTrigger: "preview",
-                    onSend: {},
+                    onSend: { _ in },
                     onStop: {}
                 )
                 .padding(.horizontal, 20)
@@ -142,15 +157,13 @@ private extension View {
 
 #Preview("With text") {
     struct Host: View {
-        @State private var text = "What should I pack for Tokyo in April?"
         var body: some View {
             VStack {
                 Spacer()
                 ChatComposerView(
-                    text: $text,
+                    conversationId: "preview",
                     isStreaming: false,
-                    focusTrigger: "preview",
-                    onSend: {},
+                    onSend: { _ in },
                     onStop: {}
                 )
                 .padding(.horizontal, 20)
@@ -164,15 +177,13 @@ private extension View {
 
 #Preview("Streaming") {
     struct Host: View {
-        @State private var text = ""
         var body: some View {
             VStack {
                 Spacer()
                 ChatComposerView(
-                    text: $text,
+                    conversationId: "preview",
                     isStreaming: true,
-                    focusTrigger: "preview",
-                    onSend: {},
+                    onSend: { _ in },
                     onStop: {}
                 )
                 .padding(.horizontal, 20)

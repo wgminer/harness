@@ -417,7 +417,7 @@ export async function proposeNoteEdit(input: NoteEditProposalInput): Promise<Not
   );
 
   if (response.usage) {
-    recordOpenAIUsage(response.usage);
+    recordOpenAIUsage(response.usage, OPENAI_CHAT_MODEL);
   }
   const proposedText = response.choices[0]?.message?.content?.trim() ?? "";
   if (!proposedText) {

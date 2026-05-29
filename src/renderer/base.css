@@ -262,6 +262,7 @@ hr {
 /* Shared input base */
 .input-base,
 .sidebar-search-input,
+.workspace-search-input,
 .settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input),
 .settings-section select {
   font-family: var(--font-family);
@@ -274,15 +275,25 @@ hr {
 }
 
 .input-base::placeholder,
-.sidebar-search-input::placeholder {
+.sidebar-search-input::placeholder,
+.workspace-search-input::placeholder {
   color: var(--fg-muted);
 }
 
 .input-base:focus,
 .sidebar-search-input:focus,
+.workspace-search-input:focus,
 .settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input):focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Strip the platform "search" affordances so this matches our other inputs. */
+.workspace-search-input::-webkit-search-decoration,
+.workspace-search-input::-webkit-search-cancel-button,
+.workspace-search-input::-webkit-search-results-button,
+.workspace-search-input::-webkit-search-results-decoration {
+  appearance: none;
 }
 
 /* Shared translucent surface used by composer and edit assistant modal. */

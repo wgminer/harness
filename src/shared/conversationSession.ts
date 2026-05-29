@@ -23,13 +23,6 @@ export function formatNewChatLabel(createdAt: number): string {
   );
 }
 
-/** Stored title suitable for LLM refinement (null when empty or legacy time placeholder). */
-export function effectiveConversationTitle(title: string | null | undefined): string | null {
-  const t = title?.trim();
-  if (!t || isTimePlaceholderTitle(t)) return null;
-  return t;
-}
-
 /** True while the title LLM runs — show a skeleton instead of placeholder text. */
 export function isConversationTitlePending(
   title: string | null | undefined,

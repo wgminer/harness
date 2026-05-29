@@ -847,46 +847,57 @@ export function NotesView({
       >
         {screen === "list" ? (
           <section className="notes-surface__panel">
-            <div className="notes-surface__templates" aria-label="Create note templates">
-              {noteTemplates.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  className={`notes-surface__template-btn notes-surface__template-btn--${template.id}`}
-                  onClick={() => void createNote(template)}
-                  disabled={status.kind === "creating" || status.kind === "saving" || status.kind === "deleting"}
-                >
-                  <span className="notes-surface__template-tab" aria-hidden />
-                  <span className="notes-surface__template-title">{template.title}</span>
-                  <span className="notes-surface__template-description">{template.description}</span>
-                </button>
-              ))}
+            <div className="notes-surface__section" aria-labelledby="notes-templates-label">
+              <h3 id="notes-templates-label" className="notes-surface__section-label">
+                Templates
+              </h3>
+              <div className="notes-surface__templates" role="group" aria-labelledby="notes-templates-label">
+                {noteTemplates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    className={`notes-surface__template-btn notes-surface__template-btn--${template.id}`}
+                    onClick={() => void createNote(template)}
+                    disabled={status.kind === "creating" || status.kind === "saving" || status.kind === "deleting"}
+                  >
+                    <span className="notes-surface__template-title">{template.title}</span>
+                    <span className="notes-surface__template-description">{template.description}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <ul className="notes-surface__notes" aria-label="Notes list">
-              {notes.map((note) => {
-                const displayTitle = getDisplayNoteTitle(note.title);
-                return (
-                  <li key={note.id}>
-                    <button
-                      type="button"
-                      className="notes-surface__note-item"
-                      onClick={() => void openNote(note.id)}
-                    >
-                      <span className="notes-surface__note-title" title={displayTitle}>
-                        {displayTitle}
-                      </span>
-                      <span className="notes-surface__note-time">
-                        <span className="notes-surface__note-time-default">{formatTimeAgo(note.updatedAt)}</span>
-                        <span className="notes-surface__note-time-hover">
-                          {formatTimeAgo(note.updatedAt)} · {formatWordCount(note.wordCount)}
+            <div className="notes-surface__section" aria-labelledby="notes-recent-label">
+              <h3 id="notes-recent-label" className="notes-surface__section-label">
+                Recent
+              </h3>
+              <ul className="notes-surface__notes" aria-labelledby="notes-recent-label">
+                {notes.map((note) => {
+                  const displayTitle = getDisplayNoteTitle(note.title);
+                  return (
+                    <li key={note.id}>
+                      <button
+                        type="button"
+                        className="notes-surface__note-item"
+                        onClick={() => void openNote(note.id)}
+                      >
+                        <span className="notes-surface__note-title" title={displayTitle}>
+                          {displayTitle}
                         </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {notes.length === 0 ? <p className="notes-surface__empty">No notes yet. Create one to get started.</p> : null}
+                        <span className="notes-surface__note-time">
+                          <span className="notes-surface__note-time-default">{formatTimeAgo(note.updatedAt)}</span>
+                          <span className="notes-surface__note-time-hover">
+                            {formatTimeAgo(note.updatedAt)} · {formatWordCount(note.wordCount)}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {notes.length === 0 ? (
+                <p className="notes-surface__empty">No notes yet. Create one to get started.</p>
+              ) : null}
+            </div>
           </section>
         ) : (
           <section className="notes-surface__detail">

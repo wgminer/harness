@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
+import { parseMemoryInjectionStrategy } from "../shared/memoryInjection";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings } from "../shared/types";
 import { normalizeNoteTemplates } from "../shared/writing";
@@ -67,6 +68,9 @@ export function parseSettings(data: Record<string, unknown>): Settings {
   const folderPath =
     typeof backupRaw?.folderPath === "string" ? backupRaw.folderPath : D.backup!.folderPath;
 
+  const memoryRaw = data.memory as Record<string, unknown> | undefined;
+  const injectionStrategy = parseMemoryInjectionStrategy(memoryRaw?.injectionStrategy);
+
   return {
     version: D.version,
     openai: {
@@ -90,6 +94,9 @@ export function parseSettings(data: Record<string, unknown>): Settings {
     transcription: parseTranscription(data.transcription as Record<string, unknown> | undefined),
     backup: {
       folderPath,
+    },
+    memory: {
+      injectionStrategy,
     },
   };
 }

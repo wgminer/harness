@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { ExternalLink, Eye, EyeOff, Minus, Plus, Settings as SettingsIcon } from "lucide-react";
 import { RIG_CONTEXT_TAB_LABEL, RIG_PAGE_TITLE } from "../shared/rigPage";
+import { LLM_CONTEXT_EXPORT_PROMPT } from "../shared/memoryImport";
+import {
+  MEMORY_INJECTION_STRATEGY_OPTIONS,
+  type MemoryInjectionStrategy,
+} from "../shared/memoryInjection";
 import { DEFAULT_LAYOUT, DEFAULT_SETTINGS } from "../shared/types";
 import type { LayoutOptions, Settings, TranscriptDictionaryEntry } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
@@ -11,9 +16,8 @@ import {
   OPENAI_TITLE_MODEL,
   OPENAI_TRANSCRIPT_CLEANUP_MODEL,
 } from "../shared/openaiModels";
-import type { SyncConflict, SyncFolderSuggestion, SyncStatus } from "../shared/sync";
-import type { SyncFileChoice } from "../shared/syncMerge";
-import { SyncConflictReviewPanel } from "./SyncConflictReviewPanel";
+import type { SyncFolderSuggestion, SyncStatus } from "../shared/sync";
+import { syncResultChangedLocalData } from "../shared/sync";
 import {
   DEFAULT_NOTE_TEMPLATES,
   NOTE_TEMPLATE_CURSOR_TOKEN,
@@ -56,6 +60,8 @@ import {
 interface SettingsViewProps {
   /** After ChatGPT import (new conversations in sidebar). */
   onImportComplete?: () => void;
+  /** After sync pull/merge (sidebar list may have changed). */
+  onSyncComplete?: () => void;
 }
 
 const SAVE_DEBOUNCE_MS = 500;
@@ -73,9 +79,10 @@ const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
 ];
 
 
-export function SettingsView({ onImportComplete }: SettingsViewProps) {
+export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewProps) {
   const [apiKey, setApiKey] = useState(D.openai!.apiKey);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showTavilyKey, setShowTavilyKey] = useState(false);
   const [usageStats, setUsageStats] = useState<UsageStatsSnapshot>(EMPTY_USAGE_STATS);
   const [switchAnimationsReady, setSwitchAnimationsReady] = useState(false);
 
@@ -101,7 +108,11 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
 
   const [autoSend, setAutoSend] = useState(true);
   const [weatherZip, setWeatherZip] = useState(D.weather!.defaultZip);
+  const [tavilyApiKey, setTavilyApiKey] = useState(D.search!.tavilyApiKey);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [memoryInjectionStrategy, setMemoryInjectionStrategy] = useState<MemoryInjectionStrategy>(
+    D.memory!.injectionStrategy
+  );
   const [userMemory, setUserMemory] = useState<Record<string, string>>({});
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
   const [editingMemoryKey, setEditingMemoryKey] = useState<string | null>(null);
@@ -121,12 +132,14 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
   } | null>(null);
   const [compileBusy, setCompileBusy] = useState(false);
   const [compileMessage, setCompileMessage] = useState<string | null>(null);
+  const [llmImportDraft, setLlmImportDraft] = useState("");
+  const [llmImportBusy, setLlmImportBusy] = useState(false);
+  const [llmImportMessage, setLlmImportMessage] = useState<string | null>(null);
+  const [exportPromptOpen, setExportPromptOpen] = useState(false);
   const [cleanupLegacyBusy, setCleanupLegacyBusy] = useState(false);
   const [cleanupLegacyMessage, setCleanupLegacyMessage] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [syncConflict, setSyncConflict] = useState<SyncConflict | null>(null);
-  const [showSyncReview, setShowSyncReview] = useState(false);
   const [syncSuggestions, setSyncSuggestions] = useState<SyncFolderSuggestion[]>([]);
   const [dataStatus, setDataStatus] = useState<{
     localDataDir: string;
@@ -187,6 +200,8 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
         setCleanupPromptDraft(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "");
         setTranscriptDictionary(S.transcription?.dictionary ?? D.transcription?.dictionary ?? []);
         setWeatherZip(S.weather?.defaultZip ?? D.weather!.defaultZip);
+        setTavilyApiKey(S.search?.tavilyApiKey ?? D.search!.tavilyApiKey);
+        setMemoryInjectionStrategy(S.memory?.injectionStrategy ?? D.memory!.injectionStrategy);
         setNoteTemplates(normalizeNoteTemplates(S.notes?.templates));
       })
       .finally(() => {
@@ -213,14 +228,23 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== "general") return;
+    void window.electron.usage.getStats().then(setUsageStats);
+  }, [activeTab]);
+
+  useEffect(() => {
     if (activeTab !== "memory") return;
     void refreshCompileStatus();
   }, [activeTab]);
 
   useEffect(() => {
     const unsub = window.electron.customization.onUpdated((payload) => {
-      if (payload.type !== "layout") return;
-      void window.electron.customization.getLayoutOptions().then(setLayoutOptions);
+      if (payload.type === "theme") {
+        void window.electron.customization.getThemeSettings().then(setThemeForm);
+      }
+      if (payload.type === "layout") {
+        void window.electron.customization.getLayoutOptions().then(setLayoutOptions);
+      }
     });
     return unsub;
   }, []);
@@ -246,6 +270,12 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
         weather: {
           defaultZip: weatherZip.trim(),
         },
+        search: {
+          tavilyApiKey: tavilyApiKey.trim(),
+        },
+        memory: {
+          injectionStrategy: memoryInjectionStrategy,
+        },
       });
       setSaveStatus("saved");
       if (hideToastRef.current) clearTimeout(hideToastRef.current);
@@ -261,7 +291,7 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
         hideToastRef.current = null;
       }
     };
-  }, [apiKey, autoSend, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip]);
+  }, [apiKey, autoSend, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip, tavilyApiKey, memoryInjectionStrategy]);
 
   const openCleanupPromptModal = () => {
     setCleanupPromptDraft(cleanupPrompt);
@@ -417,67 +447,28 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
   const runSyncNow = async () => {
     setSyncBusy(true);
     setSyncMessage(null);
-    setSyncConflict(null);
-    setShowSyncReview(false);
     try {
       const result = await window.electron.sync.runNow();
-      if (result.conflict) {
-        setSyncConflict(result.conflict);
-        setShowSyncReview(false);
-        setSyncMessage("Local and backup both changed. Review changes or pick a side.");
-      } else if (result.ok) {
+      if (result.ok) {
         const action = result.status.lastAction;
         const summary =
-          action === "push"
-            ? "Pushed local changes to backup."
-            : action === "pull"
-              ? "Pulled newer backup into local data."
-              : "Already in sync.";
-        setSyncMessage(summary);
+          action === "merge"
+            ? "Merged changes and synced."
+            : action === "push"
+              ? "Pushed local changes to backup."
+              : action === "pull"
+                ? "Pulled newer backup into local data."
+                : "Already in sync.";
+        setSyncMessage(
+          result.mergeWarning ? `${summary} ${result.mergeWarning}` : summary,
+        );
       } else {
         setSyncMessage(result.status.lastError ?? "Sync failed.");
       }
       await refreshDataStatus();
-    } finally {
-      setSyncBusy(false);
-    }
-  };
-
-  const resolveSyncConflict = async (resolution: "push" | "pull") => {
-    setSyncBusy(true);
-    setSyncMessage(null);
-    try {
-      const result = await window.electron.sync.resolveConflict(resolution);
-      setSyncConflict(null);
-      setShowSyncReview(false);
-      if (result.ok) {
-        const summary =
-          resolution === "push"
-            ? "Kept this device’s changes and updated the backup."
-            : "Used the backup. Your previous local data was saved under local-data/sync/backups/.";
-        setSyncMessage(summary);
-      } else {
-        setSyncMessage(result.status.lastError ?? "Sync failed.");
+      if (syncResultChangedLocalData(result)) {
+        onSyncComplete?.();
       }
-      await refreshDataStatus();
-    } finally {
-      setSyncBusy(false);
-    }
-  };
-
-  const applySyncMerge = async (choices: Record<string, SyncFileChoice>) => {
-    setSyncBusy(true);
-    setSyncMessage(null);
-    try {
-      const result = await window.electron.sync.resolveConflict({ mode: "merge", choices });
-      setSyncConflict(null);
-      setShowSyncReview(false);
-      if (result.ok) {
-        setSyncMessage("Merged changes applied and pushed to the backup folder.");
-      } else {
-        setSyncMessage(result.status.lastError ?? "Merge failed.");
-      }
-      await refreshDataStatus();
     } finally {
       setSyncBusy(false);
     }
@@ -549,6 +540,36 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
   const refreshCompileStatus = async () => {
     const status = await window.electron.memory.getCompileStatus();
     setCompileStatus(status);
+  };
+
+  const copyExportPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(LLM_CONTEXT_EXPORT_PROMPT);
+      setLlmImportMessage("Export prompt copied to clipboard.");
+    } catch {
+      setLlmImportMessage("Could not copy to clipboard.");
+    }
+  };
+
+  const runLlmContextImport = async () => {
+    setLlmImportBusy(true);
+    setLlmImportMessage(null);
+    try {
+      const response = await window.electron.memory.importLlmContext(llmImportDraft);
+      if (response.ok) {
+        const r = response.result;
+        const parts = [`Added ${r.added}, updated ${r.updated}.`];
+        if (r.importSource) parts.push(`Source: ${r.importSource}.`);
+        if (r.truncated) parts.push("Export was truncated before processing.");
+        setLlmImportMessage(parts.join(" "));
+        setLlmImportDraft("");
+        setUserMemory(await window.electron.memory.getUserMemory());
+      } else {
+        setLlmImportMessage(response.error);
+      }
+    } finally {
+      setLlmImportBusy(false);
+    }
   };
 
   const runCompileNow = async () => {
@@ -768,6 +789,41 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   <dd><code>{OPENAI_TRANSCRIPT_CLEANUP_MODEL}</code></dd>
                 </div>
               </dl>
+              <dl className="usage-stats settings-model-spend" aria-label="OpenAI estimated spend this month">
+                <div className="usage-stats__row usage-stats__row--emph">
+                  <dt>Estimated spend ({usageStats.openaiThisMonth.monthLabel})</dt>
+                  <dd>
+                    {new Intl.NumberFormat("en-US", {
+                      style: "currency",
+                      currency: "USD",
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    }).format(usageStats.openaiThisMonth.estimatedUsd)}
+                  </dd>
+                </div>
+                <div className="usage-stats__row">
+                  <dt>Tokens (prompt / cached / completion)</dt>
+                  <dd>
+                    {usageStats.openaiThisMonth.promptTokens.toLocaleString()}
+                    {" / "}
+                    {usageStats.openaiThisMonth.cachedPromptTokens.toLocaleString()}
+                    {" / "}
+                    {usageStats.openaiThisMonth.completionTokens.toLocaleString()}
+                  </dd>
+                </div>
+              </dl>
+              <SettingsHint flush>
+                Harness usage this month only. Estimated from API token counts and OpenAI Standard list
+                prices; may differ from your invoice.
+              </SettingsHint>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void window.electron.usage.openOpenAIDashboard()}
+              >
+                View usage on OpenAI
+                <ExternalLink size={14} aria-hidden />
+              </button>
               <SettingsHint flush>
                 Models are pinned in this build — there&apos;s no in-app picker.
               </SettingsHint>
@@ -1138,6 +1194,42 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                 />
               </SettingsField>
             </SettingsGroup>
+            <SettingsGroup
+              title="Web search tool"
+              description={
+                <>
+                  API key for the <code>web_search</code> tool. Get a free key at{" "}
+                  <a href="https://tavily.com" target="_blank" rel="noreferrer noopener">tavily.com</a>.
+                </>
+              }
+            >
+              <SettingsField label="Tavily API key" htmlFor="settings-tavily-key">
+                <div className="settings-api-key-row">
+                  <input
+                    id="settings-tavily-key"
+                    data-testid="settings-tavily-key"
+                    type={showTavilyKey ? "text" : "password"}
+                    value={tavilyApiKey}
+                    onChange={(e) => setTavilyApiKey(e.target.value)}
+                    placeholder="tvly-…"
+                    autoComplete="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-icon"
+                    aria-pressed={showTavilyKey}
+                    aria-label={showTavilyKey ? "Hide Tavily key" : "Show Tavily key"}
+                    title={showTavilyKey ? "Hide key" : "Show key"}
+                    onClick={() => setShowTavilyKey((v) => !v)}
+                  >
+                    {showTavilyKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </SettingsField>
+            </SettingsGroup>
           </section>}
 
           {activeTab === "voice" && <section
@@ -1317,8 +1409,36 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
             aria-labelledby="settings-tab-memory"
           >
             <SettingsGroup
+              title="Prompt injection"
+              description="How stored user facts are added to the system prompt on each message."
+            >
+              <SettingsField label="Strategy" htmlFor="settings-memory-injection">
+                <select
+                  id="settings-memory-injection"
+                  data-testid="settings-memory-injection"
+                  value={memoryInjectionStrategy}
+                  onChange={(e) =>
+                    setMemoryInjectionStrategy(e.target.value as MemoryInjectionStrategy)
+                  }
+                >
+                  {MEMORY_INJECTION_STRATEGY_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </SettingsField>
+              <SettingsHint flush>
+                {
+                  MEMORY_INJECTION_STRATEGY_OPTIONS.find((o) => o.id === memoryInjectionStrategy)
+                    ?.description
+                }
+              </SettingsHint>
+            </SettingsGroup>
+
+            <SettingsGroup
               title="User facts"
-              description="Stable facts merged into the model context when relevant. Pick a short label and a one-line value; the same label updates the existing entry."
+              description="Stable facts stored locally and synced with your backup. Pick a short label and a one-line value; the same label updates the existing entry."
             >
               <div className="settings-entry-list">
                 {Object.entries(userMemory).map(([k, v]) => (
@@ -1326,6 +1446,8 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                     key={k}
                     title={k}
                     detail={v}
+                    detailSingleLine
+                    actionsOnHover
                     onEdit={() => openEditMemoryModal(k, v)}
                     onDelete={() => void deleteMemoryEntry(k)}
                     editAriaLabel={`Edit ${k}`}
@@ -1343,6 +1465,66 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                   Add entry
                 </button>
               </SettingsActions>
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Import from another assistant"
+              description={
+                <>
+                  Run the export prompt in ChatGPT, Claude, or another assistant, paste the result
+                  below, then import. Harness uses your OpenAI API key to distill entries into user
+                  facts above (same merge rules as compile).
+                </>
+              }
+            >
+              <SettingsActions>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setExportPromptOpen((open) => !open)}
+                  aria-expanded={exportPromptOpen}
+                >
+                  {exportPromptOpen ? "Hide export prompt" : "Show export prompt"}
+                </button>
+                <button type="button" className="btn" onClick={() => void copyExportPrompt()}>
+                  Copy export prompt
+                </button>
+              </SettingsActions>
+              {exportPromptOpen && (
+                <label className="settings-entry-field">
+                  <span className="settings-entry-field__label">Export prompt</span>
+                  <textarea
+                    readOnly
+                    value={LLM_CONTEXT_EXPORT_PROMPT}
+                    className="app-modal-input settings-entry-detail-input settings-llm-import-prompt"
+                    rows={12}
+                    aria-label="Export prompt for other assistants"
+                  />
+                </label>
+              )}
+              <label className="settings-entry-field">
+                <span className="settings-entry-field__label">Pasted export</span>
+                <textarea
+                  placeholder="Paste the structured export from the other assistant…"
+                  value={llmImportDraft}
+                  onChange={(e) => setLlmImportDraft(e.target.value)}
+                  className="app-modal-input settings-entry-detail-input settings-llm-import-export"
+                  rows={14}
+                  data-testid="settings-llm-import-export"
+                />
+              </label>
+              <SettingsActions>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  data-testid="settings-import-llm-context"
+                  onClick={() => void runLlmContextImport()}
+                  disabled={llmImportBusy || !llmImportDraft.trim()}
+                >
+                  {llmImportBusy ? "Importing…" : "Import into user facts"}
+                </button>
+              </SettingsActions>
+              {llmImportMessage && <SettingsHint flush>{llmImportMessage}</SettingsHint>}
             </SettingsGroup>
 
             <SettingsGroup
@@ -1725,50 +1907,6 @@ export function SettingsView({ onImportComplete }: SettingsViewProps) {
                     )}
                   </SettingsActions>
                 </>
-              )}
-              {syncConflict && !showSyncReview && (
-                <div className="settings-sync-conflict" role="alert">
-                  <p>
-                    Both this device and the backup folder have changes since your last sync.
-                  </p>
-                  <SettingsActions>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => setShowSyncReview(true)}
-                      disabled={syncBusy}
-                    >
-                      Review &amp; merge
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => void resolveSyncConflict("pull")}
-                      disabled={syncBusy}
-                    >
-                      Use backup
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => void resolveSyncConflict("push")}
-                      disabled={syncBusy}
-                    >
-                      Keep this device
-                    </button>
-                  </SettingsActions>
-                  <SettingsHint flush>
-                    Review &amp; merge lets you combine conversations, tasks, notes, and other
-                    files file-by-file. Quick actions overwrite one side entirely.
-                  </SettingsHint>
-                </div>
-              )}
-              {syncConflict && showSyncReview && (
-                <SyncConflictReviewPanel
-                  busy={syncBusy}
-                  onApplyMerge={applySyncMerge}
-                  onCancel={() => setShowSyncReview(false)}
-                />
               )}
               {syncMessage && <SettingsHint flush>{syncMessage}</SettingsHint>}
             </SettingsGroup>

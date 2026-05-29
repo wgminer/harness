@@ -2,11 +2,20 @@ import { ipcMain, BrowserWindow } from "electron";
 import OpenAI from "openai";
 import { getSettings } from "./settings";
 import { getMessages, getUserMemory, appendMessage, popLastUserMessage } from "./memory";
+import {
+  annotateMessageContentForModel,
+  formatTemporalContextBlock,
+} from "../shared/chatTemporalContext";
+import {
+  formatMemoryContextBlock,
+  parseMemoryInjectionStrategy,
+  selectMemoryEntriesForPrompt,
+} from "../shared/memoryInjection";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import { scheduleConversationTitleRefinement } from "./conversationTitle";
 import { getProvider } from "./providers/registry";
 import { executeFileTool } from "./fileTools";
-import { executeCustomizationTool } from "./customization";
+import { executeCustomizationTool, isCustomizationToolName } from "./customization";
 import { executeAssistantTool, isAssistantToolName } from "./assistantTools";
 import type { ChatMessage } from "../shared/types";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
@@ -29,101 +38,6 @@ function getMainWindow(): BrowserWindow | null {
   return wins.length > 0 ? wins[0] : null;
 }
 
-const MEMORY_STOPWORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "are",
-  "as",
-  "at",
-  "be",
-  "but",
-  "by",
-  "for",
-  "from",
-  "how",
-  "i",
-  "if",
-  "in",
-  "is",
-  "it",
-  "me",
-  "my",
-  "of",
-  "on",
-  "or",
-  "that",
-  "the",
-  "this",
-  "to",
-  "was",
-  "we",
-  "with",
-  "you",
-  "your",
-]);
-
-const MEMORY_ALWAYS_RELEVANT_KEY_PARTS = ["writing", "tone", "style", "voice", "goal", "audience", "constraint"];
-const MAX_MEMORY_ENTRIES = 6;
-const MAX_MEMORY_CHARS = 900;
-const MIN_MEMORY_SCORE = 0.65;
-
-function toTokens(text: string): string[] {
-  return String(text)
-    .toLowerCase()
-    .split(/[^a-z0-9_]+/)
-    .filter((t) => t.length >= 3 && !MEMORY_STOPWORDS.has(t));
-}
-
-function countOverlap(base: Set<string>, candidates: string[]): number {
-  let count = 0;
-  for (const token of candidates) {
-    if (base.has(token)) count += 1;
-  }
-  return count;
-}
-
-function scoreMemoryEntry(key: string, value: string, userContent: string): number {
-  const userTokens = new Set(toTokens(userContent));
-  if (userTokens.size === 0) return 0;
-  const keyTokens = toTokens(key);
-  const valueTokens = toTokens(value);
-  const keyMatches = countOverlap(userTokens, keyTokens);
-  const valueMatches = countOverlap(userTokens, valueTokens);
-  const tokenNorm = Math.sqrt(Math.max(1, keyTokens.length + valueTokens.length));
-  let score = (keyMatches * 2 + valueMatches) / tokenNorm;
-  const keyLower = key.toLowerCase();
-  if (MEMORY_ALWAYS_RELEVANT_KEY_PARTS.some((part) => keyLower.includes(part))) score += 1;
-  const extraChars = Math.max(0, value.length - 260);
-  score -= (extraChars / 200) * 0.2;
-  return score;
-}
-
-function selectRelevantMemoryEntries(
-  userMemory: Record<string, string>,
-  userContent?: string
-): Array<[key: string, value: string]> {
-  const entries = Object.entries(userMemory).filter(([k]) => k.trim().length > 0);
-  if (entries.length === 0) return [];
-  if (!userContent?.trim()) return entries.slice(0, 3);
-
-  const scored = entries
-    .map(([key, value]) => ({ key, value, score: scoreMemoryEntry(key, value, userContent) }))
-    .filter((row) => row.score >= MIN_MEMORY_SCORE)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_MEMORY_ENTRIES);
-
-  let usedChars = 0;
-  const selected: Array<[string, string]> = [];
-  for (const row of scored) {
-    const nextLine = `- ${row.key}: ${row.value}`;
-    if (selected.length > 0 && usedChars + nextLine.length > MAX_MEMORY_CHARS) break;
-    selected.push([row.key, row.value]);
-    usedChars += nextLine.length;
-  }
-  return selected;
-}
-
 function splitIntoWordChunks(content: string): string[] {
   const parts = content.split(/\s+/).filter(Boolean);
   if (parts.length <= 1) return [content];
@@ -139,21 +53,12 @@ async function buildMessageList(
   userContent?: string,
   secondUserContent?: string
 ): Promise<ChatMessage[]> {
+  const settings = await getSettings();
+  const strategy = parseMemoryInjectionStrategy(settings.memory?.injectionStrategy);
   const userMemory = await getUserMemory();
-  const selectedMemory = selectRelevantMemoryEntries(userMemory, userContent);
-  const memoryBlock =
-    selectedMemory.length > 0
-      ? [
-          "[USER_MEMORY_CONTEXT]",
-          "Use only if relevant to the current request.",
-          ...selectedMemory.map(([k, v]) => `- ${k}: ${v}`),
-          "",
-          "[MEMORY_RULES]",
-          "- Treat memory as hints, not absolute truth.",
-          "- If memory conflicts with the user's current message, follow the current message.",
-          "- If uncertain whether memory still applies, ask one brief clarifying question.",
-        ].join("\n")
-      : "";
+  const scoringContent = userContent ?? secondUserContent;
+  const selectedMemory = selectMemoryEntriesForPrompt(strategy, userMemory, scoringContent);
+  const memoryBlock = formatMemoryContextBlock(selectedMemory);
 
   const systemPrompt =
     [
@@ -161,20 +66,92 @@ async function buildMessageList(
       "You are a helpful assistant running in a local desktop app.",
       "Prefer concise, practical, high-signal responses.",
       "For complex writing/thinking tasks, start with structure (questions, outline, tradeoffs) unless the user explicitly asks for a full draft immediately.",
-      "Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); update_theme and set_layout (to change app appearance); task_list, task_create, task_update, task_delete, task_clear_completed (for a persistent tagged task list visible in a dedicated panel); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); and note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat). Call them when appropriate.",
+      "Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); get_theme, update_theme, apply_theme_preset, and set_layout (app appearance — call get_theme before edits; presets: night, paper, matcha, ik_blue, bloomberg); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat); and clipping_list, clipping_create, clipping_update, clipping_delete (tagged text clippings; clipping_update supports tags, add_tags, remove_tags). Call them when appropriate.",
+      "",
+      "[FORMATTING_CAPABILITIES]",
+      "Standard markdown (bold, italic, lists, tables, fenced code, blockquotes) is supported. Use plain prose by default. Only reach for the layout blocks below when they add genuine clarity over a paragraph or list. Never wrap an entire reply in a single block.",
+      "",
+      "Callouts — one sentence of emphasis, not a heading replacement:",
+      "  :::tip",
+      "  Short suggestion.",
+      "  :::",
+      "  (variants: :::tip, :::note, :::warning, :::danger)",
+      "",
+      "Collapsible — fold away long context or sources the user may not need:",
+      "  :::details{summary=\"Sources\"}",
+      "  Long content.",
+      "  :::",
+      "",
+      "Inline chip — a short status tag inside a sentence:",
+      "  Build is :chip[failing]{tone=danger}.",
+      "  (tones: info, warn, danger, success, neutral)",
+      "",
+      "Link card — only when surfacing a single primary URL the user should open:",
+      "  :::link{url=\"https://example.com\" title=\"Example\" desc=\"One-line summary.\" site=\"example.com\"}",
+      "  :::",
+      "",
+      "Mermaid diagrams — for flows, sequences, small state diagrams:",
+      "  ```mermaid",
+      "  flowchart LR",
+      "    A --> B",
+      "  ```",
+      "",
+      "Options compare — exactly 2-5 alternatives the user must choose between. Outer fence uses FOUR colons so the inner :::option fences nest cleanly:",
+      "  ::::options{title=\"Pick an approach\"}",
+      "  :::option{title=\"Redis\" recommended}",
+      "  Fast and proven. Adds an ops dependency.",
+      "  :::",
+      "  :::option{title=\"In-memory\"}",
+      "  Zero ops. Cache is lost on restart.",
+      "  :::",
+      "  ::::",
+      "",
+      "Slide deck — a small inline deck (max ~6 slides). Outer fence uses FOUR colons. Layouts: title, bullets, quote, blank.",
+      "  ::::slides",
+      "  :::slide{layout=title title=\"Q3 Review\" subtitle=\"Highlights\"}",
+      "  :::",
+      "  :::slide{layout=bullets title=\"Wins\"}",
+      "  - Shipped feature X",
+      "  - Closed deal Y",
+      "  :::",
+      "  :::slide{layout=quote attribution=\"— Lee\"}",
+      "  Make it work, then make it fast.",
+      "  :::",
+      "  :::slide{layout=blank title=\"Notes\"}",
+      "  Free-form markdown body.",
+      "  :::",
+      "  ::::",
+      "",
+      "Rules of thumb: prefer plain prose first; use at most one layout block per reply unless the user is explicitly asking for a comparison or a deck; never nest :::slides inside another directive; do not use callouts as section headers.",
     ].join("\n") +
-    (memoryBlock ? "\n\n" + memoryBlock : "");
+    (memoryBlock ? "\n\n" + memoryBlock : "") +
+    "\n\n" +
+    formatTemporalContextBlock();
 
   const history = await getMessages(conversationId);
   const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
+  const nowMs = Date.now();
   for (const m of history) {
-    messages.push(m);
+    if (m.role === "system") {
+      messages.push(m);
+      continue;
+    }
+    messages.push({
+      ...m,
+      content: annotateMessageContentForModel(m.content, m.timestamp),
+    });
   }
   if (userContent) {
-    messages.push({ role: "user", content: userContent });
+    messages.push({
+      role: "user",
+      content: annotateMessageContentForModel(userContent, nowMs),
+    });
   }
   if (secondUserContent) {
-    messages.push({ role: "user", content: secondUserContent });
+    messages.push({
+      role: "user",
+      content: annotateMessageContentForModel(secondUserContent, nowMs + 1),
+    });
   }
   return messages;
 }
@@ -189,7 +166,7 @@ async function executeTool(
 
   const GATED_ASSISTANT_TOOLS = new Set(["task_delete", "task_clear_completed", "task_update"]);
 
-  if (["update_theme", "set_layout"].includes(name)) {
+  if (isCustomizationToolName(name)) {
     result = await Promise.resolve(executeCustomizationTool(name, args));
   } else if (isAssistantToolName(name)) {
     if (GATED_ASSISTANT_TOOLS.has(name)) {
