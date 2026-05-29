@@ -124,7 +124,7 @@ export function Sidebar({
   }, [refreshSyncConfigured]);
 
   useEffect(() => {
-    if (view === "settings") return;
+    if (view === "settings" || view === "config") return;
     refreshSyncConfigured();
   }, [view, refreshSyncConfigured]);
 
@@ -450,14 +450,25 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              className={`btn list-item-base sidebar-workspace__btn${view === "settings" ? " active" : ""}`}
-              data-testid="sidebar-settings"
-              onClick={() => onViewChange("settings")}
+              className={`btn list-item-base sidebar-workspace__btn${view === "config" ? " active" : ""}`}
+              data-testid="sidebar-config"
+              onClick={() => onViewChange("config")}
               aria-label={RIG_PAGE_TITLE}
-              aria-current={view === "settings" ? "page" : undefined}
+              aria-current={view === "config" ? "page" : undefined}
             >
               <Settings size={16} className="sidebar-workspace__icon" aria-hidden />
               <span className="sidebar-workspace__label">{RIG_PAGE_TITLE}</span>
+            </button>
+            <button
+              type="button"
+              className={`btn list-item-base sidebar-workspace__btn sidebar-workspace__btn--secondary${view === "settings" ? " active" : ""}`}
+              data-testid="sidebar-settings-legacy"
+              onClick={() => onViewChange("settings")}
+              aria-label="Config (legacy)"
+              aria-current={view === "settings" ? "page" : undefined}
+            >
+              <Settings size={16} className="sidebar-workspace__icon" aria-hidden />
+              <span className="sidebar-workspace__label">Config (legacy)</span>
             </button>
           </nav>
         )}

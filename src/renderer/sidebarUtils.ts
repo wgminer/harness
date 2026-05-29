@@ -2,7 +2,7 @@ import type { ConversationListRow } from "../shared/conversationSession";
 
 export type Conversation = ConversationListRow;
 
-export type View = "chat" | "settings" | "tasks" | "notes" | "clippings";
+export type View = "chat" | "config" | "settings" | "tasks" | "notes" | "clippings";
 
 /** Fully opaque conversations shown before the progressive fade peek rows. */
 export const SIDEBAR_PREVIEW_COUNT_DEFAULT = 7;

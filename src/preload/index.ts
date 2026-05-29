@@ -37,6 +37,14 @@ contextBridge.exposeInMainWorld("electron", {
     get: () => ipcRenderer.invoke("settings:get"),
     set: (partial: unknown) => ipcRenderer.invoke("settings:set", partial),
   },
+  config: {
+    getCatalog: () => ipcRenderer.invoke("config:getCatalog"),
+    getValues: () => ipcRenderer.invoke("config:getValues"),
+    setValue: (id: string, value: unknown) => ipcRenderer.invoke("config:setValue", id, value),
+    getView: () => ipcRenderer.invoke("config:getView"),
+    generateView: (userMessage: string, currentSpec?: unknown) =>
+      ipcRenderer.invoke("config:generateView", userMessage, currentSpec),
+  },
   usage: {
     getStats: () => ipcRenderer.invoke("usage:getStats") as Promise<UsageStatsSnapshot>,
     reset: () => ipcRenderer.invoke("usage:reset") as Promise<UsageStatsSnapshot>,

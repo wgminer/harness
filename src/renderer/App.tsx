@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChatView } from "./ChatView";
+import { ConfigCanvasView } from "./ConfigCanvasView";
 import { SettingsView } from "./SettingsView";
 import { TasksView } from "./TasksView";
 import { ClippingsView } from "./ClippingsView";
@@ -368,6 +369,7 @@ export default function App() {
           />
           </div>
         )}
+        {view === "config" && <ConfigCanvasView />}
         {view === "settings" && (
           <SettingsView
             onImportComplete={loadConversations}

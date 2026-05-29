@@ -545,3 +545,5 @@ export const TOOL_DEFINITIONS = [
     },
   },
 ];
+
+export { CONFIG_CANVAS_TOOL_DEFINITIONS } from "../configCanvas";
