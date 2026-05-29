@@ -1,0 +1,69 @@
+/* Generative config canvas; bottom composer uses tasks.css dock pattern. */
+
+.config-canvas-page .config-canvas-content {
+  gap: var(--space-6);
+}
+
+.config-canvas-status {
+  color: var(--muted);
+  margin: 0;
+}
+
+.config-canvas-error {
+  color: var(--danger, #e55);
+  margin: 0 0 var(--space-4);
+}
+
+.settings-secret-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.settings-secret-row .settings-text-input {
+  flex: 1;
+}
+
+.settings-folder-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.settings-folder-path {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+  color: var(--muted);
+  font-size: var(--type-caption);
+}
+
+.config-canvas-list-block {
+  margin-top: var(--space-4);
+}
+
+.config-canvas-list-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--type-ui);
+  font-weight: 600;
+}
+
+.settings-add-row-btn {
+  margin-top: var(--space-2);
+}
+
+.settings-select,
+.settings-text-input,
+.settings-textarea {
+  width: 100%;
+}
+
+.settings-color-input {
+  width: calc(var(--grid) * 12);
+  height: calc(var(--grid) * 8);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}

@@ -3,6 +3,7 @@ import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
 import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSummary } from "./writing";
 import type { ClippingItem, ClippingsPayload } from "./clippings";
+import type { ConfigEntry, ConfigViewSpec } from "./configRegistry";
 import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
@@ -46,6 +47,16 @@ export interface ElectronAPI {
   settings: {
     get: () => Promise<unknown>;
     set: (partial: unknown) => Promise<unknown>;
+  };
+  config: {
+    getCatalog: () => Promise<ConfigEntry[]>;
+    getValues: () => Promise<Record<string, unknown>>;
+    setValue: (id: string, value: unknown) => Promise<Record<string, unknown>>;
+    getView: () => Promise<ConfigViewSpec>;
+    generateView: (
+      userMessage: string,
+      currentSpec?: ConfigViewSpec | null,
+    ) => Promise<{ spec: ConfigViewSpec; changedIds: string[]; error?: string }>;
   };
   /** Locally accumulated usage (tokens / words); not synced with provider billing. */
   usage: {
