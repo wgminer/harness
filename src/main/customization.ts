@@ -105,40 +105,8 @@ function notifyRenderer(channel: string, payload: unknown): void {
   }
 }
 
-export function getEffectiveThemeSettings(): ThemeSettings {
+function getEffectiveThemeSettings(): ThemeSettings {
   return readThemeSettings() ?? DEFAULT_THEME_SETTINGS;
-}
-
-export function getThemeSettingsForConfig(): ThemeSettings {
-  return getEffectiveThemeSettings();
-}
-
-export function setThemeSettingsForConfig(settings: ThemeSettings | null): void {
-  setThemeSettings(settings);
-}
-
-export function patchThemeSettingsForConfig(patch: Partial<ThemeSettings>): ThemeSettings {
-  const current = getEffectiveThemeSettings();
-  const next = normalizeThemeSettings({ ...current, ...patch });
-  setThemeSettings(next);
-  return next;
-}
-
-export function applyThemePresetForConfig(presetId: string): ThemeSettings | null {
-  const preset = THEME_PRESETS.find((p) => p.id === presetId.trim());
-  if (!preset) return null;
-  const settings = applyThemeColors(getEffectiveThemeSettings(), preset.colors);
-  setThemeSettings(settings);
-  return settings;
-}
-
-export function getLayoutOptionsForConfig(): LayoutOptions {
-  return getLayoutOptions();
-}
-
-export function setLayoutForConfig(options: Partial<LayoutOptions>): LayoutOptions {
-  setLayout(options);
-  return getLayoutOptions();
 }
 
 function themeToolPayload() {
