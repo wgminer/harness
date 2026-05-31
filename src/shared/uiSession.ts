@@ -1,4 +1,4 @@
-export type UiSessionView = "chat" | "config" | "settings" | "tasks" | "notes" | "clippings";
+export type UiSessionView = "chat" | "settings" | "tasks" | "notes" | "clippings";
 
 export interface UiSession {
   view: UiSessionView;
@@ -12,7 +12,7 @@ export const DEFAULT_UI_SESSION: UiSession = {
   notesOpenNoteId: null,
 };
 
-const UI_SESSION_VIEWS: UiSessionView[] = ["chat", "config", "settings", "tasks", "notes", "clippings"];
+const UI_SESSION_VIEWS: UiSessionView[] = ["chat", "settings", "tasks", "notes", "clippings"];
 
 function isUiSessionView(value: unknown): value is UiSessionView {
   return typeof value === "string" && UI_SESSION_VIEWS.includes(value as UiSessionView);

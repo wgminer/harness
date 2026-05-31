@@ -21,7 +21,6 @@ import { registerMemoryCompileHandlers } from "./memoryCompile";
 import { registerMemoryImportHandlers } from "./memoryImport";
 import { registerSyncHandlers } from "./sync";
 import { registerUiSessionHandlers } from "./uiSession";
-import { registerConfigCanvasHandlers } from "./configCanvas";
 import {
   WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
 } from "../shared/windowLayout";
@@ -170,7 +169,6 @@ app.whenReady().then(() => {
   registerSystemHandlers();
   registerSyncHandlers();
   registerUiSessionHandlers();
-  registerConfigCanvasHandlers();
 
   if (process.platform === "darwin") {
     app.dock.setIcon(nativeImage.createFromPath(iconPath));
