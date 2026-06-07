@@ -59,7 +59,13 @@ resources/HarnessFnMonitor
 native/**/.build/
 native/**/.swiftpm/
 
+# Local backlog / scratch notes
+backlog/
+
 # Xcode (iOS app)
 **/xcuserdata/
 *.xcuserstate
 ios/**/DerivedData/
+ios/.build/
+ios/.build-device/
+ios/**/.swiftpm/
