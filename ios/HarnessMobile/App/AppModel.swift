@@ -17,7 +17,7 @@ final class AppModel: ObservableObject {
 
     let localDataDir: URL
     let store: ConversationStore
-    let clippingsStore: ClippingsStore
+    let tasksStore: TasksStore
     let syncEngine: SyncEngine
     let chatService: ChatService
 
@@ -27,13 +27,13 @@ final class AppModel: ObservableObject {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         localDataDir = docs.appendingPathComponent(localDataSubpath, isDirectory: true)
         store = ConversationStore(localDataDir: localDataDir)
-        clippingsStore = ClippingsStore(localDataDir: localDataDir, conversationStore: store)
+        tasksStore = TasksStore(localDataDir: localDataDir)
         syncEngine = SyncEngine(localDataDir: localDataDir)
-        chatService = ChatService(store: store)
+        chatService = ChatService(store: store, tasksStore: tasksStore)
         syncEngine.store = store
         lastSuccessfulSyncAt = UserDefaults.standard.object(forKey: Self.lastSuccessfulSyncAtKey) as? Date
         forwardObjectWillChange(from: store)
-        forwardObjectWillChange(from: clippingsStore)
+        forwardObjectWillChange(from: tasksStore)
     }
 
     private func forwardObjectWillChange<P: ObservableObject>(from publisher: P) {
@@ -56,7 +56,7 @@ final class AppModel: ObservableObject {
         try? LocalDataLayout.ensureConversationsFile(at: localDataDir)
         do {
             try store.reload()
-            try clippingsStore.reload()
+            try tasksStore.reload()
         } catch {
             syncStatus = SyncStatusSnapshot(
                 kind: .error,
@@ -94,22 +94,17 @@ final class AppModel: ObservableObject {
             let outcome = try await syncEngine.syncNow(forcePull: forcePull)
             applyOutcome(outcome)
             try store.reload()
-            try clippingsStore.reload()
+            try tasksStore.reload()
             chatService.refreshClient()
         } catch {
             applyError(error)
             try? store.reload()
-            try? clippingsStore.reload()
+            try? tasksStore.reload()
             chatService.refreshClient()
         }
     }
 
     func pushAfterChat() async {
-        guard BookmarkStore.hasBookmark else { return }
-        await performSync()
-    }
-
-    func pushAfterClippingEdit() async {
         guard BookmarkStore.hasBookmark else { return }
         await performSync()
     }

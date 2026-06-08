@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { stripSentAtPrefix } from "../shared/chatTemporalContext";
 import { resolveDictationReplyLabel } from "../shared/dictationReplyStrip";
 import {
   type Message,
@@ -97,7 +98,10 @@ export function ChatMessageList({
 
           let assistantBubbleBody: ReactNode = null;
           if (m.role !== "user") {
-            if (m.content) assistantBubbleBody = <MarkdownContent content={m.content} />;
+            if (m.content)
+              assistantBubbleBody = (
+                <MarkdownContent content={stripSentAtPrefix(m.content)} collapsibleNestedLists />
+              );
             else if (isLatestAssistantPending) assistantBubbleBody = <ReplyingIndicator />;
           }
 

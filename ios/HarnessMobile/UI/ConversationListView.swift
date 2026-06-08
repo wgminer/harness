@@ -3,23 +3,13 @@ import UIKit
 
 struct ConversationListView: View {
     @ObservedObject var app: AppModel
-    @ObservedObject private var clippingsStore: ClippingsStore
     let onSelect: (String) -> Void
 
     @State private var createError: String?
     @Environment(\.colorScheme) private var colorScheme
 
-    init(app: AppModel, onSelect: @escaping (String) -> Void) {
-        self.app = app
-        _clippingsStore = ObservedObject(wrappedValue: app.clippingsStore)
-        self.onSelect = onSelect
-    }
-
     private var headerQuote: String {
-        HeaderQuotePolicy.headerQuote(
-            clippings: clippingsStore.clippings,
-            rotationIndex: app.headerQuoteRotationIndex
-        )
+        HeaderQuotePolicy.homeHeaderQuote
     }
 
     var body: some View {
@@ -43,11 +33,12 @@ struct ConversationListView: View {
                             Text(item.displayTitle)
                                 .font(.headline)
                                 .foregroundStyle(.primary)
-                            if item.hasAssistantReply {
-                                Text("Has replies")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text(
+                                Date(timeIntervalSince1970: TimeInterval(item.createdAt) / 1000),
+                                style: .relative
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -63,13 +54,22 @@ struct ConversationListView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    MobileSettingsView(app: app)
-                } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "gearshape")
-                        if let settingsAttentionColor {
-                            SyncAttentionDot(color: settingsAttentionColor)
+                HStack(spacing: 16) {
+                    NavigationLink {
+                        TasksListView(app: app)
+                    } label: {
+                        Image(systemName: "checklist")
+                    }
+                    .accessibilityLabel("Tasks")
+
+                    NavigationLink {
+                        MobileSettingsView(app: app)
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "gearshape")
+                            if let settingsAttentionColor {
+                                SyncAttentionDot(color: settingsAttentionColor)
+                            }
                         }
                     }
                 }
@@ -88,9 +88,6 @@ struct ConversationListView: View {
         } message: {
             Text(createError ?? "")
         }
-        .task {
-            try? clippingsStore.reload()
-        }
     }
 
     private var headerSection: some View {
@@ -107,13 +104,6 @@ struct ConversationListView: View {
                         .padding(.horizontal, 20)
                         .padding(.vertical, 16)
                         .frame(maxWidth: .infinity)
-                }
-
-                NavigationLink {
-                    ClippingsListView(app: app)
-                } label: {
-                    Label("Clippings", systemImage: "doc.on.clipboard")
-                        .font(.subheadline.weight(.medium))
                 }
             }
             .frame(maxWidth: .infinity)

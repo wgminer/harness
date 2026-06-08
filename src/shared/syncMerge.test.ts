@@ -65,29 +65,6 @@ describe("mergeFileBytes", () => {
     expect(byId.t1).toBe("Local");
     expect(byId.t2).toBe("Only remote");
   });
-
-  it("merges clippings by id preferring newer updatedAt", () => {
-    const merged = mergeFileBytes(
-      "app-state/clippings.json",
-      Buffer.from(
-        JSON.stringify({
-          clippings: [{ id: "c1", content: "Local", updatedAt: 20 }],
-        }),
-      ),
-      Buffer.from(
-        JSON.stringify({
-          clippings: [
-            { id: "c1", content: "Remote", updatedAt: 10 },
-            { id: "c2", content: "Only remote", updatedAt: 5 },
-          ],
-        }),
-      ),
-    );
-    const parsed = JSON.parse(merged.toString("utf-8")) as { clippings: { id: string; content: string }[] };
-    const byId = Object.fromEntries(parsed.clippings.map((c) => [c.id, c.content]));
-    expect(byId.c1).toBe("Local");
-    expect(byId.c2).toBe("Only remote");
-  });
 });
 
 describe("buildMergedFileMap", () => {

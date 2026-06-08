@@ -5,7 +5,7 @@ import { join } from "path";
 import type { AppendMessageMeta, ChatMessage, SearchResult } from "../shared/types";
 import { scheduleConversationTitleRefinement } from "./conversationTitle";
 import { notifyConversationTitleUpdated } from "./titleEvents";
-import { readJsonObjectFile, atomicWriteUtf8 } from "./jsonFile";
+import { readJsonObjectFile, readJsonArrayFile, atomicWriteUtf8 } from "./jsonFile";
 import { generateId, fileExists } from "./utils";
 import {
   cleanupLegacyMemoryDir,
@@ -65,6 +65,8 @@ export interface ConversationMeta {
   sessionKind?: ConversationSessionKind;
   /** Set when an assistant message is persisted (dictation → chat). */
   hasAssistantReply?: boolean;
+  /** Set when the conversation has at least one persisted message. */
+  hasMessages?: boolean;
 }
 
 interface MessageRecord {
@@ -101,9 +103,7 @@ function getMessagesPath(conversationId: string): string {
 
 export async function loadMessagesIn(memoryDir: string, conversationId: string): Promise<MessageRecord[]> {
   const path = getMessagesPathIn(ensureDir(memoryDir), conversationId);
-  if (!(await fileExists(path))) return [];
-  const data = JSON.parse(await readFile(path, "utf-8"));
-  return Array.isArray(data) ? data : [];
+  return readJsonArrayFile<MessageRecord>(path);
 }
 
 async function loadMessages(conversationId: string): Promise<MessageRecord[]> {
@@ -115,7 +115,8 @@ export async function saveMessagesIn(
   conversationId: string,
   messages: MessageRecord[]
 ): Promise<void> {
-  await writeFile(getMessagesPathIn(ensureDir(memoryDir), conversationId), JSON.stringify(messages, null, 2), "utf-8");
+  const path = getMessagesPathIn(ensureDir(memoryDir), conversationId);
+  await atomicWriteUtf8(path, JSON.stringify(messages, null, 2));
 }
 
 async function saveMessages(conversationId: string, messages: MessageRecord[]): Promise<void> {
@@ -212,6 +213,7 @@ export async function listConversationsIn(
     createdAt: number;
     sessionKind?: ConversationSessionKind;
     hasAssistantReply?: boolean;
+    hasMessages?: boolean;
   }[]
 > {
   const conv = await loadConversationsIn(memoryDir);
@@ -222,8 +224,37 @@ export async function listConversationsIn(
       createdAt: c.createdAt,
       sessionKind: c.sessionKind,
       hasAssistantReply: c.hasAssistantReply,
+      hasMessages: c.hasMessages,
     }))
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/** Deletes message-less conversations and backfills hasMessages for existing threads. */
+export async function pruneEmptyConversationsIn(memoryDir: string): Promise<{ removed: number }> {
+  const conv = await loadConversationsIn(memoryDir);
+  let removed = 0;
+  let changed = false;
+  for (const [id, meta] of Object.entries(conv)) {
+    const messages = await loadMessagesIn(memoryDir, id);
+    if (messages.length === 0) {
+      delete conv[id];
+      const messagesPath = getMessagesPathIn(memoryDir, id);
+      if (await fileExists(messagesPath)) await unlink(messagesPath);
+      removed += 1;
+      changed = true;
+      continue;
+    }
+    if (meta.hasMessages !== true) {
+      conv[id] = { ...meta, hasMessages: true };
+      changed = true;
+    }
+  }
+  if (changed) await saveConversationsIn(memoryDir, conv);
+  return { removed };
+}
+
+export async function pruneEmptyConversations(): Promise<{ removed: number }> {
+  return pruneEmptyConversationsIn(getMemoryDir());
 }
 
 async function listConversations(): Promise<{ id: string; title: string | null; createdAt: number }[]> {
@@ -277,10 +308,12 @@ export async function importConversationsIn(
   for (const item of items) {
     const id = generateId("conv");
     const hasAssistantReply = item.messages.some((m) => m.role === "assistant");
+    const hasMessages = item.messages.length > 0;
     const meta: ConversationMeta = {
       title: item.title,
       createdAt: item.createdAt,
       sessionKind: "chat",
+      ...(hasMessages ? { hasMessages: true } : {}),
       ...(hasAssistantReply ? { hasAssistantReply: true } : {}),
       ...(item.title ? { titleSource: "imported" as const } : {}),
     };
@@ -424,18 +457,38 @@ export async function appendMessageIn(
   if (options?.toolCalls?.length) record.toolCalls = options.toolCalls;
   if (typeof options?.timestamp === "number") record.timestamp = options.timestamp;
   if (typeof options?.model === "string" && options.model) record.model = options.model;
+  const wasEmpty = messages.length === 0;
   messages.push(record);
   await saveMessagesIn(memoryDir, conversationId, messages);
-  if (role === "user") {
-    scheduleConversationTitleRefinement(conversationId);
-  } else if (role === "assistant") {
+
+  const needsHasMessages = wasEmpty;
+  const needsAssistantReply = role === "assistant";
+  if (needsHasMessages || needsAssistantReply) {
     const conv = await loadConversationsIn(memoryDir);
     const meta = conv[conversationId];
-    if (meta && meta.hasAssistantReply !== true) {
-      conv[conversationId] = { ...meta, hasAssistantReply: true };
-      await saveConversationsIn(memoryDir, conv);
-      notifyConversationTitleUpdated(conversationId);
+    if (meta) {
+      let changed = false;
+      const next = { ...meta };
+      if (needsHasMessages && meta.hasMessages !== true) {
+        next.hasMessages = true;
+        changed = true;
+      }
+      if (needsAssistantReply && meta.hasAssistantReply !== true) {
+        next.hasAssistantReply = true;
+        changed = true;
+      }
+      if (changed) {
+        conv[conversationId] = next;
+        await saveConversationsIn(memoryDir, conv);
+        if (needsAssistantReply && next.hasAssistantReply) {
+          notifyConversationTitleUpdated(conversationId);
+        }
+      }
     }
+  }
+
+  if (role === "user") {
+    scheduleConversationTitleRefinement(conversationId);
   }
 }
 
@@ -527,13 +580,19 @@ export function extractSnippet(
   return { snippet, snippetMatchRange: [clampedStart, clampedEnd] };
 }
 
-export async function searchConversationsIn(memoryDir: string, query: string): Promise<SearchResult[]> {
+export async function searchConversationsIn(
+  memoryDir: string,
+  query: string,
+  composeFirstOnly = false
+): Promise<SearchResult[]> {
   const raw = query.trim();
   const q = raw.toLowerCase();
   if (!q) return [];
   const conv = await loadConversationsIn(memoryDir);
   const results: SearchResult[] = [];
-  for (const [id, { title, createdAt }] of Object.entries(conv)) {
+  for (const [id, meta] of Object.entries(conv)) {
+    if (composeFirstOnly && meta.hasMessages !== true) continue;
+    const { title, createdAt } = meta;
     const titleStr = title ?? "";
     const titleMatched = titleStr.toLowerCase().includes(q);
     let titleMatchRange: [number, number] | undefined;
@@ -577,8 +636,8 @@ export async function searchConversationsIn(memoryDir: string, query: string): P
   return results;
 }
 
-async function searchConversations(query: string): Promise<SearchResult[]> {
-  return searchConversationsIn(getMemoryDir(), query);
+async function searchConversations(query: string, composeFirstOnly = true): Promise<SearchResult[]> {
+  return searchConversationsIn(getMemoryDir(), query, composeFirstOnly);
 }
 
 export function registerMemoryHandlers(): void {
@@ -595,7 +654,9 @@ export function registerMemoryHandlers(): void {
   ipcMain.handle("memory:setUserMemory", (_e, key: string, value: string) => setUserMemory(key, value));
   ipcMain.handle("memory:deleteUserMemoryKey", (_e, key: string) => deleteUserMemoryKey(key));
   ipcMain.handle("memory:deleteConversation", (_e, conversationId: string) => deleteConversation(conversationId));
-  ipcMain.handle("memory:searchConversations", (_e, query: string) => searchConversations(query));
+  ipcMain.handle("memory:searchConversations", (_e, query: string, composeFirstOnly?: boolean) =>
+    searchConversations(query, composeFirstOnly !== false)
+  );
   ipcMain.handle("memory:openAppDataFolder", () => openAppDataFolder());
   ipcMain.handle("memory:getDataStatus", () => getDataStatus());
   ipcMain.handle("memory:cleanupLegacyMemory", () => runCleanupLegacyMemory());

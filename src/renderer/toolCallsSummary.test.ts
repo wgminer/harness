@@ -27,7 +27,7 @@ describe("summarizeToolCalls", () => {
       "note_create",
       "task_list",
       "task_create",
-      "clipping_list"
+      "memory_list_facts"
     );
     expect(summarizeToolCalls(many)).toBe("6 actions");
   });

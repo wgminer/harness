@@ -40,7 +40,7 @@
 
 .notes-surface__notes {
   list-style: none;
-  margin: 0;
+  margin: 0 calc(-1 * var(--space-3));
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -608,7 +608,7 @@
 
 .notes-surface__empty {
   margin: var(--space-2) 0 0;
-  padding: 0 var(--space-3);
+  padding: 0;
   color: var(--fg-muted);
   font-size: var(--font-size-ui);
 }

@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  computeSidebarListLayout,
-  effectiveSidebarPeekLayout,
   groupConversations,
   nextSidebarListSortMode,
   pickSidebarConversationsForList,
-  sidebarItemPeekFadeLevel,
-  sidebarPeekFadeOpacity,
-  SIDEBAR_FADE_PEEK_COUNT,
-  SIDEBAR_PREVIEW_COUNT_DEFAULT,
+  SIDEBAR_INITIAL_VISIBLE_COUNT,
+  SIDEBAR_MORE_INCREMENT,
 } from "./sidebarUtils";
 
 describe("sidebarUtils", () => {
@@ -98,53 +94,8 @@ describe("sidebarUtils", () => {
     expect(picked.map((c) => c.id)).toEqual(["a", "c"]);
   });
 
-  it("assigns progressive peek fade levels for tail rows", () => {
-    const preview = SIDEBAR_PREVIEW_COUNT_DEFAULT;
-    const fade = SIDEBAR_FADE_PEEK_COUNT;
-    expect(sidebarItemPeekFadeLevel(6, preview, fade)).toBeNull();
-    expect(sidebarItemPeekFadeLevel(7, preview, fade)).toBe(1);
-    expect(sidebarItemPeekFadeLevel(8, preview, fade)).toBe(2);
-    expect(sidebarItemPeekFadeLevel(11, preview, fade)).toBe(5);
-    expect(sidebarItemPeekFadeLevel(12, preview, fade)).toBeNull();
-  });
-
-  it("keeps a peek band when the viewport fits more rows than conversations", () => {
-    const tall = computeSidebarListLayout({
-      listAreaHeightPx: 800,
-      rowHeightPx: 36,
-      groupHeaderHeightPx: 28,
-      expandRowHeightPx: 40,
-      listPaddingPx: 16,
-    });
-    const peek = effectiveSidebarPeekLayout(tall, 8);
-    expect(peek.previewCount).toBeLessThan(tall.previewCount);
-    expect(peek.fadePeekCount).toBeGreaterThan(0);
-    expect(sidebarItemPeekFadeLevel(7, peek.previewCount, peek.fadePeekCount)).toBeGreaterThan(0);
-  });
-
-  it("computes layout from list area height", () => {
-    const tall = computeSidebarListLayout({
-      listAreaHeightPx: 800,
-      rowHeightPx: 36,
-      groupHeaderHeightPx: 28,
-      expandRowHeightPx: 40,
-      listPaddingPx: 16,
-    });
-    expect(tall.initialVisibleCount).toBeGreaterThan(12);
-    expect(tall.previewCount + tall.fadePeekCount).toBe(tall.initialVisibleCount);
-
-    const short = computeSidebarListLayout({
-      listAreaHeightPx: 200,
-      rowHeightPx: 36,
-      groupHeaderHeightPx: 28,
-      expandRowHeightPx: 40,
-      listPaddingPx: 16,
-    });
-    expect(short.initialVisibleCount).toBeLessThan(tall.initialVisibleCount);
-  });
-
-  it("steps peek fade opacity toward zero", () => {
-    expect(sidebarPeekFadeOpacity(1, 5)).toBeCloseTo(0.8);
-    expect(sidebarPeekFadeOpacity(5, 5)).toBe(0);
+  it("defaults to 20 visible conversations with 20 more per click", () => {
+    expect(SIDEBAR_INITIAL_VISIBLE_COUNT).toBe(20);
+    expect(SIDEBAR_MORE_INCREMENT).toBe(20);
   });
 });

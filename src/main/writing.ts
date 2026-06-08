@@ -18,6 +18,7 @@ import { getMemoryDir } from "./memory";
 import { getSettings } from "./settings";
 import { recordOpenAIUsage } from "./usageStats";
 import { fileExists } from "./utils";
+import { RIG_PAGE_TITLE } from "../shared/rigPage";
 
 const LEGACY_DOC_FILE = "writing.md";
 const NOTES_INDEX_FILE = "notes.json";
@@ -386,7 +387,7 @@ export async function proposeNoteEdit(input: NoteEditProposalInput): Promise<Not
   const settings = await getSettings();
   const apiKey = settings.openai?.apiKey?.trim() ?? "";
   if (!apiKey) {
-    throw new Error("OpenAI API key not set. Configure it in Config.");
+    throw new Error(`OpenAI API key not set. Configure it in ${RIG_PAGE_TITLE}.`);
   }
 
   const client = new OpenAI({ apiKey });

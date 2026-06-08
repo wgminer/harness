@@ -44,6 +44,21 @@ describe("settings parsing", () => {
     expect((parsed as Record<string, unknown>).extra).toBeUndefined();
   });
 
+  it("parses chat.openToComposeOnLaunch with default true", () => {
+    expect(parseSettings({}).chat?.openToComposeOnLaunch).toBe(true);
+    expect(parseSettings({ chat: { openToComposeOnLaunch: false } }).chat?.openToComposeOnLaunch).toBe(
+      false
+    );
+  });
+
+  it("migrates legacy chat.composeFirst to openToComposeOnLaunch", () => {
+    expect(parseSettings({ chat: { composeFirst: false } }).chat?.openToComposeOnLaunch).toBe(false);
+    expect(
+      parseSettings({ chat: { composeFirst: true, openToComposeOnLaunch: false } }).chat
+        ?.openToComposeOnLaunch
+    ).toBe(false);
+  });
+
   it("normalizes transcription dictionary entries", () => {
     const parsed = parseSettings({
       transcription: {

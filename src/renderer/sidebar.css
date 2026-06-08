@@ -17,36 +17,6 @@
   min-height: 0;
 }
 
-.sidebar-list__fade-top {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 20px;
-  pointer-events: none;
-  z-index: 1;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--bg-secondary) 100%, transparent),
-    transparent
-  );
-}
-
-.sidebar-list__fade-bottom {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 20px;
-  pointer-events: none;
-  z-index: 1;
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--bg-secondary) 100%, transparent),
-    transparent
-  );
-}
-
 .sidebar-footer {
   flex-shrink: 0;
   margin-top: auto;
@@ -153,39 +123,6 @@
   transition: opacity var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
-.sidebar-item--peek-fade {
-  transition: opacity var(--motion-duration-ui) var(--motion-ease-standard);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .sidebar-item--peek-fade {
-    opacity: var(--sidebar-peek-opacity, 0.8);
-  }
-
-  .sidebar-item--peek-fade[data-peek-inert="true"] {
-    pointer-events: none;
-  }
-
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:hover) .sidebar-item--peek-fade,
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:focus-within) .sidebar-item--peek-fade {
-    opacity: 1;
-    pointer-events: auto;
-    transition-delay: var(--sidebar-peek-reveal-delay, 0ms);
-  }
-
-  .sidebar-list-wrap--peek-fade .sidebar-list-expand.sidebar-list-tail-item {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:hover) .sidebar-list-expand.sidebar-list-tail-item,
-  .sidebar-list-wrap--peek-fade:has(.sidebar-list-tail-item:focus-within) .sidebar-list-expand.sidebar-list-tail-item {
-    opacity: 1;
-    pointer-events: auto;
-    transition-delay: var(--sidebar-peek-expand-reveal-delay, 300ms);
-  }
-}
-
 .sidebar-list-expand-row {
   display: flex;
   align-items: center;
@@ -196,13 +133,13 @@
 
 /* Hide expand control until pointer hover or keyboard focus inside sidebar (touch: always visible). */
 @media (hover: hover) and (pointer: fine) {
-  .sidebar-list-wrap:not(.sidebar-list-wrap--peek-fade) .sidebar-list-expand {
+  .sidebar-list-expand {
     opacity: 0;
     pointer-events: none;
   }
 
-  .sidebar:hover .sidebar-list-wrap:not(.sidebar-list-wrap--peek-fade) .sidebar-list-expand,
-  .sidebar:focus-within .sidebar-list-wrap:not(.sidebar-list-wrap--peek-fade) .sidebar-list-expand {
+  .sidebar:hover .sidebar-list-expand,
+  .sidebar:focus-within .sidebar-list-expand {
     opacity: 1;
     pointer-events: auto;
   }
@@ -339,7 +276,7 @@
   flex-shrink: 0;
 }
 
-/* Workspace nav (Tasks / Notes / Config): list-row look — same type as .sidebar-item */
+/* Workspace nav (Tasks / Notes / System): list-row look — same type as .sidebar-item */
 .sidebar-workspace {
   display: flex;
   flex-direction: column;

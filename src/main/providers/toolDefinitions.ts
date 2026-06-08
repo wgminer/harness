@@ -1,9 +1,12 @@
+import { rigSection } from "../../shared/rigPage";
 import {
   FONT_MONO_IDS_FOR_SCHEMA,
   FONT_SIZE_OPTIONS,
   FONT_UI_IDS_FOR_SCHEMA,
   THEME_PRESET_IDS_FOR_SCHEMA,
 } from "../../shared/theme";
+
+const toolsSection = rigSection("Tools");
 
 export const TOOL_DEFINITIONS = [
   {
@@ -297,14 +300,14 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "get_weather",
       description:
-        "Get current conditions and a short daily forecast for a US ZIP code. Temperatures in °F, wind in mph, precipitation in inches. If the user does not specify a location, call this with no arguments to use their default ZIP from Config (Tools).",
+        `Get current conditions and a short daily forecast for a US ZIP code. Temperatures in °F, wind in mph, precipitation in inches. If the user does not specify a location, call this with no arguments to use their default ZIP from ${toolsSection}.`,
       parameters: {
         type: "object",
         properties: {
           zip: {
             type: "string",
             description:
-              "Optional US ZIP code (5 digits). Omit to use the user's default ZIP from Config (Tools).",
+              `Optional US ZIP code (5 digits). Omit to use the user's default ZIP from ${toolsSection}.`,
           },
           days: {
             type: "number",
@@ -319,7 +322,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "web_search",
       description:
-        "Search the web for current information via Tavily and return top results with title, URL, and snippet. Use for fresh facts, news, documentation, or anything outside the user's local data. Requires a Tavily API key in Config (Tools).",
+        `Search the web for current information via Tavily and return top results with title, URL, and snippet. Use for fresh facts, news, documentation, or anything outside the user's local data. Requires a Tavily API key in ${toolsSection}.`,
       parameters: {
         type: "object",
         properties: {
@@ -421,105 +424,6 @@ export const TOOL_DEFINITIONS = [
           id: {
             type: "string",
             description: "ID of the note to delete.",
-          },
-        },
-        required: ["id"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "clipping_list",
-      description:
-        "List saved clippings (short text snippets with tags). Optionally filter by tag.",
-      parameters: {
-        type: "object",
-        properties: {
-          tag: {
-            type: "string",
-            description: "Optional tag to filter clippings (normalized to lowercase).",
-          },
-        },
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "clipping_create",
-      description:
-        "Save a new text clipping with optional tags for organization.",
-      parameters: {
-        type: "object",
-        properties: {
-          content: {
-            type: "string",
-            description: "Text content to save as a clipping.",
-          },
-          tags: {
-            type: "array",
-            items: { type: "string" },
-            description: "Optional labels for sorting and filtering.",
-          },
-          kind: {
-            type: "string",
-            enum: ["text", "url", "image"],
-            description: "Clipping type. Only text is supported in v1.",
-          },
-        },
-        required: ["content"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "clipping_update",
-      description:
-        "Update an existing clipping's content or tags. Use tags to replace all labels, or add_tags/remove_tags to patch labels without replacing the full list.",
-      parameters: {
-        type: "object",
-        properties: {
-          id: {
-            type: "string",
-            description: "ID of the clipping to update.",
-          },
-          content: {
-            type: "string",
-            description: "New text content.",
-          },
-          tags: {
-            type: "array",
-            items: { type: "string" },
-            description: "Replace the full tag list (normalized to lowercase labels).",
-          },
-          add_tags: {
-            type: "array",
-            items: { type: "string" },
-            description: "Add one or more tags without replacing existing tags.",
-          },
-          remove_tags: {
-            type: "array",
-            items: { type: "string" },
-            description: "Remove tags by name (normalized match).",
-          },
-        },
-        required: ["id"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "clipping_delete",
-      description: "Delete a clipping by id when it is no longer needed.",
-      parameters: {
-        type: "object",
-        properties: {
-          id: {
-            type: "string",
-            description: "ID of the clipping to delete.",
           },
         },
         required: ["id"],

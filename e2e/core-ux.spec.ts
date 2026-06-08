@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { ElectronApplication, Page } from "@playwright/test";
-import { launchHarness } from "./helpers";
+import { E2E_PERSIST_FLUSH_MS, launchHarness, setOpenToComposeOnLaunch } from "./helpers";
 
 const HARNESS_E2E_REPLY = "Harness E2E assistant reply.";
 
@@ -22,12 +22,14 @@ test.afterAll(async () => {
 
 test("chat persists across relaunch", async () => {
   let win = await page();
+  await setOpenToComposeOnLaunch(win, false);
   await win.getByTestId("sidebar-new-chat").click();
   const input = win.getByTestId("chat-input");
   await input.fill("persist me");
   await win.getByTestId("chat-send").click();
   await expect(win.getByTestId("chat-messages")).toContainText(HARNESS_E2E_REPLY, { timeout: 25_000 });
 
+  await win.waitForTimeout(E2E_PERSIST_FLUSH_MS);
   await electronApp.close();
   electronApp = await launchHarness();
   win = await page();

@@ -53,7 +53,8 @@ contextBridge.exposeInMainWorld("electron", {
     getUserMemory: () => ipcRenderer.invoke("memory:getUserMemory"),
     setUserMemory: (key: string, value: string) => ipcRenderer.invoke("memory:setUserMemory", key, value),
     deleteUserMemoryKey: (key: string) => ipcRenderer.invoke("memory:deleteUserMemoryKey", key),
-    searchConversations: (query: string) => ipcRenderer.invoke("memory:searchConversations", query),
+    searchConversations: (query: string, composeFirstOnly?: boolean) =>
+      ipcRenderer.invoke("memory:searchConversations", query, composeFirstOnly),
     importFromChatGPTFolder: () =>
       ipcRenderer.invoke("memory:importFromChatGPTFolder") as Promise<{ imported: number; errors: string[] }>,
     importFromClaudeFolder: () =>
@@ -131,13 +132,6 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("tasks:update", payload),
     delete: (id: string) => ipcRenderer.invoke("tasks:delete", id),
     clearCompleted: () => ipcRenderer.invoke("tasks:clearCompleted"),
-  },
-  clippings: {
-    list: (tag?: string) => ipcRenderer.invoke("clippings:list", tag),
-    create: (content: string, tags?: string[]) => ipcRenderer.invoke("clippings:create", content, tags),
-    update: (payload: { id: string; content?: string; tags?: string[] }) =>
-      ipcRenderer.invoke("clippings:update", payload),
-    delete: (id: string) => ipcRenderer.invoke("clippings:delete", id),
   },
   chat: {
     send: (conversationId: string, userContent: string) => ipcRenderer.invoke("chat:send", conversationId, userContent),

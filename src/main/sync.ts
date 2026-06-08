@@ -16,6 +16,7 @@
  */
 
 import { BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import { existsSync } from "fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
 import { join } from "path";
@@ -431,7 +432,7 @@ async function runSyncNowInner(): Promise<SyncResult> {
     : [];
 
   if (!folderPath) {
-    next.lastError = "Pick a backup folder in Config.";
+    next.lastError = `Pick a backup folder in ${RIG_PAGE_TITLE}.`;
     await saveState(next);
     return {
       ok: false,

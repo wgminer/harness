@@ -1,6 +1,6 @@
 # Harness Mobile (iOS)
 
-Native SwiftUI chat companion for Harness desktop. It syncs through the **same iCloud (or cloud-folder) backup** as the Mac app and calls **OpenAI** with your API key—chat only, no tools or recording.
+Native SwiftUI chat companion for Harness desktop. It syncs through the **same iCloud (or cloud-folder) backup** as the Mac app and calls **OpenAI** with your API key. Chat supports **task tools** (create, update, list, delete, clear completed) with confirmation for destructive actions, **chat history search** (`memory_search_conversations`) so the agent can recall prior conversations, plus a dedicated **Tasks** view synced with desktop.
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ xcodegen generate
 | iCloud syncs the folder | Automatic (may take a minute) |
 | **Sync now** | Desktop Harness → Settings → Data |
 
-If both Mac and phone edited since the last sync, the app **auto-merges** both sides (combining conversations, messages, tasks, clippings, and settings) and pushes the result. Mergeable JSON stores are unioned; binary files that cannot be merged keep this device's copy.
+If both Mac and phone edited since the last sync, the app **auto-merges** both sides (combining conversations, messages, tasks, notes, and settings) and pushes the result. Mergeable JSON stores are unioned; binary files that cannot be merged keep this device's copy.
 
 ## Run tests
 
@@ -55,9 +55,9 @@ Unit tests assert the sync **revision hash** matches desktop (`syncBundle.test.t
 | Path | Role |
 |------|------|
 | `HarnessMobile/Sync/` | `bundle.json.gz` codec, manifest, iCloud folder bookmarks |
-| `HarnessMobile/Data/` | `conversations.json` + `messages_*.json` (desktop format) |
-| `HarnessMobile/Chat/` | OpenAI streaming, memory selection, Keychain |
-| `HarnessMobile/UI/` | SwiftUI list, thread, settings |
+| `HarnessMobile/Data/` | `conversations.json`, `messages_*.json`, `tasks.json` (desktop format) |
+| `HarnessMobile/Chat/` | OpenAI streaming, task tools, chat history search, memory selection, Keychain |
+| `HarnessMobile/UI/` | SwiftUI list, thread, tasks, settings |
 
 ## Model
 

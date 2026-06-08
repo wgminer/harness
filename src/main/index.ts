@@ -4,12 +4,11 @@ import { isHarnessE2E } from "./e2eStub";
 import { join } from "path";
 import { registerSettingsHandlers } from "./settings";
 import { registerUsageStatsHandlers } from "./usageStats";
-import { registerMemoryHandlers } from "./memory";
+import { pruneEmptyConversations, registerMemoryHandlers } from "./memory";
 import { registerChatHandlers } from "./chat";
 import { registerCustomizationHandlers } from "./customization";
 import { registerFileToolsHandlers } from "./fileTools";
 import { registerAssistantToolsHandlers } from "./assistantTools";
-import { registerClippingsHandlers } from "./clippings";
 import { registerPlansHandlers } from "./plans";
 import { registerNotesHandlers } from "./writing";
 import { registerRecordingHandlers } from "./recording";
@@ -144,7 +143,7 @@ ipcMain.handle("memory:importFromClaudeFolder", async () => {
   return importFromClaudeFolder(result.filePaths[0]);
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   nativeTheme.themeSource = "dark";
   if (
     process.platform === "darwin" &&
@@ -156,6 +155,7 @@ app.whenReady().then(() => {
   registerSettingsHandlers();
   registerUsageStatsHandlers();
   registerMemoryHandlers();
+  await pruneEmptyConversations();
   registerMemoryCompileHandlers();
   registerMemoryImportHandlers();
   registerPlansHandlers();
@@ -163,7 +163,8 @@ app.whenReady().then(() => {
   registerCustomizationHandlers();
   registerFileToolsHandlers();
   registerAssistantToolsHandlers();
-  registerClippingsHandlers();
+  const { migrateClippingsToNote } = await import("./migrateClippingsToNote");
+  await migrateClippingsToNote();
   registerNotesHandlers();
   registerRecordingHandlers();
   registerSystemHandlers();
@@ -195,7 +196,7 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
-  // Memory compile is manual-only for now (triggered from Config → Context).
+  // Memory compile is manual-only for now (triggered from System → Context).
 });
 
 app.on("will-quit", () => {

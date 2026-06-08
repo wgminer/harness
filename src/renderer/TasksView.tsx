@@ -17,46 +17,6 @@ import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { TASK_COMPLETE_MS } from "../shared/motion";
 
-const taskDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
-const taskRelativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-
-function formatDateAdded(createdAt?: number): string | null {
-  if (typeof createdAt !== "number" || !Number.isFinite(createdAt)) return null;
-  const date = new Date(createdAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return `Added ${taskDateFormatter.format(date)}`;
-}
-
-function formatTimeAgo(createdAt?: number): string | null {
-  if (typeof createdAt !== "number" || !Number.isFinite(createdAt)) return null;
-  const deltaMs = createdAt - Date.now();
-  const minuteMs = 60_000;
-  const hourMs = 60 * minuteMs;
-  const dayMs = 24 * hourMs;
-  const weekMs = 7 * dayMs;
-  const monthMs = 30 * dayMs;
-  const yearMs = 365 * dayMs;
-
-  if (Math.abs(deltaMs) < hourMs) {
-    const minutes = Math.round(deltaMs / minuteMs);
-    return `Added ${taskRelativeTimeFormatter.format(minutes, "minute")}`;
-  }
-  if (Math.abs(deltaMs) < dayMs) {
-    const hours = Math.round(deltaMs / hourMs);
-    return `Added ${taskRelativeTimeFormatter.format(hours, "hour")}`;
-  }
-  if (Math.abs(deltaMs) < weekMs) {
-    const days = Math.round(deltaMs / dayMs);
-    return `Added ${taskRelativeTimeFormatter.format(days, "day")}`;
-  }
-  if (Math.abs(deltaMs) < yearMs) {
-    const months = Math.round(deltaMs / monthMs);
-    return `Added ${taskRelativeTimeFormatter.format(months, "month")}`;
-  }
-  const years = Math.round(deltaMs / yearMs);
-  return `Added ${taskRelativeTimeFormatter.format(years, "year")}`;
-}
-
 function TagChips({ tags, className }: { tags: string[]; className?: string }) {
   if (tags.length === 0) return null;
   return (
@@ -84,8 +44,6 @@ function TaskRow({
   const displayTags = normalizeTags(t.tags);
   const status = resolveTaskStatus(t);
   const done = taskIsDone(status);
-  const dateAdded = formatDateAdded(t.createdAt);
-  const timeAgo = formatTimeAgo(t.createdAt);
   return (
     <li
       className={`tasks-row-item${completing ? " tasks-row-item--completing" : ""}`}
@@ -113,12 +71,6 @@ function TaskRow({
           disabled={completing}
         >
           <div className={`tasks-row-title ${done ? "tasks-row-title--done" : ""}`}>{t.title}</div>
-          {dateAdded ? (
-            <div className={`tasks-row-subtext ${done ? "tasks-row-subtext--done" : ""}`}>
-              <span className="tasks-row-subtext-default">{dateAdded}</span>
-              {timeAgo ? <span className="tasks-row-subtext-hover">{timeAgo}</span> : null}
-            </div>
-          ) : null}
           <TagChips tags={displayTags} className="tasks-row-tags" />
         </button>
       </div>

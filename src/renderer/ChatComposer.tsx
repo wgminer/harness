@@ -128,16 +128,6 @@ export function ChatComposer({
           rows={1}
         />
         <div className="input-actions">
-          <button
-            type="button"
-            className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={voiceState !== "idle" || sending || attachmentTranscribing}
-            title="Attach audio file"
-            aria-label="Attach audio file"
-          >
-            <Paperclip size={15} />
-          </button>
           {voiceState === "recording" && (
             <span className="voice-timer">
               {`${Math.floor(recordingMs / 60000)}:${String(Math.floor((recordingMs % 60000) / 1000)).padStart(2, "0")}.${String(recordingMs % 1000).padStart(3, "0")}`}
@@ -150,6 +140,16 @@ export function ChatComposer({
             </span>
           )}
           <div className="input-actions-spacer" />
+          <button
+            type="button"
+            className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={voiceState !== "idle" || sending || attachmentTranscribing}
+            title="Attach audio file"
+            aria-label="Attach audio file"
+          >
+            <Paperclip size={15} />
+          </button>
           {voiceState !== "processing" && (
             <button
               type="button"

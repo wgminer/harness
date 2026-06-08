@@ -17,7 +17,6 @@ import { getSettings } from "./settings";
 import { getWeatherForZip } from "./weather";
 import { searchWebTavily } from "./webSearch";
 import { executeNoteTool } from "./writing";
-import { executeClippingTool } from "./clippings";
 
 export interface TaskItem {
   id: string;
@@ -376,10 +375,6 @@ export function isAssistantToolName(name: string): boolean {
     "note_read",
     "note_save",
     "note_delete",
-    "clipping_list",
-    "clipping_create",
-    "clipping_update",
-    "clipping_delete",
   ].includes(name);
 }
 
@@ -413,11 +408,6 @@ export async function executeAssistantTool(name: string, args: Record<string, un
     case "note_save":
     case "note_delete":
       return JSON.stringify(await executeNoteTool(name, args));
-    case "clipping_list":
-    case "clipping_create":
-    case "clipping_update":
-    case "clipping_delete":
-      return JSON.stringify(await executeClippingTool(name, args));
     default:
       return JSON.stringify({ error: `Unknown assistant tool: ${name}` });
   }

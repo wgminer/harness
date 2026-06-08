@@ -89,14 +89,16 @@ final class ConversationStore: ObservableObject {
         conversationId: String,
         role: MessageRole,
         content: String,
-        model: String? = nil
+        model: String? = nil,
+        toolCalls: [ToolCallRecord]? = nil
     ) throws {
         var messages = try loadMessages(conversationId: conversationId)
         messages.append(MessageRecord(
             role: role.rawValue,
             content: content,
             timestamp: Int64(Date().timeIntervalSince1970 * 1000),
-            model: model
+            model: model,
+            toolCalls: toolCalls
         ))
         try saveMessages(conversationId: conversationId, messages: messages)
         if role == .user {

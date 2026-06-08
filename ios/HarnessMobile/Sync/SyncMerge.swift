@@ -38,7 +38,6 @@ enum SyncMerge {
     private static let mergeablePaths: Set<String> = [
         "app-state/conversations.json",
         "app-state/tasks.json",
-        "app-state/clippings.json",
         "app-state/plans.json",
         "app-state/user_memory.json",
         "settings/settings.json",
@@ -136,9 +135,6 @@ enum SyncMerge {
         if path == "app-state/tasks.json" {
             return mergeTasksJson(local: local, remote: remote)
         }
-        if path == "app-state/clippings.json" {
-            return mergeClippingsJson(local: local, remote: remote)
-        }
         if path.hasPrefix("app-state/messages_") {
             return mergeMessagesJson(local: local, remote: remote)
         }
@@ -187,7 +183,6 @@ enum SyncMerge {
         switch path {
         case "app-state/conversations.json": return "Conversation list"
         case "app-state/tasks.json": return "Tasks"
-        case "app-state/clippings.json": return "Clippings"
         case "app-state/plans.json": return "Plans"
         case "app-state/user_memory.json": return "User context"
         case "app-state/writing.md": return "Writing surface"
@@ -275,29 +270,6 @@ enum SyncMerge {
             merged[key] = tsFromValue(localValue) >= tsFromValue(remoteValue) ? localValue : remoteValue
         }
         return merged
-    }
-
-    private static func mergeClippingsJson(local: Data, remote: Data) -> Data {
-        let localState = parseJSONObject(local) ?? [:]
-        let remoteState = parseJSONObject(remote) ?? [:]
-        let localRows = localState["clippings"] as? [Any] ?? []
-        let remoteRows = remoteState["clippings"] as? [Any] ?? []
-
-        var byId: [String: [String: Any]] = [:]
-        for row in remoteRows {
-            guard let obj = row as? [String: Any], let id = obj["id"] as? String else { continue }
-            byId[id] = obj
-        }
-        for row in localRows {
-            guard let obj = row as? [String: Any], let id = obj["id"] as? String else { continue }
-            if let existing = byId[id] {
-                byId[id] = tsFromValue(obj) >= tsFromValue(existing) ? obj : existing
-            } else {
-                byId[id] = obj
-            }
-        }
-        let clippings = byId.values.sorted { tsFromValue($0) > tsFromValue($1) }
-        return encodeJSON(["clippings": clippings])
     }
 
     private static func mergeTasksJson(local: Data, remote: Data) -> Data {

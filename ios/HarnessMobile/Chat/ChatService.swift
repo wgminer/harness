@@ -6,10 +6,19 @@ final class ChatService: ObservableObject {
     @Published var errorMessage: String?
 
     private let store: ConversationStore
+    private let tasksStore: TasksStore
+    let gatedToolCoordinator: GatedToolCoordinator
+    private var taskToolExecutor: TaskToolExecutor?
     private var client: OpenAIClient?
 
-    init(store: ConversationStore) {
+    init(store: ConversationStore, tasksStore: TasksStore) {
         self.store = store
+        self.tasksStore = tasksStore
+        self.gatedToolCoordinator = GatedToolCoordinator()
+        self.taskToolExecutor = TaskToolExecutor(
+            tasksStore: tasksStore,
+            gatedToolCoordinator: gatedToolCoordinator
+        )
     }
 
     func refreshClient() {
@@ -32,6 +41,7 @@ final class ChatService: ObservableObject {
         [CORE_INSTRUCTIONS]
         You are a helpful assistant in Harness Mobile (iOS).
         Prefer concise, practical, high-signal responses.
+        Available tools: task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_search_conversations (search all prior chats for a free-text query when the user asks about past conversations or needs recall across threads). Call them when appropriate.
         """
         if !memoryBlock.isEmpty {
             system += "\n\n" + memoryBlock
@@ -52,9 +62,11 @@ final class ChatService: ObservableObject {
     func send(
         conversationId: String,
         userContent: String,
-        onStreamChunk: @escaping (String) -> Void
+        onStreamChunk: @escaping (String) -> Void,
+        onToolCall: @escaping (ToolCallRecord) -> Void
     ) async throws {
         guard let client else { throw OpenAIError.missingAPIKey }
+        guard let taskToolExecutor else { throw OpenAIError.missingAPIKey }
         let trimmed = userContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -65,14 +77,59 @@ final class ChatService: ObservableObject {
         try store.appendMessage(conversationId: conversationId, role: .user, content: trimmed)
         let apiMessages = try buildMessages(conversationId: conversationId)
 
-        let full = try await client.streamChat(messages: apiMessages, onChunk: onStreamChunk)
+        let result = try await client.streamChatWithTools(
+            messages: apiMessages,
+            tools: AssistantToolDefinitions.openAITools,
+            executeTool: { [weak self] name, args in
+                guard let self else {
+                    return #"{"error":"Chat unavailable"}"#
+                }
+                if TaskToolDefinitions.gatedToolNames.contains(name) {
+                    onToolCall(ToolCallRecord(toolName: name, payload: [
+                        "pending": true,
+                        "tool": name,
+                        "args": args,
+                    ]))
+                }
+                let toolResult: String
+                if TaskToolDefinitions.toolNames.contains(name) {
+                    guard let taskToolExecutor = self.taskToolExecutor else {
+                        return #"{"error":"Chat unavailable"}"#
+                    }
+                    toolResult = try await taskToolExecutor.execute(name: name, args: args)
+                } else if ChatToolDefinitions.toolNames.contains(name) {
+                    toolResult = try AssistantTools.execute(name: name, args: args, store: self.store)
+                } else {
+                    toolResult = #"{"error":"Unknown tool: \(name)"}"#
+                }
+                if AssistantToolDefinitions.trackedToolNames.contains(name),
+                   let payload = self.parseJSONObject(toolResult) {
+                    onToolCall(ToolCallRecord(toolName: name, payload: payload))
+                }
+                return toolResult
+            },
+            onChunk: onStreamChunk
+        )
+
         try store.appendMessage(
             conversationId: conversationId,
             role: .assistant,
-            content: full,
-            model: OpenAIModel.chat
+            content: ChatTemporalContext.stripSentAtPrefix(result.content),
+            model: OpenAIModel.chat,
+            toolCalls: result.toolCalls.isEmpty ? nil : result.toolCalls
         )
         scheduleTitleRefinement(conversationId: conversationId)
+    }
+
+    func resolveGatedTool(_ action: GatedToolAction) {
+        gatedToolCoordinator.resolve(action)
+    }
+
+    private func parseJSONObject(_ raw: String) -> [String: Any]? {
+        guard let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return json
     }
 
     func scheduleTitleRefinement(conversationId: String) {
@@ -112,6 +169,7 @@ final class ChatService: ObservableObject {
 
     func stop() {
         client?.cancel()
+        gatedToolCoordinator.cancelPending()
         isStreaming = false
     }
 }

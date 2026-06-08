@@ -86,9 +86,14 @@ extension Theme {
             configuration.label
                 .markdownMargin(top: 0, bottom: 12)
         }
+        .list { configuration in
+            configuration.label
+                .markdownMargin(top: 0, bottom: 12)
+        }
         .listItem { configuration in
             configuration.label
-                .markdownMargin(top: 2, bottom: 2)
+                .relativeLineSpacing(.em(0.08))
+                .markdownMargin(top: 0, bottom: 0)
         }
         .codeBlock { configuration in
             ScrollView(.horizontal, showsIndicators: false) {

@@ -2,7 +2,6 @@ import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./typ
 import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
 import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSummary } from "./writing";
-import type { ClippingItem, ClippingsPayload } from "./clippings";
 import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
@@ -23,8 +22,6 @@ export interface TasksPayload {
   affectedIds?: string[];
   error?: string;
 }
-
-export type { ClippingItem, ClippingsPayload };
 
 export interface ElectronAPI {
   app: {
@@ -63,6 +60,7 @@ export interface ElectronAPI {
         createdAt: number;
         sessionKind?: "dictation" | "chat";
         hasAssistantReply?: boolean;
+        hasMessages?: boolean;
       }[]
     >;
     deleteConversation: (id: string) => Promise<void>;
@@ -73,7 +71,7 @@ export interface ElectronAPI {
     getUserMemory: () => Promise<Record<string, string>>;
     setUserMemory: (key: string, value: string) => Promise<void>;
     deleteUserMemoryKey: (key: string) => Promise<void>;
-    searchConversations: (query: string) => Promise<SearchResult[]>;
+    searchConversations: (query: string, composeFirstOnly?: boolean) => Promise<SearchResult[]>;
     importFromChatGPTFolder: () => Promise<{ imported: number; errors: string[] }>;
     importFromClaudeFolder: () => Promise<{ imported: number; errors: string[] }>;
     /** Distill user-memory facts from a pasted export produced by another assistant. */
@@ -138,18 +136,6 @@ export interface ElectronAPI {
     }) => Promise<TasksPayload>;
     delete: (id: string) => Promise<TasksPayload>;
     clearCompleted: () => Promise<TasksPayload>;
-  };
-  clippings: {
-    list: (tag?: string) => Promise<ClippingsPayload>;
-    create: (content: string, tags?: string[]) => Promise<ClippingsPayload>;
-    update: (payload: {
-      id: string;
-      content?: string;
-      tags?: string[];
-      add_tags?: string[];
-      remove_tags?: string[];
-    }) => Promise<ClippingsPayload>;
-    delete: (id: string) => Promise<ClippingsPayload>;
   };
   chat: {
     send: (conversationId: string, content: string) => Promise<void>;
