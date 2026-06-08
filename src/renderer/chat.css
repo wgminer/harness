@@ -13,6 +13,58 @@
   width: 100%;
 }
 
+/* Compose-first landing: centered quote + composer, no chat header. */
+.new-chat-pane {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.new-chat-center {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-4);
+  box-sizing: border-box;
+}
+
+.new-chat-quote {
+  margin: 0;
+  max-width: var(--content-width);
+  text-align: center;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.new-chat-composer {
+  width: 100%;
+  max-width: var(--content-width);
+}
+
+/* Centered compose-first composer: rounded on all corners + visible border (not bottom-docked). */
+.new-chat-composer .chat-composer-inner {
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in oklab, var(--border-light) 82%, transparent);
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--fg) 10%, transparent),
+    0 var(--space-2) var(--space-6) color-mix(in srgb, #000 14%, transparent);
+}
+
+.new-chat-composer .voice-error {
+  margin-bottom: var(--space-2);
+  text-align: center;
+}
+
 .chat-scroll {
   flex: 1;
   min-height: 0;
@@ -225,6 +277,80 @@
 
 .message-block .content li {
   margin: var(--space-1) 0;
+}
+
+/* Assistant lists: GFM wraps item text in <p>, which doubles vertical rhythm. */
+.message-block.assistant .content p {
+  margin-bottom: var(--space-2);
+}
+
+.message-block.assistant .content p:has(+ ul),
+.message-block.assistant .content p:has(+ ol) {
+  margin-bottom: var(--space-1);
+}
+
+.message-block.assistant .content ul,
+.message-block.assistant .content ol {
+  margin: 0 0 var(--space-3);
+}
+
+.message-block.assistant .content li {
+  margin: 0;
+}
+
+.message-block.assistant .content li + li {
+  margin-top: 2px;
+}
+
+/* Nested lists: closed <details> wrappers (see rehypeNestedListDetails.ts). */
+.message-block.assistant .content .md-nested-list {
+  margin: var(--space-1) 0 0;
+}
+
+.message-block.assistant .content .md-nested-list__summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-size: var(--font-size-caption);
+  color: var(--fg-muted);
+  padding: 0;
+}
+
+.message-block.assistant .content .md-nested-list__summary::-webkit-details-marker {
+  display: none;
+}
+
+.message-block.assistant .content .md-nested-list__summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: var(--space-1);
+  font-size: 10px;
+  transition: transform var(--motion-duration-ui) ease;
+}
+
+.message-block.assistant .content .md-nested-list__summary::after {
+  content: "Show sub-items";
+}
+
+.message-block.assistant .content .md-nested-list[open] > .md-nested-list__summary::before {
+  transform: rotate(90deg);
+}
+
+.message-block.assistant .content .md-nested-list[open] > .md-nested-list__summary::after {
+  content: "Hide sub-items";
+}
+
+.message-block.assistant .content .md-nested-list > ul,
+.message-block.assistant .content .md-nested-list > ol {
+  margin: var(--space-1) 0 0;
+}
+
+.message-block.assistant .content li > p {
+  margin: 0;
+}
+
+.message-block.assistant .content li > p + p {
+  margin-top: var(--space-1);
 }
 
 .message-block .content code {
@@ -693,21 +819,24 @@
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
 }
 
-.input-actions-stop {
-  margin-left: auto;
-}
-
 .input-actions-spacer {
   margin-left: auto;
 }
 
 /* Voice recording controls */
 .voice-btn {
+  background: transparent;
+  box-shadow: none;
   color: var(--fg);
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
     box-shadow var(--motion-duration-ui) var(--motion-ease-standard),
     background var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.voice-btn:hover:not(:disabled) {
+  background: var(--sidebar-control-hover-bg);
+  box-shadow: var(--btn-shadow-hover);
 }
 
 .voice-btn--recording {

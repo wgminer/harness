@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   conversationSidebarIconKind,
+  isSidebarVisibleConversation,
   isTimePlaceholderTitle,
 } from "./conversationSession";
 
@@ -11,6 +12,13 @@ describe("conversationSession", () => {
     expect(isTimePlaceholderTitle("New chat @ 3:45 PM")).toBe(true);
     expect(isTimePlaceholderTitle("Empty chat @ 3:45 PM")).toBe(true);
     expect(isTimePlaceholderTitle("Weekly planning")).toBe(false);
+  });
+
+  it("hides message-less conversations from compose-first sidebar", () => {
+    expect(isSidebarVisibleConversation({ id: "a", title: null, createdAt: 1 })).toBe(false);
+    expect(
+      isSidebarVisibleConversation({ id: "b", title: "Hi", createdAt: 1, hasMessages: true })
+    ).toBe(true);
   });
 
   it("picks sidebar icon from session kind and assistant replies", () => {

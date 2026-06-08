@@ -11,11 +11,6 @@ import type { LayoutOptions, Settings, TranscriptDictionaryEntry } from "../shar
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import { EMPTY_USAGE_STATS } from "../shared/usageStats";
 import { DATA_STORAGE_DIAGRAM } from "../shared/dataStorageLayout";
-import {
-  OPENAI_CHAT_MODEL,
-  OPENAI_TITLE_MODEL,
-  OPENAI_TRANSCRIPT_CLEANUP_MODEL,
-} from "../shared/openaiModels";
 import type { SyncFolderSuggestion, SyncStatus } from "../shared/sync";
 import { syncResultChangedLocalData } from "../shared/sync";
 import {
@@ -73,7 +68,7 @@ const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: "general", label: "General" },
   { id: "tools", label: "Tools" },
   { id: "voice", label: "Voice" },
-  { id: "notes", label: "Notes" },
+  { id: "notes", label: "Editor" },
   { id: "memory", label: RIG_CONTEXT_TAB_LABEL },
   { id: "data", label: "Data" },
 ];
@@ -107,6 +102,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
   const [templateContentDraft, setTemplateContentDraft] = useState("");
 
   const [autoSend, setAutoSend] = useState(true);
+  const [openToComposeOnLaunch, setOpenToComposeOnLaunch] = useState(D.chat!.openToComposeOnLaunch);
   const [weatherZip, setWeatherZip] = useState(D.weather!.defaultZip);
   const [tavilyApiKey, setTavilyApiKey] = useState(D.search!.tavilyApiKey);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -195,6 +191,11 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
         const S = s as Settings;
         setApiKey(S.openai?.apiKey ?? D.openai!.apiKey);
         setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
+        setOpenToComposeOnLaunch(
+          S.chat?.openToComposeOnLaunch ??
+            (S.chat as { composeFirst?: boolean } | undefined)?.composeFirst ??
+            D.chat!.openToComposeOnLaunch
+        );
         setCleanupEnabled(S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false);
         setCleanupPrompt(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "");
         setCleanupPromptDraft(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "");
@@ -260,6 +261,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
       await window.electron.settings.set({
         openai: { apiKey },
         recording: { autoSend },
+        chat: { openToComposeOnLaunch },
         transcription: {
           cleanup: {
             enabled: cleanupEnabled,
@@ -291,7 +293,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
         hideToastRef.current = null;
       }
     };
-  }, [apiKey, autoSend, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip, tavilyApiKey, memoryInjectionStrategy]);
+  }, [apiKey, autoSend, openToComposeOnLaunch, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip, tavilyApiKey, memoryInjectionStrategy]);
 
   const openCleanupPromptModal = () => {
     setCleanupPromptDraft(cleanupPrompt);
@@ -746,10 +748,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
             role="tabpanel"
             aria-labelledby="settings-tab-general"
           >
-            <SettingsGroup
-              title="Chat model"
-              description="Paste your key from OpenAI. Chat replies, conversation titles, and transcript cleanup all use it; voice transcription runs on your Mac."
-            >
+            <SettingsGroup title="OpenAI" description="API key for chat. Voice transcription runs on your Mac.">
               <SettingsField label="API key" htmlFor="settings-api-key">
                 <div className="settings-api-key-row">
                   <input
@@ -775,21 +774,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                   </button>
                 </div>
               </SettingsField>
-              <dl className="usage-stats settings-model-list" aria-label="Models in use">
-                <div className="usage-stats__row">
-                  <dt>Chat replies</dt>
-                  <dd><code>{OPENAI_CHAT_MODEL}</code></dd>
-                </div>
-                <div className="usage-stats__row">
-                  <dt>Conversation titles</dt>
-                  <dd><code>{OPENAI_TITLE_MODEL}</code></dd>
-                </div>
-                <div className="usage-stats__row">
-                  <dt>Transcript cleanup</dt>
-                  <dd><code>{OPENAI_TRANSCRIPT_CLEANUP_MODEL}</code></dd>
-                </div>
-              </dl>
-              <dl className="usage-stats settings-model-spend" aria-label="OpenAI estimated spend this month">
+              <dl className="usage-stats" aria-label="OpenAI usage this month">
                 <div className="usage-stats__row usage-stats__row--emph">
                   <dt>Estimated spend ({usageStats.openaiThisMonth.monthLabel})</dt>
                   <dd>
@@ -802,31 +787,17 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                   </dd>
                 </div>
                 <div className="usage-stats__row">
-                  <dt>Tokens (prompt / cached / completion)</dt>
+                  <dt>Tokens (input / output)</dt>
                   <dd>
-                    {usageStats.openaiThisMonth.promptTokens.toLocaleString()}
-                    {" / "}
-                    {usageStats.openaiThisMonth.cachedPromptTokens.toLocaleString()}
+                    {(
+                      usageStats.openaiThisMonth.promptTokens +
+                      usageStats.openaiThisMonth.cachedPromptTokens
+                    ).toLocaleString()}
                     {" / "}
                     {usageStats.openaiThisMonth.completionTokens.toLocaleString()}
                   </dd>
                 </div>
               </dl>
-              <SettingsHint flush>
-                Harness usage this month only. Estimated from API token counts and OpenAI Standard list
-                prices; may differ from your invoice.
-              </SettingsHint>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => void window.electron.usage.openOpenAIDashboard()}
-              >
-                View usage on OpenAI
-                <ExternalLink size={14} aria-hidden />
-              </button>
-              <SettingsHint flush>
-                Models are pinned in this build — there&apos;s no in-app picker.
-              </SettingsHint>
             </SettingsGroup>
 
             <SettingsGroup
@@ -882,6 +853,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                   </div>
                   <div className="settings-playground-block" aria-label="Custom colors">
                     <h4 className="settings-playground-block__title">Custom colors</h4>
+                    <div className="settings-playground-colors">
                       <div className="settings-playground-field">
                         <label htmlFor="theme-bg">Background color</label>
                         <div className="settings-playground-color-row">
@@ -960,14 +932,17 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                           />
                         </div>
                       </div>
+                    </div>
                   </div>
                   <div className="settings-playground-block" aria-label="Typography">
                     <h4 className="settings-playground-block__title">Typography</h4>
                     <p className="settings-playground-block__lead">
                       UI and code fonts load with the app (Google Fonts). Independent of color themes above.
                     </p>
-                      <div className="settings-playground-field">
-                        <label htmlFor="theme-font">UI font</label>
+                    <div className="settings-playground-typography">
+                      <div className="settings-playground-typography-fonts">
+                        <div className="settings-playground-field">
+                          <label htmlFor="theme-font">UI font</label>
                         <select
                           id="theme-font"
                           value={themeForm.font}
@@ -997,6 +972,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                             </option>
                           ))}
                         </select>
+                      </div>
                       </div>
                       <div className="settings-playground-field">
                         <label id="theme-font-size-label" htmlFor="theme-font-size">
@@ -1128,6 +1104,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                           </div>
                         </div>
                       </div>
+                    </div>
                   </div>
                   {themeApplyError && (
                     <p className="settings-playground-status settings-playground-status--err" role="alert">
@@ -1136,6 +1113,19 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                   )}
                 </div>
               </div>
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Launch"
+              description="When open to compose is on, the app always opens to the centered compose screen. When off, the app restores your last view and conversation."
+            >
+              <SettingsSwitch
+                id="openToComposeOnLaunchToggle"
+                testId="settings-open-to-compose-on-launch"
+                label="Open to compose on launch"
+                checked={openToComposeOnLaunch}
+                onChange={(e) => setOpenToComposeOnLaunch(e.target.checked)}
+              />
             </SettingsGroup>
 
             <SettingsGroup
@@ -1384,8 +1374,8 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
             aria-labelledby="settings-tab-notes"
           >
             <SettingsGroup
-              title="Notes templates"
-              description="Edit the three note templates shown on the Notes overview page."
+              title="Editor templates"
+              description="Edit the three note templates shown on the Editor overview page."
             >
               <div className="settings-entry-list">
                 {noteTemplates.map((template) => (

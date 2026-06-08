@@ -1,5 +1,5 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
-import { Check, Copy, Loader2, NotebookText } from "lucide-react";
+import { Check, Copy, Loader2, SquarePen } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkDirective from "remark-directive";
@@ -9,6 +9,7 @@ import {
   directiveComponents,
   remarkDirectiveToHast,
 } from "./markdownDirectives";
+import { rehypeNestedListDetails } from "./rehypeNestedListDetails";
 
 export interface ToolCallDisplay {
   toolName: string;
@@ -63,7 +64,13 @@ function extractCodeText(node: ReactNode): string {
  * We also intercept ```mermaid fenced blocks at the `<pre>` level and route them
  * to a lazy-loaded mermaid renderer; everything else flows through highlight.js.
  */
-export function MarkdownContent({ content }: { content: string }) {
+export function MarkdownContent({
+  content,
+  collapsibleNestedLists = false,
+}: {
+  content: string;
+  collapsibleNestedLists?: boolean;
+}) {
   const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
     <p {...props}>{children}</p>
   );
@@ -94,7 +101,10 @@ export function MarkdownContent({ content }: { content: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
-      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+      rehypePlugins={[
+        [rehypeHighlight, { detect: false, ignoreMissing: true }],
+        ...(collapsibleNestedLists ? [rehypeNestedListDetails] : []),
+      ]}
       components={components}
     >
       {content}
@@ -140,10 +150,6 @@ export function toolLabel(name: string): string {
     note_read: "Read note",
     note_save: "Saved note",
     note_delete: "Deleted note",
-    clipping_list: "Listed clippings",
-    clipping_create: "Saved clipping",
-    clipping_update: "Updated clipping",
-    clipping_delete: "Deleted clipping",
     get_theme: "Read theme",
     update_theme: "Updated theme",
     apply_theme_preset: "Applied theme preset",
@@ -208,10 +214,10 @@ export function SaveToNotesButton({
       className="message-footer-icon-btn"
       onClick={() => void onSaveToNotes(messageId, content)}
       disabled={!content.trim()}
-      title={justSaved ? "Added to notes" : "Add to notes"}
-      aria-label={justSaved ? "Added to notes" : "Add message to notes"}
+      title={justSaved ? "Added to editor" : "Add to editor"}
+      aria-label={justSaved ? "Added to editor" : "Add message to editor"}
     >
-      {justSaved ? <Check size={12} /> : <NotebookText size={12} />}
+      {justSaved ? <Check size={12} /> : <SquarePen size={12} />}
     </button>
   );
 }

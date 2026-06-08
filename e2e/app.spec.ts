@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { ElectronApplication, Page } from "@playwright/test";
-import { launchHarness } from "./helpers";
+import { E2E_PERSIST_FLUSH_MS, launchHarness, setOpenToComposeOnLaunch } from "./helpers";
 
 const HARNESS_E2E_REPLY = "Harness E2E assistant reply.";
 const HARNESS_E2E_TRANSCRIBE = "Harness E2E transcribed text.";
@@ -62,6 +62,40 @@ test("e2e inject Fn tap-toggle delivers transcribed text to chat", async () => {
     base
   );
   await expect(win.getByTestId("chat-messages")).toContainText(HARNESS_E2E_TRANSCRIBE, { timeout: 25_000 });
+});
+
+test("open to compose on launch shows splash instead of last thread", async () => {
+  const win = await page();
+  await win.getByTestId("sidebar-new-chat").click();
+  await win.getByTestId("chat-input").fill("launch splash marker");
+  await win.getByTestId("chat-send").click();
+  await expect(win.getByTestId("chat-messages")).toContainText(HARNESS_E2E_REPLY, { timeout: 25_000 });
+
+  await electronApp.close();
+  electronApp = await launchHarness();
+  const relaunched = await page();
+  await expect(relaunched.getByTestId("chat-composer")).toBeVisible({ timeout: 30_000 });
+  await expect(relaunched.locator('[data-testid="chat-messages"]')).toHaveCount(0);
+});
+
+test("restore session on launch reopens last conversation", async () => {
+  const win = await page();
+  await setOpenToComposeOnLaunch(win, false);
+
+  await win.getByTestId("sidebar-new-chat").click();
+  await win.getByTestId("chat-input").fill("restore session marker");
+  await win.getByTestId("chat-send").click();
+  await expect(win.getByTestId("chat-messages")).toContainText("restore session marker", {
+    timeout: 25_000,
+  });
+
+  await win.waitForTimeout(E2E_PERSIST_FLUSH_MS);
+  await electronApp.close();
+  electronApp = await launchHarness();
+  const relaunched = await page();
+  await expect(relaunched.getByTestId("chat-messages")).toContainText("restore session marker", {
+    timeout: 30_000,
+  });
 });
 
 test("settings auto-send toggle persists", async () => {

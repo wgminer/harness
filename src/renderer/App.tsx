@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChatView } from "./ChatView";
 import { SettingsView } from "./SettingsView";
 import { TasksView } from "./TasksView";
-import { ClippingsView } from "./ClippingsView";
 import { NotesView } from "./WritingSurfaceView";
 import { Sidebar } from "./Sidebar";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
-import { DEFAULT_LAYOUT, type LayoutOptions, type Plan } from "../shared/types";
+import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan } from "../shared/types";
 import type {} from "../shared/electronAPI";
+import { isSidebarVisibleConversation } from "../shared/conversationSession";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
 import type { Conversation, View } from "./sidebarUtils";
 import { useViewportLayout } from "./useViewportLayout";
@@ -50,42 +50,51 @@ export default function App() {
   const conversationIdRef = useRef(conversationId);
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
 
+  const resolveConversationId = useCallback(
+    (list: Conversation[], preferredId: string | null): string | null => {
+      if (list.length === 0) return null;
+      if (preferredId) {
+        const preferred = list.find((c) => c.id === preferredId);
+        if (preferred && isSidebarVisibleConversation(preferred)) return preferredId;
+      }
+      return list.find(isSidebarVisibleConversation)?.id ?? null;
+    },
+    []
+  );
+
   const loadPlans = useCallback(async () => {
     const list = await window.electron.plans.list();
     setPlans(list);
   }, []);
 
   const loadConversations = useCallback(async () => {
-    const [list, session] = await Promise.all([
+    const [list, session, settings] = await Promise.all([
       window.electron.memory.listConversations(),
       window.electron.uiSession.get(),
+      window.electron.settings.get(),
     ]);
+    const openToCompose =
+      settings.chat?.openToComposeOnLaunch ?? DEFAULT_SETTINGS.chat!.openToComposeOnLaunch;
     setConversations(list);
-    const preferredId = session.conversationId;
-    if (list.length === 0) {
+    if (openToCompose) {
+      setView("chat");
       setConversationId(null);
-    } else if (preferredId && list.some((c) => c.id === preferredId)) {
-      setConversationId(preferredId);
     } else {
-      setConversationId(list[0].id);
-    }
-    setView(session.view);
-    if (session.notesOpenNoteId) {
-      setPendingOpenNoteId(session.notesOpenNoteId);
+      setView(session.view);
+      setConversationId(resolveConversationId(list, session.conversationId));
+      if (session.notesOpenNoteId) {
+        setPendingOpenNoteId(session.notesOpenNoteId);
+      }
     }
     setUiSessionReady(true);
-  }, []);
+  }, [resolveConversationId]);
 
   /** Reload sidebar list after sync/import without resetting view from session. */
   const refreshConversations = useCallback(async () => {
     const list = await window.electron.memory.listConversations();
     setConversations(list);
-    setConversationId((current) => {
-      if (list.length === 0) return null;
-      if (current && list.some((c) => c.id === current)) return current;
-      return list[0].id;
-    });
-  }, []);
+    setConversationId((current) => resolveConversationId(list, current));
+  }, [resolveConversationId]);
 
   useEffect(() => {
     void loadConversations();
@@ -105,10 +114,10 @@ export default function App() {
 
   useEffect(() => {
     const unsub = window.electron.chat.onConversationTitleUpdated(() => {
-      void loadConversations();
+      void refreshConversations();
     });
     return unsub;
-  }, [loadConversations]);
+  }, [refreshConversations]);
 
   const bumpTitleGen = useCallback((id: string, delta: 1 | -1) => {
     setTitleGenInFlight((prev) => {
@@ -172,14 +181,22 @@ export default function App() {
   }, []);
 
   const createNew = useCallback(async () => {
-    const id = await window.electron.memory.createConversation();
-    setConversationId(id);
-    setConversations((prev) => [
-      { id, title: null, createdAt: Date.now(), sessionKind: "chat" },
-      ...prev,
-    ]);
+    setConversationId(null);
     setView("chat");
     setFocusComposerNonce((n) => n + 1);
+  }, []);
+
+  const handleAssignConversationId = useCallback((id: string) => {
+    setConversationId(id);
+    setConversations((prev) => {
+      if (prev.some((c) => c.id === id)) {
+        return prev.map((c) => (c.id === id ? { ...c, hasMessages: true } : c));
+      }
+      return [
+        { id, title: null, createdAt: Date.now(), sessionKind: "chat", hasMessages: true },
+        ...prev,
+      ];
+    });
   }, []);
 
   useEffect(() => {
@@ -202,7 +219,7 @@ export default function App() {
     const remaining = conversations.filter((c) => c.id !== id);
     setConversations(remaining);
     if (conversationId === id) {
-      setConversationId(remaining[0]?.id ?? null);
+      setConversationId(remaining.find(isSidebarVisibleConversation)?.id ?? null);
     }
   }, [conversationId, conversations]);
 
@@ -250,14 +267,10 @@ export default function App() {
           const text = result.text.trim();
           if (!text) return;
           if (wasFocused) {
-            let targetId = conversationIdRef.current;
-            if (!targetId) {
-              targetId = await window.electron.memory.createConversation();
-              setConversations((prev) => [{ id: targetId!, title: null, createdAt: Date.now() }, ...prev]);
-              setConversationId(targetId);
-              setFocusComposerNonce((n) => n + 1);
-            }
             setView("chat");
+            if (!conversationIdRef.current) {
+              setConversationId(null);
+            }
             setFocusComposerNonce((n) => n + 1);
             setPendingHotkeyDraftOnly(false);
             setPendingHotkeyText(text);
@@ -267,7 +280,13 @@ export default function App() {
             await window.electron.memory.appendMessage(newId, "user", text, { timestamp: Date.now() });
             const voiceTitle = await window.electron.memory.markVoiceDictationSession(newId);
             setConversations((prev) => [
-              { id: newId, title: voiceTitle, createdAt: Date.now(), sessionKind: "dictation" },
+              {
+                id: newId,
+                title: voiceTitle,
+                createdAt: Date.now(),
+                sessionKind: "dictation",
+                hasMessages: true,
+              },
               ...prev,
             ]);
             setConversationId(newId);
@@ -300,6 +319,11 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const sidebarConversations = useMemo(
+    () => conversations.filter(isSidebarVisibleConversation),
+    [conversations]
+  );
+
   const activeChatConversation = useMemo(
     () => (conversationId ? conversations.find((c) => c.id === conversationId) ?? null : null),
     [conversations, conversationId]
@@ -312,11 +336,12 @@ export default function App() {
   // Suppress unused variable warning for plans/expandedPlanId until plan UI is added
   void plans;
   void expandedPlanId;
+  void presetSmall;
 
   return (
     <div className="app" data-sidebar={layout.sidebar}>
       <Sidebar
-        conversations={conversations}
+        conversations={sidebarConversations}
         conversationId={conversationId}
         view={view}
         onViewChange={setView}
@@ -333,39 +358,39 @@ export default function App() {
       <main className="main">
         {(view === "chat" || activeChatProcessing) && (
           <div className="main-chat-host" hidden={view !== "chat"}>
-          <ChatView
-            key={conversationId ?? "none"}
-            conversationId={conversationId}
-            displayTitle={
-              activeChatConversation
-                ? conversationDisplayTitle(
-                    activeChatConversation.title,
-                    activeChatConversation.createdAt
-                  )
-                : ""
-            }
-            titlePending={
-              activeChatConversation != null &&
-              isConversationTitlePending(
-                activeChatConversation.title,
-                (titleGenInFlight[activeChatConversation.id] ?? 0) > 0
-              )
-            }
-            onConversationCreated={loadConversations}
-            pendingHotkeyText={pendingHotkeyText}
-            pendingHotkeyDraftOnly={pendingHotkeyDraftOnly}
-            onPendingHotkeyTextConsumed={() => {
-              setPendingHotkeyText(null);
-              setPendingHotkeyDraftOnly(false);
-            }}
-            onChatActivityChange={handleChatActivityChange}
-            focusComposerNonce={focusComposerNonce}
-            onWindowSizeToggle={handleWindowSizeToggle}
-            onOpenNotesView={(noteId) => {
-              setPendingOpenNoteId(noteId);
-              setView("notes");
-            }}
-          />
+            <ChatView
+              conversationId={conversationId}
+              displayTitle={
+                activeChatConversation
+                  ? conversationDisplayTitle(
+                      activeChatConversation.title,
+                      activeChatConversation.createdAt
+                    )
+                  : ""
+              }
+              titlePending={
+                activeChatConversation != null &&
+                isConversationTitlePending(
+                  activeChatConversation.title,
+                  (titleGenInFlight[activeChatConversation.id] ?? 0) > 0
+                )
+              }
+              onConversationCreated={refreshConversations}
+              onAssignConversationId={handleAssignConversationId}
+              pendingHotkeyText={pendingHotkeyText}
+              pendingHotkeyDraftOnly={pendingHotkeyDraftOnly}
+              onPendingHotkeyTextConsumed={() => {
+                setPendingHotkeyText(null);
+                setPendingHotkeyDraftOnly(false);
+              }}
+              onChatActivityChange={handleChatActivityChange}
+              focusComposerNonce={focusComposerNonce}
+              onWindowSizeToggle={handleWindowSizeToggle}
+              onOpenNotesView={(noteId) => {
+                setPendingOpenNoteId(noteId);
+                setView("notes");
+              }}
+            />
           </div>
         )}
         {view === "settings" && (
@@ -375,7 +400,6 @@ export default function App() {
           />
         )}
         {view === "tasks" && <TasksView />}
-        {view === "clippings" && <ClippingsView />}
         {view === "notes" && (
           <NotesView
             initialOpenNoteId={pendingOpenNoteId}

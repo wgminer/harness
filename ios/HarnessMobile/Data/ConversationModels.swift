@@ -12,6 +12,21 @@ struct MessageRecord: Codable, Identifiable, Equatable {
     let content: String
     let timestamp: Int64?
     let model: String?
+    let toolCalls: [ToolCallRecord]?
+
+    init(
+        role: String,
+        content: String,
+        timestamp: Int64?,
+        model: String?,
+        toolCalls: [ToolCallRecord]? = nil
+    ) {
+        self.role = role
+        self.content = content
+        self.timestamp = timestamp
+        self.model = model
+        self.toolCalls = toolCalls
+    }
 
     var messageRole: MessageRole {
         MessageRole(rawValue: role) ?? .user

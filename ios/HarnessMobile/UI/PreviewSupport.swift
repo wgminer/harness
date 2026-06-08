@@ -14,10 +14,11 @@ enum PreviewSupport {
         isSyncing: Bool = false,
         hasLocalEdits: Bool = false,
         needsBackupFolder: Bool = false,
-        needsAPIKey: Bool = false
+        needsAPIKey: Bool = false,
+        withTasks: Bool = false
     ) -> AppModel {
         let app = AppModel(localDataSubpath: "preview-\(UUID().uuidString)")
-        try? seedSampleData(app: app)
+        try? seedSampleData(app: app, withTasks: withTasks)
         if let syncStatus {
             app.syncStatus = syncStatus
         }
@@ -47,7 +48,7 @@ enum PreviewSupport {
         return app
     }
 
-    private static func seedSampleData(app: AppModel) throws {
+    private static func seedSampleData(app: AppModel, withTasks: Bool = false) throws {
         try LocalDataLayout.ensureDirectories(at: app.localDataDir)
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         let yesterday = now - 86_400_000
@@ -109,14 +110,43 @@ enum PreviewSupport {
         ]
         try app.store.saveMessages(conversationId: sampleConversationId, messages: threadMessages)
         try app.store.saveMessages(conversationId: secondConversationId, messages: [])
-        _ = try app.clippingsStore.create(content: "Sample clipping for previews", tags: ["preview", "sample"])
-        _ = try app.clippingsStore.create(
-            content: "Waste no more time arguing what a good man should be.",
-            tags: ["quotes"]
-        )
+        try seedClippingsNote(app: app)
+        if withTasks {
+            try seedTasks(app: app)
+        }
         app.store.clearLocalEditsFlag()
         try app.store.reload()
-        try app.clippingsStore.reload()
+        try app.tasksStore.reload()
+    }
+
+    private static func seedTasks(app: AppModel) throws {
+        _ = try app.tasksStore.create(title: "Review mobile tasks UI", tags: ["ios"])
+        _ = try app.tasksStore.create(title: "Ship parity with desktop", tags: ["sync"])
+        app.store.clearLocalEditsFlag()
+    }
+
+    private static func seedClippingsNote(app: AppModel) throws {
+        let noteId = UUID().uuidString
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let notesIndex: [String: Any] = [
+            "notes": [[
+                "id": noteId,
+                "title": HeaderQuotePolicy.clippingsNoteTitle,
+                "createdAt": now,
+                "updatedAt": now,
+                "wordCount": 12,
+            ]],
+        ]
+        let indexPath = LocalDataLayout.fileURL(in: app.localDataDir, relativePath: LocalDataLayout.notesIndexFile)
+        try JSONSerialization.data(withJSONObject: notesIndex).write(to: indexPath, options: .atomic)
+        let noteBody = """
+        # Clippings
+
+        1. Sample clipping for previews #preview #sample
+        2. Waste no more time arguing what a good man should be. #quotes
+        """
+        let notePath = LocalDataLayout.fileURL(in: app.localDataDir, relativePath: LocalDataLayout.noteFile(id: noteId))
+        try noteBody.write(to: notePath, atomically: true, encoding: .utf8)
     }
 }
 

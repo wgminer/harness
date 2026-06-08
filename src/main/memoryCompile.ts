@@ -13,6 +13,7 @@ import { fileExists } from "./utils";
 import { getSettings } from "./settings";
 import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
 import { recordOpenAIUsage } from "./usageStats";
+import { RIG_PAGE_TITLE } from "../shared/rigPage";
 
 const STATE_FILE = "memory_compile_state.json";
 
@@ -376,11 +377,11 @@ export async function runMemoryCompileIfDue(now: Date = new Date()): Promise<Com
   }
 }
 
-/** Manual trigger from Config → Context. Bypasses the once-per-day gate. */
+/** Manual trigger from System → Context. Bypasses the once-per-day gate. */
 export async function runMemoryCompileNow(): Promise<{ ok: true; result: CompileResult } | { ok: false; error: string }> {
   const memoryDir = getMemoryDir();
   const llm = await buildLLMFromSettings();
-  if (llm == null) return { ok: false, error: "Add an OpenAI API key in Config before compiling context." };
+  if (llm == null) return { ok: false, error: `Add an OpenAI API key in ${RIG_PAGE_TITLE} before compiling context.` };
   try {
     const result = await compileMemoriesIn(memoryDir, llm, new Date());
     return { ok: true, result };

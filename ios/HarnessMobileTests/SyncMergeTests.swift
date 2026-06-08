@@ -81,22 +81,4 @@ final class SyncMergeTests: XCTestCase {
         let parsed = try JSONSerialization.jsonObject(with: merged) as? [String: Any]
         XCTAssertNotNil(parsed)
     }
-
-    func testMergeClippingsPrefersNewerUpdatedAt() throws {
-        let local = Data(
-            #"{"clippings":[{"id":"c1","content":"Local","updatedAt":20}]}"#.utf8
-        )
-        let remote = Data(
-            #"{"clippings":[{"id":"c1","content":"Remote","updatedAt":10},{"id":"c2","content":"Only remote","updatedAt":5}]}"#.utf8
-        )
-        let merged = SyncMerge.mergeFileBytes(path: "app-state/clippings.json", local: local, remote: remote)
-        let parsed = try JSONSerialization.jsonObject(with: merged) as? [String: Any]
-        let clippings = parsed?["clippings"] as? [[String: Any]] ?? []
-        let byId = Dictionary(uniqueKeysWithValues: clippings.compactMap { row -> (String, String)? in
-            guard let id = row["id"] as? String, let content = row["content"] as? String else { return nil }
-            return (id, content)
-        })
-        XCTAssertEqual(byId["c1"], "Local")
-        XCTAssertEqual(byId["c2"], "Only remote")
-    }
 }

@@ -3,16 +3,33 @@ import SwiftUI
 struct MessageRowView: View {
     let message: MessageRecord
     var isStreaming = false
+    var toolCallsExpanded = false
+    var onToggleToolCallsExpanded: (() -> Void)?
+    var onToolConfirm: ((ToolCallRecord, GatedToolAction) -> Void)?
     @State private var isExpanded = false
 
     var body: some View {
         switch message.messageRole {
         case .assistant:
-            AssistantMessageView(content: message.content, isStreaming: isStreaming)
+            AssistantMessageView(
+                content: ChatTemporalContext.stripSentAtPrefix(message.content),
+                isStreaming: isStreaming,
+                toolCalls: message.toolCalls ?? [],
+                toolCallsExpanded: toolCallsExpanded,
+                onToggleToolCallsExpanded: onToggleToolCallsExpanded,
+                onToolConfirm: onToolConfirm
+            )
         case .user:
             UserMessageCard(content: message.content, isExpanded: $isExpanded)
         case .system:
-            AssistantMessageView(content: message.content, isStreaming: isStreaming)
+            AssistantMessageView(
+                content: message.content,
+                isStreaming: isStreaming,
+                toolCalls: message.toolCalls ?? [],
+                toolCallsExpanded: toolCallsExpanded,
+                onToggleToolCallsExpanded: onToggleToolCallsExpanded,
+                onToolConfirm: onToolConfirm
+            )
         }
     }
 }
@@ -32,11 +49,27 @@ struct ReplyingIndicatorView: View {
 private struct AssistantMessageView: View {
     let content: String
     var isStreaming = false
+    var toolCalls: [ToolCallRecord]
+    var toolCallsExpanded = false
+    var onToggleToolCallsExpanded: (() -> Void)?
+    var onToolConfirm: ((ToolCallRecord, GatedToolAction) -> Void)?
 
     var body: some View {
-        HarnessMarkdownView(content: content, isStreaming: isStreaming)
-            .lineSpacing(4)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 10) {
+            if !toolCalls.isEmpty {
+                ToolCallsCardView(
+                    toolCalls: toolCalls,
+                    expanded: toolCallsExpanded,
+                    onToggleExpanded: { onToggleToolCallsExpanded?() },
+                    onToolConfirm: { call, action in onToolConfirm?(call, action) }
+                )
+            }
+            if !content.isEmpty || isStreaming {
+                HarnessMarkdownView(content: content, isStreaming: isStreaming)
+                    .lineSpacing(4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -113,24 +146,27 @@ private struct UserMessageHeightKey: PreferenceKey {
         LazyVStack(alignment: .leading, spacing: 16) {
             MessageRowView(
                 message: MessageRecord(
+                    role: "assistant",
+                    content: "Added that to your task list.",
+                    timestamp: nil,
+                    model: OpenAIModel.chat,
+                    toolCalls: [
+                        ToolCallRecord(toolName: "task_create", payload: ["lastAction": "create"]),
+                    ]
+                ),
+                onToggleToolCallsExpanded: {},
+                onToolConfirm: { _, _ in }
+            )
+            MessageRowView(
+                message: MessageRecord(
                     role: "user",
-                    content: "Write a short summary of this markdown formatting behavior with **bold** and a bullet list.\n\n- item one\n- item two\n- item three\n- item four\n- item five\n- item six",
+                    content: "Remind me to ship the iOS tasks view.",
                     timestamp: nil,
                     model: nil
                 )
             )
-            MessageRowView(
-                message: MessageRecord(
-                    role: "assistant",
-                    content: "Here is a code sample:\n\n```swift\nfunc greet(_ name: String) -> String {\n  \"Hello, \\(name)\"\n}\n```",
-                    timestamp: nil,
-                    model: "gpt-5.4"
-                )
-            )
-            ReplyingIndicatorView()
         }
         .padding(16)
     }
     .background(Color(.systemGroupedBackground))
-    .preferredColorScheme(.dark)
 }

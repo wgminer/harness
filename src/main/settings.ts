@@ -71,6 +71,14 @@ export function parseSettings(data: Record<string, unknown>): Settings {
   const memoryRaw = data.memory as Record<string, unknown> | undefined;
   const injectionStrategy = parseMemoryInjectionStrategy(memoryRaw?.injectionStrategy);
 
+  const chatRaw = data.chat as Record<string, unknown> | undefined;
+  const openToComposeOnLaunch =
+    typeof chatRaw?.openToComposeOnLaunch === "boolean"
+      ? chatRaw.openToComposeOnLaunch
+      : typeof chatRaw?.composeFirst === "boolean"
+        ? chatRaw.composeFirst
+        : D.chat!.openToComposeOnLaunch;
+
   return {
     version: D.version,
     openai: {
@@ -97,6 +105,9 @@ export function parseSettings(data: Record<string, unknown>): Settings {
     },
     memory: {
       injectionStrategy,
+    },
+    chat: {
+      openToComposeOnLaunch,
     },
   };
 }
@@ -156,6 +167,8 @@ export async function setSettings(partial: Partial<Settings>): Promise<Settings>
         }
       : current.notes,
     backup: partial.backup ? { ...current.backup, ...partial.backup } : current.backup,
+    memory: partial.memory ? { ...current.memory, ...partial.memory } : current.memory,
+    chat: partial.chat ? { ...current.chat, ...partial.chat } : current.chat,
   };
   await saveSettings(next);
   return next;

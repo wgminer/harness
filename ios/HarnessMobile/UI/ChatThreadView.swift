@@ -11,11 +11,13 @@ struct ChatThreadView: View {
 
     @State private var messages: [MessageRecord] = []
     @State private var streamingMessageTimestamp: Int64?
+    @State private var streamingToolCalls: [ToolCallRecord] = []
+    @State private var expandedToolCards: Set<Int64> = []
     @State private var loadError: String?
     @State private var scrollProxy: ScrollViewProxy?
 
     private var isAwaitingFirstToken: Bool {
-        app.chatService.isStreaming && streamingMessageTimestamp == nil
+        app.chatService.isStreaming && streamingMessageTimestamp == nil && streamingToolCalls.isEmpty
     }
 
     var body: some View {
@@ -25,9 +27,36 @@ struct ChatThreadView: View {
                     ForEach(messages) { msg in
                         MessageRowView(
                             message: msg,
-                            isStreaming: msg.timestamp == streamingMessageTimestamp
+                            isStreaming: msg.timestamp == streamingMessageTimestamp,
+                            toolCallsExpanded: expandedToolCards.contains(msg.timestamp ?? -1),
+                            onToggleToolCallsExpanded: {
+                                toggleToolCard(for: msg.timestamp)
+                            },
+                            onToolConfirm: { call, action in
+                                handleToolConfirm(call: call, action: action, messageTimestamp: msg.timestamp)
+                            }
                         )
                         .id(rowId(for: msg))
+                    }
+                    if let streamingTimestamp = streamingMessageTimestamp {
+                        MessageRowView(
+                            message: MessageRecord(
+                                role: MessageRole.assistant.rawValue,
+                                content: streamingContent,
+                                timestamp: streamingTimestamp,
+                                model: OpenAIModel.chat,
+                                toolCalls: streamingToolCalls.isEmpty ? nil : streamingToolCalls
+                            ),
+                            isStreaming: true,
+                            toolCallsExpanded: expandedToolCards.contains(streamingTimestamp),
+                            onToggleToolCallsExpanded: {
+                                toggleToolCard(for: streamingTimestamp)
+                            },
+                            onToolConfirm: { call, action in
+                                handleToolConfirm(call: call, action: action, messageTimestamp: streamingTimestamp)
+                            }
+                        )
+                        .id(ChatScrollAnchor.streaming)
                     }
                     if isAwaitingFirstToken {
                         ReplyingIndicatorView()
@@ -64,6 +93,8 @@ struct ChatThreadView: View {
         }
     }
 
+    @State private var streamingContent = ""
+
     private var composerDock: some View {
         ChatComposerView(
             conversationId: conversationId,
@@ -99,6 +130,56 @@ struct ChatThreadView: View {
         return message.id
     }
 
+    private func toggleToolCard(for timestamp: Int64?) {
+        guard let timestamp else { return }
+        if expandedToolCards.contains(timestamp) {
+            expandedToolCards.remove(timestamp)
+        } else {
+            expandedToolCards.insert(timestamp)
+        }
+    }
+
+    private func handleToolConfirm(call: ToolCallRecord, action: GatedToolAction, messageTimestamp: Int64?) {
+        app.chatService.resolveGatedTool(action)
+        guard let messageTimestamp else { return }
+        updateToolCallPendingState(timestamp: messageTimestamp, toolName: call.toolName, action: action)
+    }
+
+    private func updateToolCallPendingState(timestamp: Int64, toolName: String, action: GatedToolAction) {
+        if timestamp == streamingMessageTimestamp {
+            streamingToolCalls = streamingToolCalls.map { call in
+                guard call.toolName == toolName, call.isPending else { return call }
+                var payload = call.payloadDictionary ?? [:]
+                payload["pending"] = false
+                if action == .cancel {
+                    payload["cancelled"] = true
+                }
+                return ToolCallRecord(toolName: call.toolName, payload: payload)
+            }
+            return
+        }
+
+        messages = messages.map { message in
+            guard message.timestamp == timestamp, var toolCalls = message.toolCalls else { return message }
+            toolCalls = toolCalls.map { call in
+                guard call.toolName == toolName, call.isPending else { return call }
+                var payload = call.payloadDictionary ?? [:]
+                payload["pending"] = false
+                if action == .cancel {
+                    payload["cancelled"] = true
+                }
+                return ToolCallRecord(toolName: call.toolName, payload: payload)
+            }
+            return MessageRecord(
+                role: message.role,
+                content: message.content,
+                timestamp: message.timestamp,
+                model: message.model,
+                toolCalls: toolCalls
+            )
+        }
+    }
+
     private func reloadMessages() {
         do {
             messages = try app.store.loadMessages(conversationId: conversationId)
@@ -122,32 +203,27 @@ struct ChatThreadView: View {
 
     private func appendStreamingChunk(_ chunk: String) {
         guard !chunk.isEmpty else { return }
-        if let ts = streamingMessageTimestamp,
-           let index = messages.firstIndex(where: { $0.timestamp == ts && $0.messageRole == .assistant }) {
-            let current = messages[index]
-            messages[index] = MessageRecord(
-                role: MessageRole.assistant.rawValue,
-                content: current.content + chunk,
-                timestamp: ts,
-                model: current.model ?? OpenAIModel.chat
-            )
-            return
+        streamingContent = ChatTemporalContext.stripSentAtPrefix(streamingContent + chunk)
+        if streamingMessageTimestamp == nil {
+            streamingMessageTimestamp = Int64(Date().timeIntervalSince1970 * 1000)
         }
+    }
 
-        let ts = Int64(Date().timeIntervalSince1970 * 1000)
-        streamingMessageTimestamp = ts
-        messages.append(
-            MessageRecord(
-                role: MessageRole.assistant.rawValue,
-                content: chunk,
-                timestamp: ts,
-                model: OpenAIModel.chat
-            )
-        )
+    private func appendStreamingToolCall(_ call: ToolCallRecord) {
+        if streamingMessageTimestamp == nil {
+            streamingMessageTimestamp = Int64(Date().timeIntervalSince1970 * 1000)
+        }
+        if let index = streamingToolCalls.firstIndex(where: { $0.toolName == call.toolName }) {
+            streamingToolCalls[index] = call
+        } else {
+            streamingToolCalls.append(call)
+        }
     }
 
     private func finishStreaming() {
         streamingMessageTimestamp = nil
+        streamingContent = ""
+        streamingToolCalls = []
     }
 
     private func send(text: String) async {
@@ -160,6 +236,8 @@ struct ChatThreadView: View {
         do {
             try await app.chatService.send(conversationId: conversationId, userContent: text) { chunk in
                 appendStreamingChunk(chunk)
+            } onToolCall: { call in
+                appendStreamingToolCall(call)
             }
             finishStreaming()
             reloadMessages()
@@ -172,8 +250,17 @@ struct ChatThreadView: View {
     }
 
     private func scrollToBottom(animated: Bool) {
-        guard let proxy = scrollProxy, let last = messages.last else { return }
-        let targetId = rowId(for: last)
+        guard let proxy = scrollProxy else { return }
+        let targetId: String
+        if streamingMessageTimestamp != nil {
+            targetId = ChatScrollAnchor.streaming
+        } else if isAwaitingFirstToken {
+            targetId = ChatScrollAnchor.replying
+        } else if let last = messages.last {
+            targetId = rowId(for: last)
+        } else {
+            return
+        }
         Task { @MainActor in
             if animated {
                 withAnimation(.easeOut(duration: 0.2)) {
@@ -192,15 +279,5 @@ struct ChatThreadView: View {
             app: PreviewSupport.populatedApp(),
             conversationId: PreviewSupport.sampleConversationId
         )
-    }
-}
-
-#Preview("Stop button (streaming)") {
-    let app = PreviewSupport.populatedApp()
-    return PreviewNavigationRoot {
-        ChatThreadView(app: app, conversationId: PreviewSupport.sampleConversationId)
-    }
-    .onAppear {
-        app.chatService.isStreaming = true
     }
 }

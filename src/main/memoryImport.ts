@@ -10,6 +10,7 @@ import {
 import { getSettings } from "./settings";
 import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
 import { recordOpenAIUsage } from "./usageStats";
+import { RIG_PAGE_TITLE } from "../shared/rigPage";
 
 /** Cap pasted export size so a single import stays predictable. */
 export const LLM_CONTEXT_IMPORT_CHAR_LIMIT = 80_000;
@@ -123,7 +124,7 @@ export async function runLlmContextImportNow(
   }
   const llm = await buildImportLLMFromSettings();
   if (llm == null) {
-    return { ok: false, error: "Add an OpenAI API key in Config before importing context." };
+    return { ok: false, error: `Add an OpenAI API key in ${RIG_PAGE_TITLE} before importing context.` };
   }
   try {
     const result = await importLlmContextIn(getMemoryDir(), llm, trimmed);

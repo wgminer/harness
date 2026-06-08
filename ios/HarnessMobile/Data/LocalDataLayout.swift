@@ -3,9 +3,14 @@ import Foundation
 enum LocalDataLayout {
     static let appStateDir = "app-state"
     static let conversationsFile = "app-state/conversations.json"
-    static let clippingsFile = "app-state/clippings.json"
+    static let notesIndexFile = "app-state/notes.json"
     static let userMemoryFile = "app-state/user_memory.json"
+    static let tasksFile = "app-state/tasks.json"
     static let settingsFile = "settings/settings.json"
+
+    static func noteFile(id: String) -> String {
+        "app-state/notes/\(id).md"
+    }
 
     static func messagesPath(conversationId: String) -> String {
         let safe = conversationId.replacingOccurrences(
@@ -35,6 +40,7 @@ enum LocalDataLayout {
     static func ensureDirectories(at localDataDir: URL) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: appStateDir), withIntermediateDirectories: true)
+        try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: "app-state/notes"), withIntermediateDirectories: true)
         try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: "settings"), withIntermediateDirectories: true)
         try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: "themes"), withIntermediateDirectories: true)
     }

@@ -9,7 +9,7 @@ import {
   MoreVertical,
   Printer,
   RefreshCw,
-  NotebookText,
+  SquarePen,
   Trash2,
   X,
 } from "lucide-react";
@@ -834,8 +834,8 @@ export function NotesView({
     <div className="workspace-page notes-surface">
       {screen === "list" ? (
         <WorkspaceHeader
-          title="Notes"
-          icon={<NotebookText size={18} />}
+          title="Editor"
+          icon={<SquarePen size={18} />}
           scrolled={headerScrolled}
           titleRowClassName="notes-surface__header-title-row"
         />
@@ -906,7 +906,7 @@ export function NotesView({
                 type="button"
                 className="btn btn-icon"
                 onClick={goBackToList}
-                aria-label="Back to notes"
+                aria-label="Back to editor"
                 title="Back"
               >
                 <ArrowLeft size={16} />
@@ -997,7 +997,7 @@ export function NotesView({
                 ref={editorRef}
                 className="notes-surface__editor"
                 data-testid="notes-editor"
-                aria-label="Notes editor"
+                aria-label="Editor"
                 placeholder={status.kind === "loading" ? "Loading..." : "Write your note here..."}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}

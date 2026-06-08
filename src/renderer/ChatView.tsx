@@ -1,18 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Minimize2 } from "lucide-react";
-import { useRecorder } from "./useRecorder";
-import { playCancelChime } from "./recordingUtils";
-import { audioFileToWav } from "./audioFileToWav";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
+import { HOME_HEADER_QUOTE } from "../shared/headerQuote";
 import { ChatTitleModal } from "./ChatTitleModal";
 import { ChatSurface } from "./ChatSurface";
+import { ChatComposer } from "./ChatComposer";
+import { useChatComposer } from "./useChatComposer";
 import {
   type Message,
   type ToolCallDisplay,
-  type VoiceState,
 } from "./chatHelpers";
 import { shouldApplyTurnUpdate } from "./chatTurnFlow";
+import { stripSentAtPrefix } from "../shared/chatTemporalContext";
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -21,6 +21,8 @@ interface ChatViewProps {
   /** When true, header shows a skeleton instead of placeholder title text. */
   titlePending?: boolean;
   onConversationCreated: () => void;
+  /** Called when the first message creates a new conversation (compose splash). */
+  onAssignConversationId: (id: string) => void;
   /** Text from the global hotkey — send vs pre-fill follows recording.autoSend unless draft-only. */
   pendingHotkeyText?: string | null;
   /** If true, always pre-fill input (never auto-send), e.g. recording stopped while the app was unfocused. */
@@ -39,6 +41,7 @@ export function ChatView({
   displayTitle,
   titlePending = false,
   onConversationCreated,
+  onAssignConversationId,
   pendingHotkeyText,
   pendingHotkeyDraftOnly,
   onPendingHotkeyTextConsumed,
@@ -47,9 +50,11 @@ export function ChatView({
   onWindowSizeToggle,
   onOpenNotesView,
 }: ChatViewProps) {
-  const MAX_RECORDING_MS = 5 * 60 * 1000;
+  /** Set synchronously on first send so thread UI mounts before parent re-renders. */
+  const [draftConversationId, setDraftConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
+  const effectiveConversationId = conversationId ?? draftConversationId;
+  const isComposeMode = effectiveConversationId === null && messages.length === 0;
   const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<string | null>(null);
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const [isTurnPending, setIsTurnPending] = useState(false);
@@ -62,28 +67,18 @@ export function ChatView({
   const sendingRef = useRef(false);
   const isStreamingRef = useRef(false);
 
-  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   /** After plain dictation, show polish next to reply (polish targets the dictated turn only). */
   const [polishHintAfterDictation, setPolishHintAfterDictation] = useState(false);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [titleSaving, setTitleSaving] = useState(false);
-  const [recordingMs, setRecordingMs] = useState(0);
-  const [attachedAudioFile, setAttachedAudioFile] = useState<File | null>(null);
-  const [attachmentTranscribing, setAttachmentTranscribing] = useState(false);
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const recordingStartRef = useRef<number>(0);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const transcriptionRequestIdRef = useRef<string | null>(null);
-  const transcriptionCancelledRef = useRef(false);
-
-  const recorder = useRecorder();
 
   /** Tool calls for the assistant turn currently being streamed; shown inline and then stored on the message when stream ends. */
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const prevConversationIdRef = useRef<string | null | undefined>(undefined);
+  const resetComposerInputRef = useRef<() => void>(() => {});
+  const firstSendInProgressRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
   const nextMessageIdRef = useRef(0);
   const turnIdRef = useRef(0);
@@ -93,7 +88,11 @@ export function ChatView({
   const sending = isTurnPending || isStreaming;
 
   useEffect(() => {
-    conversationIdRef.current = conversationId;
+    conversationIdRef.current = effectiveConversationId;
+  }, [effectiveConversationId]);
+
+  useEffect(() => {
+    if (conversationId) setDraftConversationId(null);
   }, [conversationId]);
   useEffect(() => {
     messagesRef.current = messages;
@@ -126,17 +125,24 @@ export function ChatView({
     });
   }, []);
 
+  const focusComposer = useCallback(() => {
+    requestAnimationFrame(() =>
+      composerRef.current?.querySelector<HTMLTextAreaElement>(".chat-input")?.focus()
+    );
+  }, []);
+
   const completeTurn = useCallback((turnId: number) => {
     if (activeTurnIdRef.current !== turnId) return;
     activeTurnIdRef.current = null;
     streamAbortRef.current = null;
     isStreamingRef.current = false;
     activeAssistantMessageIdRef.current = null;
+    firstSendInProgressRef.current = false;
     setIsTurnPending(false);
     setIsStreaming(false);
     setActiveAssistantMessageId(null);
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
+    focusComposer();
+  }, [focusComposer]);
 
   const syncAssistantFromStorage = useCallback(async (convId: string, assistantId: string | null) => {
     const list = await window.electron.memory.getMessages(convId);
@@ -257,7 +263,7 @@ export function ChatView({
 
   useEffect(() => {
     setActiveChatModel(OPENAI_CHAT_MODEL);
-  }, [conversationId]);
+  }, [effectiveConversationId]);
 
   /** Sidebar spinner: model reply only (not composer voice record/transcribe). */
   const chatActivityBusy = sending;
@@ -270,14 +276,35 @@ export function ChatView({
   }, [onChatActivityChange]);
 
   useEffect(() => {
-    if (!conversationId) {
-      streamAbortRef.current?.abort();
-      streamAbortRef.current = null;
-      activeTurnIdRef.current = null;
-      setMessages([]);
+    const prev = prevConversationIdRef.current;
+    prevConversationIdRef.current = effectiveConversationId;
+
+    if (!effectiveConversationId) {
+      if (prev != null) {
+        streamAbortRef.current?.abort();
+        streamAbortRef.current = null;
+        activeTurnIdRef.current = null;
+        void window.electron.chat.stop().catch(() => {});
+        setMessages([]);
+        activeAssistantMessageIdRef.current = null;
+        isStreamingRef.current = false;
+        setActiveAssistantMessageId(null);
+        setIsTurnPending(false);
+        setIsStreaming(false);
+        setCopiedId(null);
+        setSavedToNotesId(null);
+        setPolishHintAfterDictation(false);
+        setTitleModalOpen(false);
+        resetComposerInputRef.current();
+      }
       return;
     }
 
+    if (prev === null && (activeTurnIdRef.current != null || firstSendInProgressRef.current)) {
+      return;
+    }
+
+    resetComposerInputRef.current();
     streamAbortRef.current?.abort();
     streamAbortRef.current = null;
     activeTurnIdRef.current = null;
@@ -288,25 +315,13 @@ export function ChatView({
     setActiveAssistantMessageId(null);
     setIsTurnPending(false);
     setIsStreaming(false);
-    setInput("");
     setCopiedId(null);
     setSavedToNotesId(null);
-    setVoiceError(null);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    transcriptionRequestIdRef.current = null;
-    transcriptionCancelledRef.current = false;
-    setVoiceState("idle");
-    setAttachedAudioFile(null);
-    setAttachmentTranscribing(false);
-    setAttachmentError(null);
     setPolishHintAfterDictation(false);
     setTitleModalOpen(false);
 
     let cancelled = false;
-    window.electron.memory.getMessages(conversationId).then((list) => {
+    window.electron.memory.getMessages(effectiveConversationId).then((list) => {
       if (cancelled) return;
       setMessages(
         list.map((m, i) => ({
@@ -322,7 +337,7 @@ export function ChatView({
     return () => {
       cancelled = true;
     };
-  }, [conversationId]);
+  }, [effectiveConversationId]);
 
   useEffect(() => {
     const unsub = window.electron.chat.onToolPanelUpdate((cid, toolName, payload) => {
@@ -346,7 +361,7 @@ export function ChatView({
       const turnId = activeTurnIdRef.current;
       const signal = streamAbortRef.current?.signal;
       if (!assistantId || turnId == null || !isTurnCurrent(turnId, signal)) return;
-      applyAssistantChunk(assistantId, (prev) => prev + chunk);
+      applyAssistantChunk(assistantId, (prev) => stripSentAtPrefix(prev + chunk));
     });
     const unsubEnd = window.electron.chat.onStreamEnd((cid) => {
       if (cid !== conversationIdRef.current) return;
@@ -419,10 +434,13 @@ export function ChatView({
 
   /** Core send logic; accepts text directly so it can be called programmatically (e.g. hotkey injection). */
   const sendText = useCallback(
-    async (text: string, opts?: { fromDictation?: boolean }) => {
-      if (!text.trim() || !conversationId) return;
+    async (text: string, opts?: { fromDictation?: boolean }, targetConversationId?: string) => {
+      const convId = targetConversationId ?? effectiveConversationId;
+      if (!text.trim() || !convId) return;
       if (opts?.fromDictation) setPolishHintAfterDictation(true);
       else setPolishHintAfterDictation(false);
+
+      conversationIdRef.current = convId;
 
       const { turnId, signal } = beginNewTurn();
       const userMessageId = makeMessageId("user");
@@ -443,27 +461,43 @@ export function ChatView({
       setIsTurnPending(false);
       isStreamingRef.current = true;
       setIsStreaming(true);
-      requestAnimationFrame(() => inputRef.current?.focus());
+      focusComposer();
       await runAssistantTurn({
         turnId,
         signal,
         assistantId: assistantMessageId,
-        backend: () => window.electron.chat.send(conversationId, text),
+        backend: () => window.electron.chat.send(convId, text),
       });
     },
     [
       appendAssistantPlaceholder,
       beginNewTurn,
-      conversationId,
+      effectiveConversationId,
+      focusComposer,
       isTurnCurrent,
       makeMessageId,
       runAssistantTurn,
     ]
   );
 
+  const ensureConversationAndSend = useCallback(
+    async (text: string, opts?: { fromDictation?: boolean }) => {
+      let convId = effectiveConversationId;
+      if (!convId) {
+        convId = await window.electron.memory.createConversation();
+        firstSendInProgressRef.current = true;
+        setDraftConversationId(convId);
+        conversationIdRef.current = convId;
+        onAssignConversationId(convId);
+      }
+      await sendText(text, opts, convId);
+    },
+    [effectiveConversationId, onAssignConversationId, sendText]
+  );
+
   /** Post-strip polish: replace last user dictation with instruction + same text, then stream. */
   const polishLastUserFromStrip = useCallback(async () => {
-    if (!conversationId) return;
+    if (!effectiveConversationId) return;
     const last = messagesRef.current[messagesRef.current.length - 1];
     if (!last || last.role !== "user" || !last.content?.trim()) return;
     setPolishHintAfterDictation(false);
@@ -494,61 +528,33 @@ export function ChatView({
       turnId,
       signal,
       assistantId: assistantMessageId,
-      backend: () => window.electron.chat.polishLastUser(conversationId),
+      backend: () => window.electron.chat.polishLastUser(effectiveConversationId),
     });
   }, [
     appendAssistantPlaceholder,
     beginNewTurn,
-    conversationId,
+    effectiveConversationId,
     isTurnCurrent,
     makeMessageId,
     runAssistantTurn,
   ]);
 
-  const send = useCallback(async () => {
-    if (attachmentTranscribing) return;
+  const composer = useChatComposer({
+    onSubmit: ensureConversationAndSend,
+    pendingHotkeyText,
+    pendingHotkeyDraftOnly,
+    onPendingHotkeyTextConsumed,
+    focusComposerNonce,
+    composerRef,
+    submitDisabled: sending,
+    allowHotkeyWithoutConversation: true,
+    hasConversation: effectiveConversationId != null,
+  });
 
-    const text = input.trim();
-    const attached = attachedAudioFile;
-    if (!text && !attached) return;
-
-    setAttachmentError(null);
-    let transcript = "";
-    if (attached) {
-      setAttachmentTranscribing(true);
-      try {
-        const wav = await audioFileToWav(attached);
-        const result = await window.electron.recording.transcribe(wav);
-        if ("error" in result) {
-          setAttachmentError(result.error);
-          return;
-        }
-        transcript = result.text.trim();
-        if (!transcript) {
-          setAttachmentError("Unable to transcribe attached audio.");
-          return;
-        }
-      } catch (err) {
-        setAttachmentError(err instanceof Error ? err.message : "Unable to read attached audio.");
-        return;
-      } finally {
-        setAttachmentTranscribing(false);
-      }
-    }
-
-    const messageText =
-      text && transcript
-        ? `${text}\n\n${transcript}`
-        : text || transcript;
-    if (!messageText) return;
-
-    setInput("");
-    setAttachedAudioFile(null);
-    await sendText(messageText);
-  }, [attachedAudioFile, attachmentTranscribing, input, sendText]);
+  resetComposerInputRef.current = composer.resetComposerInput;
 
   const generateReply = useCallback(async () => {
-    if (!conversationId) return;
+    if (!effectiveConversationId) return;
     const { turnId, signal } = beginNewTurn();
     const assistantMessageId = makeMessageId("assistant");
     activeAssistantMessageIdRef.current = assistantMessageId;
@@ -561,9 +567,9 @@ export function ChatView({
       turnId,
       signal,
       assistantId: assistantMessageId,
-      backend: () => window.electron.chat.generateReply(conversationId),
+      backend: () => window.electron.chat.generateReply(effectiveConversationId),
     });
-  }, [appendAssistantPlaceholder, beginNewTurn, conversationId, makeMessageId, runAssistantTurn]);
+  }, [appendAssistantPlaceholder, beginNewTurn, effectiveConversationId, makeMessageId, runAssistantTurn]);
 
   const saveMessageToNotes = useCallback(
     async (messageId: string, content: string) => {
@@ -583,104 +589,6 @@ export function ChatView({
     [onOpenNotesView]
   );
 
-  // Stable ref so the pendingHotkeyText effect always calls the latest sendText without it being a dep
-  const sendTextRef = useRef(sendText);
-  useEffect(() => {
-    sendTextRef.current = sendText;
-  });
-
-  // Global hotkey finished transcription — inject into this chat (send or pre-fill per settings, unless draft-only)
-  useEffect(() => {
-    if (!pendingHotkeyText || !conversationId) return;
-    window.electron.settings.get().then((s) => {
-      const autoSend = (s as { recording?: { autoSend: boolean } }).recording?.autoSend ?? true;
-      if (autoSend && !pendingHotkeyDraftOnly) {
-        sendTextRef.current(pendingHotkeyText, { fromDictation: true });
-      } else {
-        setInput((prev) => (prev ? prev + " " + pendingHotkeyText : pendingHotkeyText));
-      }
-      onPendingHotkeyTextConsumed?.();
-    });
-  // Only re-run when the text itself changes (or conversationId changes underneath it)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingHotkeyText, conversationId, pendingHotkeyDraftOnly]);
-
-  const startRecording = useCallback(async () => {
-    setVoiceError(null);
-    setRecordingMs(0);
-    try {
-      await recorder.start();
-      setVoiceState("recording");
-      transcriptionCancelledRef.current = false;
-      recordingStartRef.current = Date.now();
-      recordingTimerRef.current = setInterval(() => {
-        const elapsed = Date.now() - recordingStartRef.current;
-        setRecordingMs(elapsed);
-        if (elapsed >= MAX_RECORDING_MS) {
-          if (recordingTimerRef.current) {
-            clearInterval(recordingTimerRef.current);
-            recordingTimerRef.current = null;
-          }
-          void stopAndTranscribe();
-        }
-      }, 33);
-    } catch (err) {
-      setVoiceError(err instanceof Error ? err.message : "Microphone access denied.");
-    }
-  }, [recorder, MAX_RECORDING_MS]);
-
-  const stopAndTranscribe = useCallback(async () => {
-    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
-    setVoiceState("processing");
-    setVoiceError(null);
-    transcriptionCancelledRef.current = false;
-    try {
-      const wav = await recorder.stop();
-      window.electron.recording.saveWav(wav).catch(() => {});
-      const requestId = crypto.randomUUID();
-      transcriptionRequestIdRef.current = requestId;
-      const result = await window.electron.recording.transcribe(wav, { requestId });
-      if (transcriptionCancelledRef.current || transcriptionRequestIdRef.current !== requestId) {
-        return;
-      }
-      if ("error" in result) {
-        setVoiceError(result.error);
-      } else {
-        const text = result.text.trim();
-        if (!text) return;
-        const s = await window.electron.settings.get() as { recording?: { autoSend: boolean } };
-        if (s.recording?.autoSend ?? true) {
-          sendTextRef.current(text, { fromDictation: true });
-        } else {
-          setInput((prev) => (prev ? prev + " " + text : text));
-        }
-      }
-    } catch (err) {
-      setVoiceError(err instanceof Error ? err.message : "Recording failed.");
-    } finally {
-      transcriptionRequestIdRef.current = null;
-      setVoiceState("idle");
-    }
-  }, [recorder]);
-
-  const cancelRecording = useCallback(async () => {
-    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
-    if (voiceState === "processing" && transcriptionRequestIdRef.current) {
-      transcriptionCancelledRef.current = true;
-      void window.electron.recording.cancelTranscription(transcriptionRequestIdRef.current).catch(() => {});
-      transcriptionRequestIdRef.current = null;
-    }
-    try {
-      if (voiceState === "recording") {
-        await recorder.stop();
-      }
-    } catch (_) { /* already stopped */ }
-    setVoiceState("idle");
-    setVoiceError(null);
-    setRecordingMs(0);
-    playCancelChime();
-  }, [recorder, voiceState]);
-
   const openTitleModal = useCallback(() => {
     setTitleDraft(displayTitle);
     setTitleModalOpen(true);
@@ -688,22 +596,74 @@ export function ChatView({
 
   const saveConversationTitle = useCallback(async () => {
     const trimmed = titleDraft.trim();
-    if (!trimmed || !conversationId) return;
+    if (!trimmed || !effectiveConversationId) return;
     setTitleSaving(true);
     try {
-      await window.electron.memory.setConversationTitle(conversationId, trimmed);
+      await window.electron.memory.setConversationTitle(effectiveConversationId, trimmed);
       onConversationCreated();
       setTitleModalOpen(false);
     } finally {
       setTitleSaving(false);
     }
-  }, [titleDraft, conversationId, onConversationCreated]);
+  }, [titleDraft, effectiveConversationId, onConversationCreated]);
 
-  if (!conversationId) {
+  const composerProps = {
+    input: composer.input,
+    onInputChange: composer.setInput,
+    onSend: () => void composer.send(),
+    onStop: () => {
+      const turnId = activeTurnIdRef.current;
+      streamAbortRef.current?.abort();
+      void window.electron.chat.stop().catch(() => {});
+      if (turnId != null) completeTurn(turnId);
+    },
+    sending: sending || composer.composerBusy,
+    voiceState: composer.voiceState,
+    voiceError: composer.voiceError,
+    recordingMs: composer.recordingMs,
+    onStartRecording: () => void composer.startRecording(),
+    onStopRecording: () => void composer.stopAndTranscribe(),
+    onCancelRecording: () => void composer.cancelRecording(),
+    attachedAudioName: composer.attachedAudioFile?.name ?? null,
+    attachmentTranscribing: composer.attachmentTranscribing,
+    attachmentError: composer.attachmentError,
+    onAttachAudio: (file: File) => {
+      composer.setAttachedAudioFile(file);
+      composer.setAttachmentError(null);
+    },
+    onRemoveAttachedAudio: () => {
+      composer.setAttachedAudioFile(null);
+      composer.setAttachmentError(null);
+    },
+    focusComposerNonce,
+    inputRef: composer.inputRef,
+  };
+
+  if (isComposeMode) {
     return (
-      <div className="chat-pane">
-        <div className="chat-scroll chat-scroll--placeholder">
-          <div className="chat-area-inner">Select a conversation or create a new one.</div>
+      <div className="new-chat-pane">
+        <div className="chat-pane-corner-control">
+          <button
+            type="button"
+            className="btn btn-icon chat-pane-window-toggle"
+            onClick={onWindowSizeToggle}
+            aria-label="Shrink window"
+            title="Shrink window"
+          >
+            <Minimize2 size={14} />
+          </button>
+        </div>
+        <div className="new-chat-center">
+          <p className="new-chat-quote">{HOME_HEADER_QUOTE}</p>
+          <div
+            ref={composerRef}
+            className="new-chat-composer"
+            data-testid="chat-composer"
+            role="group"
+            aria-label="Message composer"
+          >
+            <ChatComposer {...composerProps} />
+          </div>
         </div>
       </div>
     );
@@ -751,34 +711,7 @@ export function ChatView({
         onToolConfirm={handleToolConfirm}
         onPolish={polishLastUserFromStrip}
         onGenerateReply={generateReply}
-        inputRef={inputRef}
-        input={input}
-        onInputChange={setInput}
-        onSend={send}
-        onStop={() => {
-          const turnId = activeTurnIdRef.current;
-          streamAbortRef.current?.abort();
-          void window.electron.chat.stop().catch(() => {});
-          if (turnId != null) completeTurn(turnId);
-        }}
-        voiceState={voiceState}
-        voiceError={voiceError}
-        recordingMs={recordingMs}
-        onStartRecording={startRecording}
-        onStopRecording={stopAndTranscribe}
-        onCancelRecording={cancelRecording}
-        attachedAudioName={attachedAudioFile?.name ?? null}
-        attachmentTranscribing={attachmentTranscribing}
-        attachmentError={attachmentError}
-        onAttachAudio={(file) => {
-          setAttachedAudioFile(file);
-          setAttachmentError(null);
-        }}
-        onRemoveAttachedAudio={() => {
-          setAttachedAudioFile(null);
-          setAttachmentError(null);
-        }}
-        focusComposerNonce={focusComposerNonce}
+        {...composerProps}
         messagesTestId="chat-messages"
         composerTestId="chat-composer"
       />

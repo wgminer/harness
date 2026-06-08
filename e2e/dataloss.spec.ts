@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import path from "node:path";
 import type { ElectronApplication, Page } from "@playwright/test";
-import { launchHarness } from "./helpers";
+import { E2E_PERSIST_FLUSH_MS, launchHarness, setOpenToComposeOnLaunch } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -41,11 +41,13 @@ test("stop mid-stream preserves partial assistant output", async () => {
 
 test("notes persist across relaunch", async () => {
   let win = await page();
+  await setOpenToComposeOnLaunch(win, false);
   await win.getByTestId("sidebar-notes").click();
+  await win.getByRole("button", { name: /Blank/ }).click();
   const editor = win.getByTestId("notes-editor");
+  await expect(editor).toBeVisible({ timeout: 10_000 });
   await editor.fill("# Notes\n\nkeep this text");
-  await win.getByRole("button", { name: "Save", exact: true }).click();
-  await win.waitForTimeout(600);
+  await win.waitForTimeout(E2E_PERSIST_FLUSH_MS);
 
   await electronApp.close();
   electronApp = await launchHarness({
@@ -53,8 +55,10 @@ test("notes persist across relaunch", async () => {
     HARNESS_E2E_IMPORT_DIR: path.join(process.cwd(), "e2e/fixtures/chatgpt-sample"),
   });
   win = await page();
-  await win.getByTestId("sidebar-notes").click();
-  await expect(win.getByTestId("notes-editor")).toHaveValue("# Notes\n\nkeep this text");
+  await win.getByRole("button", { name: /^Notes/ }).click();
+  await expect(win.getByTestId("notes-editor")).toHaveValue("# Notes\n\nkeep this text", {
+    timeout: 15_000,
+  });
 });
 
 test("chatgpt import is deduped on rerun", async () => {

@@ -75,6 +75,10 @@ export interface Settings {
   memory?: {
     injectionStrategy: MemoryInjectionStrategy;
   };
+  chat?: {
+    /** When true, app launch opens the centered compose splash instead of restoring the last session. */
+    openToComposeOnLaunch: boolean;
+  };
 }
 
 export interface SearchResult {
@@ -135,5 +139,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   memory: {
     injectionStrategy: "all",
+  },
+  chat: {
+    openToComposeOnLaunch: true,
   },
 };

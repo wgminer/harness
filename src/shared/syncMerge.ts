@@ -27,7 +27,6 @@ export interface SyncConflictReview {
 const MERGEABLE_PATHS = new Set([
   "app-state/conversations.json",
   "app-state/tasks.json",
-  "app-state/clippings.json",
   "app-state/plans.json",
   "app-state/user_memory.json",
   "settings/settings.json",
@@ -54,7 +53,6 @@ function labelForPath(path: string, bytes: Buffer | undefined): string {
   }
   if (path === "app-state/conversations.json") return "Conversation list";
   if (path === "app-state/tasks.json") return "Tasks";
-  if (path === "app-state/clippings.json") return "Clippings";
   if (path === "app-state/plans.json") return "Plans";
   if (path === "app-state/user_memory.json") return "User context";
   if (path === "app-state/writing.md") return "Writing surface";
@@ -153,29 +151,6 @@ function tsFromValue(value: unknown): number {
   return 0;
 }
 
-function mergeClippingsJson(local: Buffer, remote: Buffer): Buffer {
-  const localState = parseJson(local) as { clippings?: unknown[] };
-  const remoteState = parseJson(remote) as { clippings?: unknown[] };
-  const byId = new Map<string, Record<string, unknown>>();
-  for (const row of remoteState.clippings ?? []) {
-    if (row && typeof row === "object" && typeof (row as Record<string, unknown>).id === "string") {
-      byId.set((row as Record<string, unknown>).id as string, row as Record<string, unknown>);
-    }
-  }
-  for (const row of localState.clippings ?? []) {
-    if (!row || typeof row !== "object" || typeof (row as Record<string, unknown>).id !== "string") continue;
-    const id = (row as Record<string, unknown>).id as string;
-    const existing = byId.get(id);
-    if (!existing) {
-      byId.set(id, row as Record<string, unknown>);
-      continue;
-    }
-    byId.set(id, tsFromValue(row) >= tsFromValue(existing) ? (row as Record<string, unknown>) : existing);
-  }
-  const clippings = [...byId.values()].sort((a, b) => tsFromValue(b) - tsFromValue(a));
-  return Buffer.from(JSON.stringify({ clippings }, null, 2), "utf-8");
-}
-
 function mergeTasksJson(local: Buffer, remote: Buffer): Buffer {
   const localState = parseJson(local) as { tasks?: unknown[] };
   const remoteState = parseJson(remote) as { tasks?: unknown[] };
@@ -229,7 +204,6 @@ function mergeSettingsJson(local: Buffer, remote: Buffer): Buffer {
 
 export function mergeFileBytes(path: string, local: Buffer, remote: Buffer): Buffer {
   if (path === "app-state/tasks.json") return mergeTasksJson(local, remote);
-  if (path === "app-state/clippings.json") return mergeClippingsJson(local, remote);
   if (path.startsWith("app-state/messages_")) return mergeMessagesJson(local, remote);
   if (path === "settings/settings.json") return mergeSettingsJson(local, remote);
   if (path.endsWith(".json")) {

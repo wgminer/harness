@@ -13,7 +13,14 @@ export type ConversationListRow = {
   createdAt: number;
   sessionKind?: ConversationSessionKind;
   hasAssistantReply?: boolean;
+  /** True once the conversation has at least one persisted message. */
+  hasMessages?: boolean;
 };
+
+/** Sidebar visibility — message-less threads are hidden. */
+export function isSidebarVisibleConversation(row: ConversationListRow): boolean {
+  return row.hasMessages === true;
+}
 
 /** Fallback when a conversation has no stored title (matches historical sidebar labels). */
 export function formatNewChatLabel(createdAt: number): string {

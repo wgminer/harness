@@ -8,7 +8,6 @@ import "./chat.css";
 import "./workspaceShell.css";
 import "./settings.css";
 import "./tasks.css";
-import "./clippings.css";
 import "./notes.css";
 import "highlight.js/styles/github-dark.css";
 import { GOOGLE_FONTS_HREF } from "../shared/theme";

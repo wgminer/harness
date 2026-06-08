@@ -1,21 +1,18 @@
 import {
   useState,
   useEffect,
-  useLayoutEffect,
   useCallback,
   useMemo,
   useRef,
-  type CSSProperties,
 } from "react";
 import {
   ArrowUpRight,
   Settings,
   Plus,
   Search,
-  NotebookText,
+  SquarePen,
   X,
   ListTodo,
-  Clipboard,
   Loader2,
   RefreshCw,
   Circle,
@@ -36,15 +33,9 @@ import {
   type SidebarListSortMode,
   SIDEBAR_INITIAL_VISIBLE_COUNT,
   SIDEBAR_MORE_INCREMENT,
-  computeSidebarListLayout,
-  effectiveSidebarPeekLayout,
   groupConversations,
   nextSidebarListSortMode,
   pickSidebarConversationsForList,
-  SIDEBAR_LIST_LAYOUT_DEFAULTS,
-  sidebarItemPeekFadeLevel,
-  sidebarPeekFadeOpacity,
-  type SidebarListLayout,
 } from "./sidebarUtils";
 
 interface SidebarProps {
@@ -103,11 +94,6 @@ export function Sidebar({
   /** Avoid focusing the search toggle on mount — composer should receive initial focus. */
   const prevSearchOpenRef = useRef<boolean | undefined>(undefined);
 
-  const listWrapRef = useRef<HTMLDivElement>(null);
-  const sidebarCapacityRef = useRef(SIDEBAR_INITIAL_VISIBLE_COUNT);
-  const [listLayout, setListLayout] = useState<SidebarListLayout>(() =>
-    computeSidebarListLayout()
-  );
   const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_INITIAL_VISIBLE_COUNT);
   const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("recent");
   const [syncConfigured, setSyncConfigured] = useState(false);
@@ -152,7 +138,7 @@ export function Sidebar({
     }
     setSearchLoading(true);
     const t = setTimeout(() => {
-      window.electron.memory.searchConversations(trimmed).then((results) => {
+      window.electron.memory.searchConversations(trimmed, true).then((results) => {
         setSearchResults(results);
         setSearchLoading(false);
       });
@@ -205,108 +191,24 @@ export function Sidebar({
         : { ariaLabel: "Switch to time-ago groups", title: "Group by time ago" };
 
   const showSidebarMoreControl = sidebarListConversations.length < conversations.length;
-  const sidebarPeekFadeActive = sidebarVisibleLimit <= listLayout.initialVisibleCount;
-  const peekLayout = useMemo(
-    () => effectiveSidebarPeekLayout(listLayout, sidebarListConversations.length),
-    [listLayout, sidebarListConversations.length]
-  );
-
-  useLayoutEffect(() => {
-    if (searchOpen) return;
-    const wrap = listWrapRef.current;
-    if (!wrap) return;
-
-    const measure = () => {
-      const list = wrap.querySelector<HTMLElement>(".sidebar-list");
-      const sampleItem = wrap.querySelector<HTMLElement>(".sidebar-item");
-      const groupHeader = wrap.querySelector<HTMLElement>(
-        ".sidebar-group-header, .sidebar-group-label"
-      );
-      const expandRow = wrap.querySelector<HTMLElement>(".sidebar-list-expand");
-
-      let listPaddingPx: number | undefined;
-      if (list) {
-        const styles = getComputedStyle(list);
-        listPaddingPx =
-          (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
-      }
-
-      const layout = computeSidebarListLayout({
-        listAreaHeightPx: wrap.clientHeight,
-        rowHeightPx: sampleItem?.offsetHeight,
-        groupHeaderHeightPx: groupHeader?.offsetHeight,
-        expandRowHeightPx:
-          expandRow?.offsetHeight ??
-          (conversations.length > sidebarCapacityRef.current
-            ? SIDEBAR_LIST_LAYOUT_DEFAULTS.expandRowHeightPx
-            : 0),
-        listPaddingPx,
-      });
-
-      setListLayout(layout);
-      const prevCapacity = sidebarCapacityRef.current;
-      sidebarCapacityRef.current = layout.initialVisibleCount;
-      setSidebarVisibleLimit((prev) => {
-        if (prev <= prevCapacity) return layout.initialVisibleCount;
-        return prev;
-      });
-    };
-
-    measure();
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(measure);
-      ro.observe(wrap);
-    }
-    window.addEventListener("resize", measure);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [searchOpen, conversations.length, sidebarListConversations.length]);
 
   const onSidebarShowMore = useCallback(() => {
     setSidebarVisibleLimit((n) => Math.min(conversations.length, n + SIDEBAR_MORE_INCREMENT));
   }, [conversations.length]);
 
   const renderConversationItem = useCallback(
-    (c: Conversation, flatIndex: number) => {
+    (c: Conversation) => {
       const isActive = conversationId === c.id && view === "chat";
-      const peekFadeLevel =
-        !isActive && sidebarPeekFadeActive
-          ? sidebarItemPeekFadeLevel(flatIndex, peekLayout.previewCount, peekLayout.fadePeekCount)
-          : null;
-      const peekOpacity =
-        peekFadeLevel != null
-          ? sidebarPeekFadeOpacity(peekFadeLevel, peekLayout.fadePeekCount)
-          : null;
       const titleGenerating = (titleGenInFlight[c.id] ?? 0) > 0;
       const titlePending = isConversationTitlePending(c.title, titleGenerating);
       const chatStreaming =
         view === "chat" && conversationId === c.id && activeChatProcessing;
       const iconKind = conversationSidebarIconKind(c);
       const Icon = iconKind === "dictation" ? ArrowUpRight : Circle;
-      const isTailItem = sidebarPeekFadeActive && flatIndex >= peekLayout.previewCount;
       return (
         <li
           key={c.id}
-          className={[
-            "sidebar-item",
-            isActive ? "active" : "",
-            isTailItem ? "sidebar-list-tail-item" : "",
-            peekFadeLevel != null ? "sidebar-item--peek-fade" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          style={
-            peekOpacity != null
-              ? ({
-                  "--sidebar-peek-opacity": String(peekOpacity),
-                  "--sidebar-peek-reveal-delay": `${(peekFadeLevel! - 1) * 60}ms`,
-                } satisfies CSSProperties)
-              : undefined
-          }
-          data-peek-inert={peekOpacity === 0 ? "true" : undefined}
+          className={["sidebar-item", isActive ? "active" : ""].filter(Boolean).join(" ")}
           data-testid="sidebar-conversation"
           data-conversation-id={c.id}
           data-session-icon={iconKind}
@@ -356,10 +258,6 @@ export function Sidebar({
       onConversationDelete,
       onConversationSelect,
       onViewChange,
-      peekLayout.fadePeekCount,
-      peekLayout.previewCount,
-      sidebarPeekFadeActive,
-      sidebarVisibleLimit,
       titleGenInFlight,
       view,
     ]
@@ -428,25 +326,14 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              className={`btn list-item-base sidebar-workspace__btn${view === "clippings" ? " active" : ""}`}
-              data-testid="sidebar-clippings"
-              onClick={() => onViewChange("clippings")}
-              aria-label="Clippings"
-              aria-current={view === "clippings" ? "page" : undefined}
-            >
-              <Clipboard size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">Clippings</span>
-            </button>
-            <button
-              type="button"
               className={`btn list-item-base sidebar-workspace__btn${notesItemActive ? " active" : ""}`}
               data-testid="sidebar-notes"
               onClick={onNotesClick}
-              aria-label="Notes"
+              aria-label="Editor"
               aria-current={notesItemActive ? "page" : undefined}
             >
-              <NotebookText size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">Notes</span>
+              <SquarePen size={16} className="sidebar-workspace__icon" aria-hidden />
+              <span className="sidebar-workspace__label">Editor</span>
             </button>
             <button
               type="button"
@@ -461,19 +348,7 @@ export function Sidebar({
             </button>
           </nav>
         )}
-        <div
-          ref={listWrapRef}
-          className={`sidebar-list-wrap${sidebarPeekFadeActive ? " sidebar-list-wrap--peek-fade" : ""}`}
-          style={
-            sidebarPeekFadeActive
-              ? ({
-                  "--sidebar-peek-expand-reveal-delay": `${peekLayout.fadePeekCount * 60}ms`,
-                } satisfies CSSProperties)
-              : undefined
-          }
-        >
-          <div className="sidebar-list__fade-top" aria-hidden />
-          <div className="sidebar-list__fade-bottom" aria-hidden />
+        <div className="sidebar-list-wrap">
           <ul className="sidebar-list">
           {searchOpen ? (
             searchQuery.trim() ? (
@@ -512,9 +387,7 @@ export function Sidebar({
             )
           ) : (
             <>
-              {(() => {
-                let flatConversationIndex = 0;
-                return sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => (
+              {sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => (
                 <li key={key} className="sidebar-group">
                   {groupIndex === 0 ? (
                     <div className="sidebar-group-header">
@@ -534,20 +407,12 @@ export function Sidebar({
                     <span className="sidebar-group-label">{label}</span>
                   )}
                   <ul className="sidebar-group-items">
-                    {items.map((c) => renderConversationItem(c, flatConversationIndex++))}
+                    {items.map((c) => renderConversationItem(c))}
                   </ul>
                 </li>
-              ));
-              })()}
+              ))}
               {showSidebarMoreControl ? (
-                <li
-                  className={[
-                    "sidebar-list-expand",
-                    sidebarPeekFadeActive ? "sidebar-list-tail-item" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
+                <li className="sidebar-list-expand">
                   <div className="sidebar-list-expand-row">
                     <button
                       type="button"

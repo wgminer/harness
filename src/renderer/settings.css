@@ -1,4 +1,4 @@
-/* Config page layout */
+/* System page layout */
 .settings-page {
   overflow: hidden;
 }
@@ -319,24 +319,6 @@
   font-weight: 600;
 }
 
-.settings-model-list {
-  margin-top: 12px;
-}
-
-.settings-model-spend {
-  margin-top: 16px;
-  padding-top: var(--space-3);
-  border-top: 1px solid color-mix(in srgb, var(--border-light) 70%, transparent);
-}
-
-.settings-model-list .usage-stats__row dd code {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-caption);
-  background: none;
-  padding: 0;
-  border: none;
-  color: var(--fg);
-}
 
 /* iOS-style settings switches */
 .settings-switch-row {
@@ -851,12 +833,50 @@
   max-width: 400px;
 }
 
+.settings-playground-colors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.settings-playground-colors .settings-playground-field {
+  margin-bottom: 0;
+}
+
+.settings-playground-typography {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settings-playground-typography-fonts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.settings-playground-typography-fonts .settings-playground-field {
+  margin-bottom: 0;
+}
+
+.settings-playground-typography > .settings-playground-field:last-child {
+  margin-bottom: 0;
+}
+
+.settings-playground-typography-fonts .settings-playground-field select {
+  max-width: none;
+}
+
 .settings-playground-color-row {
   display: grid;
   grid-template-columns: 40px 1fr;
   gap: var(--space-2);
   align-items: center;
   max-width: 320px;
+}
+
+.settings-playground-colors .settings-playground-color-row {
+  max-width: none;
 }
 
 .settings-playground-color-row input[type="color"] {
@@ -973,6 +993,14 @@
   .settings-playground-columns {
     grid-template-columns: 1fr;
     gap: var(--space-3);
+  }
+
+  .settings-playground-colors {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-playground-typography-fonts {
+    grid-template-columns: 1fr;
   }
 }
 

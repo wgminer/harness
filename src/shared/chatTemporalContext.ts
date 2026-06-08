@@ -1,5 +1,7 @@
 /** Prefix on model-facing message bodies; not stored on disk. */
 const SENT_AT_LINE = /^\[sent_at=[^\]]+\]\n/;
+/** Model sometimes echoes sent_at metadata; strip from assistant text before display/persist. */
+const SENT_AT_ARTIFACT = /\[sent_at=[^\]]+\]\n?/g;
 
 function resolveTimeZone(timeZone?: string): string {
   const tz = (timeZone ?? "").trim();
@@ -30,8 +32,9 @@ export function formatTemporalContextBlock(now: Date = new Date(), timeZone?: st
   return [
     "[TEMPORAL_CONTEXT]",
     `Current local date and time (${tz}): ${formatted}`,
-    "When present, a message begins with [sent_at=...] (ISO 8601 UTC) for when it was sent.",
+    "When present, a user message begins with [sent_at=...] (ISO 8601 UTC) for when it was sent.",
     "Use sent_at together with the current time above to interpret relative dates and whether discussed future plans, events, or deadlines have already passed.",
+    "Never include [sent_at=...] in your replies; it is metadata on user messages only.",
   ].join("\n");
 }
 
@@ -44,5 +47,5 @@ export function annotateMessageContentForModel(content: string, timestampMs?: nu
 }
 
 export function stripSentAtPrefix(content: string): string {
-  return content.replace(SENT_AT_LINE, "");
+  return content.replace(SENT_AT_ARTIFACT, "");
 }

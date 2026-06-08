@@ -26,6 +26,14 @@ describe("chatTemporalContext", () => {
     expect(stripSentAtPrefix(annotated)).toBe("body");
   });
 
+  it("stripSentAtPrefix removes echoed artifacts without trailing newline", () => {
+    expect(stripSentAtPrefix("[sent_at=2026-06-07T19:17.802Z]Hello")).toBe("Hello");
+  });
+
+  it("stripSentAtPrefix removes artifacts anywhere in assistant text", () => {
+    expect(stripSentAtPrefix("See [sent_at=2026-06-07T19:17.802Z] above")).toBe("See  above");
+  });
+
   it("formatTemporalContextBlock includes timezone label", () => {
     const block = formatTemporalContextBlock(new Date("2026-05-27T12:00:00Z"), "UTC");
     expect(block).toContain("[TEMPORAL_CONTEXT]");
