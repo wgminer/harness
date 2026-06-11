@@ -22,6 +22,8 @@ export interface SyncStatus {
   lastSyncedRevision: string | null;
   /** Conflict-copy filenames detected in the backup folder (Dropbox / Drive style). */
   conflictCopies: string[];
+  /** Non-null when iCloud (or similar) has only partially downloaded the backup pair. */
+  backupReadiness: string | null;
 }
 
 export interface SyncResult {
