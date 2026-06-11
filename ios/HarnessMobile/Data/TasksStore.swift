@@ -62,6 +62,23 @@ final class TasksStore: ObservableObject {
         return payload
     }
 
+    /// Persists manual order for active tasks via `metadata.sortIndex` (survives sync merge).
+    func reorderActive(taskIds: [String]) throws {
+        var state = try Self.loadTasks(in: localDataDir)
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        for (index, id) in taskIds.enumerated() {
+            guard let taskIndex = state.tasks.firstIndex(where: { $0.id == id }) else { continue }
+            var task = state.tasks[taskIndex]
+            var metadata = task.metadata ?? [:]
+            metadata["sortIndex"] = .number(Double(index))
+            task.metadata = metadata
+            task.updatedAt = nowMs
+            state.tasks[taskIndex] = task
+        }
+        try Self.saveTasks(state.tasks, in: localDataDir)
+        tasks = state.tasks
+    }
+
     @discardableResult
     func clearCompleted() throws -> TasksPayload {
         let payload = Self.applyTaskAction(

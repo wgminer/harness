@@ -305,7 +305,6 @@ final class SyncEngine {
                 }
             }
         }
-        store?.markEdited()
     }
 
     private func loadRemoteBundleData(bundleURL: URL) throws -> [String: Data] {

@@ -100,7 +100,7 @@ export function ChatMessageList({
           if (m.role !== "user") {
             if (m.content)
               assistantBubbleBody = (
-                <MarkdownContent content={stripSentAtPrefix(m.content)} collapsibleNestedLists />
+                <MarkdownContent content={stripSentAtPrefix(m.content)} />
               );
             else if (isLatestAssistantPending) assistantBubbleBody = <ReplyingIndicator />;
           }

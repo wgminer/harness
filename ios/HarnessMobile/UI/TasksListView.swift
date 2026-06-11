@@ -8,7 +8,6 @@ private enum TaskCompleteTiming {
 struct TasksListView: View {
     @ObservedObject var app: AppModel
 
-    @State private var loading = true
     @State private var newTitle = ""
     @State private var creating = false
     @State private var searchQuery = ""
@@ -17,10 +16,17 @@ struct TasksListView: View {
     @State private var completingIds: Set<String> = []
     @State private var modalTask: TaskItem?
     @State private var modalTitle = ""
+    @State private var modalStatus: TaskStatus = .pending
     @State private var modalTags: [String] = []
     @State private var tagInput = ""
     @State private var modalSaving = false
     @State private var loadError: String?
+    @State private var isReordering = false
+    @State private var showClearCompletedConfirm = false
+
+    private var isSearching: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     private var filteredTasks: [TaskItem] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -33,7 +39,8 @@ struct TasksListView: View {
     }
 
     private var activeTasks: [TaskItem] {
-        filteredTasks.filter { TaskStatusPolicy.taskIsActive(TaskStatusPolicy.resolveStatus(for: $0)) }
+        let active = filteredTasks.filter { TaskStatusPolicy.taskIsActive(TaskStatusPolicy.resolveStatus(for: $0)) }
+        return TaskOrdering.sorted(active)
     }
 
     private var completedTasks: [TaskItem] {
@@ -50,20 +57,50 @@ struct TasksListView: View {
 
             Section {
                 DisclosureGroup(isExpanded: $activeOpen) {
-                    if loading {
-                        Text("Loading tasks…")
-                            .foregroundStyle(.secondary)
-                    } else if activeTasks.isEmpty {
+                    if activeTasks.isEmpty {
                         Text(emptyActiveMessage)
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(activeTasks) { task in
                             taskRow(task, completing: completingIds.contains(task.id))
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        deleteTask(task.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    Button {
+                                        toggleDone(task)
+                                    } label: {
+                                        Label("Done", systemImage: "checkmark")
+                                    }
+                                    .tint(.green)
+
+                                    if TaskStatusPolicy.resolveStatus(for: task) != .in_progress {
+                                        Button {
+                                            setStatus(task.id, status: .in_progress)
+                                        } label: {
+                                            Label("In Progress", systemImage: "arrow.right.circle")
+                                        }
+                                        .tint(.blue)
+                                    }
+                                }
                         }
+                        .onMove(perform: moveActiveTasks)
                     }
                 } label: {
-                    Text("Active")
-                        .font(.headline)
+                    HStack {
+                        Text("Active")
+                            .font(.headline)
+                        Spacer()
+                        if !activeTasks.isEmpty {
+                            Text("\(activeTasks.count)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
 
@@ -72,27 +109,82 @@ struct TasksListView: View {
                     DisclosureGroup(isExpanded: completedExpandedBinding) {
                         ForEach(completedTasks) { task in
                             taskRow(task, completing: false)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        deleteTask(task.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    Button {
+                                        toggleDone(task)
+                                    } label: {
+                                        Label("Reopen", systemImage: "arrow.uturn.backward")
+                                    }
+                                    .tint(.blue)
+                                }
                         }
                     } label: {
-                        Text("Completed")
-                            .font(.headline)
+                        HStack {
+                            Text("Completed")
+                                .font(.headline)
+                            Spacer()
+                            Text("\(completedTasks.count)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
         }
         .listStyle(.insetGrouped)
+        .environment(\.editMode, .constant(isReordering ? .active : .inactive))
         .navigationTitle("Tasks")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        withAnimation {
+                            isReordering.toggle()
+                        }
+                    } label: {
+                        Label(isReordering ? "Done Reordering" : "Reorder", systemImage: "line.3.horizontal")
+                    }
+                    .disabled(isSearching || activeTasks.isEmpty)
+
+                    if !completedTasks.isEmpty {
+                        Button("Clear Completed", role: .destructive) {
+                            showClearCompletedConfirm = true
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             composerDock
+        }
+        .refreshable {
+            await app.performSync()
         }
         .sheet(item: $modalTask) { task in
             editSheet(task)
         }
-        .task {
-            await reloadTasks()
+        .confirmationDialog(
+            "Clear completed tasks?",
+            isPresented: $showClearCompletedConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Clear \(completedTasks.count) Tasks", role: .destructive) {
+                clearCompleted()
+            }
+        } message: {
+            Text("Completed and cancelled tasks will be removed.")
         }
-        .alert("Could not load tasks", isPresented: .constant(loadError != nil)) {
+        .alert("Could not update tasks", isPresented: .constant(loadError != nil)) {
             Button("OK") { loadError = nil }
         } message: {
             Text(loadError ?? "")
@@ -101,16 +193,14 @@ struct TasksListView: View {
 
     private var completedExpandedBinding: Binding<Bool> {
         Binding(
-            get: { searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? completedOpen : true },
+            get: { isSearching ? true : completedOpen },
             set: { completedOpen = $0 }
         )
     }
 
     private var emptyActiveMessage: String {
         if app.tasksStore.tasks.isEmpty { return "No tasks yet." }
-        if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "No active tasks match your search."
-        }
+        if isSearching { return "No active tasks match your search." }
         return "No active tasks."
     }
 
@@ -119,6 +209,10 @@ struct TasksListView: View {
             TextField("Describe the task…", text: $newTitle, axis: .vertical)
                 .lineLimit(1 ... 4)
                 .textFieldStyle(.roundedBorder)
+                .submitLabel(.done)
+                .onSubmit {
+                    Task { await createTask() }
+                }
             HStack {
                 Spacer()
                 Button("Add") {
@@ -151,9 +245,20 @@ struct TasksListView: View {
                 openModal(task)
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(task.title)
-                        .foregroundStyle(.primary)
-                        .strikethrough(done)
+                    HStack(spacing: 8) {
+                        Text(task.title)
+                            .foregroundStyle(.primary)
+                            .strikethrough(done)
+                        if status == .in_progress {
+                            Text("In progress")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.15))
+                                .foregroundStyle(.blue)
+                                .clipShape(Capsule())
+                        }
+                    }
                     if !task.tags.isEmpty {
                         TaskTagChips(tags: task.tags)
                     }
@@ -173,6 +278,13 @@ struct TasksListView: View {
                 Section("Title") {
                     TextField("Title", text: $modalTitle, axis: .vertical)
                         .lineLimit(2 ... 6)
+                }
+                Section("Status") {
+                    Picker("Status", selection: $modalStatus) {
+                        ForEach(TaskStatus.allCases, id: \.self) { status in
+                            Text(TaskOrdering.statusLabel(status)).tag(status)
+                        }
+                    }
                 }
                 Section("Tags") {
                     Text("Press Return to add. Underscores show as spaces in the list.")
@@ -212,17 +324,6 @@ struct TasksListView: View {
     }
 
     @MainActor
-    private func reloadTasks() async {
-        loading = true
-        defer { loading = false }
-        do {
-            try app.tasksStore.reload()
-        } catch {
-            loadError = error.localizedDescription
-        }
-    }
-
-    @MainActor
     private func createTask() async {
         let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
@@ -258,6 +359,10 @@ struct TasksListView: View {
         }
     }
 
+    private func setStatus(_ id: String, status: TaskStatus) {
+        patchStatus(id, status: status)
+    }
+
     private func patchStatus(_ id: String, status: TaskStatus) {
         Task {
             do {
@@ -269,9 +374,45 @@ struct TasksListView: View {
         }
     }
 
+    private func deleteTask(_ id: String) {
+        Task {
+            do {
+                _ = try app.tasksStore.delete(id: id)
+                app.store.markEdited()
+            } catch {
+                loadError = error.localizedDescription
+            }
+        }
+    }
+
+    private func clearCompleted() {
+        Task {
+            do {
+                _ = try app.tasksStore.clearCompleted()
+                app.store.markEdited()
+            } catch {
+                loadError = error.localizedDescription
+            }
+        }
+    }
+
+    private func moveActiveTasks(from source: IndexSet, to destination: Int) {
+        var ordered = activeTasks
+        ordered.move(fromOffsets: source, toOffset: destination)
+        Task {
+            do {
+                try app.tasksStore.reorderActive(taskIds: ordered.map(\.id))
+                app.store.markEdited()
+            } catch {
+                loadError = error.localizedDescription
+            }
+        }
+    }
+
     private func openModal(_ task: TaskItem) {
         modalTask = task
         modalTitle = task.title
+        modalStatus = TaskStatusPolicy.resolveStatus(for: task)
         modalTags = TagNormalization.normalizeTags(task.tags)
         tagInput = ""
     }
@@ -294,7 +435,7 @@ struct TasksListView: View {
         modalSaving = true
         defer { modalSaving = false }
         do {
-            _ = try app.tasksStore.update(id: task.id, title: trimmed, tags: modalTags)
+            _ = try app.tasksStore.update(id: task.id, title: trimmed, status: modalStatus, tags: modalTags)
             app.store.markEdited()
             modalTask = nil
         } catch {

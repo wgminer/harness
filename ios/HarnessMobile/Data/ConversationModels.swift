@@ -38,6 +38,7 @@ struct ConversationMeta: Codable, Equatable {
     var createdAt: Int64
     var sessionKind: String?
     var hasAssistantReply: Bool?
+    var hasMessages: Bool?
     var titleSource: String?
 
     /// Parses desktop `conversations.json` entries, tolerating missing or numeric `createdAt`.
@@ -49,11 +50,13 @@ struct ConversationMeta: Codable, Equatable {
         let sessionKind = dict["sessionKind"] as? String
         let titleSource = dict["titleSource"] as? String
         let hasAssistantReply = dict["hasAssistantReply"] as? Bool
+        let hasMessages = dict["hasMessages"] as? Bool
         return ConversationMeta(
             title: title,
             createdAt: createdAt,
             sessionKind: sessionKind,
             hasAssistantReply: hasAssistantReply,
+            hasMessages: hasMessages,
             titleSource: titleSource
         )
     }
@@ -79,6 +82,12 @@ struct ConversationListItem: Identifiable, Equatable {
     let title: String?
     let createdAt: Int64
     let hasAssistantReply: Bool
+    let hasMessages: Bool
+
+    static func isSidebarVisible(meta: ConversationMeta, messageCount: Int) -> Bool {
+        if meta.hasMessages == true { return true }
+        return messageCount > 0
+    }
 
     var displayTitle: String {
         if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

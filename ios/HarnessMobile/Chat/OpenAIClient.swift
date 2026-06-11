@@ -5,6 +5,21 @@ enum OpenAIModel {
     static let chat = "gpt-5.4"
     /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_TITLE_MODEL`).
     static let title = "gpt-5.4-nano"
+    /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_TRANSCRIPT_CLEANUP_MODEL`).
+    static let transcriptCleanup = "gpt-5.4-mini"
+    /// OpenAI Whisper transcription (cloud fallback).
+    static let whisper = "whisper-1"
+}
+
+enum DictationPolish {
+    /// Keep in sync with `src/shared/dictationPolish.ts`.
+    static let instruction =
+        "Polish and clarify the following dictation. Fix grammar and wording; keep the meaning. Reply with a clear, concise version."
+}
+
+enum DictationReplyLabel {
+    /// Keep in sync with `src/shared/dictationReplyStrip.ts`.
+    static let continueLabel = "Continue"
 }
 
 struct ChatCompletionMessage {
@@ -232,6 +247,77 @@ final class OpenAIClient {
             .replacingOccurrences(of: #"["'`]"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func transcribeAudio(at url: URL) async throws -> String {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120
+
+        let fileData = try Data(contentsOf: url)
+        let filename = url.lastPathComponent
+        var body = Data()
+        func appendField(name: String, value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+        appendField(name: "model", value: OpenAIModel.whisper)
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: audio/m4a\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            throw OpenAIError.httpFailure
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let text = json["text"] as? String
+        else {
+            throw OpenAIError.httpFailure
+        }
+        return text
+    }
+
+    func cleanupTranscript(text: String, userInstructions: String) async throws -> String {
+        let systemPrompt =
+            "You are an expert transcript editor for dictation text. Rewrite the transcript to remove filler words, verbal stumbles, and false starts while preserving meaning. Improve punctuation and readability. Do not add new facts. Keep proper nouns and technical terms intact. Return only the cleaned transcript text.\n\nAdditional user instructions:\n" +
+            userInstructions
+
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 8
+
+        let body: [String: Any] = [
+            "model": OpenAIModel.transcriptCleanup,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": text],
+            ],
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            throw OpenAIError.httpFailure
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let content = message["content"] as? String
+        else {
+            throw OpenAIError.httpFailure
+        }
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func parseToolArguments(_ raw: String) -> [String: Any] {

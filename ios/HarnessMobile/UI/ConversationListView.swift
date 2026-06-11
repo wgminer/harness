@@ -1,22 +1,39 @@
 import SwiftUI
-import UIKit
 
 struct ConversationListView: View {
     @ObservedObject var app: AppModel
     let onSelect: (String) -> Void
 
     @State private var createError: String?
-    @Environment(\.colorScheme) private var colorScheme
+    @State private var showDictationSheet = false
+    @State private var searchQuery = ""
+    @State private var conversationToRename: ConversationListItem?
+    @State private var renameDraft = ""
+    @State private var showRenameAlert = false
 
-    private var headerQuote: String {
-        HeaderQuotePolicy.homeHeaderQuote
+    private var filteredConversations: [ConversationListItem] {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return app.store.conversations }
+        return app.store.conversations.filter { $0.displayTitle.lowercased().contains(query) }
+    }
+
+    private var activeTaskCount: Int {
+        app.tasksStore.tasks.filter { TaskStatusPolicy.taskIsActive(TaskStatusPolicy.resolveStatus(for: $0)) }.count
     }
 
     var body: some View {
         List {
-            headerSection
+            if app.hasCompletedInitialLoad, !app.store.conversations.isEmpty {
+                Section {
+                    TextField("Search conversations…", text: $searchQuery)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+            }
 
-            if app.store.conversations.isEmpty {
+            if !app.hasCompletedInitialLoad {
+                conversationsLoadingSection
+            } else if app.store.conversations.isEmpty {
                 ContentUnavailableView(
                     "No conversations",
                     systemImage: "bubble.left.and.bubble.right",
@@ -24,29 +41,22 @@ struct ConversationListView: View {
                 )
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+            } else if filteredConversations.isEmpty {
+                ContentUnavailableView.search(text: searchQuery)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             } else {
-                ForEach(app.store.conversations) { item in
-                    Button {
-                        onSelect(item.id)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.displayTitle)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                            Text(
-                                Date(timeIntervalSince1970: TimeInterval(item.createdAt) / 1000),
-                                style: .relative
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-                    }
+                ForEach(filteredConversations) { item in
+                    conversationRow(item)
                 }
             }
         }
         .listStyle(.plain)
         .navigationTitle("Harness")
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await app.performSync()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 SyncToolbarButton(app: app) {
@@ -58,7 +68,7 @@ struct ConversationListView: View {
                     NavigationLink {
                         TasksListView(app: app)
                     } label: {
-                        Image(systemName: "checklist")
+                        TasksToolbarIcon(activeCount: activeTaskCount)
                     }
                     .accessibilityLabel("Tasks")
 
@@ -76,92 +86,83 @@ struct ConversationListView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            Color.clear.frame(height: 84)
+            Color.clear.frame(height: BottomBarMetrics.reservedHeight)
         }
         .overlay(alignment: .bottom) {
-            newChatPill
-                .padding(.horizontal, 24)
-                .padding(.bottom, 12)
+            homeBottomBar
+                .padding(.horizontal, BottomBarMetrics.horizontalInset)
+                .padding(.bottom, BottomBarMetrics.bottomInset)
         }
         .alert("Could not start chat", isPresented: .constant(createError != nil)) {
             Button("OK") { createError = nil }
         } message: {
             Text(createError ?? "")
         }
+        .alert("Rename conversation", isPresented: $showRenameAlert) {
+            TextField("Title", text: $renameDraft)
+            Button("Save") {
+                guard let item = conversationToRename else { return }
+                renameConversation(id: item.id, title: renameDraft)
+            }
+            Button("Cancel", role: .cancel) {
+                conversationToRename = nil
+            }
+        }
+        .sheet(isPresented: $showDictationSheet) {
+            DictationRecordingSheet(app: app, isPresented: $showDictationSheet) { conversationId in
+                onSelect(conversationId)
+            }
+        }
     }
 
-    private var headerSection: some View {
+    private var conversationsLoadingSection: some View {
         Section {
-            VStack(spacing: 12) {
-                if !headerQuote.isEmpty {
-                    Text(headerQuote)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(Self.quoteLineSpacing)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
-                        .frame(maxWidth: .infinity)
-                }
+            VStack(spacing: 16) {
+                ProgressView()
+                    .controlSize(.large)
+                Text("Loading conversations…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 48)
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
         }
     }
 
-    /// Extra line spacing so total line height ≈ 1.5× the title2 point size.
-    private static var quoteLineSpacing: CGFloat {
-        let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .title2).pointSize, weight: .semibold)
-        let targetLineHeight = font.pointSize * 1.5
-        return max(0, targetLineHeight - font.lineHeight)
-    }
+    private var homeBottomBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                createNewChat()
+            } label: {
+                Label("New Chat", systemImage: "plus")
+                    .labelStyle(.titleAndIcon)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, BottomBarMetrics.collapsedInnerHorizontal)
+                    .padding(.vertical, BottomBarMetrics.collapsedInnerVertical)
+                    .frame(maxWidth: .infinity)
+                    .liquidGlassSurface(
+                        cornerRadius: BottomBarMetrics.collapsedCornerRadius,
+                        shadowOffsetY: 6
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("New Chat")
 
-    private var newChatPill: some View {
-        Button {
-            Task { await createNewChat() }
-        } label: {
-            Label("New Chat", systemImage: "plus")
-                .labelStyle(.titleAndIcon)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 20)
-                .frame(maxWidth: .infinity)
-                .background {
-                    Capsule(style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Capsule(style: .continuous)
-                                .strokeBorder(
-                                    Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.10),
-                                    lineWidth: 1
-                                )
-                        }
-                        .overlay(alignment: .top) {
-                            Capsule(style: .continuous)
-                                .strokeBorder(
-                                    Color.white.opacity(colorScheme == .dark ? 0.12 : 0.35),
-                                    lineWidth: 1
-                                )
-                                .blur(radius: 0.5)
-                                .mask {
-                                    LinearGradient(
-                                        colors: [.white, .clear],
-                                        startPoint: .top,
-                                        endPoint: .center
-                                    )
-                                }
-                                .allowsHitTesting(false)
-                        }
-                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.35 : 0.14), radius: 24, y: 6)
-                }
+            Button {
+                showDictationSheet = true
+            } label: {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color(.systemBackground))
+                    .frame(width: 56, height: 56)
+                    .background(Circle().fill(Color.red))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dictate")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("New Chat")
     }
 
     private var settingsAttentionColor: Color? {
@@ -174,19 +175,97 @@ struct ConversationListView: View {
         return nil
     }
 
-    private func createNewChat() async {
+    private func createNewChat() {
+        app.openCompose()
+    }
+
+    private func deleteConversation(id: String) {
         do {
-            let id = try app.store.createConversation()
-            onSelect(id)
+            try app.deleteConversation(id: id)
         } catch {
             createError = error.localizedDescription
         }
+    }
+
+    private func renameConversation(id: String, title: String) {
+        do {
+            try app.store.setUserTitle(conversationId: id, title: title)
+        } catch {
+            createError = error.localizedDescription
+        }
+    }
+
+    @ViewBuilder
+    private func conversationRow(_ item: ConversationListItem) -> some View {
+        Button {
+            onSelect(item.id)
+        } label: {
+            ConversationRow(item: item)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                deleteConversation(id: item.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            Button {
+                conversationToRename = item
+                renameDraft = item.displayTitle
+                showRenameAlert = true
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            Button(role: .destructive) {
+                deleteConversation(id: item.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+}
+
+private struct ConversationRow: View {
+    let item: ConversationListItem
+
+    var body: some View {
+        Text(item.displayTitle)
+            .font(.headline)
+            .foregroundStyle(.primary)
+    }
+}
+
+private struct TasksToolbarIcon: View {
+    let activeCount: Int
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: "checklist")
+            if activeCount > 0 {
+                Text(activeCount > 99 ? "99+" : "\(activeCount)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, activeCount > 9 ? 4 : 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.red))
+                    .offset(x: 10, y: -8)
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityValue(activeCount > 0 ? "\(activeCount) active tasks" : "No active tasks")
+    }
+}
+
+#Preview("Loading") {
+    PreviewNavigationRoot {
+        ConversationListView(app: AppModel(localDataSubpath: "preview-loading-\(UUID().uuidString)")) { _ in }
     }
 }
 
 #Preview("With conversations") {
     PreviewNavigationRoot {
-        ConversationListView(app: PreviewSupport.populatedApp()) { _ in }
+        ConversationListView(app: PreviewSupport.populatedApp(withTasks: true)) { _ in }
     }
 }
 

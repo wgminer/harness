@@ -2,9 +2,16 @@ import SwiftUI
 
 struct MobileSettingsView: View {
     @ObservedObject var app: AppModel
+    @StateObject private var recordingPlayer = RecordingPlayer()
+    @Environment(\.dismiss) private var dismiss
     @State private var apiKey = ""
     @State private var showFolderPicker = false
+    @State private var showVoiceMemoImport = false
     @State private var settingsMessage = ""
+    @State private var recordingCount = 0
+    @State private var recentRecordings: [VoiceRecording] = []
+    @State private var retranscribingRecordingId: String?
+    @State private var retranscribeError: String?
 
     var body: some View {
         Form {
@@ -113,6 +120,81 @@ struct MobileSettingsView: View {
                 }
             }
 
+            Section {
+                Button("Import Voice Memo") {
+                    showVoiceMemoImport = true
+                }
+
+                LabeledContent("Saved on device") {
+                    Text("\(recordingCount)")
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(RecordingStorage.displayPath)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("Recordings stay on this device and are not synced to your backup folder.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if recentRecordings.isEmpty {
+                    Text("No voice recordings yet.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(recentRecordings) { recording in
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(recording.url.lastPathComponent)
+                                    .font(.subheadline)
+                                    .lineLimit(1)
+
+                                Text(recordingDetail(for: recording))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Button {
+                                recordingPlayer.toggle(recording)
+                            } label: {
+                                Image(systemName: recordingPlayer.playingRecordingId == recording.id ? "stop.fill" : "play.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .accessibilityLabel(recordingPlayer.playingRecordingId == recording.id ? "Stop" : "Play")
+
+                            Spacer(minLength: 8)
+
+                            Button {
+                                Task { await retranscribe(recording) }
+                            } label: {
+                                if retranscribingRecordingId == recording.id {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Text("Retranscribe")
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .disabled(retranscribingRecordingId != nil)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
+                if let retranscribeError {
+                    Text(retranscribeError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("Voice recordings")
+            } footer: {
+                Text("Retranscribe uses Apple on-device speech when possible, then Whisper if you have an API key.")
+            }
+
             if !settingsMessage.isEmpty {
                 Section {
                     Text(settingsMessage)
@@ -123,6 +205,16 @@ struct MobileSettingsView: View {
         .navigationTitle("Settings")
         .onAppear {
             apiKey = KeychainStore.loadAPIKey() ?? ""
+            reloadRecordings()
+        }
+        .onDisappear {
+            recordingPlayer.stop()
+        }
+        .sheet(isPresented: $showVoiceMemoImport) {
+            VoiceMemoImportSheet(app: app, isPresented: $showVoiceMemoImport) { conversationId in
+                app.openThread(id: conversationId)
+                dismiss()
+            }
         }
         .sheet(isPresented: $showFolderPicker) {
             FolderPicker { url in
@@ -137,6 +229,40 @@ struct MobileSettingsView: View {
                 }
                 url.stopAccessingSecurityScopedResource()
             }
+        }
+    }
+
+    private func reloadRecordings() {
+        do {
+            recordingCount = try RecordingStorage.recordingCount()
+            recentRecordings = try RecordingStorage.listRecordings(limit: 3)
+        } catch {
+            recordingCount = 0
+            recentRecordings = []
+        }
+    }
+
+    private func recordingDetail(for recording: VoiceRecording) -> String {
+        let timestamp = recording.recordedAt.formatted(
+            .dateTime.month(.abbreviated).day().year().hour().minute()
+        )
+        if let duration = recording.duration {
+            return "\(timestamp) · \(RecordingStorage.formattedDuration(duration))"
+        }
+        return timestamp
+    }
+
+    private func retranscribe(_ recording: VoiceRecording) async {
+        retranscribeError = nil
+        retranscribingRecordingId = recording.id
+        defer { retranscribingRecordingId = nil }
+
+        do {
+            let conversationId = try await app.retranscribeRecording(at: recording.url)
+            app.openThread(id: conversationId)
+            dismiss()
+        } catch {
+            retranscribeError = error.localizedDescription
         }
     }
 }
