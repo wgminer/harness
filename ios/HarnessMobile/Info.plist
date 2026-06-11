@@ -34,5 +34,13 @@
 	</array>
 	<key>UISupportsDocumentBrowser</key>
 	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Harness uses the microphone to record voice dictation.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Harness transcribes voice recordings on-device using Apple Speech recognition.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 </dict>
 </plist>

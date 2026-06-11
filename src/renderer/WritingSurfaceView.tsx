@@ -14,8 +14,10 @@ import {
   X,
 } from "lucide-react";
 import {
+  adjustMarkdownListItemIndent,
   DEFAULT_NOTE_TEMPLATES,
   getListContinuationPrefixForLine,
+  isMarkdownListItemLine,
   normalizeNoteTemplates,
   stripLeadingMarkdownHeading,
   type NoteSummary,
@@ -698,10 +700,49 @@ export function NotesView({
 
     if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
+    e.stopPropagation();
     const editor = e.currentTarget;
     const value = editor.value;
     const selectionStart = editor.selectionStart ?? 0;
     const selectionEnd = editor.selectionEnd ?? 0;
+    const blockStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
+    const blockEnd =
+      selectionStart === selectionEnd
+        ? (() => {
+            const lineEnd = value.indexOf("\n", selectionStart);
+            return lineEnd === -1 ? value.length : lineEnd;
+          })()
+        : selectionEnd;
+    const block = value.slice(blockStart, blockEnd);
+    const listDirection = e.shiftKey ? "outdent" : "indent";
+    const useListIndent =
+      selectionStart === selectionEnd
+        ? isMarkdownListItemLine(block)
+        : block.split("\n").some(isMarkdownListItemLine);
+
+    if (useListIndent) {
+      const adjusted = adjustMarkdownListItemIndent(block, listDirection);
+      if (adjusted.changed) {
+        const nextDraft = `${value.slice(0, blockStart)}${adjusted.block}${value.slice(blockEnd)}`;
+        setDraft(nextDraft);
+        if (selectionStart === selectionEnd) {
+          const caretDelta = listDirection === "indent" ? adjusted.deltaAtStart : -adjusted.deltaAtStart;
+          const nextCaret = Math.max(blockStart, selectionStart + caretDelta);
+          requestAnimationFrame(() => editor.setSelectionRange(nextCaret, nextCaret));
+        } else {
+          requestAnimationFrame(() => {
+            editor.setSelectionRange(
+              Math.max(blockStart, selectionStart + (listDirection === "indent" ? adjusted.deltaAtStart : -adjusted.deltaAtStart)),
+              Math.max(blockStart, selectionEnd + (listDirection === "indent" ? adjusted.deltaTotal : -adjusted.deltaTotal)),
+            );
+          });
+        }
+        return;
+      }
+      if (selectionStart === selectionEnd) {
+        return;
+      }
+    }
 
     if (selectionStart === selectionEnd) {
       if (e.shiftKey) {

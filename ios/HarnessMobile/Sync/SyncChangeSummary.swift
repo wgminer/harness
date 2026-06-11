@@ -1,6 +1,6 @@
 import Foundation
 
-struct ConversationSnapshot: Equatable {
+struct ConversationSnapshot: Equatable, Codable {
     let id: String
     let title: String?
     let createdAt: Int64
@@ -88,5 +88,35 @@ enum SyncChangeSummary {
 
         guard !parts.isEmpty else { return nil }
         return parts.joined(separator: " · ")
+    }
+
+    /// Human-readable pending changes since the last successful sync.
+    static func describePendingLocalChanges(
+        baseline: [String: ConversationSnapshot],
+        current: [String: ConversationSnapshot]
+    ) -> String? {
+        guard !baseline.isEmpty else { return nil }
+        if let changes = describeConversationChanges(before: baseline, after: current) {
+            return changes
+        }
+        return "Tasks or other data changed on this phone."
+    }
+}
+
+enum PendingSyncTracker {
+    static let baselineKey = "harness.syncBaselineConversations"
+
+    static func saveBaseline(_ snapshot: [String: ConversationSnapshot]) {
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: baselineKey)
+    }
+
+    static func loadBaseline() -> [String: ConversationSnapshot]? {
+        guard let data = UserDefaults.standard.data(forKey: baselineKey) else { return nil }
+        return try? JSONDecoder().decode([String: ConversationSnapshot].self, from: data)
+    }
+
+    static func clearBaseline() {
+        UserDefaults.standard.removeObject(forKey: baselineKey)
     }
 }

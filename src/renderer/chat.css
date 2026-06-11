@@ -302,49 +302,6 @@
   margin-top: 2px;
 }
 
-/* Nested lists: closed <details> wrappers (see rehypeNestedListDetails.ts). */
-.message-block.assistant .content .md-nested-list {
-  margin: var(--space-1) 0 0;
-}
-
-.message-block.assistant .content .md-nested-list__summary {
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-  font-size: var(--font-size-caption);
-  color: var(--fg-muted);
-  padding: 0;
-}
-
-.message-block.assistant .content .md-nested-list__summary::-webkit-details-marker {
-  display: none;
-}
-
-.message-block.assistant .content .md-nested-list__summary::before {
-  content: "▸";
-  display: inline-block;
-  margin-right: var(--space-1);
-  font-size: 10px;
-  transition: transform var(--motion-duration-ui) ease;
-}
-
-.message-block.assistant .content .md-nested-list__summary::after {
-  content: "Show sub-items";
-}
-
-.message-block.assistant .content .md-nested-list[open] > .md-nested-list__summary::before {
-  transform: rotate(90deg);
-}
-
-.message-block.assistant .content .md-nested-list[open] > .md-nested-list__summary::after {
-  content: "Hide sub-items";
-}
-
-.message-block.assistant .content .md-nested-list > ul,
-.message-block.assistant .content .md-nested-list > ol {
-  margin: var(--space-1) 0 0;
-}
-
 .message-block.assistant .content li > p {
   margin: 0;
 }

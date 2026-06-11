@@ -121,6 +121,120 @@ final class ChatService: ObservableObject {
         scheduleTitleRefinement(conversationId: conversationId)
     }
 
+    /// Stream assistant reply without adding a new user message.
+    func generateReply(
+        conversationId: String,
+        onStreamChunk: @escaping (String) -> Void,
+        onToolCall: @escaping (ToolCallRecord) -> Void
+    ) async throws {
+        guard let client else { throw OpenAIError.missingAPIKey }
+        errorMessage = nil
+        isStreaming = true
+        defer { isStreaming = false }
+
+        let apiMessages = try buildMessages(conversationId: conversationId)
+        let result = try await client.streamChatWithTools(
+            messages: apiMessages,
+            tools: AssistantToolDefinitions.openAITools,
+            executeTool: { [weak self] name, args in
+                guard let self else { return #"{"error":"Chat unavailable"}"# }
+                if TaskToolDefinitions.gatedToolNames.contains(name) {
+                    onToolCall(ToolCallRecord(toolName: name, payload: [
+                        "pending": true,
+                        "tool": name,
+                        "args": args,
+                    ]))
+                }
+                let toolResult: String
+                if TaskToolDefinitions.toolNames.contains(name) {
+                    guard let taskToolExecutor = self.taskToolExecutor else {
+                        return #"{"error":"Chat unavailable"}"#
+                    }
+                    toolResult = try await taskToolExecutor.execute(name: name, args: args)
+                } else if ChatToolDefinitions.toolNames.contains(name) {
+                    toolResult = try AssistantTools.execute(name: name, args: args, store: self.store)
+                } else {
+                    toolResult = #"{"error":"Unknown tool: \(name)"}"#
+                }
+                if AssistantToolDefinitions.trackedToolNames.contains(name),
+                   let payload = self.parseJSONObject(toolResult) {
+                    onToolCall(ToolCallRecord(toolName: name, payload: payload))
+                }
+                return toolResult
+            },
+            onChunk: onStreamChunk
+        )
+
+        try store.appendMessage(
+            conversationId: conversationId,
+            role: .assistant,
+            content: ChatTemporalContext.stripSentAtPrefix(result.content),
+            model: OpenAIModel.chat,
+            toolCalls: result.toolCalls.isEmpty ? nil : result.toolCalls
+        )
+        scheduleTitleRefinement(conversationId: conversationId)
+    }
+
+    /// Pop last user message, send polish instruction + transcript, stream assistant reply.
+    func polishLastUser(
+        conversationId: String,
+        onStreamChunk: @escaping (String) -> Void,
+        onToolCall: @escaping (ToolCallRecord) -> Void
+    ) async throws {
+        guard let client else { throw OpenAIError.missingAPIKey }
+        guard let taskToolExecutor else { throw OpenAIError.missingAPIKey }
+        guard let transcript = try store.popLastUserMessage(conversationId: conversationId) else {
+            throw OpenAIError.httpFailure
+        }
+
+        errorMessage = nil
+        isStreaming = true
+        defer { isStreaming = false }
+
+        try store.appendMessage(conversationId: conversationId, role: .user, content: DictationPolish.instruction)
+        try store.appendMessage(conversationId: conversationId, role: .user, content: transcript)
+        let apiMessages = try buildMessages(conversationId: conversationId)
+        let result = try await client.streamChatWithTools(
+            messages: apiMessages,
+            tools: AssistantToolDefinitions.openAITools,
+            executeTool: { [weak self] name, args in
+                guard let self else { return #"{"error":"Chat unavailable"}"# }
+                if TaskToolDefinitions.gatedToolNames.contains(name) {
+                    onToolCall(ToolCallRecord(toolName: name, payload: [
+                        "pending": true,
+                        "tool": name,
+                        "args": args,
+                    ]))
+                }
+                let toolResult: String
+                if TaskToolDefinitions.toolNames.contains(name) {
+                    guard let taskToolExecutor = self.taskToolExecutor else {
+                        return #"{"error":"Chat unavailable"}"#
+                    }
+                    toolResult = try await taskToolExecutor.execute(name: name, args: args)
+                } else if ChatToolDefinitions.toolNames.contains(name) {
+                    toolResult = try AssistantTools.execute(name: name, args: args, store: self.store)
+                } else {
+                    toolResult = #"{"error":"Unknown tool: \(name)"}"#
+                }
+                if AssistantToolDefinitions.trackedToolNames.contains(name),
+                   let payload = self.parseJSONObject(toolResult) {
+                    onToolCall(ToolCallRecord(toolName: name, payload: payload))
+                }
+                return toolResult
+            },
+            onChunk: onStreamChunk
+        )
+        try store.appendMessage(
+            conversationId: conversationId,
+            role: .assistant,
+            content: ChatTemporalContext.stripSentAtPrefix(result.content),
+            model: OpenAIModel.chat,
+            toolCalls: result.toolCalls.isEmpty ? nil : result.toolCalls
+        )
+        scheduleTitleRefinement(conversationId: conversationId)
+    }
+
     func resolveGatedTool(_ action: GatedToolAction) {
         gatedToolCoordinator.resolve(action)
     }

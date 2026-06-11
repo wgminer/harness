@@ -157,21 +157,4 @@ describe("markdown directives", () => {
     expect(html).toContain("<strong>world</strong>");
     expect(html).toContain("<table>");
   });
-
-  it("wraps nested lists in closed details when enabled", () => {
-    const html = renderToStaticMarkup(
-      <MarkdownContent
-        collapsibleNestedLists
-        content={"- Parent\n  - Child one\n  - Child two\n- Sibling"}
-      />,
-    );
-    expect(html).toContain('class="md-nested-list"');
-    expect(html).toContain("<summary");
-    expect(html).not.toMatch(/<details[^>]*\sopen=/);
-  });
-
-  it("leaves top-level lists unwrapped when collapsible nested lists are disabled", () => {
-    const html = render("- Parent\n  - Child\n- Sibling");
-    expect(html).not.toContain("md-nested-list");
-  });
 });

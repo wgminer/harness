@@ -39,7 +39,7 @@ struct ReplyingIndicatorView: View {
         HStack(spacing: 8) {
             ProgressView().controlSize(.small)
             Text("Replying…")
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

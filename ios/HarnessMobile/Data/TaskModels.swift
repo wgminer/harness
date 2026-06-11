@@ -50,6 +50,43 @@ enum TaskActionKind: String, Equatable {
     case clear_completed
 }
 
+enum TaskOrdering {
+    private static let sortIndexKey = "sortIndex"
+
+    static func sortIndex(for task: TaskItem) -> Double? {
+        guard let metadata = task.metadata,
+              case .number(let value) = metadata[sortIndexKey]
+        else { return nil }
+        return value
+    }
+
+    static func sorted(_ tasks: [TaskItem]) -> [TaskItem] {
+        tasks.sorted { lhs, rhs in
+            let left = sortIndex(for: lhs)
+            let right = sortIndex(for: rhs)
+            switch (left, right) {
+            case let (l?, r?):
+                return l < r
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                return lhs.createdAt > rhs.createdAt
+            }
+        }
+    }
+
+    static func statusLabel(_ status: TaskStatus) -> String {
+        switch status {
+        case .pending: return "To do"
+        case .in_progress: return "In progress"
+        case .completed: return "Done"
+        case .cancelled: return "Cancelled"
+        }
+    }
+}
+
 enum TaskStatusPolicy {
     private static let statusPriority: [TaskStatus] = [.completed, .cancelled, .in_progress, .pending]
 

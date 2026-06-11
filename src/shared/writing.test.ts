@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   NOTE_TEMPLATE_CURSOR_TOKEN,
   NOTE_TEMPLATE_TODAY_TOKEN,
+  adjustMarkdownListItemIndent,
   getListContinuationPrefixForLine,
+  isMarkdownListItemLine,
   interpolateNoteTemplateContent,
   interpolateNoteTemplateTitle,
   normalizeNoteTemplateDescription,
@@ -133,6 +135,51 @@ describe("getListContinuationPrefixForLine", () => {
   it("does not continue blank or non-list lines", () => {
     expect(getListContinuationPrefixForLine("- ")).toBeNull();
     expect(getListContinuationPrefixForLine("plain text")).toBeNull();
+  });
+});
+
+describe("isMarkdownListItemLine", () => {
+  it("matches unordered and ordered list markers", () => {
+    expect(isMarkdownListItemLine("- item")).toBe(true);
+    expect(isMarkdownListItemLine("- ")).toBe(true);
+    expect(isMarkdownListItemLine("    - nested")).toBe(true);
+    expect(isMarkdownListItemLine("1. first")).toBe(true);
+    expect(isMarkdownListItemLine("plain text")).toBe(false);
+  });
+});
+
+describe("adjustMarkdownListItemIndent", () => {
+  it("indents list lines by four spaces", () => {
+    expect(adjustMarkdownListItemIndent("- item", "indent")).toEqual({
+      block: "    - item",
+      deltaAtStart: 4,
+      deltaTotal: 4,
+      changed: true,
+    });
+  });
+
+  it("outdents list lines by up to four spaces", () => {
+    expect(adjustMarkdownListItemIndent("    - item", "outdent")).toEqual({
+      block: "- item",
+      deltaAtStart: 4,
+      deltaTotal: 4,
+      changed: true,
+    });
+    expect(adjustMarkdownListItemIndent("- item", "outdent")).toEqual({
+      block: "- item",
+      deltaAtStart: 0,
+      deltaTotal: 0,
+      changed: false,
+    });
+  });
+
+  it("indents each list line in a multi-line block", () => {
+    expect(adjustMarkdownListItemIndent("- one\n- two", "indent")).toEqual({
+      block: "    - one\n    - two",
+      deltaAtStart: 4,
+      deltaTotal: 8,
+      changed: true,
+    });
   });
 });
 

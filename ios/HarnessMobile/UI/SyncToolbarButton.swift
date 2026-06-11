@@ -49,6 +49,9 @@ struct SyncToolbarButton: View {
         if app.syncStatus.showsAttentionDot {
             return app.syncStatus.detail ?? app.syncStatus.title
         }
+        if let detail = app.pendingChangesDetail {
+            return detail
+        }
         if app.store.hasLocalEdits {
             return "Unsynced changes on this phone"
         }

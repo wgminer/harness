@@ -11,10 +11,15 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             ConversationListView(app: app) { conversationId in
-                app.selectedConversationId = conversationId
+                app.openThread(id: conversationId)
             }
-            .navigationDestination(item: selectedConversationBinding) { conversationId in
-                ChatThreadView(app: app, conversationId: conversationId)
+            .navigationDestination(item: chatRouteBinding) { route in
+                switch route {
+                case .compose:
+                    ComposeChatView(app: app)
+                case .thread(let conversationId):
+                    ChatThreadView(app: app, conversationId: conversationId)
+                }
             }
         }
         .task {
@@ -52,10 +57,15 @@ struct ContentView: View {
         return parts.joined(separator: " ")
     }
 
-    private var selectedConversationBinding: Binding<String?> {
+    private var chatRouteBinding: Binding<ChatRoute?> {
         Binding(
-            get: { app.selectedConversationId },
-            set: { app.selectedConversationId = $0 }
+            get: { app.chatRoute },
+            set: { newValue in
+                if newValue == nil, case .compose = app.chatRoute {
+                    app.clearComposeDraft()
+                }
+                app.chatRoute = newValue
+            }
         )
     }
 }
@@ -68,7 +78,7 @@ struct ContentView: View {
     ContentView(
         app: {
             let app = PreviewSupport.populatedApp()
-            app.selectedConversationId = PreviewSupport.sampleConversationId
+            app.openThread(id: PreviewSupport.sampleConversationId)
             return app
         }()
     )

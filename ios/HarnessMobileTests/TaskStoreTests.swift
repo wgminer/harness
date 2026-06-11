@@ -32,19 +32,6 @@ final class TaskStoreTests: XCTestCase {
     }
 
     @MainActor
-    func testClearCompletedPreservesActiveTasks() throws {
-        let store = TasksStore(localDataDir: tempDir)
-        _ = try store.create(title: "Done", status: .completed)
-        _ = try store.create(title: "In progress", status: .in_progress)
-        _ = try store.create(title: "Cancelled", status: .cancelled)
-
-        let cleared = try store.clearCompleted()
-        XCTAssertEqual(cleared.tasks.count, 1)
-        XCTAssertEqual(cleared.tasks.first?.status, .in_progress)
-        XCTAssertEqual(cleared.tasks.first?.title, "In progress")
-    }
-
-    @MainActor
     func testMigratesLegacyStatusInTagsWhenLoading() throws {
         let raw: [String: Any] = [
             "tasks": [[
@@ -63,5 +50,36 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(loaded.tasks.count, 1)
         XCTAssertEqual(loaded.tasks[0].status, .pending)
         XCTAssertEqual(loaded.tasks[0].tags, ["work"])
+    }
+
+    @MainActor
+    func testClearCompletedPreservesActiveTasks() throws {
+        let store = TasksStore(localDataDir: tempDir)
+        _ = try store.create(title: "Done", status: .completed)
+        _ = try store.create(title: "In progress", status: .in_progress)
+        _ = try store.create(title: "Cancelled", status: .cancelled)
+
+        let cleared = try store.clearCompleted()
+        XCTAssertEqual(cleared.tasks.count, 1)
+        XCTAssertEqual(cleared.tasks.first?.status, .in_progress)
+        XCTAssertEqual(cleared.tasks.first?.title, "In progress")
+    }
+
+    @MainActor
+    func testReorderActivePersistsSortIndexMetadata() throws {
+        let store = TasksStore(localDataDir: tempDir)
+        let firstId = try XCTUnwrap(try store.create(title: "First").affectedIds?.first)
+        let secondId = try XCTUnwrap(try store.create(title: "Second").affectedIds?.first)
+        let thirdId = try XCTUnwrap(try store.create(title: "Third").affectedIds?.first)
+        let ids = [thirdId, firstId, secondId]
+
+        try store.reorderActive(taskIds: ids)
+        try store.reload()
+
+        let ordered = TaskOrdering.sorted(store.tasks.filter { TaskStatusPolicy.taskIsActive($0.status) })
+        XCTAssertEqual(ordered.map(\.title), ["Third", "First", "Second"])
+        XCTAssertEqual(TaskOrdering.sortIndex(for: ordered[0]), 0)
+        XCTAssertEqual(TaskOrdering.sortIndex(for: ordered[1]), 1)
+        XCTAssertEqual(TaskOrdering.sortIndex(for: ordered[2]), 2)
     }
 }

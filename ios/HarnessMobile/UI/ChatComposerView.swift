@@ -1,11 +1,15 @@
 import SwiftUI
 
-/// Message composer — liquid glass shell aligned with desktop `.chat-composer-inner`.
+/// Message composer for chat threads.
 struct ChatComposerView: View {
-    var conversationId: String
-    var isStreaming: Bool
-    var onSend: (String) -> Void
-    var onStop: () -> Void
+    let conversationId: String
+    let isStreaming: Bool
+    let autofocusOnAppear: Bool
+    let initialDraft: String
+    let onDraftChange: (String) -> Void
+    let onClearDraft: () -> Void
+    let onSend: (String) -> Void
+    let onStop: () -> Void
 
     @State private var draft = ""
     @FocusState private var isFocused: Bool
@@ -65,19 +69,25 @@ struct ChatComposerView: View {
             .padding(.bottom, 14)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .composerGlassBackground(cornerRadius: 20)
-        .onChange(of: conversationId) { _, _ in
-            draft = ""
-        }
+        .liquidGlassSurface(
+            cornerRadius: BottomBarMetrics.expandedCornerRadius,
+            shadowOffsetY: -6
+        )
+        .animation(nil, value: isStreaming)
+        .animation(nil, value: canSend)
         .onChange(of: isStreaming) { _, streaming in
             if streaming {
                 isFocused = false
             }
         }
-        .task(id: conversationId) {
-            draft = ""
-            try? await Task.sleep(for: .milliseconds(150))
-            isFocused = true
+        .onChange(of: draft) { _, newValue in
+            onDraftChange(newValue)
+        }
+        .onAppear {
+            draft = initialDraft
+            if autofocusOnAppear {
+                isFocused = true
+            }
         }
     }
 
@@ -86,56 +96,12 @@ struct ChatComposerView: View {
         guard !trimmed.isEmpty else { return }
         isFocused = false
         draft = ""
+        onClearDraft()
         onSend(trimmed)
     }
 }
 
-// MARK: - Liquid glass surface (desktop `.surface-elevated-glass`)
-
-private struct ComposerGlassBackground: ViewModifier {
-    let cornerRadius: CGFloat
-    @Environment(\.colorScheme) private var colorScheme
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .strokeBorder(
-                                Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.10),
-                                lineWidth: 1
-                            )
-                    }
-                    .overlay(alignment: .top) {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .strokeBorder(
-                                Color.white.opacity(colorScheme == .dark ? 0.12 : 0.35),
-                                lineWidth: 1
-                            )
-                            .blur(radius: 0.5)
-                            .mask {
-                                LinearGradient(
-                                    colors: [.white, .clear],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                )
-                            }
-                            .allowsHitTesting(false)
-                    }
-                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.35 : 0.14), radius: 24, y: -6)
-            }
-    }
-}
-
-private extension View {
-    func composerGlassBackground(cornerRadius: CGFloat = 20) -> some View {
-        modifier(ComposerGlassBackground(cornerRadius: cornerRadius))
-    }
-}
-
-#Preview("Empty") {
+#Preview("Composer") {
     struct Host: View {
         var body: some View {
             VStack {
@@ -143,51 +109,15 @@ private extension View {
                 ChatComposerView(
                     conversationId: "preview",
                     isStreaming: false,
+                    autofocusOnAppear: false,
+                    initialDraft: "",
+                    onDraftChange: { _ in },
+                    onClearDraft: {},
                     onSend: { _ in },
                     onStop: {}
                 )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-            }
-            .background(Color(.systemGroupedBackground))
-        }
-    }
-    return Host()
-}
-
-#Preview("With text") {
-    struct Host: View {
-        var body: some View {
-            VStack {
-                Spacer()
-                ChatComposerView(
-                    conversationId: "preview",
-                    isStreaming: false,
-                    onSend: { _ in },
-                    onStop: {}
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-            }
-            .background(Color(.systemGroupedBackground))
-        }
-    }
-    return Host()
-}
-
-#Preview("Streaming") {
-    struct Host: View {
-        var body: some View {
-            VStack {
-                Spacer()
-                ChatComposerView(
-                    conversationId: "preview",
-                    isStreaming: true,
-                    onSend: { _ in },
-                    onStop: {}
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+                .padding(.horizontal, BottomBarMetrics.horizontalInset)
+                .padding(.bottom, BottomBarMetrics.bottomInset)
             }
             .background(Color(.systemGroupedBackground))
         }

@@ -9,8 +9,6 @@ import {
   directiveComponents,
   remarkDirectiveToHast,
 } from "./markdownDirectives";
-import { rehypeNestedListDetails } from "./rehypeNestedListDetails";
-
 export interface ToolCallDisplay {
   toolName: string;
   payload?: unknown;
@@ -64,13 +62,7 @@ function extractCodeText(node: ReactNode): string {
  * We also intercept ```mermaid fenced blocks at the `<pre>` level and route them
  * to a lazy-loaded mermaid renderer; everything else flows through highlight.js.
  */
-export function MarkdownContent({
-  content,
-  collapsibleNestedLists = false,
-}: {
-  content: string;
-  collapsibleNestedLists?: boolean;
-}) {
+export function MarkdownContent({ content }: { content: string }) {
   const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
     <p {...props}>{children}</p>
   );
@@ -101,10 +93,7 @@ export function MarkdownContent({
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
-      rehypePlugins={[
-        [rehypeHighlight, { detect: false, ignoreMissing: true }],
-        ...(collapsibleNestedLists ? [rehypeNestedListDetails] : []),
-      ]}
+      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
       components={components}
     >
       {content}

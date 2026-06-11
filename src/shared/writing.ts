@@ -254,3 +254,50 @@ export function getListContinuationPrefixForLine(line: string): string | null {
 
   return null;
 }
+
+export const LIST_ITEM_INDENT_SPACES = 4;
+
+const MARKDOWN_LIST_ITEM_LINE_RE = /^(\s*)(?:[-*+]\s|\d+\.\s)/;
+
+/** True when the line starts with a markdown bullet or numbered list marker. */
+export function isMarkdownListItemLine(line: string): boolean {
+  return MARKDOWN_LIST_ITEM_LINE_RE.test(line);
+}
+
+/** Indents or outdents list-item lines in a block by four spaces per level. */
+export function adjustMarkdownListItemIndent(
+  block: string,
+  direction: "indent" | "outdent",
+): { block: string; deltaAtStart: number; deltaTotal: number; changed: boolean } {
+  const lines = block.split("\n");
+  let deltaAtStart = 0;
+  let deltaTotal = 0;
+  let changed = false;
+
+  const newLines = lines.map((line, index) => {
+    if (!isMarkdownListItemLine(line)) return line;
+
+    if (direction === "indent") {
+      changed = true;
+      deltaTotal += LIST_ITEM_INDENT_SPACES;
+      if (index === 0) deltaAtStart = LIST_ITEM_INDENT_SPACES;
+      return `${" ".repeat(LIST_ITEM_INDENT_SPACES)}${line}`;
+    }
+
+    const leadingSpaces = line.match(/^(\s+)/)?.[1]?.length ?? 0;
+    if (leadingSpaces === 0) return line;
+
+    const removeCount = Math.min(LIST_ITEM_INDENT_SPACES, leadingSpaces);
+    changed = true;
+    deltaTotal += removeCount;
+    if (index === 0) deltaAtStart = removeCount;
+    return line.slice(removeCount);
+  });
+
+  return {
+    block: newLines.join("\n"),
+    deltaAtStart,
+    deltaTotal,
+    changed,
+  };
+}

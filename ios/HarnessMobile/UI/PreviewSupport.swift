@@ -29,6 +29,7 @@ enum PreviewSupport {
         app.needsBackupFolder = needsBackupFolder
         app.needsAPIKey = needsAPIKey
         app.lastSuccessfulSyncAt = Date().addingTimeInterval(-3600)
+        app.markInitialLoadCompleteForPreviews()
         return app
     }
 
@@ -45,6 +46,7 @@ enum PreviewSupport {
         }
         app.needsBackupFolder = needsBackupFolder
         app.needsAPIKey = needsAPIKey
+        app.markInitialLoadCompleteForPreviews()
         return app
     }
 
