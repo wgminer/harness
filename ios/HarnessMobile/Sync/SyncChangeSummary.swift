@@ -8,14 +8,7 @@ struct ConversationSnapshot: Equatable, Codable {
     let messageCount: Int
 
     var displayTitle: String {
-        if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return title
-        }
-        let date = Date(timeIntervalSince1970: TimeInterval(createdAt) / 1000)
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        ConversationTitlePolicy.conversationDisplayTitle(title: title, createdAtMs: createdAt)
     }
 }
 

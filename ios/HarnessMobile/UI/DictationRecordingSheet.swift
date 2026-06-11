@@ -25,17 +25,19 @@ struct DictationRecordingSheet: View {
                 switch phase {
                 case .starting:
                     startingContent
+                        .padding(.horizontal, 28)
                 case .recording:
                     recordingContent
                 case .processing:
                     processingContent
+                        .padding(.horizontal, 28)
                 case .failed(let message):
                     failedContent(message: message)
+                        .padding(.horizontal, 28)
                 }
 
                 Spacer()
             }
-            .padding(.horizontal, 28)
             .padding(.bottom, 32)
             .navigationTitle(phase == .processing ? "" : "Dictate")
             .navigationBarTitleDisplayMode(.inline)
@@ -83,39 +85,49 @@ struct DictationRecordingSheet: View {
     }
 
     private var recordingContent: some View {
-        VStack(spacing: 28) {
-            SpeakingIndicatorView(level: recorder.audioLevel)
-                .padding(.vertical, 12)
+        VStack(spacing: 20) {
+            LiveAudioWaveformView(samples: recorder.waveformSamples, barColor: .red)
+                .frame(maxWidth: .infinity)
+                .ignoresSafeArea(edges: .horizontal)
 
-            Text(formattedElapsed(recorder.elapsedMs))
-                .font(.system(.title, design: .monospaced))
-                .foregroundStyle(.primary)
+            VStack(spacing: 20) {
+                Text(formattedElapsed(recorder.elapsedMs))
+                    .font(.system(.title, design: .monospaced))
+                    .foregroundStyle(.primary)
 
-            HStack(spacing: 20) {
-                Button {
-                    cancelActiveWork()
-                    isPresented = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 20, weight: .bold))
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(Color.primary.opacity(0.1)))
+                if recorder.audioLevel < 0.12 {
+                    Text("Listening… speak now.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Cancel recording")
 
-                Button {
-                    Task { await stopAndTranscribe() }
-                } label: {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 72, height: 72)
-                        .background(Circle().fill(Color.accentColor))
+                HStack(spacing: 20) {
+                    Button {
+                        cancelActiveWork()
+                        isPresented = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 20, weight: .bold))
+                            .frame(width: 52, height: 52)
+                            .background(Circle().fill(Color.primary.opacity(0.1)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Cancel recording")
+
+                    Button {
+                        Task { await stopAndTranscribe() }
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 72, height: 72)
+                            .background(Circle().fill(Color.accentColor))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Stop and transcribe")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Stop and transcribe")
             }
+            .padding(.horizontal, 28)
         }
     }
 
@@ -200,7 +212,7 @@ struct DictationRecordingSheet: View {
 
         do {
             let transcript = try await app.dictationService.transcribeRecording(at: audioURL)
-            let conversationId = try app.store.createDictationConversation(
+            let conversationId = try app.createDictationConversation(
                 userMessage: transcript,
                 recordingURL: audioURL
             )

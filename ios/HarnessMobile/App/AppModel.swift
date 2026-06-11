@@ -200,10 +200,22 @@ final class AppModel: ObservableObject {
         needsAPIKey = key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Creates a dictation session with the transcribed user message already stored.
+    /// Schedules LLM title refinement to match desktop `markVoiceDictationSession`.
+    @discardableResult
+    func createDictationConversation(userMessage: String, recordingURL: URL? = nil) throws -> String {
+        let conversationId = try store.createDictationConversation(
+            userMessage: userMessage,
+            recordingURL: recordingURL
+        )
+        chatService.scheduleTitleRefinement(conversationId: conversationId)
+        return conversationId
+    }
+
     /// Re-transcribe a saved recording and open a fresh dictation conversation.
     func retranscribeRecording(at url: URL) async throws -> String {
         let transcript = try await dictationService.transcribeRecording(at: url)
-        let conversationId = try store.createDictationConversation(
+        let conversationId = try createDictationConversation(
             userMessage: transcript,
             recordingURL: url
         )

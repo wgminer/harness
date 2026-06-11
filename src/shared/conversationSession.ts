@@ -1,3 +1,9 @@
+/** Initial sidebar label for voice-dictation threads; LLM may replace when configured. */
+export function formatVoiceDictationTitle(date: Date = new Date()): string {
+  const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `Dictation @ ${time}`;
+}
+
 /** Legacy auto titles that should be replaced by LLM summaries. */
 export function isTimePlaceholderTitle(title: string | null | undefined): boolean {
   const t = title?.trim();

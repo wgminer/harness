@@ -28,6 +28,7 @@ final class ConversationStoreDictationTests: XCTestCase {
         let meta = try store.loadConversationMeta(conversationId: id)
         XCTAssertEqual(meta?.sessionKind, "dictation")
         XCTAssertTrue(ConversationTitlePolicy.isTimePlaceholderTitle(meta?.title))
+        XCTAssertTrue(meta?.title?.hasPrefix("Dictation @ ") ?? false)
         XCTAssertEqual(meta?.titleSource, "auto")
 
         let messages = try store.loadMessages(conversationId: id)

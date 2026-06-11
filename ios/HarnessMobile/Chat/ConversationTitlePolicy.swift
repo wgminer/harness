@@ -24,12 +24,28 @@ enum ConversationTitlePolicy {
         ) != nil
     }
 
-    static func provisionalTitle(from content: String) -> String? {
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let maxLen = 56
-        if trimmed.count <= maxLen { return trimmed }
-        return String(trimmed.prefix(maxLen)).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+    /// Initial sidebar label for voice-dictation threads; LLM may replace when configured.
+    /// Mirrors `formatVoiceDictationTitle` in `src/shared/conversationSession.ts`.
+    static func voiceDictationTitle(at date: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.setLocalizedDateFormatFromTemplate("jm")
+        return "Dictation @ \(formatter.string(from: date))"
+    }
+
+    /// Mirrors `formatNewChatLabel` in `src/shared/conversationSession.ts`.
+    static func formatNewChatLabel(createdAtMs: Int64) -> String {
+        let date = Date(timeIntervalSince1970: TimeInterval(createdAtMs) / 1000)
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.setLocalizedDateFormatFromTemplate("jm")
+        return "Empty chat @ \(formatter.string(from: date))"
+    }
+
+    static func conversationDisplayTitle(title: String?, createdAtMs: Int64) -> String {
+        let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty { return trimmed }
+        return formatNewChatLabel(createdAtMs: createdAtMs)
     }
 
     static func buildContext(messages: [MessageRecord], maxChars: Int = 2400) -> String {

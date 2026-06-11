@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import type { AppendMessageMeta, ChatMessage, SearchResult } from "../shared/types";
+import { formatVoiceDictationTitle } from "../shared/conversationSession";
 import { scheduleConversationTitleRefinement } from "./conversationTitle";
 import { notifyConversationTitleUpdated } from "./titleEvents";
 import { readJsonObjectFile, readJsonArrayFile, atomicWriteUtf8 } from "./jsonFile";
@@ -193,8 +194,7 @@ async function setConversationTitle(
 
 /** Legacy time label for voice-dictation threads; LLM may replace when configured. */
 export async function markVoiceDictationSession(conversationId: string): Promise<string> {
-  const time = new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  const title = `Dictation @ ${time}`;
+  const title = formatVoiceDictationTitle();
   await patchConversationMetaIn(getMemoryDir(), conversationId, {
     title,
     titleSource: "auto",
