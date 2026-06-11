@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync } from "fs";
-import { mkdir, readFile, readdir, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { createTempDir } from "./__tests__/tempDir";
 
@@ -283,6 +283,52 @@ describe("folder-backup sync", () => {
     const result = await runSyncNow();
     expect(result.ok).toBe(false);
     expect(result.status.lastError).toMatch(/still downloading/);
+  });
+
+  it("does not push over an existing bundle when manifest.json is still missing", async () => {
+    const backup = await makeDir("sync-backup-");
+
+    currentUserDataDir = await makeDevice({
+      "app-state/conversations.json": '{"from":"remote"}',
+    });
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+
+    currentUserDataDir = await makeDevice({
+      "app-state/conversations.json": '{"from":"local"}',
+    });
+    await setBackupFolderInSettings(backup);
+    await rm(join(backup, MANIFEST_FILENAME));
+
+    const result = await runSyncNow();
+    expect(result.ok).toBe(false);
+    expect(result.status.lastError).toMatch(/manifest is still downloading/);
+
+    const remoteConv = await readFile(
+      join(backup, BUNDLE_FILENAME),
+    );
+    expect(remoteConv.length).toBeGreaterThan(0);
+    const parsed = JSON.parse(
+      (await import("zlib")).gunzipSync(remoteConv).toString("utf-8"),
+    );
+    const convEntry = parsed.entries.find(
+      (e: { path: string }) => e.path === "app-state/conversations.json",
+    );
+    expect(Buffer.from(convEntry.contents, "base64").toString("utf-8")).toBe('{"from":"remote"}');
+  });
+
+  it("getSyncStatus reports backupReadiness when manifest is missing but bundle exists", async () => {
+    const backup = await makeDir("sync-backup-");
+    currentUserDataDir = await makeDevice({
+      "app-state/conversations.json": '{"a":1}',
+    });
+    await setBackupFolderInSettings(backup);
+    await runSyncNow();
+    await rm(join(backup, MANIFEST_FILENAME));
+
+    const status = await getSyncStatus();
+    expect(status.configured).toBe(true);
+    expect(status.backupReadiness).toMatch(/manifest is still downloading/);
   });
 
   it("getSyncStatus reports configured=true and the resolved folder path", async () => {

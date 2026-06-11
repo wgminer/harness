@@ -229,6 +229,14 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== "data" || !dataStatus?.sync.backupReadiness) return;
+    const timer = setInterval(() => {
+      void refreshDataStatus();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [activeTab, dataStatus?.sync.backupReadiness]);
+
+  useEffect(() => {
     if (activeTab !== "general") return;
     void window.electron.usage.getStats().then(setUsageStats);
   }, [activeTab]);
@@ -1843,7 +1851,12 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                         )}
                       </p>
                     )}
-                    {dataStatus.sync.lastError && (
+                    {dataStatus.sync.backupReadiness && (
+                      <p className="settings-import-status__errors">
+                        Waiting for cloud download: {dataStatus.sync.backupReadiness}
+                      </p>
+                    )}
+                    {dataStatus.sync.lastError && !dataStatus.sync.backupReadiness && (
                       <p className="settings-import-status__errors">
                         Last error: {dataStatus.sync.lastError}
                       </p>
@@ -1860,9 +1873,13 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                       type="button"
                       className="btn btn-primary"
                       onClick={() => void runSyncNow()}
-                      disabled={syncBusy}
+                      disabled={syncBusy || Boolean(dataStatus.sync.backupReadiness)}
                     >
-                      {syncBusy ? "Syncing…" : "Sync now"}
+                      {syncBusy
+                        ? "Syncing…"
+                        : dataStatus.sync.backupReadiness
+                          ? "Waiting for download…"
+                          : "Sync now"}
                     </button>
                   </SettingsActions>
                 </>

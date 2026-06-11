@@ -175,6 +175,7 @@ function buildStatus(
   folderPath: string | null,
   folderCheck: { configured: boolean; error: string | null },
   conflictCopies: string[],
+  backupReadiness: string | null,
 ): SyncStatus {
   return {
     provider: "folderBackup",
@@ -187,6 +188,7 @@ function buildStatus(
     lastAction: state.lastAction,
     lastSyncedRevision: state.lastSyncedRevision,
     conflictCopies,
+    backupReadiness,
   };
 }
 
@@ -197,7 +199,11 @@ export async function getSyncStatus(): Promise<SyncStatus> {
   const conflictCopies = folderCheck.configured
     ? await listConflictCopies(folderPath)
     : [];
-  return buildStatus(state, folderPath, folderCheck, conflictCopies);
+  const backupReadiness =
+    folderCheck.configured && folderPath
+      ? await backupReadinessError(folderPath)
+      : null;
+  return buildStatus(state, folderPath, folderCheck, conflictCopies, backupReadiness);
 }
 
 async function readManifestFromBackup(folder: string): Promise<BackupManifest | null> {
@@ -224,21 +230,45 @@ async function readManifestFromBackup(folder: string): Promise<BackupManifest | 
   return null;
 }
 
-async function bundlePlaceholderError(folder: string): Promise<string | null> {
-  const bundlePath = join(folder, BUNDLE_FILENAME);
-  const placeholderPath = join(folder, placeholderSiblingFor(BUNDLE_FILENAME));
+async function filePlaceholderError(
+  folder: string,
+  filename: string,
+): Promise<string | null> {
+  const filePath = join(folder, filename);
+  const placeholderPath = join(folder, placeholderSiblingFor(filename));
   if (existsSync(placeholderPath)) {
     return "Backup is still downloading from your sync provider — try again shortly.";
   }
-  if (existsSync(bundlePath)) {
-    try {
-      const s = await stat(bundlePath);
-      if (s.size === 0) {
-        return "Backup is still downloading from your sync provider — try again shortly.";
-      }
-    } catch (err) {
-      return `Could not read backup bundle: ${err instanceof Error ? err.message : String(err)}`;
+  if (!existsSync(filePath)) return null;
+  try {
+    const s = await stat(filePath);
+    if (s.size === 0) {
+      return "Backup is still downloading from your sync provider — try again shortly.";
     }
+  } catch (err) {
+    return `Could not read backup file ${filename}: ${err instanceof Error ? err.message : String(err)}`;
+  }
+  return null;
+}
+
+/** Block sync while iCloud (or similar) has only partially materialized the backup pair. */
+async function backupReadinessError(folder: string): Promise<string | null> {
+  const bundleError = await filePlaceholderError(folder, BUNDLE_FILENAME);
+  if (bundleError) return bundleError;
+  const manifestError = await filePlaceholderError(folder, MANIFEST_FILENAME);
+  if (manifestError) return manifestError;
+
+  const bundlePath = join(folder, BUNDLE_FILENAME);
+  const manifestPath = join(folder, MANIFEST_FILENAME);
+  const hasBundle = existsSync(bundlePath);
+  const hasManifest = existsSync(manifestPath);
+  // iCloud often downloads one file before the other; never push over a peer bundle
+  // just because manifest.json has not arrived yet.
+  if (hasBundle && !hasManifest) {
+    return "Backup manifest is still downloading from your sync provider — try again shortly.";
+  }
+  if (hasManifest && !hasBundle) {
+    return "Backup bundle is still downloading from your sync provider — try again shortly.";
   }
   return null;
 }
@@ -430,13 +460,17 @@ async function runSyncNowInner(): Promise<SyncResult> {
   const conflictCopies = folderCheck.configured
     ? await listConflictCopies(folderPath)
     : [];
+  const backupReadiness =
+    folderCheck.configured && folderPath
+      ? await backupReadinessError(folderPath)
+      : null;
 
   if (!folderPath) {
     next.lastError = `Pick a backup folder in ${RIG_PAGE_TITLE}.`;
     await saveState(next);
     return {
       ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies, backupReadiness),
     };
   }
   if (!folderCheck.configured) {
@@ -444,17 +478,16 @@ async function runSyncNowInner(): Promise<SyncResult> {
     await saveState(next);
     return {
       ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies, backupReadiness),
     };
   }
 
-  const placeholderError = await bundlePlaceholderError(folderPath);
-  if (placeholderError) {
-    next.lastError = placeholderError;
+  if (backupReadiness) {
+    next.lastError = backupReadiness;
     await saveState(next);
     return {
       ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies, backupReadiness),
     };
   }
 
@@ -476,7 +509,7 @@ async function runSyncNowInner(): Promise<SyncResult> {
       await saveState(next);
       return {
         ok: true,
-        status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+        status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
       };
     }
 
@@ -510,7 +543,7 @@ async function runSyncNowInner(): Promise<SyncResult> {
       await saveState(next);
       return {
         ok: true,
-        status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+        status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
         mergeWarning,
       };
     }
@@ -532,7 +565,7 @@ async function runSyncNowInner(): Promise<SyncResult> {
     await saveState(next);
     return {
       ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
     };
   }
 }
@@ -611,7 +644,7 @@ async function finishSyncAction(params: {
     await saveState(next);
     return {
       ok: true,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
     };
   }
 
@@ -625,7 +658,7 @@ async function finishSyncAction(params: {
     await saveState(next);
     return {
       ok: true,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+      status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
     };
   }
 
@@ -638,7 +671,7 @@ async function finishSyncAction(params: {
   await saveState(next);
   return {
     ok: true,
-    status: buildStatus(next, folderPath, folderCheck, conflictCopies),
+    status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
   };
 }
 
