@@ -20,14 +20,21 @@ enum AudioRecorderError: LocalizedError {
 
 @MainActor
 final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
+    static let waveformSampleCount = 40
+
     @Published private(set) var isRecording = false
     @Published private(set) var elapsedMs: Int = 0
     @Published private(set) var audioLevel: CGFloat = 0
+    @Published private(set) var waveformSamples: [CGFloat] = Array(
+        repeating: 0.06,
+        count: AudioRecorder.waveformSampleCount
+    )
 
     private var recorder: AVAudioRecorder?
     private var outputURL: URL?
     private var timer: Timer?
     private var startedAt: Date?
+    private var smoothedLevel: Float = 0.06
 
     func requestPermission() async -> Bool {
         await withCheckedContinuation { continuation in
@@ -63,7 +70,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         isRecording = true
         startedAt = Date()
         elapsedMs = 0
-        resetMetering()
+        resetWaveform()
         startTimer()
         return url
     }
@@ -75,7 +82,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         recorder.stop()
         isRecording = false
         self.recorder = nil
-        resetMetering()
+        resetWaveform()
         try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         return url
     }
@@ -91,7 +98,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         isRecording = false
         elapsedMs = 0
         startedAt = nil
-        resetMetering()
+        resetWaveform()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
@@ -118,23 +125,34 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private func tickMetering() {
         guard let recorder, isRecording else { return }
         recorder.updateMeters()
-        let peak = recorder.peakPower(forChannel: 0)
         let average = recorder.averagePower(forChannel: 0)
-        let level = Self.normalizedLevel(fromDecibels: max(peak, average - 6))
+        let target = Float(Self.normalizedLevel(fromDecibels: average))
+        let smoothing: Float = target > smoothedLevel ? 0.35 : 0.12
+        smoothedLevel += (target - smoothedLevel) * smoothing
+        let level = CGFloat(smoothedLevel)
         audioLevel = level
+
+        var next = waveformSamples
+        if !next.isEmpty {
+            next.removeFirst()
+        }
+        next.append(level)
+        waveformSamples = next
     }
 
-    private func resetMetering() {
+    private func resetWaveform() {
+        smoothedLevel = 0.06
         audioLevel = 0
+        waveformSamples = Array(repeating: 0.06, count: Self.waveformSampleCount)
     }
 
     private static func normalizedLevel(fromDecibels power: Float) -> CGFloat {
         let silenceFloor: Float = -52
         let speechCeiling: Float = -10
-        if power <= silenceFloor { return 0.04 }
+        if power <= silenceFloor { return 0.06 }
         let clamped = min(max(power, silenceFloor), speechCeiling)
         let linear = (clamped - silenceFloor) / (speechCeiling - silenceFloor)
         let compressed = pow(linear, 0.62)
-        return CGFloat(0.04 + compressed * 0.88)
+        return CGFloat(0.06 + compressed * 0.88)
     }
 }

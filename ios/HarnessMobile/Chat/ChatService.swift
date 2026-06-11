@@ -74,7 +74,7 @@ final class ChatService: ObservableObject {
         isStreaming = true
         defer { isStreaming = false }
 
-        try store.appendMessage(conversationId: conversationId, role: .user, content: trimmed)
+        try appendMessage(conversationId: conversationId, role: .user, content: trimmed)
         let apiMessages = try buildMessages(conversationId: conversationId)
 
         let result = try await client.streamChatWithTools(
@@ -111,7 +111,7 @@ final class ChatService: ObservableObject {
             onChunk: onStreamChunk
         )
 
-        try store.appendMessage(
+        try appendMessage(
             conversationId: conversationId,
             role: .assistant,
             content: ChatTemporalContext.stripSentAtPrefix(result.content),
@@ -165,7 +165,7 @@ final class ChatService: ObservableObject {
             onChunk: onStreamChunk
         )
 
-        try store.appendMessage(
+        try appendMessage(
             conversationId: conversationId,
             role: .assistant,
             content: ChatTemporalContext.stripSentAtPrefix(result.content),
@@ -191,8 +191,8 @@ final class ChatService: ObservableObject {
         isStreaming = true
         defer { isStreaming = false }
 
-        try store.appendMessage(conversationId: conversationId, role: .user, content: DictationPolish.instruction)
-        try store.appendMessage(conversationId: conversationId, role: .user, content: transcript)
+        try appendMessage(conversationId: conversationId, role: .user, content: DictationPolish.instruction)
+        try appendMessage(conversationId: conversationId, role: .user, content: transcript)
         let apiMessages = try buildMessages(conversationId: conversationId)
         let result = try await client.streamChatWithTools(
             messages: apiMessages,
@@ -225,7 +225,7 @@ final class ChatService: ObservableObject {
             },
             onChunk: onStreamChunk
         )
-        try store.appendMessage(
+        try appendMessage(
             conversationId: conversationId,
             role: .assistant,
             content: ChatTemporalContext.stripSentAtPrefix(result.content),
@@ -244,6 +244,26 @@ final class ChatService: ObservableObject {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         return json
+    }
+
+    /// Mirrors desktop `appendMessageIn`: schedule title LLM after each user message.
+    private func appendMessage(
+        conversationId: String,
+        role: MessageRole,
+        content: String,
+        model: String? = nil,
+        toolCalls: [ToolCallRecord]? = nil
+    ) throws {
+        try store.appendMessage(
+            conversationId: conversationId,
+            role: role,
+            content: content,
+            model: model,
+            toolCalls: toolCalls
+        )
+        if role == .user {
+            scheduleTitleRefinement(conversationId: conversationId)
+        }
     }
 
     func scheduleTitleRefinement(conversationId: String) {

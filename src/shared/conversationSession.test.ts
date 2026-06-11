@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   conversationSidebarIconKind,
+  formatVoiceDictationTitle,
   isSidebarVisibleConversation,
   isTimePlaceholderTitle,
 } from "./conversationSession";
@@ -12,6 +13,12 @@ describe("conversationSession", () => {
     expect(isTimePlaceholderTitle("New chat @ 3:45 PM")).toBe(true);
     expect(isTimePlaceholderTitle("Empty chat @ 3:45 PM")).toBe(true);
     expect(isTimePlaceholderTitle("Weekly planning")).toBe(false);
+  });
+
+  it("formats voice dictation titles with Dictation @ prefix", () => {
+    const title = formatVoiceDictationTitle(new Date("2026-06-10T15:45:00"));
+    expect(title.startsWith("Dictation @ ")).toBe(true);
+    expect(isTimePlaceholderTitle(title)).toBe(true);
   });
 
   it("hides message-less conversations from compose-first sidebar", () => {

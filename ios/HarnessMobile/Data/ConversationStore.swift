@@ -104,7 +104,7 @@ final class ConversationStore: ObservableObject {
         try LocalDataLayout.ensureDirectories(at: localDataDir)
         let id = generateId(prefix: "conv")
         let now = Int64(Date().timeIntervalSince1970 * 1000)
-        let title = voiceDictationTitle()
+        let title = ConversationTitlePolicy.voiceDictationTitle()
         var map = try loadConversationMapRaw()
         map[id] = ConversationMeta(
             title: title,
@@ -139,13 +139,6 @@ final class ConversationStore: ObservableObject {
         return content
     }
 
-    private func voiceDictationTitle() -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        formatter.dateStyle = .none
-        return "Dictation @ \(formatter.string(from: Date()))"
-    }
-
     func patchConversationMeta(
         conversationId: String,
         title: String? = nil,
@@ -156,20 +149,6 @@ final class ConversationStore: ObservableObject {
         if meta.titleSource == "user" || meta.titleSource == "imported" { return }
         if let title { meta.title = title }
         if let titleSource { meta.titleSource = titleSource }
-        map[conversationId] = meta
-        try saveConversationMap(map)
-        try reload()
-    }
-
-    func setProvisionalTitleIfNeeded(conversationId: String, fromUserMessage content: String) throws {
-        var map = try loadConversationMapRaw()
-        guard var meta = map[conversationId] else { return }
-        if meta.titleSource == "user" || meta.titleSource == "imported" { return }
-        let existing = meta.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !existing.isEmpty, !ConversationTitlePolicy.isTimePlaceholderTitle(meta.title) { return }
-        guard let provisional = ConversationTitlePolicy.provisionalTitle(from: content) else { return }
-        meta.title = provisional
-        meta.titleSource = "auto"
         map[conversationId] = meta
         try saveConversationMap(map)
         try reload()
@@ -192,9 +171,6 @@ final class ConversationStore: ObservableObject {
         ))
         try saveMessages(conversationId: conversationId, messages: messages)
         try markHasMessages(conversationId: conversationId)
-        if role == .user {
-            try setProvisionalTitleIfNeeded(conversationId: conversationId, fromUserMessage: content)
-        }
         if role == .assistant {
             var map = try loadConversationMapRaw()
             if var meta = map[conversationId] {

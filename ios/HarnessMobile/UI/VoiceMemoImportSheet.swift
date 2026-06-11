@@ -153,7 +153,7 @@ struct VoiceMemoImportSheet: View {
             )
 
             statusDetail = transcriptionStatus(for: result.source)
-            let conversationId = try app.store.createDictationConversation(
+            let conversationId = try app.createDictationConversation(
                 userMessage: result.text,
                 recordingURL: localURL
             )

@@ -22,64 +22,29 @@ struct ConversationListView: View {
     }
 
     var body: some View {
-        List {
-            if app.hasCompletedInitialLoad, !app.store.conversations.isEmpty {
-                Section {
-                    TextField("Search conversations…", text: $searchQuery)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-            }
-
-            if !app.hasCompletedInitialLoad {
-                conversationsLoadingSection
-            } else if app.store.conversations.isEmpty {
-                ContentUnavailableView(
-                    "No conversations",
-                    systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Start a new chat or sync from your Mac backup folder.")
-                )
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            } else if filteredConversations.isEmpty {
-                ContentUnavailableView.search(text: searchQuery)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            } else {
-                ForEach(filteredConversations) { item in
-                    conversationRow(item)
-                }
-            }
-        }
-        .listStyle(.plain)
-        .navigationTitle("Harness")
-        .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
+        conversationList
+        .labeledRefreshable("Pull to sync") {
             await app.performSync()
         }
+        .navigationTitle("Harness")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                SyncToolbarButton(app: app) {
-                    Task { await app.performSync() }
+                NavigationLink {
+                    TasksListView(app: app)
+                } label: {
+                    TasksToolbarIcon(activeCount: activeTaskCount)
                 }
+                .accessibilityLabel("Tasks")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 16) {
-                    NavigationLink {
-                        TasksListView(app: app)
-                    } label: {
-                        TasksToolbarIcon(activeCount: activeTaskCount)
-                    }
-                    .accessibilityLabel("Tasks")
-
-                    NavigationLink {
-                        MobileSettingsView(app: app)
-                    } label: {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "gearshape")
-                            if let settingsAttentionColor {
-                                SyncAttentionDot(color: settingsAttentionColor)
-                            }
+                NavigationLink {
+                    MobileSettingsView(app: app)
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "gearshape")
+                        if let settingsAttentionColor {
+                            SyncAttentionDot(color: settingsAttentionColor)
                         }
                     }
                 }
@@ -113,6 +78,39 @@ struct ConversationListView: View {
                 onSelect(conversationId)
             }
         }
+    }
+
+    private var conversationList: some View {
+        List {
+            if app.hasCompletedInitialLoad, !app.store.conversations.isEmpty {
+                Section {
+                    TextField("Search conversations…", text: $searchQuery)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+            }
+
+            if !app.hasCompletedInitialLoad {
+                conversationsLoadingSection
+            } else if app.store.conversations.isEmpty {
+                ContentUnavailableView(
+                    "No conversations",
+                    systemImage: "bubble.left.and.bubble.right",
+                    description: Text("Start a new chat or sync from your Mac backup folder.")
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            } else if filteredConversations.isEmpty {
+                ContentUnavailableView.search(text: searchQuery)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(filteredConversations) { item in
+                    conversationRow(item)
+                }
+            }
+        }
+        .listStyle(.plain)
     }
 
     private var conversationsLoadingSection: some View {
