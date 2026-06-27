@@ -1,7 +1,6 @@
 import { rigSection } from "./rigPage";
-import type { Settings } from "./types";
 
-export type SetupGapKind = "openai_api_key" | "backup_folder" | "macos_accessibility";
+export type SetupGapKind = "openai_api_key" | "sync_r2" | "macos_accessibility";
 
 export interface SetupGap {
   kind: SetupGapKind;
@@ -12,29 +11,19 @@ export interface SetupGap {
   severity: "required" | "recommended";
 }
 
-export function hasOpenAIApiKey(
-  settings: Pick<Settings, "openai"> | { openai?: { apiKey?: string } }
-): boolean {
-  return Boolean(settings.openai?.apiKey?.trim());
-}
-
-export function openAIRequiredMessage(): string {
-  return `Add an OpenAI API key in ${rigSection("General")} to use chat and other AI features. Voice transcription still works without a key.`;
-}
-
 export function transcriptCleanupSkippedMessage(): string {
   return `Transcript cleanup needs an OpenAI API key (${rigSection("General")}). Using the raw transcription.`;
 }
 
 export function collectSetupGaps(input: {
-  settings: Settings;
+  hasOpenAIApiKey: boolean;
   syncConfigured: boolean;
   platform: NodeJS.Platform;
   accessibilityTrusted?: boolean | null;
 }): SetupGap[] {
   const gaps: SetupGap[] = [];
 
-  if (!hasOpenAIApiKey(input.settings)) {
+  if (!input.hasOpenAIApiKey) {
     gaps.push({
       kind: "openai_api_key",
       title: "OpenAI API key",
@@ -47,10 +36,10 @@ export function collectSetupGaps(input: {
 
   if (!input.syncConfigured) {
     gaps.push({
-      kind: "backup_folder",
-      title: "Backup folder",
+      kind: "sync_r2",
+      title: "Cloud sync (R2)",
       detail:
-        "Link a folder (iCloud, Dropbox, etc.) to sync conversations and settings across devices.",
+        "Connect a Cloudflare R2 bucket to sync conversations and settings across devices.",
       settingsTab: "data",
       severity: "recommended",
     });
@@ -68,4 +57,11 @@ export function collectSetupGaps(input: {
   }
 
   return gaps;
+}
+
+/** Show the welcome setup notice when gaps remain and dismiss has not stuck for optional-only setups. */
+export function shouldShowSetupNotice(gaps: SetupGap[], setupNoticeDismissed: boolean): boolean {
+  if (gaps.length === 0) return false;
+  if (gaps.some((gap) => gap.severity === "required")) return true;
+  return !setupNoticeDismissed;
 }

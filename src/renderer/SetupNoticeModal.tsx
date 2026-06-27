@@ -1,6 +1,5 @@
 import { Modal } from "./Modal";
 import type { SetupGap } from "../shared/setupState";
-import { RIG_PAGE_TITLE } from "../shared/rigPage";
 
 interface SetupNoticeModalProps {
   open: boolean;
@@ -26,8 +25,9 @@ export function SetupNoticeModal({ open, gaps, onConfigure, onDismiss }: SetupNo
       }
     >
       <p className="setup-notice-lead">
-        A few things to set up in <strong>{RIG_PAGE_TITLE}</strong>. Voice dictation works right away
-        on your Mac; chat and other AI features need an OpenAI API key.
+        Harness works locally on your Mac. Voice dictation works right away; chat and other AI
+        features need an OpenAI API key. Cloud sync is optional — set up R2 when you want to pull
+        data from another device.
       </p>
       {required.length > 0 && (
         <section className="setup-notice-section">

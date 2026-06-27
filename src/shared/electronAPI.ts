@@ -1,8 +1,8 @@
-import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult } from "./types";
+import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult, Settings } from "./types";
 import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
-import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSummary } from "./writing";
-import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "./sync";
+import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput, NoteSummary } from "./writing";
+import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
 
@@ -29,6 +29,7 @@ export interface ElectronAPI {
   };
   env: {
     isHarnessE2E: () => Promise<boolean>;
+    isHarnessDev: () => Promise<boolean>;
   };
   system: {
     getPlatform: () => Promise<NodeJS.Platform>;
@@ -41,14 +42,29 @@ export interface ElectronAPI {
     toggle: () => Promise<"small" | "large">;
   };
   settings: {
-    get: () => Promise<unknown>;
-    set: (partial: unknown) => Promise<unknown>;
+    get: () => Promise<Settings>;
+    set: (partial: Partial<Settings>) => Promise<void>;
   };
-  /** Locally accumulated usage (tokens / words); not synced with provider billing. */
+  credentials: {
+    getStatus: () => Promise<{
+      hasOpenAIApiKey: boolean;
+      hasTavilyApiKey: boolean;
+      hasR2SecretAccessKey: boolean;
+      encryptionAvailable: boolean;
+    }>;
+    getSecretsForSettings: () => Promise<{
+      openaiApiKey: string;
+      tavilyApiKey: string;
+      r2SecretAccessKey: string;
+    }>;
+    setOpenAIApiKey: (value: string) => Promise<void>;
+    setTavilyApiKey: (value: string) => Promise<void>;
+    setR2SecretAccessKey: (value: string) => Promise<void>;
+  };
+  /** Locally accumulated transcription usage. */
   usage: {
     getStats: () => Promise<UsageStatsSnapshot>;
     reset: () => Promise<UsageStatsSnapshot>;
-    openOpenAIDashboard: () => Promise<void>;
   };
   memory: {
     createConversation: () => Promise<string>;
@@ -176,6 +192,7 @@ export interface ElectronAPI {
     delete: (id: string) => Promise<NoteSummary[]>;
     showInFolder: (id: string) => Promise<void>;
     proposeEdit: (input: NoteEditProposalInput) => Promise<NoteEditProposal>;
+    spellCheck: (input: NoteSpellCheckInput) => Promise<NoteEditProposal>;
     print: (html: string, jobName?: string) => Promise<{ success: boolean }>;
   };
   recording: {
@@ -203,15 +220,14 @@ export interface ElectronAPI {
   sync: {
     getStatus: () => Promise<SyncStatus>;
     runNow: () => Promise<SyncResult>;
-    /** Open a folder picker; persists the chosen path. Returns the chosen path or null if cancelled. */
-    pickFolder: () => Promise<string | null>;
-    /** Persist a backup folder path directly (used by Suggestions and Reset). Empty string clears it. */
-    setFolder: (path: string) => Promise<string | null>;
-    /** Reveal the configured backup folder in the OS file manager (no-op if unset). */
-    revealFolder: () => Promise<void>;
-    /** Best-effort suggestions for known cloud-sync providers' folders. */
-    listSuggestions: () => Promise<SyncFolderSuggestion[]>;
-    /** Fired when a sync pull or merge wrote remote data into local storage. */
+    testConnection: () => Promise<{ ok: boolean; error?: string }>;
+    setR2Config: (partial: {
+      accountId?: string;
+      bucket?: string;
+      prefix?: string;
+      accessKeyId?: string;
+    }) => Promise<SyncStatus>;
+    setR2SecretAccessKey: (secret: string) => Promise<void>;
     onChanged: (cb: () => void) => () => void;
   };
   /** Present when the app is launched with `HARNESS_E2E=1`. */

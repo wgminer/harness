@@ -68,11 +68,30 @@ enum ThemeResolver {
         let accentHex = normalizeHex(accent)
         let fgHex = normalizeHex(fg)
         let bgHex = normalizeHex(bg)
+
+        if isLightBackground(bgHex) {
+            let neutral = "#b8bcc4"
+            return ThemeDerived(
+                accent: accentHex,
+                fg: fgHex,
+                bg: bgHex,
+                fgMuted: mixOklab(base: fgHex, toward: bgHex, baseWeight: 0.62),
+                bgSecondary: bgHex,
+                bgElevated: mixOklab(base: bgHex, toward: neutral, baseWeight: 0.96),
+                borderDark: mixOklab(base: bgHex, toward: neutral, baseWeight: 0.82),
+                borderLight: mixOklab(base: bgHex, toward: neutral, baseWeight: 0.88),
+                border: mixOklab(base: bgHex, toward: neutral, baseWeight: 0.82),
+                accentReadable: mixOklab(base: accentHex, toward: fgHex, baseWeight: 0.88),
+                selectionBg: mixOklab(base: accentHex, toward: bgHex, baseWeight: 0.82),
+                selectionFg: mixOklab(base: bgHex, toward: fgHex, baseWeight: 0.7),
+                sidebarControlHoverBg: mixSrgb(base: fgHex, toward: bgHex, baseWeight: 0.06),
+                sidebarControlActiveHoverBg: mixSrgb(base: accentHex, toward: bgHex, baseWeight: 0.88)
+            )
+        }
+
         let mix = surfaceMix(for: bgHex)
         let surfaceTone = surfaceToneHex(fg: fgHex, accent: accentHex, bg: bgHex)
-        let fgMutedTone = isLightBackground(bgHex)
-            ? fgHex
-            : mixOklab(base: fgHex, toward: accentHex, baseWeight: 0.68)
+        let fgMutedTone = mixOklab(base: fgHex, toward: accentHex, baseWeight: 0.68)
         let bgSecondary = mixOklab(base: bgHex, toward: surfaceTone, baseWeight: mix.bgSecondaryBgPct / 100)
         return ThemeDerived(
             accent: accentHex,
@@ -124,19 +143,6 @@ enum ThemeResolver {
     }
 
     private static func surfaceMix(for bg: String) -> SurfaceMix {
-        if isLightBackground(bg) {
-            return SurfaceMix(
-                fgMutedFgPct: 62,
-                bgSecondaryBgPct: 88,
-                bgElevatedBgPct: 78,
-                borderLightBgPct: 68,
-                borderDarkBgPct: 58,
-                accentReadableAccentPct: 88,
-                selectionAccentPct: 82,
-                sidebarActiveAccentPct: 88,
-                sidebarHoverFgPct: 14
-            )
-        }
         return SurfaceMix(
             fgMutedFgPct: 70,
             bgSecondaryBgPct: 88,

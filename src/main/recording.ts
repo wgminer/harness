@@ -1,14 +1,15 @@
 import { ipcMain, app, shell, dialog, clipboard, systemPreferences } from "electron";
 import { writeFile, mkdir } from "fs/promises";
+import { existsSync, renameSync } from "fs";
 import { join } from "path";
 import { exec } from "child_process";
 import OpenAI from "openai";
-import { getSettings } from "./settings";
+import { getSettings, resolveOpenAIApiKey } from "./settings";
 import { getTranscriptionProvider } from "./providers/transcriptionRegistry";
 import { HARNESS_E2E_TRANSCRIBE_TEXT, isHarnessE2E } from "./e2eStub";
 import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
 import { DEFAULT_SETTINGS } from "../shared/types";
-import { recordOpenAIUsage, recordParakeetTranscription } from "./usageStats";
+import { recordParakeetTranscription } from "./usageStats";
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -30,8 +31,20 @@ export function applyTranscriptDictionary(
   return next;
 }
 
+const RECORDINGS_DIR = "audio-recordings";
+const LEGACY_RECORDINGS_DIR = "recordings";
+
+function migrateLegacyRecordingsDir(): void {
+  const userData = app.getPath("userData");
+  const legacy = join(userData, LEGACY_RECORDINGS_DIR);
+  const next = join(userData, RECORDINGS_DIR);
+  if (!existsSync(legacy) || existsSync(next)) return;
+  renameSync(legacy, next);
+}
+
 export function getRecordingsDir(): string {
-  return join(app.getPath("userData"), "recordings");
+  migrateLegacyRecordingsDir();
+  return join(app.getPath("userData"), RECORDINGS_DIR);
 }
 
 async function runTranscriptCleanup(
@@ -55,10 +68,6 @@ async function runTranscriptCleanup(
     },
     { signal }
   );
-  if (completion.usage) {
-    recordOpenAIUsage(completion.usage, OPENAI_TRANSCRIPT_CLEANUP_MODEL);
-  }
-
   const cleaned = completion.choices[0]?.message?.content?.trim() ?? "";
   return cleaned || text;
 }
@@ -137,7 +146,7 @@ export function registerRecordingHandlers(): void {
       if (!shouldCleanup || !text.trim()) {
         return { text: applyTranscriptDictionary(text, dictionary) };
       }
-      const key = settings.openai?.apiKey?.trim() ?? "";
+      const key = (await resolveOpenAIApiKey()).trim();
       if (!key) {
         return {
           text: applyTranscriptDictionary(text, dictionary),

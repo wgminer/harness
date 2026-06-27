@@ -204,7 +204,7 @@ struct MobileSettingsView: View {
                 _ = url.startAccessingSecurityScopedResource()
                 do {
                     try BookmarkStore.saveBookmark(from: url)
-                    app.needsBackupFolder = false
+                    app.syncNotConfigured = false
                     settingsMessage = "Backup folder linked."
                     Task { await app.performSync(forcePull: true) }
                 } catch {

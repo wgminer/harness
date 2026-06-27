@@ -72,14 +72,14 @@
   background: var(--bg);
   color: var(--fg);
   border: none;
-  box-shadow: var(--hairline-inset);
+  box-shadow: var(--hairline-inset-input);
   border-radius: 2px;
 }
 
 .tasks-textarea:focus,
 .tasks-modal-body textarea:focus {
   outline: none;
-  box-shadow: var(--hairline-inset-accent);
+  box-shadow: var(--hairline-inset-input-focus);
 }
 
 .tasks-textarea--modal {
@@ -337,13 +337,13 @@
   background: var(--bg);
   color: var(--fg);
   border: none;
-  box-shadow: var(--hairline-inset);
+  box-shadow: var(--hairline-inset-input);
   border-radius: var(--radius-sm);
 }
 
 .tasks-tags-input:focus {
   outline: none;
-  box-shadow: var(--hairline-inset-accent);
+  box-shadow: var(--hairline-inset-input-focus);
 }
 
 .tasks-tag-remove svg {

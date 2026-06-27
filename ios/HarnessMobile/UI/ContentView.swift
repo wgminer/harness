@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var app: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showSetupSettings = false
 
     init(app: AppModel? = nil) {
         _app = StateObject(wrappedValue: app ?? AppModel())
@@ -22,9 +23,6 @@ struct ContentView: View {
                 }
             }
         }
-        .environment(\.harnessTheme, app.themeStore.harnessTheme)
-        .preferredColorScheme(app.themeStore.preferredColorScheme)
-        .tint(Color(themeHex: app.themeStore.harnessTheme.derived.accent))
         .task {
             await app.bootstrap()
         }
@@ -33,31 +31,32 @@ struct ContentView: View {
                 Task { await app.syncOnForeground() }
             }
         }
-        .alert("Setup required", isPresented: setupAlertBinding) {
-            Button("Settings") {
-                // User navigates via gear icon
+        .sheet(isPresented: setupNoticeBinding) {
+            SetupNoticeSheet(app: app) {
+                app.dismissSetupNotice()
+                showSetupSettings = true
             }
-        } message: {
-            Text(setupMessage)
+        }
+        .sheet(isPresented: $showSetupSettings) {
+            NavigationStack {
+                MobileSettingsView(app: app)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") {
+                                showSetupSettings = false
+                                app.refreshSetupFlags()
+                            }
+                        }
+                    }
+            }
         }
     }
 
-    private var setupAlertBinding: Binding<Bool> {
+    private var setupNoticeBinding: Binding<Bool> {
         Binding(
-            get: { app.needsBackupFolder || app.needsAPIKey },
-            set: { _ in }
+            get: { app.showSetupNotice },
+            set: { app.showSetupNotice = $0 }
         )
-    }
-
-    private var setupMessage: String {
-        var parts: [String] = []
-        if app.needsBackupFolder {
-            parts.append("Link your Harness backup folder in Settings.")
-        }
-        if app.needsAPIKey {
-            parts.append("Add your OpenAI API key in Settings.")
-        }
-        return parts.joined(separator: " ")
     }
 
     private var chatRouteBinding: Binding<ChatRoute?> {
@@ -87,6 +86,12 @@ struct ContentView: View {
     )
 }
 
-#Preview("Setup required") {
-    ContentView(app: PreviewSupport.emptyApp())
+#Preview("Setup notice") {
+    ContentView(
+        app: {
+            let app = PreviewSupport.emptyApp()
+            app.showSetupNotice = true
+            return app
+        }()
+    )
 }

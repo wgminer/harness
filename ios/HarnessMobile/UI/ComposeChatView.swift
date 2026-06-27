@@ -81,6 +81,6 @@ struct ComposeChatView: View {
 
 #Preview("Compose") {
     PreviewNavigationRoot {
-        ComposeChatView(app: PreviewSupport.emptyApp(needsBackupFolder: false, needsAPIKey: false))
+        ComposeChatView(app: PreviewSupport.emptyApp(syncNotConfigured: false, needsAPIKey: false))
     }
 }

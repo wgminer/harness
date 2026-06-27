@@ -50,7 +50,7 @@ export function parseChatGPTConversation(conv: unknown): ParsedConversation | nu
     let id: string | null = currentLeafId;
     while (id != null) {
       path.unshift(id);
-      const node = map[id];
+      const node: { parent?: string | null } | undefined = map[id];
       id = node?.parent != null ? String(node.parent) : null;
     }
     // Path should start at root

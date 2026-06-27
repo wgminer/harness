@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
-import type { MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import { Mic, Check, Loader2, X, Paperclip, ArrowUp } from "lucide-react";
 import type { VoiceState } from "./chatHelpers";
 
@@ -44,7 +43,7 @@ export function ChatComposer({
   focusComposerNonce,
   inputRef: externalInputRef,
 }: ChatComposerProps) {
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null) as MutableRefObject<HTMLTextAreaElement | null>;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-grow textarea to fit content (up to CSS max-height)

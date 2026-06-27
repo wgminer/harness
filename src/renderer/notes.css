@@ -340,8 +340,7 @@
   --notes-editor-content-width: 100%;
 }
 
-.notes-surface__editor-wrap--narrow .notes-surface__editor,
-.notes-surface__editor-wrap--narrow .notes-surface__editor-overlay-content {
+.notes-surface__editor-wrap--narrow .notes-surface__editor {
   padding-top: var(--space-4);
 }
 
@@ -397,6 +396,11 @@
   opacity: 0.5;
 }
 
+.notes-code-editor .notes-cm-text-selection {
+  background-color: var(--selection-bg);
+  color: var(--selection-fg);
+}
+
 .notes-code-editor .cm-line.cm-md-h1 {
   font-weight: 600;
   font-size: 1.125em;
@@ -440,41 +444,6 @@
 
 .notes-code-editor .cm-line.cm-md-blockquote {
   color: color-mix(in srgb, var(--fg) 82%, var(--fg-muted));
-}
-
-/* When unfocused, persist selection via the mirror overlay instead of CM chrome. */
-.notes-code-editor .cm-editor:not(.cm-focused) .cm-selectionBackground {
-  background: transparent !important;
-}
-
-.notes-surface__editor-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-  background: transparent;
-  box-shadow: var(--hairline-top-transparent);
-}
-
-.notes-surface__editor-overlay-content {
-  padding-top: clamp(var(--space-4), var(--notes-editor-inline-pad), calc(var(--space-4) + var(--space-12)));
-  padding-bottom: var(--space-4);
-  padding-inline: var(--notes-editor-inline-pad);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size);
-  line-height: var(--line-height-prose);
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: transparent;
-}
-
-
-.notes-surface__editor-overlay-highlight {
-  background: var(--selection-bg);
-  color: transparent;
-  /* border-radius: var(--radius-sm); */
-  padding: 0;
 }
 
 .notes-selection-toolbar {

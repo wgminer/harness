@@ -32,7 +32,7 @@ struct ChatThreadView: View {
     init(app: AppModel, conversationId: String) {
         self.app = app
         self.conversationId = conversationId
-        autofocusComposer = app.consumePendingComposerFocus(conversationId: conversationId)
+        autofocusComposer = false
         _messages = State(
             initialValue: (try? app.store.loadMessages(conversationId: conversationId)) ?? []
         )
@@ -126,7 +126,7 @@ struct ChatThreadView: View {
                 .frame(minHeight: centerSingleMessage ? minScrollHeight : nil, alignment: centerSingleMessage ? .center : .top)
                 .padding(.horizontal, ChatThreadLayout.horizontalInset)
                 .padding(.top, 12)
-                .padding(.bottom, 16)
+                .padding(.bottom, 24)
             }
             .scrollDisabled(centerSingleMessage)
             .defaultScrollAnchor(centerSingleMessage ? .center : .bottom)
@@ -136,7 +136,7 @@ struct ChatThreadView: View {
                     isComposerFocused = false
                 }
             )
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            .safeAreaInset(edge: .bottom, spacing: 16) {
                 composerDock
             }
             .onAppear { scrollProxy = proxy }

@@ -13,7 +13,7 @@ enum PreviewSupport {
         syncStatus: SyncStatusSnapshot? = nil,
         isSyncing: Bool = false,
         hasLocalEdits: Bool = false,
-        needsBackupFolder: Bool = false,
+        syncNotConfigured: Bool = false,
         needsAPIKey: Bool = false,
         withTasks: Bool = false
     ) -> AppModel {
@@ -27,7 +27,7 @@ enum PreviewSupport {
             UserDefaults.standard.set("stale-preview-revision", forKey: SyncEngine.lastSyncedContentRevisionKey)
             try? app.store.refreshPendingSyncState()
         }
-        app.needsBackupFolder = needsBackupFolder
+        app.syncNotConfigured = syncNotConfigured
         app.needsAPIKey = needsAPIKey
         app.lastSuccessfulSyncAt = Date().addingTimeInterval(-3600)
         app.markInitialLoadCompleteForPreviews()
@@ -36,7 +36,7 @@ enum PreviewSupport {
 
     static func emptyApp(
         syncStatus: SyncStatusSnapshot? = nil,
-        needsBackupFolder: Bool = true,
+        syncNotConfigured: Bool = true,
         needsAPIKey: Bool = true
     ) -> AppModel {
         let app = AppModel(localDataSubpath: "preview-empty-\(UUID().uuidString)")
@@ -45,7 +45,7 @@ enum PreviewSupport {
         if let syncStatus {
             app.syncStatus = syncStatus
         }
-        app.needsBackupFolder = needsBackupFolder
+        app.syncNotConfigured = syncNotConfigured
         app.needsAPIKey = needsAPIKey
         app.markInitialLoadCompleteForPreviews()
         return app

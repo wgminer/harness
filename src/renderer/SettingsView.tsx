@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { ExternalLink, Eye, EyeOff, Minus, Plus, Settings as SettingsIcon } from "lucide-react";
-import { RIG_CONTEXT_TAB_LABEL, RIG_PAGE_TITLE } from "../shared/rigPage";
+import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import { LLM_CONTEXT_EXPORT_PROMPT } from "../shared/memoryImport";
 import {
   MEMORY_INJECTION_STRATEGY_OPTIONS,
@@ -10,8 +10,8 @@ import { DEFAULT_LAYOUT, DEFAULT_SETTINGS } from "../shared/types";
 import type { LayoutOptions, Settings, TranscriptDictionaryEntry } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import { EMPTY_USAGE_STATS } from "../shared/usageStats";
-import { DATA_STORAGE_DIAGRAM } from "../shared/dataStorageLayout";
-import type { SyncFolderSuggestion, SyncStatus } from "../shared/sync";
+import { appDataFolderButtonLabel } from "../shared/dataStorageLayout";
+import type { SyncStatus } from "../shared/sync";
 import { syncResultChangedLocalData } from "../shared/sync";
 import {
   DEFAULT_NOTE_TEMPLATES,
@@ -21,8 +21,12 @@ import {
   normalizeNoteTemplates,
   type NoteTemplateConfig,
 } from "../shared/writing";
-import { useScrolledHeader } from "./useScrolledHeader";
+import {
+  beginThemeColorTransition,
+  themeColorsChanged,
+} from "./themeTransition";
 import { Modal } from "./Modal";
+import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
   SettingsActions,
@@ -33,20 +37,19 @@ import {
   SettingsSwitch,
   SettingsSwitchProvider,
 } from "./settings";
+import type { SettingsTabId } from "./settings/settingsNavConfig";
+import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
 import {
   applyThemeColors,
   coerceFontSizePx,
   DEFAULT_THEME_SETTINGS,
-  enforceVeryLowContrastGuard,
   FONT_SIZE_OPTIONS,
-  parseHexColor,
-  MONO_FONTS,
+  matchThemePresetId,
   stepFontSize,
-  normalizeColorPickerValue,
-  themeMatchesColorPreset,
   themeSettingsToCss,
   THEME_PRESETS,
   UI_FONTS,
+  MONO_FONTS,
   type MonoFontId,
   type ThemeSettings,
   type UiFontId,
@@ -64,19 +67,32 @@ interface SettingsViewProps {
 }
 
 const SAVE_DEBOUNCE_MS = 500;
+const SAVED_TOAST_VISIBLE_MS = 1200;
+const SAVED_TOAST_FADE_MS = 280;
+
+type PersistedFormState = {
+  apiKey: string;
+  tavilyApiKey: string;
+  r2SecretAccessKey: string;
+  autoSend: boolean;
+  globalFnHotkey: string;
+  openToComposeOnLaunch: boolean;
+  cleanupEnabled: boolean;
+  cleanupPrompt: string;
+  transcriptDictionary: TranscriptDictionaryEntry[];
+  weatherZip: string;
+  memoryInjectionStrategy: MemoryInjectionStrategy;
+  r2AccountId: string;
+  r2Bucket: string;
+  r2Prefix: string;
+  r2AccessKeyId: string;
+};
+
+function serializeFormState(state: PersistedFormState): string {
+  return JSON.stringify(state);
+}
 
 const D = DEFAULT_SETTINGS;
-type SettingsTabId = "general" | "tools" | "voice" | "notes" | "memory" | "data";
-
-const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
-  { id: "general", label: "General" },
-  { id: "tools", label: "Tools" },
-  { id: "voice", label: "Voice" },
-  { id: "notes", label: "Editor" },
-  { id: "memory", label: RIG_CONTEXT_TAB_LABEL },
-  { id: "data", label: "Data" },
-];
-
 
 export function SettingsView({
   onImportComplete,
@@ -84,9 +100,10 @@ export function SettingsView({
   initialTab,
   onSettingsChanged,
 }: SettingsViewProps) {
-  const [apiKey, setApiKey] = useState(D.openai!.apiKey);
+  const [apiKey, setApiKey] = useState(D.openai?.apiKey ?? "");
   const [showApiKey, setShowApiKey] = useState(false);
   const [showTavilyKey, setShowTavilyKey] = useState(false);
+  const [showR2Secret, setShowR2Secret] = useState(false);
   const [usageStats, setUsageStats] = useState<UsageStatsSnapshot>(EMPTY_USAGE_STATS);
   const [switchAnimationsReady, setSwitchAnimationsReady] = useState(false);
 
@@ -111,10 +128,12 @@ export function SettingsView({
   const [templateContentDraft, setTemplateContentDraft] = useState("");
 
   const [autoSend, setAutoSend] = useState(true);
+  const [globalFnHotkey, setGlobalFnHotkey] = useState(D.recording!.globalFnHotkey);
   const [openToComposeOnLaunch, setOpenToComposeOnLaunch] = useState(D.chat!.openToComposeOnLaunch);
   const [weatherZip, setWeatherZip] = useState(D.weather!.defaultZip);
-  const [tavilyApiKey, setTavilyApiKey] = useState(D.search!.tavilyApiKey);
+  const [tavilyApiKey, setTavilyApiKey] = useState(D.search?.tavilyApiKey ?? "");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [toastFading, setToastFading] = useState(false);
   const [memoryInjectionStrategy, setMemoryInjectionStrategy] = useState<MemoryInjectionStrategy>(
     D.memory!.injectionStrategy
   );
@@ -145,7 +164,12 @@ export function SettingsView({
   const [cleanupLegacyMessage, setCleanupLegacyMessage] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [syncSuggestions, setSyncSuggestions] = useState<SyncFolderSuggestion[]>([]);
+  const [syncTestBusy, setSyncTestBusy] = useState(false);
+  const [r2AccountId, setR2AccountId] = useState(D.sync!.accountId);
+  const [r2Bucket, setR2Bucket] = useState(D.sync!.bucket);
+  const [r2Prefix, setR2Prefix] = useState(D.sync!.prefix);
+  const [r2AccessKeyId, setR2AccessKeyId] = useState(D.sync!.accessKeyId);
+  const [r2SecretAccessKey, setR2SecretAccessKey] = useState("");
   const [dataStatus, setDataStatus] = useState<{
     localDataDir: string;
     appStateDir: string;
@@ -161,9 +185,13 @@ export function SettingsView({
     legacyMemoryExists: boolean;
     sync: SyncStatus;
   } | null>(null);
-  const [isMac] = useState(
-    () => typeof navigator !== "undefined" && navigator.platform.startsWith("Mac")
-  );
+  const platform = useMemo((): NodeJS.Platform => {
+    if (typeof navigator === "undefined") return "linux";
+    if (navigator.platform.startsWith("Mac")) return "darwin";
+    if (navigator.userAgent.includes("Windows")) return "win32";
+    return "linux";
+  }, []);
+  const isMac = platform === "darwin";
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
   const [themeForm, setThemeForm] = useState<ThemeSettings>({ ...DEFAULT_THEME_SETTINGS });
   const [themeApplyError, setThemeApplyError] = useState<string | null>(null);
@@ -171,20 +199,21 @@ export function SettingsView({
   const themeApplySeqRef = useRef(0);
   const settingsHydratedRef = useRef(false);
   const skipAutosaveRef = useRef(false);
+  const lastPersistedRef = useRef("");
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const tabButtonRefs = useRef<Record<SettingsTabId, HTMLButtonElement | null>>({
     general: null,
-    tools: null,
+    appearance: null,
     voice: null,
-    notes: null,
     memory: null,
     data: null,
   });
-  const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab ?? "general");
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(normalizeSettingsTab(initialTab));
+  const activeThemePresetId = useMemo(() => matchThemePresetId(themeForm), [themeForm]);
 
   useEffect(() => {
-    if (initialTab) setActiveTab(initialTab);
+    if (initialTab) setActiveTab(normalizeSettingsTab(initialTab));
   }, [initialTab]);
 
   useEffect(() => {
@@ -196,27 +225,52 @@ export function SettingsView({
         });
       });
     };
-    void window.electron.settings
-      .get()
-      .then((s) => {
+    void Promise.all([
+      window.electron.settings.get(),
+      window.electron.credentials.getSecretsForSettings(),
+    ])
+      .then(([s, secrets]) => {
         if (cancelled) return;
         skipAutosaveRef.current = true;
         const S = s as Settings;
-        setApiKey(S.openai?.apiKey ?? D.openai!.apiKey);
-        setAutoSend(S.recording?.autoSend ?? D.recording!.autoSend);
-        setOpenToComposeOnLaunch(
-          S.chat?.openToComposeOnLaunch ??
+        const hydrated: PersistedFormState = {
+          apiKey: secrets.openaiApiKey,
+          tavilyApiKey: secrets.tavilyApiKey,
+          r2SecretAccessKey: secrets.r2SecretAccessKey,
+          autoSend: S.recording?.autoSend ?? D.recording!.autoSend,
+          globalFnHotkey: S.recording?.globalFnHotkey ?? D.recording!.globalFnHotkey,
+          openToComposeOnLaunch:
+            S.chat?.openToComposeOnLaunch ??
             (S.chat as { composeFirst?: boolean } | undefined)?.composeFirst ??
-            D.chat!.openToComposeOnLaunch
-        );
-        setCleanupEnabled(S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false);
-        setCleanupPrompt(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "");
-        setCleanupPromptDraft(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "");
-        setTranscriptDictionary(S.transcription?.dictionary ?? D.transcription?.dictionary ?? []);
-        setWeatherZip(S.weather?.defaultZip ?? D.weather!.defaultZip);
-        setTavilyApiKey(S.search?.tavilyApiKey ?? D.search!.tavilyApiKey);
-        setMemoryInjectionStrategy(S.memory?.injectionStrategy ?? D.memory!.injectionStrategy);
+            D.chat!.openToComposeOnLaunch,
+          cleanupEnabled: S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false,
+          cleanupPrompt: S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "",
+          transcriptDictionary: S.transcription?.dictionary ?? D.transcription?.dictionary ?? [],
+          weatherZip: S.weather?.defaultZip ?? D.weather!.defaultZip,
+          memoryInjectionStrategy: S.memory?.injectionStrategy ?? D.memory!.injectionStrategy,
+          r2AccountId: S.sync?.accountId ?? D.sync!.accountId,
+          r2Bucket: S.sync?.bucket ?? D.sync!.bucket,
+          r2Prefix: S.sync?.prefix ?? D.sync!.prefix,
+          r2AccessKeyId: S.sync?.accessKeyId ?? D.sync!.accessKeyId,
+        };
+        setApiKey(hydrated.apiKey);
+        setTavilyApiKey(hydrated.tavilyApiKey);
+        setR2SecretAccessKey(hydrated.r2SecretAccessKey);
+        setAutoSend(hydrated.autoSend);
+        setGlobalFnHotkey(hydrated.globalFnHotkey);
+        setOpenToComposeOnLaunch(hydrated.openToComposeOnLaunch);
+        setCleanupEnabled(hydrated.cleanupEnabled);
+        setCleanupPrompt(hydrated.cleanupPrompt);
+        setCleanupPromptDraft(hydrated.cleanupPrompt);
+        setTranscriptDictionary(hydrated.transcriptDictionary);
+        setWeatherZip(hydrated.weatherZip);
+        setR2AccountId(hydrated.r2AccountId);
+        setR2Bucket(hydrated.r2Bucket);
+        setR2Prefix(hydrated.r2Prefix);
+        setR2AccessKeyId(hydrated.r2AccessKeyId);
+        setMemoryInjectionStrategy(hydrated.memoryInjectionStrategy);
         setNoteTemplates(normalizeNoteTemplates(S.notes?.templates));
+        lastPersistedRef.current = serializeFormState(hydrated);
       })
       .finally(() => {
         if (!cancelled) settingsHydratedRef.current = true;
@@ -242,17 +296,12 @@ export function SettingsView({
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab !== "data" || !dataStatus?.sync.backupReadiness) return;
+    if (activeTab !== "data" || !dataStatus?.sync.configured) return;
     const timer = setInterval(() => {
       void refreshDataStatus();
-    }, 5000);
+    }, 15_000);
     return () => clearInterval(timer);
-  }, [activeTab, dataStatus?.sync.backupReadiness]);
-
-  useEffect(() => {
-    if (activeTab !== "general") return;
-    void window.electron.usage.getStats().then(setUsageStats);
-  }, [activeTab]);
+  }, [activeTab, dataStatus?.sync.configured]);
 
   useEffect(() => {
     if (activeTab !== "memory") return;
@@ -272,50 +321,112 @@ export function SettingsView({
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (hideToastRef.current) clearTimeout(hideToastRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!settingsHydratedRef.current) return;
     if (skipAutosaveRef.current) {
       skipAutosaveRef.current = false;
       return;
     }
+
+    const current = serializeFormState({
+      apiKey,
+      tavilyApiKey,
+      r2SecretAccessKey,
+      autoSend,
+      globalFnHotkey,
+      openToComposeOnLaunch,
+      cleanupEnabled,
+      cleanupPrompt,
+      transcriptDictionary,
+      weatherZip,
+      memoryInjectionStrategy,
+      r2AccountId,
+      r2Bucket,
+      r2Prefix,
+      r2AccessKeyId,
+    });
+    if (current === lastPersistedRef.current) return;
+
     const timer = setTimeout(async () => {
-      setSaveStatus("saving");
-      await window.electron.settings.set({
-        openai: { apiKey },
-        recording: { autoSend },
-        chat: { openToComposeOnLaunch },
-        transcription: {
-          cleanup: {
-            enabled: cleanupEnabled,
-            prompt: cleanupPrompt,
-          },
-          dictionary: transcriptDictionary,
-        },
-        weather: {
-          defaultZip: weatherZip.trim(),
-        },
-        search: {
-          tavilyApiKey: tavilyApiKey.trim(),
-        },
-        memory: {
-          injectionStrategy: memoryInjectionStrategy,
-        },
+      const latest = serializeFormState({
+        apiKey,
+        tavilyApiKey,
+        r2SecretAccessKey,
+        autoSend,
+        globalFnHotkey,
+        openToComposeOnLaunch,
+        cleanupEnabled,
+        cleanupPrompt,
+        transcriptDictionary,
+        weatherZip,
+        memoryInjectionStrategy,
+        r2AccountId,
+        r2Bucket,
+        r2Prefix,
+        r2AccessKeyId,
       });
-      setSaveStatus("saved");
-      onSettingsChanged?.();
+      if (latest === lastPersistedRef.current) return;
+
+      const prev = JSON.parse(lastPersistedRef.current || "{}") as Partial<PersistedFormState>;
+      const next = JSON.parse(latest) as PersistedFormState;
+
       if (hideToastRef.current) clearTimeout(hideToastRef.current);
-      hideToastRef.current = setTimeout(() => {
+      setToastFading(false);
+      setSaveStatus("saving");
+
+      try {
+        await window.electron.settings.set({
+          openai: next.apiKey.trim() ? { apiKey: next.apiKey } : undefined,
+          recording: { autoSend: next.autoSend, globalFnHotkey: next.globalFnHotkey },
+          chat: { openToComposeOnLaunch: next.openToComposeOnLaunch },
+          transcription: {
+            cleanup: {
+              enabled: next.cleanupEnabled,
+              prompt: next.cleanupPrompt,
+            },
+            dictionary: next.transcriptDictionary,
+          },
+          weather: {
+            defaultZip: next.weatherZip.trim(),
+          },
+          search: next.tavilyApiKey.trim() ? { tavilyApiKey: next.tavilyApiKey.trim() } : undefined,
+          memory: {
+            injectionStrategy: next.memoryInjectionStrategy,
+          },
+          sync: {
+            accountId: next.r2AccountId.trim(),
+            bucket: next.r2Bucket.trim(),
+            prefix: next.r2Prefix.trim() || D.sync!.prefix,
+            accessKeyId: next.r2AccessKeyId.trim(),
+          },
+        });
+        if (next.r2SecretAccessKey !== (prev.r2SecretAccessKey ?? "")) {
+          await window.electron.sync.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
+        }
+        lastPersistedRef.current = latest;
+        setSaveStatus("saved");
+        onSettingsChanged?.();
+        hideToastRef.current = setTimeout(() => {
+          setToastFading(true);
+          hideToastRef.current = setTimeout(() => {
+            setSaveStatus("idle");
+            setToastFading(false);
+            hideToastRef.current = null;
+          }, SAVED_TOAST_FADE_MS);
+        }, SAVED_TOAST_VISIBLE_MS);
+      } catch {
         setSaveStatus("idle");
-        hideToastRef.current = null;
-      }, 1500);
-    }, SAVE_DEBOUNCE_MS);
-    return () => {
-      clearTimeout(timer);
-      if (hideToastRef.current) {
-        clearTimeout(hideToastRef.current);
-        hideToastRef.current = null;
+        setToastFading(false);
       }
-    };
-  }, [apiKey, autoSend, openToComposeOnLaunch, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip, tavilyApiKey, memoryInjectionStrategy, onSettingsChanged]);
+    }, SAVE_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [apiKey, autoSend, globalFnHotkey, openToComposeOnLaunch, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip, tavilyApiKey, memoryInjectionStrategy, r2AccountId, r2Bucket, r2Prefix, r2AccessKeyId, r2SecretAccessKey, onSettingsChanged]);
 
   const openCleanupPromptModal = () => {
     setCleanupPromptDraft(cleanupPrompt);
@@ -474,18 +585,10 @@ export function SettingsView({
     try {
       const result = await window.electron.sync.runNow();
       if (result.ok) {
-        const action = result.status.lastAction;
-        const summary =
-          action === "merge"
-            ? "Merged changes and synced."
-            : action === "push"
-              ? "Pushed local changes to backup."
-              : action === "pull"
-                ? "Pulled newer backup into local data."
-                : "Already in sync.";
-        setSyncMessage(
-          result.mergeWarning ? `${summary} ${result.mergeWarning}` : summary,
-        );
+        setSyncMessage(result.status.statusLine ?? "Synced.");
+        if (result.mergeWarning) {
+          setSyncMessage((prev) => `${prev ?? ""} ${result.mergeWarning}`.trim());
+        }
       } else {
         setSyncMessage(result.status.lastError ?? "Sync failed.");
       }
@@ -498,34 +601,16 @@ export function SettingsView({
     }
   };
 
-  const pickBackupFolder = async () => {
-    const chosen = await window.electron.sync.pickFolder();
-    if (chosen) {
-      setSyncMessage(null);
-      await refreshDataStatus();
+  const testR2Connection = async () => {
+    setSyncTestBusy(true);
+    setSyncMessage(null);
+    try {
+      const result = await window.electron.sync.testConnection();
+      setSyncMessage(result.ok ? "R2 connection OK." : (result.error ?? "Connection failed."));
+    } finally {
+      setSyncTestBusy(false);
     }
   };
-
-  const useSuggestedFolder = async (path: string) => {
-    await window.electron.sync.setFolder(path);
-    setSyncMessage(null);
-    await refreshDataStatus();
-  };
-
-  const defaultBackupPath = useMemo(
-    () => syncSuggestions.find((s) => s.label === "iCloud Drive")?.path ?? null,
-    [syncSuggestions],
-  );
-
-  const useDefaultBackupFolder = async () => {
-    if (!defaultBackupPath) return;
-    await useSuggestedFolder(defaultBackupPath);
-  };
-
-  useEffect(() => {
-    if (activeTab !== "data") return;
-    void window.electron.sync.listSuggestions().then(setSyncSuggestions);
-  }, [activeTab]);
 
   const runImport = async () => {
     setImporting(true);
@@ -632,33 +717,12 @@ export function SettingsView({
     el.textContent = themeSettingsToCss(settings);
   };
 
-  const areThemeColorsCompleteHex = (settings: ThemeSettings): boolean =>
-    parseHexColor(settings.bg) != null &&
-    parseHexColor(settings.fg) != null &&
-    parseHexColor(settings.accent) != null;
-
-  const updateThemeForm = (
-    updater: (prev: ThemeSettings) => ThemeSettings,
-    options?: { skipContrastGuard?: boolean },
-  ) => {
+  const updateThemeForm = (updater: (prev: ThemeSettings) => ThemeSettings) => {
     setThemeForm((prev) => {
-      const updated = updater(prev);
-      if (!areThemeColorsCompleteHex(updated)) {
-        setThemeApplyError(null);
-        return updated;
+      const next = updater(prev);
+      if (themeColorsChanged(prev, next)) {
+        beginThemeColorTransition();
       }
-      const changedFg = updated.fg !== prev.fg;
-      const changedBg = updated.bg !== prev.bg;
-      const next =
-        !options?.skipContrastGuard && changedFg !== changedBg
-          ? {
-              ...updated,
-              ...enforceVeryLowContrastGuard(
-                { fg: updated.fg, bg: updated.bg },
-                changedFg ? "fg" : "bg",
-              ),
-            }
-          : updated;
       applyThemeCssImmediately(next);
       const seq = ++themeApplySeqRef.current;
       setThemeApplyError(null);
@@ -753,14 +817,6 @@ export function SettingsView({
           </div>
         }
       />
-      <div
-        className={`settings-toast${saveStatus !== "idle" ? " settings-toast--visible" : ""}`}
-        role="status"
-        aria-live="polite"
-        aria-hidden={saveStatus === "idle"}
-      >
-        {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : ""}
-      </div>
       <div ref={scrollRef} className="workspace-scroll settings-scroll" onScroll={onScroll}>
         <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
@@ -771,442 +827,32 @@ export function SettingsView({
             aria-labelledby="settings-tab-general"
           >
             <SettingsGroup title="OpenAI" description="API key for chat. Voice transcription runs on your Mac.">
-              <SettingsField label="API key" htmlFor="settings-api-key">
-                <div className="settings-api-key-row">
-                  <input
-                    id="settings-api-key"
-                    type={showApiKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="sk-…"
-                    autoComplete="off"
-                    spellCheck={false}
-                    data-lpignore="true"
-                    data-1p-ignore="true"
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-icon"
-                    aria-pressed={showApiKey}
-                    aria-label={showApiKey ? "Hide API key" : "Show API key"}
-                    title={showApiKey ? "Hide key" : "Show key"}
-                    onClick={() => setShowApiKey((v) => !v)}
-                  >
-                    {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </SettingsField>
-              <dl className="usage-stats" aria-label="OpenAI usage this month">
-                <div className="usage-stats__row usage-stats__row--emph">
-                  <dt>Estimated spend ({usageStats.openaiThisMonth.monthLabel})</dt>
-                  <dd>
-                    {new Intl.NumberFormat("en-US", {
-                      style: "currency",
-                      currency: "USD",
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    }).format(usageStats.openaiThisMonth.estimatedUsd)}
-                  </dd>
-                </div>
-                <div className="usage-stats__row">
-                  <dt>Tokens (input / output)</dt>
-                  <dd>
-                    {(
-                      usageStats.openaiThisMonth.promptTokens +
-                      usageStats.openaiThisMonth.cachedPromptTokens
-                    ).toLocaleString()}
-                    {" / "}
-                    {usageStats.openaiThisMonth.completionTokens.toLocaleString()}
-                  </dd>
-                </div>
-              </dl>
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Theme studio"
-              descriptionClassName="settings-group__lead--tight"
-              description={
-                <>
-                  Pick a color palette or tune background, text, and accent. Typography is separate below. Changes apply
-                  instantly and save to your theme (replacing any previous custom theme from this screen or tools).
-                </>
-              }
-            >
-              <div className="settings-playground">
-                <div className="settings-playground-tools settings-section">
-                  <div className="settings-playground-block">
-                    <h4 className="settings-playground-block__title">Color themes</h4>
-                    <div className="settings-playground-presets" role="list" aria-label="Color theme presets">
-                    {THEME_PRESETS.map((preset) => {
-                      const selected = themeMatchesColorPreset(themeForm, preset.colors);
-                      const previewBg = normalizeColorPickerValue(preset.colors.bg);
-                      const previewFg = normalizeColorPickerValue(preset.colors.fg);
-                      const previewAccent = normalizeColorPickerValue(preset.colors.accent);
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          role="listitem"
-                          className={`settings-playground-theme-card${selected ? " settings-playground-theme-card--selected" : ""}`}
-                          onClick={() => updateThemeForm((f) => applyThemeColors(f, preset.colors))}
-                          aria-pressed={selected}
-                          aria-label={`Apply ${preset.label} colors`}
-                        >
-                          <div
-                            className="settings-playground-theme-preview"
-                            style={{ background: previewBg, color: previewFg }}
-                          >
-                            <span className="settings-playground-theme-preview__line" aria-hidden />
-                            <span
-                              className="settings-playground-theme-preview__line settings-playground-theme-preview__line--short"
-                              aria-hidden
-                            />
-                            <span
-                              className="settings-playground-theme-preview__accent"
-                              style={{ background: previewAccent }}
-                              aria-hidden
-                            />
-                          </div>
-                          <span className="settings-playground-theme-card__label">{preset.label}</span>
-                        </button>
-                      );
-                    })}
-                    </div>
-                  </div>
-                  <div className="settings-playground-block" aria-label="Custom colors">
-                    <h4 className="settings-playground-block__title">Custom colors</h4>
-                    <div className="settings-playground-colors">
-                      <div className="settings-playground-field">
-                        <label htmlFor="theme-bg">Background color</label>
-                        <div className="settings-playground-color-row">
-                          <input
-                            id="theme-bg"
-                            type="color"
-                            value={normalizeColorPickerValue(themeForm.bg)}
-                            onChange={(e) => updateThemeForm((f) => ({ ...f, bg: e.target.value }))}
-                            aria-label="Background color picker"
-                          />
-                          <input
-                            type="text"
-                            value={themeForm.bg}
-                            onChange={(e) =>
-                              updateThemeForm((f) => ({ ...f, bg: e.target.value }), {
-                                skipContrastGuard: true,
-                              })
-                            }
-                            spellCheck={false}
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="off"
-                            aria-label="Background hex"
-                          />
-                        </div>
-                      </div>
-                      <div className="settings-playground-field">
-                        <label htmlFor="theme-fg">Text color</label>
-                        <div className="settings-playground-color-row">
-                          <input
-                            id="theme-fg"
-                            type="color"
-                            value={normalizeColorPickerValue(themeForm.fg)}
-                            onChange={(e) => updateThemeForm((f) => ({ ...f, fg: e.target.value }))}
-                            aria-label="Text color picker"
-                          />
-                          <input
-                            type="text"
-                            value={themeForm.fg}
-                            onChange={(e) =>
-                              updateThemeForm((f) => ({ ...f, fg: e.target.value }), {
-                                skipContrastGuard: true,
-                              })
-                            }
-                            spellCheck={false}
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="off"
-                            aria-label="Text color hex"
-                          />
-                        </div>
-                      </div>
-                      <div className="settings-playground-field">
-                        <label htmlFor="theme-accent">Accent color</label>
-                        <div className="settings-playground-color-row">
-                          <input
-                            id="theme-accent"
-                            type="color"
-                            value={normalizeColorPickerValue(themeForm.accent)}
-                            onChange={(e) => updateThemeForm((f) => ({ ...f, accent: e.target.value }))}
-                            aria-label="Accent color picker"
-                          />
-                          <input
-                            type="text"
-                            value={themeForm.accent}
-                            onChange={(e) =>
-                              updateThemeForm((f) => ({ ...f, accent: e.target.value }), {
-                                skipContrastGuard: true,
-                              })
-                            }
-                            spellCheck={false}
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="off"
-                            aria-label="Accent hex"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="settings-playground-block" aria-label="Typography">
-                    <h4 className="settings-playground-block__title">Typography</h4>
-                    <p className="settings-playground-block__lead">
-                      UI and code fonts load with the app (Google Fonts). Independent of color themes above.
-                    </p>
-                    <div className="settings-playground-typography">
-                      <div className="settings-playground-typography-fonts">
-                        <div className="settings-playground-field">
-                          <label htmlFor="theme-font">UI font</label>
-                        <select
-                          id="theme-font"
-                          value={themeForm.font}
-                          onChange={(e) =>
-                            updateThemeForm((f) => ({ ...f, font: e.target.value as UiFontId }))
-                          }
-                        >
-                          {UI_FONTS.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="settings-playground-field">
-                        <label htmlFor="theme-font-mono">Code / notes font</label>
-                        <select
-                          id="theme-font-mono"
-                          value={themeForm.fontMono}
-                          onChange={(e) =>
-                            updateThemeForm((f) => ({ ...f, fontMono: e.target.value as MonoFontId }))
-                          }
-                        >
-                          {MONO_FONTS.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      </div>
-                      <div className="settings-playground-field">
-                        <label id="theme-font-size-label" htmlFor="theme-font-size">
-                          Base font size
-                        </label>
-                        <div
-                          className="settings-font-size-stepper"
-                          role="group"
-                          aria-labelledby="theme-font-size-label"
-                        >
-                          <div
-                            className="settings-font-size-stepper__control"
-                            role="button"
-                            tabIndex={themeForm.fontSize === FONT_SIZE_OPTIONS[0] ? -1 : 0}
-                            aria-disabled={
-                              themeForm.fontSize === FONT_SIZE_OPTIONS[0] || undefined
-                            }
-                            aria-label="Decrease base font size"
-                            onClick={() => {
-                              if (themeForm.fontSize === FONT_SIZE_OPTIONS[0]) return;
-                              updateThemeForm((f) => ({
-                                ...f,
-                                fontSize: stepFontSize(f.fontSize, -1),
-                              }));
-                            }}
-                            onKeyDown={(e) => {
-                              if (themeForm.fontSize === FONT_SIZE_OPTIONS[0]) return;
-                              if (e.key !== "Enter" && e.key !== " ") return;
-                              e.preventDefault();
-                              updateThemeForm((f) => ({
-                                ...f,
-                                fontSize: stepFontSize(f.fontSize, -1),
-                              }));
-                            }}
-                          >
-                            <Minus size={16} aria-hidden />
-                          </div>
-                          <div className="settings-font-size-stepper__input-wrap">
-                            <input
-                              id="theme-font-size"
-                              className="settings-font-size-stepper__input"
-                              type="number"
-                              inputMode="numeric"
-                              min={FONT_SIZE_OPTIONS[0]}
-                              max={FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]}
-                              value={themeForm.fontSize}
-                              onChange={(e) => {
-                                const n = Math.round(Number(e.target.value));
-                                if (!Number.isFinite(n)) return;
-                                if (!FONT_SIZE_OPTIONS.includes(n as (typeof FONT_SIZE_OPTIONS)[number])) {
-                                  return;
-                                }
-                                updateThemeForm((f) => ({
-                                  ...f,
-                                  fontSize: n as (typeof FONT_SIZE_OPTIONS)[number],
-                                }));
-                              }}
-                              onBlur={(e) => {
-                                const n = Number(e.target.value);
-                                if (!Number.isFinite(n)) return;
-                                updateThemeForm((f) => ({
-                                  ...f,
-                                  fontSize: coerceFontSizePx(n),
-                                }));
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "ArrowUp") {
-                                  e.preventDefault();
-                                  updateThemeForm((f) => ({
-                                    ...f,
-                                    fontSize: stepFontSize(f.fontSize, 1),
-                                  }));
-                                } else if (e.key === "ArrowDown") {
-                                  e.preventDefault();
-                                  updateThemeForm((f) => ({
-                                    ...f,
-                                    fontSize: stepFontSize(f.fontSize, -1),
-                                  }));
-                                }
-                              }}
-                              aria-label="Base font size in pixels"
-                            />
-                            <span className="settings-font-size-stepper__unit" aria-hidden="true">
-                              px
-                            </span>
-                          </div>
-                          <div
-                            className="settings-font-size-stepper__control"
-                            role="button"
-                            tabIndex={
-                              themeForm.fontSize ===
-                              FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
-                                ? -1
-                                : 0
-                            }
-                            aria-disabled={
-                              themeForm.fontSize ===
-                                FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1] || undefined
-                            }
-                            aria-label="Increase base font size"
-                            onClick={() => {
-                              if (
-                                themeForm.fontSize ===
-                                FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
-                              ) {
-                                return;
-                              }
-                              updateThemeForm((f) => ({
-                                ...f,
-                                fontSize: stepFontSize(f.fontSize, 1),
-                              }));
-                            }}
-                            onKeyDown={(e) => {
-                              if (
-                                themeForm.fontSize ===
-                                FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
-                              ) {
-                                return;
-                              }
-                              if (e.key !== "Enter" && e.key !== " ") return;
-                              e.preventDefault();
-                              updateThemeForm((f) => ({
-                                ...f,
-                                fontSize: stepFontSize(f.fontSize, 1),
-                              }));
-                            }}
-                          >
-                            <Plus size={16} aria-hidden />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {themeApplyError && (
-                    <p className="settings-playground-status settings-playground-status--err" role="alert">
-                      {themeApplyError}
-                    </p>
-                  )}
-                </div>
+              <div className="settings-api-key-row">
+                <input
+                  id="settings-api-key"
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  aria-label="OpenAI API key"
+                />
+                <button
+                  type="button"
+                  className="btn btn-icon"
+                  aria-pressed={showApiKey}
+                  aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                  title={showApiKey ? "Hide key" : "Show key"}
+                  onClick={() => setShowApiKey((v) => !v)}
+                >
+                  {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </SettingsGroup>
 
-            <SettingsGroup
-              title="Launch"
-              description="When open to compose is on, the app always opens to the centered compose screen. When off, the app restores your last view and conversation."
-            >
-              <SettingsSwitch
-                id="openToComposeOnLaunchToggle"
-                testId="settings-open-to-compose-on-launch"
-                label="Open to compose on launch"
-                checked={openToComposeOnLaunch}
-                onChange={(e) => setOpenToComposeOnLaunch(e.target.checked)}
-              />
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Layout aids"
-              description="Optional visual grid overlay for alignment checks while designing screens."
-            >
-              <SettingsField label="Grid overlay" htmlFor="settings-grid-overlay">
-                <select
-                  id="settings-grid-overlay"
-                  data-testid="settings-grid-overlay"
-                  value={layoutOptions.gridOverlay}
-                  onChange={(e) =>
-                    updateLayoutOptions({
-                      gridOverlay: e.target.value as LayoutOptions["gridOverlay"],
-                    })
-                  }
-                >
-                  <option value="off">Off</option>
-                  <option value="4">4px grid</option>
-                  <option value="8">8px grid</option>
-                  <option value="16">16px grid</option>
-                </select>
-              </SettingsField>
-              <SettingsHint flush>
-                Overlay is visual only and does not capture clicks.
-              </SettingsHint>
-            </SettingsGroup>
-          </section>}
-
-          {activeTab === "tools" && <section
-            id="settings-panel-tools"
-            className="settings-tab-panel"
-            role="tabpanel"
-            aria-labelledby="settings-tab-tools"
-          >
-            <SettingsGroup
-              title="Weather tool"
-              description={
-                <>
-                  Default US ZIP used by the <code>get_weather</code> tool when the assistant does not specify a location.
-                  Powered by Open-Meteo (no API key).
-                </>
-              }
-            >
-              <SettingsField label="Default ZIP" htmlFor="settings-weather-zip">
-                <input
-                  id="settings-weather-zip"
-                  data-testid="settings-weather-zip"
-                  type="text"
-                  value={weatherZip}
-                  onChange={(e) => setWeatherZip(e.target.value)}
-                  placeholder="12528"
-                  inputMode="numeric"
-                  autoComplete="postal-code"
-                  spellCheck={false}
-                  maxLength={5}
-                />
-              </SettingsField>
-            </SettingsGroup>
             <SettingsGroup
               title="Web search tool"
               description={
@@ -1242,6 +888,310 @@ export function SettingsView({
                   </button>
                 </div>
               </SettingsField>
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Weather tool"
+              description={
+                <>
+                  Default US ZIP used by the <code>get_weather</code> tool when the assistant does not specify a location.
+                  Powered by Open-Meteo (no API key).
+                </>
+              }
+            >
+              <SettingsField label="Default ZIP" htmlFor="settings-weather-zip">
+                <input
+                  id="settings-weather-zip"
+                  data-testid="settings-weather-zip"
+                  type="text"
+                  value={weatherZip}
+                  onChange={(e) => setWeatherZip(e.target.value)}
+                  placeholder="12528"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  spellCheck={false}
+                  maxLength={5}
+                />
+              </SettingsField>
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Facts in chat"
+              description="Choose how stored facts are included when you send a message."
+            >
+              <select
+                id="settings-memory-injection"
+                data-testid="settings-memory-injection"
+                value={memoryInjectionStrategy}
+                onChange={(e) =>
+                  setMemoryInjectionStrategy(e.target.value as MemoryInjectionStrategy)
+                }
+                aria-label="When to include facts in chat"
+              >
+                {MEMORY_INJECTION_STRATEGY_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <SettingsHint flush>
+                {
+                  MEMORY_INJECTION_STRATEGY_OPTIONS.find((o) => o.id === memoryInjectionStrategy)
+                    ?.description
+                }
+              </SettingsHint>
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Launch & sending"
+              description="Startup view and what happens after voice dictation."
+            >
+              <SettingsSwitch
+                id="openToComposeOnLaunchToggle"
+                testId="settings-open-to-compose-on-launch"
+                label="Open to compose on launch"
+                checked={openToComposeOnLaunch}
+                onChange={(e) => setOpenToComposeOnLaunch(e.target.checked)}
+              />
+              <SettingsSwitch
+                id="autoSendToggle"
+                testId="settings-auto-send"
+                label="Auto-send after dictation"
+                checked={autoSend}
+                onChange={(e) => setAutoSend(e.target.checked)}
+              />
+            </SettingsGroup>
+          </section>}
+
+          {activeTab === "appearance" && <section
+            id="settings-panel-appearance"
+            className="settings-tab-panel"
+            role="tabpanel"
+            aria-labelledby="settings-tab-appearance"
+          >
+            <SettingsGroup
+              title="Color theme"
+              description="Dark or light. Typography below is independent."
+            >
+              <div className="settings-theme-toggle" role="group" aria-label="Color theme">
+                {THEME_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`settings-theme-toggle__option${
+                      activeThemePresetId === preset.id ? " settings-theme-toggle__option--selected" : ""
+                    }`}
+                    data-testid={`settings-theme-${preset.id}`}
+                    aria-pressed={activeThemePresetId === preset.id}
+                    onClick={() => updateThemeForm((f) => applyThemeColors(f, preset.colors))}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              {themeApplyError && (
+                <p className="settings-group__hint settings-group__hint--flush" role="alert">
+                  {themeApplyError}
+                </p>
+              )}
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Typography"
+              description="UI and editor fonts load with the app. Independent of color theme above."
+            >
+              <SettingsField label="UI font" htmlFor="theme-font">
+                <select
+                  id="theme-font"
+                  value={themeForm.font}
+                  onChange={(e) =>
+                    updateThemeForm((f) => ({ ...f, font: e.target.value as UiFontId }))
+                  }
+                >
+                  {UI_FONTS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </SettingsField>
+              <SettingsField label="Code / notes font" htmlFor="theme-font-mono">
+                <select
+                  id="theme-font-mono"
+                  value={themeForm.fontMono}
+                  onChange={(e) =>
+                    updateThemeForm((f) => ({ ...f, fontMono: e.target.value as MonoFontId }))
+                  }
+                >
+                  {MONO_FONTS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </SettingsField>
+              <SettingsField label="Base font size" htmlFor="theme-font-size">
+                <div
+                  className="settings-font-size-stepper"
+                  role="group"
+                  aria-label="Base font size"
+                >
+                  <div
+                    className="settings-font-size-stepper__control"
+                    role="button"
+                    tabIndex={themeForm.fontSize === FONT_SIZE_OPTIONS[0] ? -1 : 0}
+                    aria-disabled={themeForm.fontSize === FONT_SIZE_OPTIONS[0] || undefined}
+                    aria-label="Decrease base font size"
+                    onClick={() => {
+                      if (themeForm.fontSize === FONT_SIZE_OPTIONS[0]) return;
+                      updateThemeForm((f) => ({
+                        ...f,
+                        fontSize: stepFontSize(f.fontSize, -1),
+                      }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (themeForm.fontSize === FONT_SIZE_OPTIONS[0]) return;
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      updateThemeForm((f) => ({
+                        ...f,
+                        fontSize: stepFontSize(f.fontSize, -1),
+                      }));
+                    }}
+                  >
+                    <Minus size={16} aria-hidden />
+                  </div>
+                  <div className="settings-font-size-stepper__input-wrap">
+                    <input
+                      id="theme-font-size"
+                      className="settings-font-size-stepper__input"
+                      type="number"
+                      inputMode="numeric"
+                      min={FONT_SIZE_OPTIONS[0]}
+                      max={FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]}
+                      value={themeForm.fontSize}
+                      onChange={(e) => {
+                        const n = Math.round(Number(e.target.value));
+                        if (!Number.isFinite(n)) return;
+                        if (!FONT_SIZE_OPTIONS.includes(n as (typeof FONT_SIZE_OPTIONS)[number])) {
+                          return;
+                        }
+                        updateThemeForm((f) => ({
+                          ...f,
+                          fontSize: n as (typeof FONT_SIZE_OPTIONS)[number],
+                        }));
+                      }}
+                      onBlur={(e) => {
+                        const n = Number(e.target.value);
+                        if (!Number.isFinite(n)) return;
+                        updateThemeForm((f) => ({
+                          ...f,
+                          fontSize: coerceFontSizePx(n),
+                        }));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          updateThemeForm((f) => ({
+                            ...f,
+                            fontSize: stepFontSize(f.fontSize, 1),
+                          }));
+                        } else if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          updateThemeForm((f) => ({
+                            ...f,
+                            fontSize: stepFontSize(f.fontSize, -1),
+                          }));
+                        }
+                      }}
+                      aria-label="Base font size in pixels"
+                    />
+                    <span className="settings-font-size-stepper__unit" aria-hidden="true">
+                      px
+                    </span>
+                  </div>
+                  <div
+                    className="settings-font-size-stepper__control"
+                    role="button"
+                    tabIndex={
+                      themeForm.fontSize === FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
+                        ? -1
+                        : 0
+                    }
+                    aria-disabled={
+                      themeForm.fontSize === FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1] ||
+                      undefined
+                    }
+                    aria-label="Increase base font size"
+                    onClick={() => {
+                      if (
+                        themeForm.fontSize === FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
+                      ) {
+                        return;
+                      }
+                      updateThemeForm((f) => ({
+                        ...f,
+                        fontSize: stepFontSize(f.fontSize, 1),
+                      }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        themeForm.fontSize === FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
+                      ) {
+                        return;
+                      }
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      updateThemeForm((f) => ({
+                        ...f,
+                        fontSize: stepFontSize(f.fontSize, 1),
+                      }));
+                    }}
+                  >
+                    <Plus size={16} aria-hidden />
+                  </div>
+                </div>
+              </SettingsField>
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Grid overlay"
+              description="Optional visual grid for alignment checks while designing screens. Overlay is visual only and does not capture clicks."
+            >
+              <select
+                id="settings-grid-overlay"
+                data-testid="settings-grid-overlay"
+                value={layoutOptions.gridOverlay}
+                onChange={(e) =>
+                  updateLayoutOptions({
+                    gridOverlay: e.target.value as LayoutOptions["gridOverlay"],
+                  })
+                }
+                aria-label="Grid overlay"
+              >
+                <option value="off">Off</option>
+                <option value="4">4px grid</option>
+                <option value="8">8px grid</option>
+                <option value="16">16px grid</option>
+              </select>
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Editor templates"
+              description="Edit the three note templates shown on the Editor overview page."
+            >
+              <div className="settings-entry-list">
+                {noteTemplates.map((template) => (
+                  <SettingsEntryRow
+                    key={template.id}
+                    title={template.title}
+                    detail={template.description}
+                    onEdit={() => openTemplateModal(template)}
+                    editAriaLabel={`Edit ${template.title} template`}
+                    editButtonTitle="Edit template"
+                  />
+                ))}
+              </div>
             </SettingsGroup>
           </section>}
 
@@ -1338,86 +1288,59 @@ export function SettingsView({
                   </>
                 }
               >
-                <SettingsHint flush>
-                  After changing permissions, quit and reopen the app. Use the buttons if macOS doesn’t prompt you.
-                </SettingsHint>
-                <SettingsActions>
-                  {accessibilityTrusted !== true && (
-                    <button
-                      type="button"
-                      className="btn"
-                      data-testid="settings-accessibility-prompt"
-                      onClick={() => {
-                        void window.electron.system.requestAccessibilityPrompt();
-                        setTimeout(() => {
-                          void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
-                        }, 800);
-                      }}
-                    >
-                      Ask for permission <ExternalLink size={14} aria-hidden />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn"
-                    data-testid="settings-open-accessibility"
-                    onClick={() => {
-                      void window.electron.system.openAccessibilitySettings();
-                      setTimeout(() => {
-                        void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
-                      }, 1500);
-                    }}
-                  >
-                    Open accessibility <ExternalLink size={14} aria-hidden />
-                  </button>
-                </SettingsActions>
-                <SettingsHint flush>
-                  {accessibilityTrusted === true
-                    ? "Accessibility looks good. If Fn still won’t work, restart and check both Harness and Fn Monitor."
-                    : accessibilityTrusted === false
-                      ? "Accessibility not enabled yet."
-                      : "Checking…"}
-                </SettingsHint>
+                <SettingsSwitch
+                  id="globalFnHotkeyToggle"
+                  testId="settings-global-fn-hotkey"
+                  label="Menu bar shortcut"
+                  checked={globalFnHotkey}
+                  onChange={(e) => setGlobalFnHotkey(e.target.checked)}
+                />
+                {globalFnHotkey && (
+                  <>
+                    <SettingsHint flush>
+                      After changing permissions, quit and reopen the app. Use the buttons if macOS doesn’t prompt you.
+                    </SettingsHint>
+                    <SettingsActions>
+                      {accessibilityTrusted !== true && (
+                        <button
+                          type="button"
+                          className="btn"
+                          data-testid="settings-accessibility-prompt"
+                          onClick={() => {
+                            void window.electron.system.requestAccessibilityPrompt();
+                            setTimeout(() => {
+                              void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+                            }, 800);
+                          }}
+                        >
+                          Ask for permission <ExternalLink size={14} aria-hidden />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn"
+                        data-testid="settings-open-accessibility"
+                        onClick={() => {
+                          void window.electron.system.openAccessibilitySettings();
+                          setTimeout(() => {
+                            void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+                          }, 1500);
+                        }}
+                      >
+                        Open accessibility <ExternalLink size={14} aria-hidden />
+                      </button>
+                    </SettingsActions>
+                    <SettingsHint flush>
+                      {accessibilityTrusted === true
+                        ? "Accessibility looks good. If Fn still won’t work, restart and check both Harness and Fn Monitor."
+                        : accessibilityTrusted === false
+                          ? "Accessibility not enabled yet."
+                          : "Checking…"}
+                    </SettingsHint>
+                  </>
+                )}
               </SettingsGroup>
             )}
-
-            <SettingsGroup
-              title="After dictation"
-              description="Send the transcribed message right away in a new chat."
-            >
-              <SettingsSwitch
-                id="autoSendToggle"
-                testId="settings-auto-send"
-                label="Auto-send"
-                checked={autoSend}
-                onChange={(e) => setAutoSend(e.target.checked)}
-              />
-            </SettingsGroup>
-          </section>}
-
-          {activeTab === "notes" && <section
-            id="settings-panel-notes"
-            className="settings-tab-panel"
-            role="tabpanel"
-            aria-labelledby="settings-tab-notes"
-          >
-            <SettingsGroup
-              title="Editor templates"
-              description="Edit the three note templates shown on the Editor overview page."
-            >
-              <div className="settings-entry-list">
-                {noteTemplates.map((template) => (
-                  <SettingsEntryRow
-                    key={template.id}
-                    title={template.title}
-                    detail={template.description}
-                    onEdit={() => openTemplateModal(template)}
-                    editAriaLabel={`Edit ${template.title} template`}
-                    editButtonTitle="Edit template"
-                  />
-                ))}
-              </div>
-            </SettingsGroup>
           </section>}
 
           {activeTab === "memory" && <section
@@ -1427,35 +1350,7 @@ export function SettingsView({
             aria-labelledby="settings-tab-memory"
           >
             <SettingsGroup
-              title="Prompt injection"
-              description="How stored user facts are added to the system prompt on each message."
-            >
-              <SettingsField label="Strategy" htmlFor="settings-memory-injection">
-                <select
-                  id="settings-memory-injection"
-                  data-testid="settings-memory-injection"
-                  value={memoryInjectionStrategy}
-                  onChange={(e) =>
-                    setMemoryInjectionStrategy(e.target.value as MemoryInjectionStrategy)
-                  }
-                >
-                  {MEMORY_INJECTION_STRATEGY_OPTIONS.map((opt) => (
-                    <option key={opt.id} value={opt.id}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </SettingsField>
-              <SettingsHint flush>
-                {
-                  MEMORY_INJECTION_STRATEGY_OPTIONS.find((o) => o.id === memoryInjectionStrategy)
-                    ?.description
-                }
-              </SettingsHint>
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="User facts"
+              title="Your facts"
               description="Stable facts stored locally and synced with your backup. Pick a short label and a one-line value; the same label updates the existing entry."
             >
               <div className="settings-entry-list">
@@ -1490,8 +1385,8 @@ export function SettingsView({
               description={
                 <>
                   Run the export prompt in ChatGPT, Claude, or another assistant, paste the result
-                  below, then import. Harness uses your OpenAI API key to distill entries into user
-                  facts above (same merge rules as compile).
+                  below, then import. Harness uses your OpenAI API key to distill entries into your
+                  facts above (same merge rules as learn from past chats).
                 </>
               }
             >
@@ -1539,19 +1434,19 @@ export function SettingsView({
                   onClick={() => void runLlmContextImport()}
                   disabled={llmImportBusy || !llmImportDraft.trim()}
                 >
-                  {llmImportBusy ? "Importing…" : "Import into user facts"}
+                  {llmImportBusy ? "Importing…" : "Import facts"}
                 </button>
               </SettingsActions>
               {llmImportMessage && <SettingsHint flush>{llmImportMessage}</SettingsHint>}
             </SettingsGroup>
 
             <SettingsGroup
-              title="Compile from conversations"
+              title="Learn from past chats"
               description={
                 <>
-                  Reviews conversations updated since the last run and adds durable facts to the list
-                  above. Uses your OpenAI API key. Auto-merges without asking — edit or remove entries
-                  any time. Manual-only for now; runs only when you press the button below.
+                  Reviews conversations updated since the last run and adds durable facts to your
+                  facts above. Uses your OpenAI API key. Auto-merges without asking — edit or remove
+                  entries any time. Manual-only for now; runs only when you press the button below.
                 </>
               }
             >
@@ -1563,7 +1458,7 @@ export function SettingsView({
                   onClick={() => void runCompileNow()}
                   disabled={compileBusy}
                 >
-                  {compileBusy ? "Compiling…" : "Compile now"}
+                  {compileBusy ? "Learning…" : "Learn now"}
                 </button>
               </SettingsActions>
               {compileStatus && (
@@ -1792,232 +1687,226 @@ export function SettingsView({
             aria-labelledby="settings-tab-data"
           >
             <SettingsGroup
-              title="Storage layout"
-              description={
-                <>
-                  Everything Harness saves on this device. Sync copies a snapshot of{" "}
-                  <code>local-data</code> (except recordings) into your chosen backup folder;
-                  your cloud provider moves that folder between machines.
-                </>
-              }
+              title="Local data"
+              description="Harness stores conversations, notes, and settings on this device. Backup syncs everything except local recordings."
             >
-              <figure className="settings-storage-diagram" aria-label="Storage layout diagram">
-                <pre className="settings-storage-diagram__pre">{DATA_STORAGE_DIAGRAM}</pre>
-              </figure>
               <SettingsActions>
                 <button type="button" className="btn" onClick={() => window.electron.memory.openAppDataFolder()}>
-                  Show app data folder <ExternalLink size={14} aria-hidden />
+                  {appDataFolderButtonLabel(platform)} <ExternalLink size={14} aria-hidden />
                 </button>
-                <button type="button" className="btn" onClick={() => void runCleanupLegacyMemory()} disabled={cleanupLegacyBusy}>
-                  {cleanupLegacyBusy ? "Cleaning…" : "Clean legacy memory folder"}
-                </button>
+                {dataStatus?.legacyMemoryExists && (
+                  <button type="button" className="btn" onClick={() => void runCleanupLegacyMemory()} disabled={cleanupLegacyBusy}>
+                    {cleanupLegacyBusy ? "Cleaning…" : "Clean legacy memory folder"}
+                  </button>
+                )}
               </SettingsActions>
-              {cleanupLegacyMessage && (
+              {dataStatus?.legacyMemoryExists && cleanupLegacyMessage && (
                 <SettingsHint flush>{cleanupLegacyMessage}</SettingsHint>
               )}
             </SettingsGroup>
 
             <SettingsGroup
-              title="Backup folder"
+              title="Backup (R2)"
               description={
                 <>
-                  Pick a folder Harness can read and write — anything inside iCloud Drive, Dropbox,
-                  Google Drive, OneDrive, a network share, or an external drive works. Sync now writes
-                  a single bundle + manifest there; your sync provider moves those files between
-                  devices. Each device should point at the <strong>same</strong> folder.
+                  Connect a Cloudflare R2 bucket. Harness stores <code>bundle.json.gz</code> and{" "}
+                  <code>manifest.json</code> under the prefix below. Enable object versioning in R2 for
+                  free backup history.
                 </>
               }
             >
-              {!dataStatus?.sync.backupFolderPath ? (
-                <>
-                  <SettingsActions>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => void pickBackupFolder()}
-                    >
-                      Choose folder…
-                    </button>
-                    {defaultBackupPath && (
-                      <button type="button" className="btn" onClick={() => void useDefaultBackupFolder()}>
-                        Use iCloud Drive default
-                      </button>
-                    )}
-                  </SettingsActions>
-                  <SettingsHint flush>
-                    You&apos;ll be able to sync once you pick a folder.
-                  </SettingsHint>
-                </>
-              ) : dataStatus.sync.configured ? (
-                <>
-                  <div className="settings-data-status" role="status">
-                    <p className="settings-data-status__path-row">
-                      <strong>Backup folder:</strong>{" "}
-                      <code>{dataStatus.sync.backupFolderPath}</code>
-                      <button
-                        type="button"
-                        className="btn settings-data-status__change-btn"
-                        onClick={() => void pickBackupFolder()}
-                      >
-                        Change…
-                      </button>
-                    </p>
-                    {dataStatus.sync.lastSuccessAt && (
-                      <p>
-                        <strong>Last sync:</strong>{" "}
-                        {new Date(dataStatus.sync.lastSuccessAt).toLocaleString()}
-                        {dataStatus.sync.lastAction && (
-                          <> ({dataStatus.sync.lastAction})</>
-                        )}
-                      </p>
-                    )}
-                    {dataStatus.sync.backupReadiness && (
-                      <p className="settings-import-status__errors">
-                        Waiting for cloud download: {dataStatus.sync.backupReadiness}
-                      </p>
-                    )}
-                    {dataStatus.sync.lastError && !dataStatus.sync.backupReadiness && (
-                      <p className="settings-import-status__errors">
-                        Last error: {dataStatus.sync.lastError}
-                      </p>
-                    )}
-                    {dataStatus.sync.conflictCopies.length > 0 && (
-                      <p className="settings-import-status__errors">
-                        Conflict copies in backup folder: {dataStatus.sync.conflictCopies.join(", ")}.
-                        Resolve them manually so future syncs stay clean.
-                      </p>
-                    )}
-                  </div>
-                  <SettingsActions>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => void runSyncNow()}
-                      disabled={syncBusy || Boolean(dataStatus.sync.backupReadiness)}
-                    >
-                      {syncBusy
-                        ? "Syncing…"
-                        : dataStatus.sync.backupReadiness
-                          ? "Waiting for download…"
-                          : "Sync now"}
-                    </button>
-                  </SettingsActions>
-                </>
-              ) : (
-                <>
-                  <div
-                    className="settings-data-status settings-data-status--error"
-                    role="alert"
+              <SettingsField label="Account ID" htmlFor="settings-r2-account">
+                <input
+                  id="settings-r2-account"
+                  type="text"
+                  value={r2AccountId}
+                  onChange={(e) => setR2AccountId(e.target.value)}
+                  placeholder="Cloudflare account ID"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </SettingsField>
+              <SettingsField label="Bucket" htmlFor="settings-r2-bucket">
+                <input
+                  id="settings-r2-bucket"
+                  type="text"
+                  value={r2Bucket}
+                  onChange={(e) => setR2Bucket(e.target.value)}
+                  placeholder="harness-sync"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </SettingsField>
+              <SettingsField label="Prefix" htmlFor="settings-r2-prefix">
+                <input
+                  id="settings-r2-prefix"
+                  type="text"
+                  value={r2Prefix}
+                  onChange={(e) => setR2Prefix(e.target.value)}
+                  placeholder="harness/"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </SettingsField>
+              <SettingsField label="Access key ID" htmlFor="settings-r2-access-key-id">
+                <input
+                  id="settings-r2-access-key-id"
+                  type="text"
+                  value={r2AccessKeyId}
+                  onChange={(e) => setR2AccessKeyId(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </SettingsField>
+              <SettingsField label="Secret access key" htmlFor="settings-r2-secret">
+                <div className="settings-api-key-row">
+                  <input
+                    id="settings-r2-secret"
+                    type={showR2Secret ? "text" : "password"}
+                    value={r2SecretAccessKey}
+                    onChange={(e) => setR2SecretAccessKey(e.target.value)}
+                    placeholder="Secret access key"
+                    autoComplete="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    aria-label="R2 secret access key"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-icon"
+                    aria-pressed={showR2Secret}
+                    aria-label={showR2Secret ? "Hide secret access key" : "Show secret access key"}
+                    title={showR2Secret ? "Hide key" : "Show key"}
+                    onClick={() => setShowR2Secret((v) => !v)}
                   >
-                    <p className="settings-data-status__path-row">
-                      <strong>Backup folder:</strong>{" "}
-                      <code>{dataStatus.sync.backupFolderPath}</code>
-                    </p>
-                    {dataStatus.sync.folderError && (
-                      <p className="settings-import-status__errors">
-                        {dataStatus.sync.folderError}
-                      </p>
-                    )}
-                  </div>
-                  <SettingsActions>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => void pickBackupFolder()}
-                    >
-                      Choose folder…
-                    </button>
-                    {defaultBackupPath && (
-                      <button type="button" className="btn" onClick={() => void useDefaultBackupFolder()}>
-                        Use iCloud Drive default
-                      </button>
-                    )}
-                  </SettingsActions>
-                </>
+                    {showR2Secret ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </SettingsField>
+              {dataStatus?.sync.statusLine && (
+                <p className="settings-data-status" role="status">
+                  {dataStatus.sync.statusLine}
+                </p>
               )}
+              {dataStatus?.sync.lastError && (
+                <p className="settings-import-status__errors">{dataStatus.sync.lastError}</p>
+              )}
+              <SettingsActions>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => void testR2Connection()}
+                  disabled={syncTestBusy}
+                >
+                  {syncTestBusy ? "Testing…" : "Test connection"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void runSyncNow()}
+                  disabled={syncBusy || !dataStatus?.sync.configured}
+                >
+                  {syncBusy ? "Syncing…" : "Sync now"}
+                </button>
+              </SettingsActions>
               {syncMessage && <SettingsHint flush>{syncMessage}</SettingsHint>}
             </SettingsGroup>
 
-            <SettingsGroup
-              title="Import from ChatGPT"
-              description="Choose the folder from an unzipped ChatGPT export."
-            >
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={runImport}
-                  disabled={importing}
-                >
-                  {importing ? "Importing…" : "Import"}
-                </button>
-              </SettingsActions>
-              {importStatus != null && (
-                <div className="settings-import-status" role="status">
-                  {importStatus.imported > 0 && (
-                    <p className="settings-import-status__ok">
-                      Imported {importStatus.imported} conversation{importStatus.imported !== 1 ? "s" : ""}.
-                    </p>
-                  )}
-                  {importStatus.errors.length > 0 && (
-                    <div className="settings-import-status__errors">
-                      <p>Errors:</p>
-                      <ul>
-                        {importStatus.errors.map((err, i) => (
-                          <li key={i}>{err}</li>
-                        ))}
-                      </ul>
+            <SettingsGroup title="Import chat history">
+              <details className="settings-import-details">
+                <summary>Import chat history (optional)</summary>
+                <p className="settings-group__lead settings-import-details__lead">
+                  Bring conversations from ChatGPT or Claude exports into Harness. This is separate
+                  from importing facts on the Memory tab.
+                </p>
+                <div className="settings-import-details__section">
+                  <h4 className="settings-import-details__heading">ChatGPT</h4>
+                  <p className="settings-group__hint">Choose the folder from an unzipped ChatGPT export.</p>
+                  <SettingsActions>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={runImport}
+                      disabled={importing}
+                    >
+                      {importing ? "Importing…" : "Import from ChatGPT"}
+                    </button>
+                  </SettingsActions>
+                  {importStatus != null && (
+                    <div className="settings-import-status" role="status">
+                      {importStatus.imported > 0 && (
+                        <p className="settings-import-status__ok">
+                          Imported {importStatus.imported} conversation{importStatus.imported !== 1 ? "s" : ""}.
+                        </p>
+                      )}
+                      {importStatus.errors.length > 0 && (
+                        <div className="settings-import-status__errors">
+                          <p>Errors:</p>
+                          <ul>
+                            {importStatus.errors.map((err, i) => (
+                              <li key={i}>{err}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Import from Claude"
-              description={
-                <>
-                  Choose the folder from Claude.ai&apos;s &ldquo;Export data&rdquo; archive (contains{" "}
-                  <code>conversations.json</code>). Re-imports skip threads already added.
-                </>
-              }
-            >
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="settings-claude-import"
-                  onClick={runClaudeImport}
-                  disabled={claudeImporting}
-                >
-                  {claudeImporting ? "Importing…" : "Import"}
-                </button>
-              </SettingsActions>
-              {claudeImportStatus != null && (
-                <div className="settings-import-status" role="status">
-                  {claudeImportStatus.imported > 0 && (
-                    <p className="settings-import-status__ok">
-                      Imported {claudeImportStatus.imported} conversation
-                      {claudeImportStatus.imported !== 1 ? "s" : ""}.
-                    </p>
-                  )}
-                  {claudeImportStatus.errors.length > 0 && (
-                    <div className="settings-import-status__errors">
-                      <p>Errors:</p>
-                      <ul>
-                        {claudeImportStatus.errors.map((err, i) => (
-                          <li key={i}>{err}</li>
-                        ))}
-                      </ul>
+                <div className="settings-import-details__section">
+                  <h4 className="settings-import-details__heading">Claude</h4>
+                  <p className="settings-group__hint">
+                    Choose the folder from Claude.ai&apos;s &ldquo;Export data&rdquo; archive (contains{" "}
+                    <code>conversations.json</code>). Re-imports skip threads already added.
+                  </p>
+                  <SettingsActions>
+                    <button
+                      type="button"
+                      className="btn"
+                      data-testid="settings-claude-import"
+                      onClick={runClaudeImport}
+                      disabled={claudeImporting}
+                    >
+                      {claudeImporting ? "Importing…" : "Import from Claude"}
+                    </button>
+                  </SettingsActions>
+                  {claudeImportStatus != null && (
+                    <div className="settings-import-status" role="status">
+                      {claudeImportStatus.imported > 0 && (
+                        <p className="settings-import-status__ok">
+                          Imported {claudeImportStatus.imported} conversation
+                          {claudeImportStatus.imported !== 1 ? "s" : ""}.
+                        </p>
+                      )}
+                      {claudeImportStatus.errors.length > 0 && (
+                        <div className="settings-import-status__errors">
+                          <p>Errors:</p>
+                          <ul>
+                            {claudeImportStatus.errors.map((err, i) => (
+                              <li key={i}>{err}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+              </details>
             </SettingsGroup>
 
           </section>}
         </div>
         </SettingsSwitchProvider>
+      </div>
+      <div
+        className={`settings-toast${
+          saveStatus !== "idle" ? " settings-toast--visible" : ""
+        }${toastFading ? " settings-toast--fading" : ""}`}
+        role="status"
+        aria-live="polite"
+        aria-hidden={saveStatus === "idle"}
+      >
+        {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : ""}
       </div>
     </div>
   );

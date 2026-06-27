@@ -1,39 +1,39 @@
 /**
- * Folder-based backup sync (provider-agnostic).
+ * Cloudflare R2 remote backup sync.
  *
- * The user picks any folder on disk as the "backup folder". A cloud-sync
- * client (iCloud Drive, Dropbox, Google Drive, OneDrive, Syncthing, a
- * network share, an external drive…) is what actually moves bytes between
- * devices — Harness only ever reads and writes local files at that path.
- *
- * Two artifacts live in the backup folder:
+ * Artifacts in the bucket (under the configured prefix):
  *   - bundle.json.gz : gzipped JSON archive of the synced scopes
  *   - manifest.json  : { revision, updatedAt, version, bundleHash }
  *
- * Sync now compares revisions against the last synced revision: pull when
- * only the backup changed, push when only local changed, and auto-merge when
- * both diverged.
+ * Active polling on window focus and every ~30s while the app is foregrounded
+ * pulls when the remote manifest changes.
  */
 
-import { BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
-import { existsSync, watch } from "fs";
-import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
+import { watch, existsSync } from "fs";
+import { mkdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";
-import type { SyncConflictReview, SyncFolderSuggestion, SyncResult, SyncStatus } from "../shared/sync";
+import type { SyncConflictReview, SyncDecision, SyncResult, SyncStatus } from "../shared/sync";
 import {
   buildDefaultMergeChoices,
   buildMergedFileMap,
   buildSyncConflictReview,
   decideSyncAction,
+  formatSyncStatusLine,
   syncResultChangedLocalData,
 } from "../shared/sync";
 import { isHarnessE2E } from "./e2eStub";
 import type { SyncFileChoice } from "../shared/syncMerge";
+import { getR2SecretAccessKey } from "./credentials";
 import { getLocalDataDir, getLocalDataSyncDir } from "./localDataPaths";
+import {
+  isR2ConfigComplete,
+  RemoteBackupStore,
+  type BackupManifest,
+} from "./remoteBackupStore";
 import { getSettings, setSettings } from "./settings";
 import {
-  atomicWriteFile,
   applyMergedFiles,
   backupScopedFiles,
   buildBundle,
@@ -45,10 +45,8 @@ import {
   hashBundleBytes,
   listScopedFiles,
   parseBundle,
-  placeholderSiblingFor,
   USER_CONTENT_SYNC_SCOPES,
 } from "./syncBundle";
-import { listFolderSuggestions } from "./syncSuggestions";
 import { fileExists } from "./utils";
 
 const STATE_FILE = "state.json";
@@ -56,6 +54,7 @@ const LOCAL_BACKUP_DIR = "backups";
 export const BUNDLE_FILENAME = "bundle.json.gz";
 export const MANIFEST_FILENAME = "manifest.json";
 const MANIFEST_VERSION = 1;
+const POLL_INTERVAL_MS = 30_000;
 
 interface PersistedState {
   lastAttemptAt: number | null;
@@ -64,14 +63,7 @@ interface PersistedState {
   lastAction: SyncStatus["lastAction"];
   lastSyncedRevision: string | null;
   lastSyncedContentRevision: string | null;
-}
-
-interface BackupManifest {
-  version: number;
-  revision: string;
-  contentRevision?: string;
-  updatedAt: number;
-  bundleHash: string;
+  remoteRevision: string | null;
 }
 
 const DEFAULT_STATE: PersistedState = {
@@ -81,6 +73,7 @@ const DEFAULT_STATE: PersistedState = {
   lastAction: null,
   lastSyncedRevision: null,
   lastSyncedContentRevision: null,
+  remoteRevision: null,
 };
 
 function getStatePath(): string {
@@ -113,6 +106,7 @@ async function loadState(): Promise<PersistedState> {
         typeof raw.lastSyncedContentRevision === "string"
           ? raw.lastSyncedContentRevision
           : null,
+      remoteRevision: typeof raw.remoteRevision === "string" ? raw.remoteRevision : null,
     };
   } catch {
     return { ...DEFAULT_STATE, lastError: "Invalid sync state file" };
@@ -123,164 +117,77 @@ async function saveState(state: PersistedState): Promise<void> {
   await writeFile(getStatePath(), JSON.stringify(state, null, 2), "utf-8");
 }
 
-async function getBackupFolderPath(): Promise<string | null> {
+async function buildRemoteStore(): Promise<RemoteBackupStore | null> {
   const settings = await getSettings();
-  const path = settings.backup?.folderPath?.trim();
-  return path && path.length > 0 ? path : null;
+  const secret = await getR2SecretAccessKey();
+  if (!isR2ConfigComplete(settings.sync, Boolean(secret))) return null;
+  return new RemoteBackupStore({
+    accountId: settings.sync!.accountId,
+    bucket: settings.sync!.bucket,
+    prefix: settings.sync!.prefix,
+    accessKeyId: settings.sync!.accessKeyId,
+    secretAccessKey: secret!,
+  });
 }
 
-async function checkFolderAccessible(folder: string | null): Promise<{
+async function getSyncConfigStatus(): Promise<{
   configured: boolean;
-  error: string | null;
+  accountId: string | null;
+  bucket: string | null;
+  prefix: string | null;
+  configError: string | null;
 }> {
-  if (!folder) return { configured: false, error: null };
-  if (!existsSync(folder)) {
-    return { configured: false, error: `Backup folder not found: ${folder}` };
-  }
-  try {
-    const s = await stat(folder);
-    if (!s.isDirectory()) {
-      return { configured: false, error: `Backup path is not a folder: ${folder}` };
+  const settings = await getSettings();
+  const secret = await getR2SecretAccessKey();
+  const sync = settings.sync;
+  const accountId = sync?.accountId?.trim() || null;
+  const bucket = sync?.bucket?.trim() || null;
+  const prefix = sync?.prefix?.trim() || null;
+  const configured = isR2ConfigComplete(sync, Boolean(secret));
+  let configError: string | null = null;
+  if (accountId || bucket || sync?.accessKeyId?.trim()) {
+    if (!configured) {
+      configError = "Complete R2 account ID, bucket, access key ID, and secret access key.";
     }
-  } catch (err) {
-    return {
-      configured: false,
-      error: `Cannot access backup folder: ${err instanceof Error ? err.message : String(err)}`,
-    };
   }
-  return { configured: true, error: null };
+  return { configured, accountId, bucket, prefix, configError };
 }
 
-async function listConflictCopies(folder: string | null): Promise<string[]> {
-  if (!folder || !existsSync(folder)) return [];
-  try {
-    const entries = await readdir(folder);
-    return entries.filter(
-      (name) =>
-        name !== BUNDLE_FILENAME &&
-        name !== MANIFEST_FILENAME &&
-        (name.toLowerCase().includes("conflicted copy") ||
-          name.toLowerCase().includes("conflict") ||
-          name.includes("(") ||
-          name.startsWith("manifest") ||
-          name.startsWith("bundle.json")) &&
-        // Don't flag the canonical names (already filtered) or our own tmp files.
-        !name.endsWith(".tmp"),
-    );
-  } catch {
-    return [];
-  }
-}
-
-function buildStatus(
-  state: PersistedState,
-  folderPath: string | null,
-  folderCheck: { configured: boolean; error: string | null },
-  conflictCopies: string[],
-  backupReadiness: string | null,
-): SyncStatus {
+function buildStatus(state: PersistedState, config: Awaited<ReturnType<typeof getSyncConfigStatus>>): SyncStatus {
   return {
-    provider: "folderBackup",
-    configured: folderCheck.configured,
-    backupFolderPath: folderPath,
-    folderError: folderCheck.error,
+    provider: "s3Backup",
+    configured: config.configured,
+    accountId: config.accountId,
+    bucket: config.bucket,
+    prefix: config.prefix,
     lastAttemptAt: state.lastAttemptAt,
     lastSuccessAt: state.lastSuccessAt,
-    lastError: state.lastError,
+    lastError: state.lastError ?? config.configError,
     lastAction: state.lastAction,
     lastSyncedRevision: state.lastSyncedRevision,
-    conflictCopies,
-    backupReadiness,
+    remoteRevision: state.remoteRevision,
+    statusLine: formatSyncStatusLine({
+      configured: config.configured,
+      isSyncing: false,
+      lastSuccessAt: state.lastSuccessAt,
+      lastAction: state.lastAction,
+      lastError: state.lastError ?? config.configError,
+    }),
   };
 }
 
 export async function getSyncStatus(): Promise<SyncStatus> {
   const state = await loadState();
-  const folderPath = await getBackupFolderPath();
-  const folderCheck = await checkFolderAccessible(folderPath);
-  const conflictCopies = folderCheck.configured
-    ? await listConflictCopies(folderPath)
-    : [];
-  const backupReadiness =
-    folderCheck.configured && folderPath
-      ? await backupReadinessError(folderPath)
-      : null;
-  return buildStatus(state, folderPath, folderCheck, conflictCopies, backupReadiness);
-}
-
-async function readManifestFromBackup(folder: string): Promise<BackupManifest | null> {
-  const path = join(folder, MANIFEST_FILENAME);
-  if (!(await fileExists(path))) return null;
-  try {
-    const raw = JSON.parse(await readFile(path, "utf-8")) as Partial<BackupManifest>;
-    if (
-      typeof raw.revision === "string" &&
-      typeof raw.updatedAt === "number" &&
-      typeof raw.bundleHash === "string" &&
-      typeof raw.version === "number"
-    ) {
-      return {
-        version: raw.version,
-        revision: raw.revision,
-        updatedAt: raw.updatedAt,
-        bundleHash: raw.bundleHash,
-      };
-    }
-  } catch {
-    // Fall through to null below.
-  }
-  return null;
-}
-
-async function filePlaceholderError(
-  folder: string,
-  filename: string,
-): Promise<string | null> {
-  const filePath = join(folder, filename);
-  const placeholderPath = join(folder, placeholderSiblingFor(filename));
-  if (existsSync(placeholderPath)) {
-    return "Backup is still downloading from your sync provider — try again shortly.";
-  }
-  if (!existsSync(filePath)) return null;
-  try {
-    const s = await stat(filePath);
-    if (s.size === 0) {
-      return "Backup is still downloading from your sync provider — try again shortly.";
-    }
-  } catch (err) {
-    return `Could not read backup file ${filename}: ${err instanceof Error ? err.message : String(err)}`;
-  }
-  return null;
-}
-
-/** Block sync while iCloud (or similar) has only partially materialized the backup pair. */
-async function backupReadinessError(folder: string): Promise<string | null> {
-  const bundleError = await filePlaceholderError(folder, BUNDLE_FILENAME);
-  if (bundleError) return bundleError;
-  const manifestError = await filePlaceholderError(folder, MANIFEST_FILENAME);
-  if (manifestError) return manifestError;
-
-  const bundlePath = join(folder, BUNDLE_FILENAME);
-  const manifestPath = join(folder, MANIFEST_FILENAME);
-  const hasBundle = existsSync(bundlePath);
-  const hasManifest = existsSync(manifestPath);
-  // iCloud often downloads one file before the other; never push over a peer bundle
-  // just because manifest.json has not arrived yet.
-  if (hasBundle && !hasManifest) {
-    return "Backup manifest is still downloading from your sync provider — try again shortly.";
-  }
-  if (hasManifest && !hasBundle) {
-    return "Backup bundle is still downloading from your sync provider — try again shortly.";
-  }
-  return null;
+  const config = await getSyncConfigStatus();
+  return buildStatus(state, config);
 }
 
 async function readRemoteContentRevision(
-  folder: string,
+  store: RemoteBackupStore,
   manifest: BackupManifest,
 ): Promise<string> {
   if (typeof manifest.contentRevision === "string") return manifest.contentRevision;
-  const bytes = await readFile(join(folder, BUNDLE_FILENAME));
+  const bytes = await store.readBundle();
   return computeContentRevisionFromBundle(parseBundle(bytes));
 }
 
@@ -292,7 +199,7 @@ async function resolveSyncDecision(params: {
   lastSyncedRevision: string | null;
   lastSyncedContentRevision: string | null;
   localMaxMtimeMs: number;
-}): Promise<"push" | "pull" | "noop" | "conflict"> {
+}): Promise<SyncDecision> {
   const {
     localRevision,
     localContentRevision,
@@ -335,16 +242,13 @@ async function loadLocalScopedFileMap(): Promise<Record<string, Buffer>> {
 }
 
 async function loadRemoteScopedFileMap(
-  folder: string,
+  store: RemoteBackupStore,
   manifest: BackupManifest,
 ): Promise<Record<string, Buffer>> {
-  const bundlePath = join(folder, BUNDLE_FILENAME);
-  const bytes = await readFile(bundlePath);
+  const bytes = await store.readBundle();
   const actualHash = hashBundleBytes(bytes);
   if (actualHash !== manifest.bundleHash) {
-    throw new Error(
-      "Backup bundle hash does not match its manifest — the bundle may still be syncing. Try again shortly.",
-    );
+    throw new Error("Remote bundle hash does not match its manifest.");
   }
   const doc = parseBundle(bytes);
   const out: Record<string, Buffer> = {};
@@ -362,14 +266,14 @@ function mergeWarningFromReview(review: SyncConflictReview): string | undefined 
 }
 
 async function mergeConflictResolution(
-  folderPath: string,
+  store: RemoteBackupStore,
   remoteManifest: BackupManifest,
   choices: Record<string, SyncFileChoice>,
   now: number,
 ): Promise<void> {
   suppressSyncSchedule();
   const localFiles = await loadLocalScopedFileMap();
-  const remoteFiles = await loadRemoteScopedFileMap(folderPath, remoteManifest);
+  const remoteFiles = await loadRemoteScopedFileMap(store, remoteManifest);
   const mergedFiles = buildMergedFileMap(localFiles, remoteFiles, choices);
   const localData = getLocalDataDir();
   const backupSnapshotDir = join(getLocalBackupsRoot(), String(now));
@@ -378,33 +282,28 @@ async function mergeConflictResolution(
 }
 
 async function autoMergeAndPush(
-  folderPath: string,
+  store: RemoteBackupStore,
   remoteManifest: BackupManifest,
   now: number,
 ): Promise<{ mergeWarning?: string }> {
   const localFiles = await loadLocalScopedFileMap();
-  const remoteFiles = await loadRemoteScopedFileMap(folderPath, remoteManifest);
+  const remoteFiles = await loadRemoteScopedFileMap(store, remoteManifest);
   const review = buildSyncConflictReview(localFiles, remoteFiles);
   const choices = buildDefaultMergeChoices(review);
-  await mergeConflictResolution(folderPath, remoteManifest, choices, now);
+  await mergeConflictResolution(store, remoteManifest, choices, now);
   const mergeWarning = mergeWarningFromReview(review);
   const localRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
-  await pushLocalToBackup(folderPath, localRevision, now);
+  await pushLocalToRemote(store, localRevision, now);
   return { mergeWarning };
 }
 
-async function pushLocalToBackup(
-  folder: string,
+async function pushLocalToRemote(
+  store: RemoteBackupStore,
   localRevision: string,
   now: number,
 ): Promise<{ bundleHash: string }> {
   const { bytes, bundleHash } = await buildBundle(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
   const contentRevision = await computeRevision(getLocalDataDir(), USER_CONTENT_SYNC_SCOPES);
-  await mkdir(folder, { recursive: true });
-  // Write bundle first, then manifest (so a partially-synced peer never sees
-  // a manifest that points at an old or missing bundle). Both writes are
-  // atomic via *.tmp + rename.
-  await atomicWriteFile(join(folder, BUNDLE_FILENAME), bytes);
   const manifest: BackupManifest = {
     version: MANIFEST_VERSION,
     revision: localRevision,
@@ -412,26 +311,20 @@ async function pushLocalToBackup(
     updatedAt: now,
     bundleHash,
   };
-  await atomicWriteFile(
-    join(folder, MANIFEST_FILENAME),
-    Buffer.from(JSON.stringify(manifest, null, 2), "utf-8"),
-  );
+  await store.writeBundleAndManifest({ bundleBytes: bytes, manifest });
   return { bundleHash };
 }
 
-async function pullBackupIntoLocal(
-  folder: string,
+async function pullRemoteIntoLocal(
+  store: RemoteBackupStore,
   manifest: BackupManifest,
   now: number,
 ): Promise<{ filesWritten: number }> {
   suppressSyncSchedule();
-  const bundlePath = join(folder, BUNDLE_FILENAME);
-  const bytes = await readFile(bundlePath);
+  const bytes = await store.readBundle();
   const actualHash = hashBundleBytes(bytes);
   if (actualHash !== manifest.bundleHash) {
-    throw new Error(
-      "Backup bundle hash does not match its manifest — the bundle may still be syncing. Try again shortly.",
-    );
+    throw new Error("Remote bundle hash does not match its manifest.");
   }
   const doc = parseBundle(bytes);
   const backupSnapshotDir = join(getLocalBackupsRoot(), String(now));
@@ -441,13 +334,16 @@ async function pullBackupIntoLocal(
 }
 
 let inFlight: Promise<SyncResult> | null = null;
+let pollInFlight: Promise<void> | null = null;
 
 const SYNC_DEBOUNCE_MS = 2500;
 const SYNC_SUPPRESS_MS = 3000;
 
 let syncScheduleTimer: ReturnType<typeof setTimeout> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 let suppressScheduleUntil = 0;
 let autoSyncWatcherStarted = false;
+let lastObservedRemoteRevision: string | null = null;
 
 function suppressSyncSchedule(ms = SYNC_SUPPRESS_MS): void {
   suppressScheduleUntil = Date.now() + ms;
@@ -466,7 +362,6 @@ function runScheduledSync(): void {
   void runSyncNow();
 }
 
-/** Debounced push/pull after local synced data changes (chat, tasks, notes, settings). */
 export function scheduleSyncAfterLocalChange(): void {
   if (isHarnessE2E()) return;
   if (Date.now() < suppressScheduleUntil) return;
@@ -494,6 +389,56 @@ function startAutoSyncWatcher(): void {
   }
 }
 
+function startActivePolling(): void {
+  if (isHarnessE2E() || pollTimer) return;
+
+  const pollOnce = () => {
+    if (pollInFlight) return;
+    pollInFlight = pollRemoteManifest()
+      .catch(() => undefined)
+      .finally(() => {
+        pollInFlight = null;
+      });
+  };
+
+  pollOnce();
+
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.on("focus", pollOnce);
+  }
+
+  pollTimer = setInterval(() => {
+    const wins = BrowserWindow.getAllWindows();
+    const anyFocused = wins.some((w) => !w.isDestroyed() && w.isFocused());
+    if (anyFocused) pollOnce();
+  }, POLL_INTERVAL_MS);
+}
+
+async function pollRemoteManifest(): Promise<void> {
+  const store = await buildRemoteStore();
+  if (!store) return;
+
+  const manifest = await store.readManifest();
+  const remoteRevision = manifest?.revision ?? null;
+  const state = await loadState();
+
+  if (remoteRevision && remoteRevision !== lastObservedRemoteRevision) {
+    const prev = lastObservedRemoteRevision;
+    lastObservedRemoteRevision = remoteRevision;
+    if (prev !== null && remoteRevision !== state.lastSyncedRevision) {
+      await saveState({ ...state, remoteRevision, lastError: null });
+      broadcastSyncChanged();
+      await runSyncNow();
+      return;
+    }
+  }
+
+  if (remoteRevision !== state.remoteRevision) {
+    await saveState({ ...state, remoteRevision });
+    broadcastSyncChanged();
+  }
+}
+
 function runExclusive(task: () => Promise<SyncResult>): Promise<SyncResult> {
   if (inFlight) return inFlight;
   inFlight = task().finally(() => {
@@ -508,53 +453,37 @@ export async function runSyncNow(): Promise<SyncResult> {
     if (syncResultChangedLocalData(result)) {
       broadcastSyncChanged();
     }
+    if (result.status.remoteRevision) {
+      lastObservedRemoteRevision = result.status.remoteRevision;
+    }
     return result;
   });
 }
 
 async function runSyncNowInner(): Promise<SyncResult> {
   const now = Date.now();
-  const folderPath = await getBackupFolderPath();
-  const folderCheck = await checkFolderAccessible(folderPath);
+  const config = await getSyncConfigStatus();
   const state = await loadState();
   const next: PersistedState = { ...state, lastAttemptAt: now, lastError: null };
 
-  const conflictCopies = folderCheck.configured
-    ? await listConflictCopies(folderPath)
-    : [];
-  const backupReadiness =
-    folderCheck.configured && folderPath
-      ? await backupReadinessError(folderPath)
-      : null;
-
-  if (!folderPath) {
-    next.lastError = `Pick a backup folder in ${RIG_PAGE_TITLE}.`;
+  if (!config.configured) {
+    next.lastError = config.configError ?? `Configure R2 sync in ${RIG_PAGE_TITLE}.`;
     await saveState(next);
     return {
       ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies, backupReadiness),
-    };
-  }
-  if (!folderCheck.configured) {
-    next.lastError = folderCheck.error ?? "Backup folder is not accessible.";
-    await saveState(next);
-    return {
-      ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies, backupReadiness),
+      status: buildStatus(next, config),
     };
   }
 
-  if (backupReadiness) {
-    next.lastError = backupReadiness;
+  const store = await buildRemoteStore();
+  if (!store) {
+    next.lastError = "R2 credentials are incomplete.";
     await saveState(next);
-    return {
-      ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies, backupReadiness),
-    };
+    return { ok: false, status: buildStatus(next, config) };
   }
 
   try {
-    const remoteManifest = await readManifestFromBackup(folderPath);
+    const remoteManifest = await store.readManifest();
     const localRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
     const localContentRevision = await computeRevision(
       getLocalDataDir(),
@@ -562,24 +491,23 @@ async function runSyncNowInner(): Promise<SyncResult> {
     );
 
     if (!remoteManifest) {
-      // Nothing in the backup folder yet (or unreadable manifest) → push.
-      await pushLocalToBackup(folderPath, localRevision, now);
+      await pushLocalToRemote(store, localRevision, now);
       next.lastSuccessAt = now;
       next.lastAction = "push";
       next.lastSyncedRevision = localRevision;
       next.lastSyncedContentRevision = localContentRevision;
+      next.remoteRevision = localRevision;
       await saveState(next);
-      return {
-        ok: true,
-        status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
-      };
+      return { ok: true, status: buildStatus(next, config) };
     }
+
+    next.remoteRevision = remoteManifest.revision;
 
     const localMaxMtimeMs = await computeLocalMaxMtime(
       getLocalDataDir(),
       USER_CONTENT_SYNC_SCOPES,
     );
-    const remoteContentRevision = await readRemoteContentRevision(folderPath, remoteManifest);
+    const remoteContentRevision = await readRemoteContentRevision(store, remoteManifest);
     const decision = await resolveSyncDecision({
       localRevision,
       localContentRevision,
@@ -590,8 +518,8 @@ async function runSyncNowInner(): Promise<SyncResult> {
       localMaxMtimeMs,
     });
 
-    if (decision === "conflict") {
-      const { mergeWarning } = await autoMergeAndPush(folderPath, remoteManifest, now);
+    if (decision === "conflict" || decision === "merge") {
+      const { mergeWarning } = await autoMergeAndPush(store, remoteManifest, now);
       const mergedRevision = await computeRevision(getLocalDataDir(), DEFAULT_SYNC_SCOPES);
       const mergedContentRevision = await computeRevision(
         getLocalDataDir(),
@@ -601,20 +529,20 @@ async function runSyncNowInner(): Promise<SyncResult> {
       next.lastAction = "merge";
       next.lastSyncedRevision = mergedRevision;
       next.lastSyncedContentRevision = mergedContentRevision;
+      next.remoteRevision = mergedRevision;
       next.lastError = null;
       await saveState(next);
       return {
         ok: true,
-        status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
+        status: buildStatus(next, config),
         mergeWarning,
       };
     }
 
     return finishSyncAction({
       decision,
-      folderPath,
-      folderCheck,
-      conflictCopies,
+      store,
+      config,
       remoteManifest,
       localRevision,
       localContentRevision,
@@ -625,58 +553,14 @@ async function runSyncNowInner(): Promise<SyncResult> {
   } catch (err) {
     next.lastError = err instanceof Error ? err.message : String(err);
     await saveState(next);
-    return {
-      ok: false,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
-    };
+    return { ok: false, status: buildStatus(next, config) };
   }
-}
-
-async function pickBackupFolder(): Promise<string | null> {
-  const win = BrowserWindow.getAllWindows()[0] ?? null;
-  const result = await dialog.showOpenDialog(win ?? undefined, {
-    title: "Choose backup folder",
-    properties: ["openDirectory", "createDirectory"],
-  });
-  if (result.canceled || result.filePaths.length === 0) return null;
-  const chosen = result.filePaths[0];
-  await setSettings({ backup: { folderPath: chosen } });
-  return chosen;
-}
-
-async function setBackupFolder(path: string): Promise<string | null> {
-  const trimmed = path?.trim() ?? "";
-  if (!trimmed) {
-    await setSettings({ backup: { folderPath: "" } });
-    return null;
-  }
-  // Try to create the folder so the user can accept a "Suggested" path even
-  // if the cloud-sync provider hasn't created `Harness/` yet.
-  try {
-    await mkdir(trimmed, { recursive: true });
-  } catch {
-    // Surface the error via getStatus on the next read; don't throw here.
-  }
-  await setSettings({ backup: { folderPath: trimmed } });
-  return trimmed;
-}
-
-async function revealBackupFolder(): Promise<void> {
-  const folder = await getBackupFolderPath();
-  if (!folder) return;
-  await mkdir(folder, { recursive: true }).catch(() => undefined);
-  await shell.openPath(folder);
-}
-
-function listSuggestions(): SyncFolderSuggestion[] {
-  return listFolderSuggestions();
 }
 
 async function finishSyncAction(params: {
   decision: "push" | "pull" | "noop";
-  folderPath: string;
-  folderCheck: { configured: boolean; error: string | null };
-  conflictCopies: string[];
+  store: RemoteBackupStore;
+  config: Awaited<ReturnType<typeof getSyncConfigStatus>>;
   remoteManifest: BackupManifest;
   localRevision: string;
   localContentRevision: string;
@@ -686,9 +570,8 @@ async function finishSyncAction(params: {
 }): Promise<SyncResult> {
   const {
     decision,
-    folderPath,
-    folderCheck,
-    conflictCopies,
+    store,
+    config,
     remoteManifest,
     localRevision,
     localContentRevision,
@@ -702,50 +585,68 @@ async function finishSyncAction(params: {
     next.lastAction = "noop";
     next.lastSyncedRevision = localRevision;
     next.lastSyncedContentRevision = localContentRevision;
+    next.remoteRevision = remoteManifest.revision;
     next.lastError = null;
     await saveState(next);
-    return {
-      ok: true,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
-    };
+    return { ok: true, status: buildStatus(next, config) };
   }
 
   if (decision === "pull") {
-    await pullBackupIntoLocal(folderPath, remoteManifest, now);
+    await pullRemoteIntoLocal(store, remoteManifest, now);
     next.lastSuccessAt = now;
     next.lastAction = "pull";
     next.lastSyncedRevision = remoteManifest.revision;
     next.lastSyncedContentRevision = remoteContentRevision;
+    next.remoteRevision = remoteManifest.revision;
     next.lastError = null;
     await saveState(next);
-    return {
-      ok: true,
-      status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
-    };
+    return { ok: true, status: buildStatus(next, config) };
   }
 
-  await pushLocalToBackup(folderPath, localRevision, now);
+  await pushLocalToRemote(store, localRevision, now);
   next.lastSuccessAt = now;
   next.lastAction = "push";
   next.lastSyncedRevision = localRevision;
   next.lastSyncedContentRevision = localContentRevision;
+  next.remoteRevision = localRevision;
   next.lastError = null;
   await saveState(next);
-  return {
-    ok: true,
-    status: buildStatus(next, folderPath, folderCheck, conflictCopies, null),
-  };
+  return { ok: true, status: buildStatus(next, config) };
+}
+
+async function testR2Connection(): Promise<{ ok: boolean; error?: string }> {
+  const store = await buildRemoteStore();
+  if (!store) {
+    return { ok: false, error: "R2 settings or secret access key is incomplete." };
+  }
+  const result = await store.testConnection();
+  return result.ok ? { ok: true } : { ok: false, error: result.error };
+}
+
+async function setR2SecretAccessKey(secret: string): Promise<void> {
+  const { setCredential } = await import("./credentials");
+  await setCredential("r2.secretAccessKey", secret);
 }
 
 export function registerSyncHandlers(): void {
   startAutoSyncWatcher();
+  startActivePolling();
   ipcMain.handle("sync:getStatus", () => getSyncStatus());
   ipcMain.handle("sync:runNow", () => runSyncNow());
-  ipcMain.handle("sync:pickFolder", () => pickBackupFolder());
-  ipcMain.handle("sync:setFolder", (_e, path: string) => setBackupFolder(path));
-  ipcMain.handle("sync:revealFolder", () => revealBackupFolder());
-  ipcMain.handle("sync:listSuggestions", () => listSuggestions());
+  ipcMain.handle("sync:testConnection", () => testR2Connection());
+  ipcMain.handle("sync:setR2SecretAccessKey", (_e, secret: string) => setR2SecretAccessKey(secret));
+  ipcMain.handle("sync:setR2Config", async (_e, partial: { accountId?: string; bucket?: string; prefix?: string; accessKeyId?: string }) => {
+    const current = await getSettings();
+    await setSettings({
+      sync: {
+        accountId: partial.accountId ?? current.sync?.accountId ?? "",
+        bucket: partial.bucket ?? current.sync?.bucket ?? "",
+        prefix: partial.prefix ?? current.sync?.prefix ?? "harness/",
+        accessKeyId: partial.accessKeyId ?? current.sync?.accessKeyId ?? "",
+      },
+    });
+    return getSyncStatus();
+  });
 }
 
-// Re-export so callers in main process don't need to know the path layout.
 export { getLocalBackupsRoot };

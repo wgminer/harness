@@ -66,6 +66,17 @@ describe("mergeFileBytes", () => {
     expect(byId.t2).toBe("Only remote");
   });
 
+  it("never merges remote api keys in settings.json", () => {
+    const merged = mergeFileBytes(
+      "settings/settings.json",
+      Buffer.from(JSON.stringify({ version: 1, openai: { apiKey: "local" }, sync: { bucket: "local-b" } })),
+      Buffer.from(JSON.stringify({ version: 1, openai: { apiKey: "remote" }, sync: { bucket: "remote-b" } })),
+    );
+    const parsed = JSON.parse(merged.toString("utf-8")) as Record<string, unknown>;
+    expect((parsed.openai as Record<string, unknown> | undefined)?.apiKey).toBeUndefined();
+    expect((parsed.sync as { bucket: string }).bucket).toBe("local-b");
+  });
+
   it("merges theme.json preferring newer updatedAt", () => {
     const merged = mergeFileBytes(
       "themes/theme.json",

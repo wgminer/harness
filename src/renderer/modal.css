@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-6) var(--space-4);
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .app-modal {
@@ -70,12 +70,12 @@
   background: var(--bg);
   color: var(--fg);
   border: none;
-  box-shadow: var(--hairline-inset);
+  box-shadow: var(--hairline-inset-input);
 }
 
 .app-modal-body select:focus {
   outline: none;
-  box-shadow: var(--hairline-inset-accent);
+  box-shadow: var(--hairline-inset-input-focus);
 }
 
 .app-modal-input {
@@ -88,12 +88,12 @@
   color: var(--fg);
   border: none;
   border-radius: var(--radius-sm);
-  box-shadow: var(--hairline-inset);
+  box-shadow: var(--hairline-inset-input);
 }
 
 .app-modal-input:focus {
   outline: none;
-  box-shadow: var(--hairline-inset-accent);
+  box-shadow: var(--hairline-inset-input-focus);
 }
 
 .app-modal-footer {
@@ -179,4 +179,9 @@
   color: var(--fg-muted);
   font-size: var(--font-size-sm);
   line-height: 1.45;
+}
+
+.setup-notice-item > .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }

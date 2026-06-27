@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Minimize2 } from "lucide-react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
-import { openAIRequiredMessage } from "../shared/setupState";
 import { HOME_HEADER_QUOTE } from "../shared/headerQuote";
 import { ChatTitleModal } from "./ChatTitleModal";
 import { ChatSurface } from "./ChatSurface";
@@ -441,7 +440,6 @@ export function ChatView({
   const setVoiceErrorRef = useRef<(message: string | null) => void>(() => {});
 
   const blockLlmAction = useCallback(() => {
-    setVoiceErrorRef.current(openAIRequiredMessage());
     onOpenSetup?.();
   }, [onOpenSetup]);
 
@@ -669,7 +667,7 @@ export function ChatView({
     attachedAudioName: composer.attachedAudioFile?.name ?? null,
     attachmentTranscribing: composer.attachmentTranscribing,
     attachmentError: composer.attachmentError,
-    onAttachAudio: (file: File) => {
+    onAttachAudio: (file: File | null) => {
       composer.setAttachedAudioFile(file);
       composer.setAttachmentError(null);
     },
@@ -748,7 +746,6 @@ export function ChatView({
         onCopied={setCopiedId}
         onSaveToNotes={saveMessageToNotes}
         streamingContent={streamingContent}
-        sending={sending}
         polishHintAfterDictation={polishHintAfterDictation}
         llmActionsEnabled={openAIConfigured}
         onToolConfirm={handleToolConfirm}

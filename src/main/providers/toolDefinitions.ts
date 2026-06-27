@@ -6,7 +6,7 @@ import {
   THEME_PRESET_IDS_FOR_SCHEMA,
 } from "../../shared/theme";
 
-const toolsSection = rigSection("Tools");
+const toolsSection = rigSection("General");
 
 export const TOOL_DEFINITIONS = [
   {
@@ -89,7 +89,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "update_theme",
       description:
-        "Update the app theme (accent, text/background colors, UI font, monospace font for code/notes, base size). Omit fields you do not want to change. Returns the applied settings. Prefer get_theme first when unsure of current values.",
+        "Update the app theme (accent, text/background colors, UI font, editor font for code/notes, base size). Omit fields you do not want to change. Returns the applied settings. Prefer get_theme first when unsure of current values.",
       parameters: {
         type: "object",
         properties: {
@@ -100,7 +100,7 @@ export const TOOL_DEFINITIONS = [
           fontMono: {
             type: "string",
             enum: FONT_MONO_IDS_FOR_SCHEMA,
-            description: "Monospace font id for code and notes editor",
+            description: "Editor font id for code and notes (monospace or proportional, e.g. ui_serif)",
           },
           fontSize: {
             type: "number",
@@ -116,7 +116,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "apply_theme_preset",
       description:
-        "Apply a built-in color palette by preset id (typography is unchanged). Use get_theme to list presets. Presets: dark, light, green, blue.",
+        "Apply a built-in color palette by preset id (typography is unchanged). Use get_theme to list presets. Presets: dark, light.",
       parameters: {
         type: "object",
         properties: {

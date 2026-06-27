@@ -7,9 +7,44 @@ enum ChatRoute: Hashable {
     case thread(id: String)
 }
 
+enum ComposerDraftStorage {
+    static let composeDraftKey = "harness.composeDraft"
+    static let threadDraftsKey = "harness.composerDraftCache"
+
+    static func loadComposeDraft() -> String {
+        UserDefaults.standard.string(forKey: composeDraftKey) ?? ""
+    }
+
+    static func saveComposeDraft(_ draft: String) {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: composeDraftKey)
+        } else {
+            UserDefaults.standard.set(draft, forKey: composeDraftKey)
+        }
+    }
+
+    static func loadThreadDrafts() -> [String: String] {
+        guard let data = UserDefaults.standard.data(forKey: threadDraftsKey),
+              let drafts = try? JSONDecoder().decode([String: String].self, from: data) else {
+            return [:]
+        }
+        return drafts
+    }
+
+    static func saveThreadDrafts(_ drafts: [String: String]) {
+        if drafts.isEmpty {
+            UserDefaults.standard.removeObject(forKey: threadDraftsKey)
+        } else if let data = try? JSONEncoder().encode(drafts) {
+            UserDefaults.standard.set(data, forKey: threadDraftsKey)
+        }
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     static let lastSuccessfulSyncAtKey = "harness.lastSuccessfulSyncAt"
+    static let setupNoticeDismissedKey = "harness.setupNoticeDismissed"
 
     @Published var syncStatus = SyncStatusSnapshot(kind: .idle, title: "", detail: nil, occurredAt: nil)
     @Published var isSyncing = false
@@ -17,8 +52,10 @@ final class AppModel: ObservableObject {
     var composeDraft = ""
     private var pendingOutboundMessages: [String: String] = [:]
     private var composerDraftCache: [String: String] = [:]
-    @Published var needsBackupFolder = false
+    @Published var syncNotConfigured = false
     @Published var needsAPIKey = false
+    @Published var showSetupNotice = false
+    @Published private(set) var setupNoticeDismissed = false
     @Published var lastSuccessfulSyncAt: Date?
     @Published private(set) var hasCompletedInitialLoad = false
     @Published private(set) var headerQuoteRotationIndex = 0
@@ -29,10 +66,8 @@ final class AppModel: ObservableObject {
     let syncEngine: SyncEngine
     let chatService: ChatService
     let dictationService: DictationService
-    let themeStore: ThemeStore
 
     private var pendingAutoGenerateReply: Set<String> = []
-    private var pendingComposerFocus: Set<String> = []
     private var cancellables = Set<AnyCancellable>()
 
     init(localDataSubpath: String = "local-data") {
@@ -43,12 +78,13 @@ final class AppModel: ObservableObject {
         syncEngine = SyncEngine(localDataDir: localDataDir)
         chatService = ChatService(store: store, tasksStore: tasksStore)
         dictationService = DictationService(localDataDir: localDataDir)
-        themeStore = ThemeStore(localDataDir: localDataDir)
         syncEngine.store = store
         lastSuccessfulSyncAt = UserDefaults.standard.object(forKey: Self.lastSuccessfulSyncAtKey) as? Date
+        setupNoticeDismissed = UserDefaults.standard.bool(forKey: Self.setupNoticeDismissedKey)
+        composeDraft = ComposerDraftStorage.loadComposeDraft()
+        composerDraftCache = ComposerDraftStorage.loadThreadDrafts()
         forwardObjectWillChange(from: store)
         forwardObjectWillChange(from: tasksStore)
-        forwardObjectWillChange(from: themeStore)
         wireContentChangeHandlers()
     }
 
@@ -69,7 +105,7 @@ final class AppModel: ObservableObject {
     }
 
     func scheduleSyncAfterLocalChange() {
-        guard BookmarkStore.hasBookmark else { return }
+        guard R2SettingsStore.isConfigured else { return }
         scheduledSyncTask?.cancel()
         hasScheduledSync = true
         scheduledSyncTask = Task { [weak self] in
@@ -144,14 +180,6 @@ final class AppModel: ObservableObject {
         pendingAutoGenerateReply.remove(conversationId) != nil
     }
 
-    func markPendingComposerFocus(conversationId: String) {
-        pendingComposerFocus.insert(conversationId)
-    }
-
-    func consumePendingComposerFocus(conversationId: String) -> Bool {
-        pendingComposerFocus.remove(conversationId) != nil
-    }
-
     func cachedComposerDraft(conversationId: String) -> String {
         composerDraftCache[conversationId] ?? ""
     }
@@ -163,18 +191,22 @@ final class AppModel: ObservableObject {
         } else {
             composerDraftCache[conversationId] = draft
         }
+        ComposerDraftStorage.saveThreadDrafts(composerDraftCache)
     }
 
     func clearComposerDraft(conversationId: String) {
         composerDraftCache.removeValue(forKey: conversationId)
+        ComposerDraftStorage.saveThreadDrafts(composerDraftCache)
     }
 
     func cacheComposeDraft(_ draft: String) {
         composeDraft = draft
+        ComposerDraftStorage.saveComposeDraft(draft)
     }
 
     func clearComposeDraft() {
         composeDraft = ""
+        ComposerDraftStorage.saveComposeDraft("")
     }
 
     func openCompose() {
@@ -188,7 +220,6 @@ final class AppModel: ObservableObject {
     func bootstrap() async {
         try? LocalDataLayout.ensureDirectories(at: localDataDir)
         try? LocalDataLayout.ensureConversationsFile(at: localDataDir)
-        themeStore.reload()
         do {
             try store.pruneEmptyConversations()
             try store.reload()
@@ -204,19 +235,34 @@ final class AppModel: ObservableObject {
         }
         hasCompletedInitialLoad = true
         chatService.refreshClient()
-        needsBackupFolder = !BookmarkStore.hasBookmark
-        needsAPIKey = KeychainStore.loadAPIKey() == nil
-        if BookmarkStore.hasBookmark {
+        refreshSetupFlags()
+        maybePresentSetupNotice()
+        if R2SettingsStore.isConfigured {
             await syncOnForeground()
         }
     }
 
+    func refreshSetupFlags() {
+        syncNotConfigured = !R2SettingsStore.isConfigured
+        needsAPIKey = KeychainStore.loadAPIKey() == nil
+    }
+
+    func maybePresentSetupNotice() {
+        guard !setupNoticeDismissed else { return }
+        if needsAPIKey || syncNotConfigured {
+            showSetupNotice = true
+        }
+    }
+
+    func dismissSetupNotice() {
+        setupNoticeDismissed = true
+        UserDefaults.standard.set(true, forKey: Self.setupNoticeDismissedKey)
+        showSetupNotice = false
+    }
+
     func syncOnForeground() async {
         bumpHeaderQuoteRotation()
-        guard BookmarkStore.hasBookmark else {
-            needsBackupFolder = true
-            return
-        }
+        guard R2SettingsStore.isConfigured else { return }
         await performSync()
     }
 
@@ -237,7 +283,6 @@ final class AppModel: ObservableObject {
         do {
             let outcome = try await syncEngine.syncNow(forcePull: forcePull)
             applyOutcome(outcome)
-            themeStore.reload()
             try store.reload()
             try tasksStore.reload()
             try store.refreshPendingSyncState()
@@ -252,7 +297,7 @@ final class AppModel: ObservableObject {
     }
 
     func pushAfterChat() async {
-        guard BookmarkStore.hasBookmark else { return }
+        guard R2SettingsStore.isConfigured else { return }
         await performSync()
     }
 
@@ -264,8 +309,10 @@ final class AppModel: ObservableObject {
     }
 
     func importAPIKeyFromSyncedSettings() throws -> Bool {
+        guard !KeychainStore.hasImportedOpenAIKeyFromSync else { return false }
         guard let key = try store.loadSettingsOpenAIKey() else { return false }
         try KeychainStore.saveAPIKey(key)
+        KeychainStore.hasImportedOpenAIKeyFromSync = true
         chatService.refreshClient()
         needsAPIKey = false
         return true
@@ -305,19 +352,19 @@ final class AppModel: ObservableObject {
     var pendingChangesDetail: String? {
         guard showsPendingUploadAttention else { return nil }
         guard let current = try? store.snapshotConversations() else {
-            return "Changes waiting to upload to iCloud."
+            return "Changes waiting to upload."
         }
         if let baseline = PendingSyncTracker.loadBaseline(),
            let detail = SyncChangeSummary.describePendingLocalChanges(baseline: baseline, current: current) {
             return detail
         }
-        return "Changes waiting to upload to iCloud."
+        return "Changes waiting to upload."
     }
 
     /// Plain-language sync line for Settings.
     var syncStatusSummary: String {
         if isSyncing {
-            return "Syncing with iCloud…"
+            return "Syncing…"
         }
         if hasScheduledSync {
             return "Uploading changes shortly…"
@@ -326,15 +373,16 @@ final class AppModel: ObservableObject {
             return syncStatus.title
         }
         if showsPendingUploadAttention {
-            return pendingChangesDetail ?? "Changes waiting to upload to iCloud."
+            return pendingChangesDetail ?? "Changes waiting to upload."
         }
-        if lastSuccessfulSyncAt != nil {
-            return "Up to date with iCloud."
+        if let lastSuccessfulSyncAt {
+            let ago = lastSuccessfulSyncAt.formatted(.relative(presentation: .named))
+            return "Synced \(ago)"
         }
-        if BookmarkStore.hasBookmark {
+        if R2SettingsStore.isConfigured {
             return "No sync completed yet on this phone."
         }
-        return "Choose a backup folder to enable sync."
+        return "Configure R2 sync to enable backup."
     }
 
     private func applyOutcome(_ outcome: SyncOutcome) {

@@ -1,37 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "./types";
-import { collectSetupGaps, hasOpenAIApiKey, openAIRequiredMessage } from "./setupState";
-
-describe("hasOpenAIApiKey", () => {
-  it("returns false for empty or whitespace keys", () => {
-    expect(hasOpenAIApiKey({ openai: { apiKey: "" } })).toBe(false);
-    expect(hasOpenAIApiKey({ openai: { apiKey: "   " } })).toBe(false);
-    expect(hasOpenAIApiKey({})).toBe(false);
-  });
-
-  it("returns true when a key is present", () => {
-    expect(hasOpenAIApiKey({ openai: { apiKey: "sk-test" } })).toBe(true);
-  });
-});
+import { collectSetupGaps, shouldShowSetupNotice } from "./setupState";
 
 describe("collectSetupGaps", () => {
-  it("reports missing API key and backup folder on a fresh install", () => {
+  it("reports missing API key and R2 sync on a fresh install", () => {
     const gaps = collectSetupGaps({
-      settings: DEFAULT_SETTINGS,
+      hasOpenAIApiKey: false,
       syncConfigured: false,
       platform: "darwin",
       accessibilityTrusted: false,
     });
     expect(gaps.map((g) => g.kind)).toEqual([
       "openai_api_key",
-      "backup_folder",
+      "sync_r2",
       "macos_accessibility",
     ]);
   });
 
   it("returns no gaps when everything is configured", () => {
     const gaps = collectSetupGaps({
-      settings: { ...DEFAULT_SETTINGS, openai: { apiKey: "sk-test" } },
+      hasOpenAIApiKey: true,
       syncConfigured: true,
       platform: "darwin",
       accessibilityTrusted: true,
@@ -40,8 +28,34 @@ describe("collectSetupGaps", () => {
   });
 });
 
-describe("openAIRequiredMessage", () => {
-  it("points users to System → General", () => {
-    expect(openAIRequiredMessage()).toContain("System → General");
+describe("shouldShowSetupNotice", () => {
+  const requiredGap = collectSetupGaps({
+    hasOpenAIApiKey: false,
+    syncConfigured: true,
+    platform: "darwin",
+    accessibilityTrusted: true,
+  });
+  const recommendedOnlyGaps = collectSetupGaps({
+    hasOpenAIApiKey: true,
+    syncConfigured: false,
+    platform: "darwin",
+    accessibilityTrusted: true,
+  });
+
+  it("shows again after dismiss when a required gap remains", () => {
+    expect(shouldShowSetupNotice(requiredGap, true)).toBe(true);
+  });
+
+  it("respects dismiss when only recommended gaps remain", () => {
+    expect(shouldShowSetupNotice(recommendedOnlyGaps, true)).toBe(false);
+    expect(shouldShowSetupNotice(recommendedOnlyGaps, false)).toBe(true);
+  });
+});
+
+describe("DEFAULT_SETTINGS", () => {
+  it("does not embed secrets in defaults", () => {
+    expect(DEFAULT_SETTINGS.openai?.apiKey).toBe("");
+    expect(DEFAULT_SETTINGS.search?.tavilyApiKey).toBe("");
+    expect(DEFAULT_SETTINGS.sync?.prefix).toBe("harness/");
   });
 });

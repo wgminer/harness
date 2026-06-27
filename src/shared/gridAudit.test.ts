@@ -17,6 +17,7 @@ describe("grid-audit", () => {
   it("base.css defines hairline shadow tokens", () => {
     const base = readFileSync(join(CSS_DIR, "base.css"), "utf8");
     expect(base).toContain("--hairline-inset:");
+    expect(base).toContain("--hairline-inset-input:");
     expect(base).toContain("--hairline-top:");
     expect(base).toContain("--hairline-bottom:");
     expect(base).toContain("--hairline-left-2-accent:");

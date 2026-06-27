@@ -2,7 +2,6 @@ import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { stripSentAtPrefix } from "../shared/chatTemporalContext";
 import { resolveDictationReplyLabel } from "../shared/dictationReplyStrip";
-import { openAIRequiredMessage } from "../shared/setupState";
 import {
   type Message,
   type ToolCallDisplay,
@@ -85,8 +84,6 @@ export function ChatMessageList({
     !streamingContent;
   const showPolishInStrip = showReplyActions && polishHintAfterDictation;
   const replyLabel = resolveDictationReplyLabel();
-  const llmBlockedTitle = openAIRequiredMessage();
-
   return (
     <>
       <div className="chat-messages-stack">
@@ -208,7 +205,6 @@ export function ChatMessageList({
               className="btn btn-chat-secondary chat-pane-btn"
               onClick={onPolish}
               disabled={!llmActionsEnabled}
-              title={llmActionsEnabled ? undefined : llmBlockedTitle}
             >
               Polish
             </button>
@@ -219,7 +215,6 @@ export function ChatMessageList({
             onClick={onGenerateReply}
             data-testid="chat-generate-reply"
             disabled={!llmActionsEnabled}
-            title={llmActionsEnabled ? undefined : llmBlockedTitle}
           >
             {replyLabel}
           </button>

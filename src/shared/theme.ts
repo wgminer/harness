@@ -144,13 +144,16 @@ export const GOOGLE_FONTS_HREF =
   GOOGLE_QUERY_PARTS.map((p) => `family=${p}`).join("&") +
   "&display=swap";
 
+export const SYSTEM_SERIF_STACK =
+  'ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif';
+
 export const FONTS = [
   { id: "system", label: "System UI", stack: "system-ui, sans-serif", category: "ui" as const },
   {
     id: "ui_serif",
-    label: "UI serif - system",
-    stack: 'ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif',
-    category: "ui" as const,
+    label: "System serif - Apple",
+    stack: SYSTEM_SERIF_STACK,
+    category: "both" as const,
   },
   { id: "inter", label: "Inter - Google", stack: '"Inter", system-ui, sans-serif', category: "ui" as const },
   { id: "open_sans", label: "Open Sans - Google", stack: '"Open Sans", system-ui, sans-serif', category: "ui" as const },
@@ -190,8 +193,9 @@ export const FONTS = [
 
 export type FontId = (typeof FONTS)[number]["id"];
 
-export const UI_FONTS = FONTS.filter((f) => f.category === "ui");
-export const MONO_FONTS = FONTS.filter((f) => f.category === "mono");
+export const UI_FONTS = FONTS.filter((f) => f.category === "ui" || f.category === "both");
+/** Code / notes editor fonts (monospace and proportional). */
+export const MONO_FONTS = FONTS.filter((f) => f.category === "mono" || f.category === "both");
 
 export type UiFontId = (typeof UI_FONTS)[number]["id"];
 export type MonoFontId = (typeof MONO_FONTS)[number]["id"];
@@ -333,9 +337,9 @@ export type ThemeSettings = ThemeColors & {
 };
 
 export const DEFAULT_THEME_COLORS: ThemeColors = {
-  accent: "#f2ff00",
-  fg: "#f5f5f5",
-  bg: "#050505",
+  accent: "#5b9cf5",
+  fg: "#eceef2",
+  bg: "#0b0d10",
 };
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
@@ -351,32 +355,50 @@ export type ThemePreset = {
   colors: ThemeColors;
 };
 
-/** Four built-in color themes. Typography is configured separately. */
+/** Two built-in color themes. Typography is configured separately. */
 export const THEME_PRESETS: readonly ThemePreset[] = [
   { id: "dark", label: "Dark", colors: { ...DEFAULT_THEME_COLORS } },
   {
     id: "light",
     label: "Light",
-    colors: { accent: "#0052ff", fg: "#0a0a0a", bg: "#fafafa" },
-  },
-  {
-    id: "green",
-    label: "Green",
-    colors: { accent: "#32d74b", fg: "#b8f5a8", bg: "#031508" },
-  },
-  {
-    id: "blue",
-    label: "Blue",
-    colors: { accent: "#0091ff", fg: "#b8dcff", bg: "#010810" },
+    colors: { accent: "#3b6fd9", fg: "#141820", bg: "#ffffff" },
   },
 ] as const;
+
+/** Colors from removed green/blue presets — used to migrate saved themes on load. */
+const LEGACY_REMOVED_PRESET_COLORS: readonly ThemeColors[] = [
+  { accent: "#32d74b", fg: "#b8f5a8", bg: "#031508" },
+  { accent: "#0091ff", fg: "#b8dcff", bg: "#010810" },
+];
+
+/** Previous default dark/light palettes before the blue accent refresh. */
+const LEGACY_DEFAULT_DARK_COLORS: ThemeColors = {
+  accent: "#f2ff00",
+  fg: "#f5f5f5",
+  bg: "#050505",
+};
+
+const LEGACY_DEFAULT_LIGHT_COLORS: ThemeColors = {
+  accent: "#0052ff",
+  fg: "#0a0a0a",
+  bg: "#fafafa",
+};
+
+/** Previous light preset before the whiter background refresh. */
+const LEGACY_GRAY_LIGHT_COLORS: ThemeColors = {
+  accent: "#3b6fd9",
+  fg: "#141820",
+  bg: "#f6f7f9",
+};
 
 /** Legacy preset ids still accepted by tools and older backups. */
 export const THEME_PRESET_ALIASES: Readonly<Record<string, string>> = {
   night: "dark",
   paper: "light",
-  matcha: "green",
-  ik_blue: "blue",
+  green: "dark",
+  matcha: "dark",
+  blue: "dark",
+  ik_blue: "dark",
   bloomberg: "dark",
 };
 
@@ -433,6 +455,9 @@ export function isLightThemeBackground(bg: string): boolean {
   return relativeLuminance(rgb) > 0.55;
 }
 
+/** Neutral used only for light-theme borders and elevation — never mix near-black fg into white surfaces. */
+const LIGHT_SURFACE_NEUTRAL = "#b8bcc4";
+
 type ThemeSurfaceMix = {
   fgMutedFgPct: number;
   bgSecondaryBgPct: number;
@@ -445,26 +470,13 @@ type ThemeSurfaceMix = {
   sidebarHoverFgPct: number;
 };
 
-function themeSurfaceMix(bg: string): ThemeSurfaceMix {
-  if (isLightThemeBackground(bg)) {
-    return {
-      fgMutedFgPct: 62,
-      bgSecondaryBgPct: 88,
-      bgElevatedBgPct: 78,
-      borderLightBgPct: 68,
-      borderDarkBgPct: 58,
-      accentReadableAccentPct: 88,
-      selectionAccentPct: 82,
-      sidebarActiveAccentPct: 88,
-      sidebarHoverFgPct: 14,
-    };
-  }
+function themeSurfaceMix(): ThemeSurfaceMix {
   return {
     fgMutedFgPct: 70,
     bgSecondaryBgPct: 88,
     bgElevatedBgPct: 78,
-    borderLightBgPct: 68,
-    borderDarkBgPct: 58,
+    borderLightBgPct: 78,
+    borderDarkBgPct: 72,
     accentReadableAccentPct: 86,
     selectionAccentPct: 80,
     sidebarActiveAccentPct: 88,
@@ -473,8 +485,7 @@ function themeSurfaceMix(bg: string): ThemeSurfaceMix {
 }
 
 /** Dark-theme surface tone pulls fg toward accent so panels keep chromatic punch. */
-function themeSurfaceTone(fg: string, accent: string, bg: string): string {
-  if (isLightThemeBackground(bg)) return fg;
+function themeSurfaceTone(fg: string, accent: string): string {
   return `color-mix(in oklab, ${fg} 74%, ${accent})`;
 }
 
@@ -482,11 +493,37 @@ function themeResolvedCssVars(s: ThemeSettings): Record<string, string> {
   const accent = s.accent.trim();
   const fg = s.fg.trim();
   const bg = s.bg.trim();
-  const mix = themeSurfaceMix(bg);
-  const surfaceTone = themeSurfaceTone(fg, accent, bg);
-  const fgMutedTone = isLightThemeBackground(bg)
-    ? fg
-    : `color-mix(in oklab, ${fg} 68%, ${accent})`;
+  const typography = {
+    "--font-family": FONT_STACKS[s.font],
+    "--font-family-mono": FONT_STACKS[s.fontMono],
+    "--font-size": `${s.fontSize}px`,
+    ...typeScaleCssVars(s.fontSize),
+  };
+
+  if (isLightThemeBackground(bg)) {
+    const neutral = LIGHT_SURFACE_NEUTRAL;
+    return {
+      "--accent": accent,
+      "--fg": fg,
+      "--bg": bg,
+      "--fg-muted": `color-mix(in oklab, ${fg} 62%, ${bg})`,
+      "--bg-secondary": bg,
+      "--bg-elevated": `color-mix(in oklab, ${bg} 96%, ${neutral})`,
+      "--border-dark": `color-mix(in oklab, ${bg} 82%, ${neutral})`,
+      "--border-light": `color-mix(in oklab, ${bg} 88%, ${neutral})`,
+      "--border": `color-mix(in oklab, ${bg} 82%, ${neutral})`,
+      "--accent-readable": `color-mix(in oklab, ${accent} 88%, ${fg})`,
+      "--selection-bg": `color-mix(in oklab, ${accent} 82%, ${bg})`,
+      "--selection-fg": `color-mix(in oklab, ${bg} 70%, ${fg})`,
+      "--sidebar-control-hover-bg": `color-mix(in srgb, ${fg} 6%, ${bg})`,
+      "--sidebar-control-active-hover-bg": `color-mix(in srgb, ${accent} 88%, ${bg})`,
+      ...typography,
+    };
+  }
+
+  const mix = themeSurfaceMix();
+  const surfaceTone = themeSurfaceTone(fg, accent);
+  const fgMutedTone = `color-mix(in oklab, ${fg} 68%, ${accent})`;
   return {
     "--accent": accent,
     "--fg": fg,
@@ -502,10 +539,7 @@ function themeResolvedCssVars(s: ThemeSettings): Record<string, string> {
     "--selection-fg": `color-mix(in oklab, ${bg} 70%, ${fg})`,
     "--sidebar-control-hover-bg": `color-mix(in srgb, ${fg} ${mix.sidebarHoverFgPct}%, var(--bg-secondary))`,
     "--sidebar-control-active-hover-bg": `color-mix(in srgb, ${accent} ${mix.sidebarActiveAccentPct}%, var(--bg-secondary))`,
-    "--font-family": FONT_STACKS[s.font],
-    "--font-family-mono": FONT_STACKS[s.fontMono],
-    "--font-size": `${s.fontSize}px`,
-    ...typeScaleCssVars(s.fontSize),
+    ...typography,
   };
 }
 
@@ -569,6 +603,44 @@ export function themeMatchesColorPreset(settings: ThemeSettings, colors: ThemeCo
   );
 }
 
+export type ThemePresetId = "dark" | "light";
+
+/** Which built-in color theme best matches the current settings (for UI selection). */
+export function matchThemePresetId(settings: ThemeSettings): ThemePresetId {
+  const normalized = normalizeThemeSettings(settings);
+  for (const preset of THEME_PRESETS) {
+    if (themeMatchesColorPreset(normalized, preset.colors)) {
+      return preset.id as ThemePresetId;
+    }
+  }
+  return isLightThemeBackground(normalized.bg) ? "light" : "dark";
+}
+
+/** Coerce legacy green/blue preset colors to dark on load. */
+export function migrateThemeToPreset(settings: ThemeSettings): ThemeSettings {
+  const normalized = normalizeThemeSettings(settings);
+  for (const preset of THEME_PRESETS) {
+    if (themeMatchesColorPreset(normalized, preset.colors)) {
+      return normalized;
+    }
+  }
+  for (const legacy of LEGACY_REMOVED_PRESET_COLORS) {
+    if (themeMatchesColorPreset(normalized, legacy)) {
+      return applyThemeColors(normalized, findThemePreset("dark")!.colors);
+    }
+  }
+  if (themeMatchesColorPreset(normalized, LEGACY_DEFAULT_DARK_COLORS)) {
+    return applyThemeColors(normalized, findThemePreset("dark")!.colors);
+  }
+  if (themeMatchesColorPreset(normalized, LEGACY_DEFAULT_LIGHT_COLORS)) {
+    return applyThemeColors(normalized, findThemePreset("light")!.colors);
+  }
+  if (themeMatchesColorPreset(normalized, LEGACY_GRAY_LIGHT_COLORS)) {
+    return applyThemeColors(normalized, findThemePreset("light")!.colors);
+  }
+  return normalized;
+}
+
 export function themeSettingsToCss(settings: ThemeSettings): string {
   const s = normalizeThemeSettings(settings);
   const vars = themeResolvedCssVars(s);
@@ -581,7 +653,7 @@ export function themeSettingsToCss(settings: ThemeSettings): string {
 /** UI font ids only (for update_theme.font). */
 export const FONT_UI_IDS_FOR_SCHEMA: string[] = [...UI_FONTS.map((f) => f.id)];
 
-/** Monospace font ids only (for update_theme.fontMono). */
+/** Editor font ids (for update_theme.fontMono). Includes monospace and proportional options. */
 export const FONT_MONO_IDS_FOR_SCHEMA: string[] = [...MONO_FONTS.map((f) => f.id)];
 
 /** Theme preset ids (for apply_theme_preset). */

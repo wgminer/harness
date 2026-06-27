@@ -1,3 +1,10 @@
+/** Label for the Settings → Data action that reveals the Electron userData folder. */
+export function appDataFolderButtonLabel(platform: NodeJS.Platform): string {
+  if (platform === "darwin") return "Show in Finder";
+  if (platform === "win32") return "Show in File Explorer";
+  return "Open data folder";
+}
+
 /** ASCII overview of Harness on-disk layout (shown on System → Data). */
 export const DATA_STORAGE_DIAGRAM = `Harness app data folder (Electron userData)
 │
@@ -12,7 +19,7 @@ export const DATA_STORAGE_DIAGRAM = `Harness app data folder (Electron userData)
 │  ├─ themes/
 │  └─ sync/  (last sync state; local backups before pull)
 │
-├─ recordings/ ........... local-only — never backed up
+├─ audio-recordings/ .... local-only — never backed up
 └─ memory/ ................ legacy pre-migration copy (safe to remove)
 
         │  Sync now packs app-state + settings + themes
