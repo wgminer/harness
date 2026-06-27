@@ -7,9 +7,8 @@ import {
   type DistilledFact,
   type MemoryCompileLLM,
 } from "./memoryCompile";
-import { getSettings } from "./settings";
+import { resolveOpenAIApiKey } from "./settings";
 import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
-import { recordOpenAIUsage } from "./usageStats";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
 
 /** Cap pasted export size so a single import stays predictable. */
@@ -67,7 +66,6 @@ export function createOpenAIImportDistiller(apiKey: string): MemoryCompileLLM {
         },
         { signal: AbortSignal.timeout(90_000) }
       );
-      if (completion.usage) recordOpenAIUsage(completion.usage, OPENAI_TRANSCRIPT_CLEANUP_MODEL);
       const raw = completion.choices[0]?.message?.content?.trim() ?? "";
       return parseFactsResponse(raw);
     },
@@ -109,8 +107,7 @@ export async function importLlmContextIn(
 }
 
 async function buildImportLLMFromSettings(): Promise<MemoryCompileLLM | null> {
-  const settings = await getSettings();
-  const apiKey = settings.openai?.apiKey?.trim() ?? "";
+  const apiKey = (await resolveOpenAIApiKey()).trim();
   if (!apiKey) return null;
   return createOpenAIImportDistiller(apiKey);
 }

@@ -6,7 +6,7 @@ import {
   notifyTitleGenerationStarted,
   notifyTitleGenerationEnded,
 } from "./titleEvents";
-import { getSettings } from "./settings";
+import { resolveOpenAIApiKey } from "./settings";
 import {
   getConversationMetaForId,
   patchConversationMeta,
@@ -52,8 +52,7 @@ export function scheduleConversationTitleRefinement(conversationId: string): voi
       const context = buildContext(messages);
       if (!context.trim()) return;
 
-      const settings = await getSettings();
-      const openaiKey = settings.openai?.apiKey?.trim();
+      const openaiKey = (await resolveOpenAIApiKey()).trim();
       if (!openaiKey) return;
 
       notifyTitleGenerationStarted(conversationId);

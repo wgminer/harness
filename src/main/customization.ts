@@ -8,6 +8,7 @@ import {
   applyThemeColors,
   DEFAULT_THEME_SETTINGS,
   findThemePreset,
+  migrateThemeToPreset,
   normalizeThemeSettings,
   THEME_PRESETS,
   themeSettingsToCss,
@@ -39,7 +40,16 @@ function readThemeSettings(): ThemeSettings | null {
   if (!existsSync(path)) return null;
   try {
     const raw = JSON.parse(readFileSync(path, "utf-8"));
-    return normalizeThemeSettings(raw);
+    const normalized = normalizeThemeSettings(raw);
+    const migrated = migrateThemeToPreset(normalized);
+    const colorsChanged =
+      migrated.accent !== normalized.accent ||
+      migrated.fg !== normalized.fg ||
+      migrated.bg !== normalized.bg;
+    if (colorsChanged) {
+      writeThemeFile({ ...migrated, updatedAt: Date.now() });
+    }
+    return migrated;
   } catch {
     return null;
   }

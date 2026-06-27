@@ -1,8 +1,11 @@
 import "./e2eBootstrap";
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, dialog, nativeTheme, globalShortcut, systemPreferences, Tray } from "electron";
-import { isHarnessE2E } from "./e2eStub";
+import "./devBootstrap";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, dialog, nativeTheme, globalShortcut, systemPreferences } from "electron";
+import { isHarnessDev, isHarnessE2E } from "./e2eStub";
+import { HARNESS_DEV_APP_NAME } from "./devBootstrap";
 import { join } from "path";
-import { registerSettingsHandlers } from "./settings";
+import { registerCredentialHandlers } from "./credentials";
+import { registerSettingsHandlers, getSettings } from "./settings";
 import { registerUsageStatsHandlers } from "./usageStats";
 import { pruneEmptyConversations, registerMemoryHandlers } from "./memory";
 import { registerChatHandlers } from "./chat";
@@ -12,7 +15,7 @@ import { registerAssistantToolsHandlers } from "./assistantTools";
 import { registerPlansHandlers } from "./plans";
 import { registerNotesHandlers } from "./writing";
 import { registerRecordingHandlers } from "./recording";
-import { registerGlobalFnRecording } from "./globalRecordingMain";
+import { registerGlobalFnRecording, applyGlobalFnHotkeySetting } from "./globalRecordingMain";
 import { registerSystemHandlers } from "./systemHandlers";
 import { importFromFolder as importFromChatGPTFolder } from "./importChatGPT";
 import { importFromFolder as importFromClaudeFolder } from "./importClaude";
@@ -23,11 +26,18 @@ import { registerUiSessionHandlers } from "./uiSession";
 import {
   WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
 } from "../shared/windowLayout";
+import { DEFAULT_SETTINGS } from "../shared/types";
 
 let mainWindow: BrowserWindow | null = null;
-let tray: Tray | null = null;
 
-const iconPath = join(app.getAppPath(), "resources", "icon.png");
+const isDevBuild = isHarnessDev() && !isHarnessE2E();
+const appDisplayName = isDevBuild ? HARNESS_DEV_APP_NAME : "Harness";
+
+function appResourcePath(fileName: string): string {
+  return join(app.getAppPath(), "resources", fileName);
+}
+
+const iconPath = appResourcePath(isDevBuild ? "icon-dev.png" : "icon.png");
 
 const LARGE_WIDTH = 1024;
 const LARGE_HEIGHT = 768;
@@ -38,6 +48,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: LARGE_WIDTH,
     height: LARGE_HEIGHT,
+    title: appDisplayName,
     icon: nativeImage.createFromPath(iconPath),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
@@ -100,6 +111,8 @@ function isSmallSize(): boolean {
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
 
+ipcMain.handle("env:isHarnessDev", () => isDevBuild);
+
 ipcMain.handle("env:isHarnessE2E", () => process.env.HARNESS_E2E === "1");
 
 ipcMain.handle("window:getSize", (): "small" | "large" => {
@@ -145,14 +158,18 @@ ipcMain.handle("memory:importFromClaudeFolder", async () => {
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = "dark";
+  registerCredentialHandlers();
+  registerSettingsHandlers();
+  const settings = await getSettings();
+  const globalFnHotkeyEnabled = settings.recording?.globalFnHotkey ?? DEFAULT_SETTINGS.recording!.globalFnHotkey;
   if (
     process.platform === "darwin" &&
     !isHarnessE2E() &&
+    globalFnHotkeyEnabled &&
     !systemPreferences.isTrustedAccessibilityClient(false)
   ) {
     systemPreferences.isTrustedAccessibilityClient(true);
   }
-  registerSettingsHandlers();
   registerUsageStatsHandlers();
   registerMemoryHandlers();
   await pruneEmptyConversations();
@@ -177,20 +194,8 @@ app.whenReady().then(async () => {
 
   createWindow();
 
-  const trayIconPath = join(app.getAppPath(), "resources", "icon-tray.png");
-  const trayIcon = nativeImage.createFromPath(trayIconPath).resize({ width: 18, height: 18 });
-  trayIcon.setTemplateImage(true);
-
-  const trayRecordingIconPath = join(app.getAppPath(), "resources", "icon-tray-recording.png");
-  const trayRecordingIcon = nativeImage.createFromPath(trayRecordingIconPath).resize({ width: 18, height: 18 });
-  const trayProcessingIconPath = join(app.getAppPath(), "resources", "icon-tray-processing.png");
-  const trayProcessingIcon = nativeImage.createFromPath(trayProcessingIconPath).resize({ width: 18, height: 18 });
-
-  tray = new Tray(trayIcon);
-  tray.setToolTip("Harness");
-  tray.setTitle("");
-
-  registerGlobalFnRecording({ tray, trayIcon, trayRecordingIcon, trayProcessingIcon });
+  registerGlobalFnRecording({ appDisplayName, isDevBuild });
+  await applyGlobalFnHotkeySetting(globalFnHotkeyEnabled);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -56,7 +56,7 @@ describe("task reducer and persistence", () => {
   it("migrates legacy status-in-tags when loading", async () => {
     const dir = await makeDir();
     await saveTasksIn(dir, {
-      tasks: [{ id: "x", title: "Legacy", tags: ["pending", "work"], createdAt: 1, updatedAt: 1 }],
+      tasks: [{ id: "x", title: "Legacy", status: "pending", tags: ["pending", "work"], createdAt: 1, updatedAt: 1 }],
     });
     const loaded = await loadTasksIn(dir);
     expect(loaded.tasks).toHaveLength(1);

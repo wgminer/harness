@@ -3,11 +3,7 @@ import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import { audioFileToWav } from "./audioFileToWav";
 import type { VoiceState } from "./chatHelpers";
-import {
-  hasOpenAIApiKey,
-  openAIRequiredMessage,
-  transcriptCleanupSkippedMessage,
-} from "../shared/setupState";
+import { transcriptCleanupSkippedMessage } from "../shared/setupState";
 import type { Settings } from "../shared/types";
 
 const MAX_RECORDING_MS = 5 * 60 * 1000;
@@ -128,15 +124,14 @@ export function useChatComposer({
       const trimmed = text.trim();
       if (!trimmed) return;
       const settings = (await window.electron.settings.get()) as Settings;
+      const credentialStatus = await window.electron.credentials.getStatus();
       const autoSend = settings.recording?.autoSend ?? true;
-      const canChat = hasOpenAIApiKey(settings);
+      const canChat = credentialStatus.hasOpenAIApiKey;
       if (autoSend && canChat && !pendingHotkeyDraftOnly) {
         await submitMessageRef.current(trimmed, { fromDictation: true });
       } else {
         setInput((prev) => (prev ? `${prev} ${trimmed}` : trimmed));
-        if (autoSend && !canChat) {
-          setVoiceError(openAIRequiredMessage());
-        } else if (result?.cleanupSkipped === "no_api_key") {
+        if (result?.cleanupSkipped === "no_api_key") {
           setVoiceError(transcriptCleanupSkippedMessage());
         }
       }

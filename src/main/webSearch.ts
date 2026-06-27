@@ -29,7 +29,7 @@ export async function searchWebTavily(
     return {
       query: q,
       results: [],
-      error: `Tavily API key is not set. Add it in ${rigSection("Tools")}.`,
+      error: `Tavily API key is not set. Add it in ${rigSection("General")}.`,
     };
   }
 

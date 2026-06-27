@@ -7,6 +7,16 @@ export function isHarnessE2E(): boolean {
   return process.env.HARNESS_E2E === "1";
 }
 
+/** True when running via `npm run dev` (electron-vite) or `HARNESS_DEV=1`. */
+export function isHarnessDev(): boolean {
+  return Boolean(process.env.ELECTRON_RENDERER_URL) || process.env.HARNESS_DEV === "1";
+}
+
+/** Hard kill switch for HarnessFnMonitor (e.g. when two instances would compete for Fn). */
+export function isGlobalHotkeyDisabled(): boolean {
+  return process.env.HARNESS_DISABLE_GLOBAL_HOTKEY === "1";
+}
+
 /**
  * Optional per-chunk delay used by e2e to exercise abort/persistence behavior.
  * Set `HARNESS_E2E_STREAM_MS` to a positive integer to enable chunked streaming.

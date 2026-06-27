@@ -2,16 +2,16 @@
    User theme overrides live in #custom-theme (moved after bundled CSS in main.tsx). */
 :root {
   color-scheme: dark;
-  --bg: #050505;
-  --bg-secondary: #121212;
-  --bg-elevated: #1c1c1c;
-  --fg: #f5f5f5;
-  --fg-muted: #c2c2c2;
-  --border-dark: #333333;
-  --border-light: #262626;
+  --bg: #0b0d10;
+  --bg-secondary: #14161a;
+  --bg-elevated: #1c1f24;
+  --fg: #eceef2;
+  --fg-muted: #a8adb8;
+  --border-dark: #1c1f26;
+  --border-light: #171920;
   /** @deprecated Use --border-dark or --border-light; aliases dark for legacy rules. */
   --border: var(--border-dark);
-  --accent: #f2ff00;
+  --accent: #5b9cf5;
   /**
    * Readable variant of --accent for use as *text color* on app backgrounds
    * (--bg / --bg-secondary / --bg-elevated). Pulled 30% toward --fg in oklab so
@@ -69,26 +69,36 @@
   --sidebar-control-active-hover-bg: color-mix(in srgb, var(--accent) 72%, var(--bg-secondary));
   /** Universal list-row hover (sidebar nav, notes rows, search results). */
   --list-row-hover-bg: color-mix(in srgb, var(--fg) 6%, transparent);
-  --list-row-hover-border: color-mix(in oklab, var(--border-light) 68%, transparent);
+  --list-row-hover-border: color-mix(in oklab, var(--border-light) 48%, transparent);
   /**
-   * Hairline edges — painted with inset box-shadow so declared heights and widths
-   * stay on the 4px grid (CSS borders consume px inside border-box sizing).
+   * Divider hairlines — soft edges for panels, list rows, modal chrome, and separators.
+   * Form controls use --hairline-inset-input* instead.
    */
-  --hairline-glass: color-mix(in oklab, var(--border-light) 68%, transparent);
-  --hairline-inset: inset 0 0 0 1px var(--border-light);
-  --hairline-inset-dark: inset 0 0 0 1px var(--border-dark);
+  --border-edge: color-mix(in oklab, var(--border-light) 42%, transparent);
+  --border-edge-dark: color-mix(in oklab, var(--border-dark) 42%, transparent);
+  --hairline-glass: color-mix(in oklab, var(--border-light) 48%, transparent);
+  --hairline-inset: inset 0 0 0 1px var(--border-edge);
+  --hairline-inset-dark: inset 0 0 0 1px var(--border-edge-dark);
   --hairline-inset-accent: inset 0 0 0 1px var(--accent);
   --hairline-inset-transparent: inset 0 0 0 1px transparent;
   --hairline-inset-glass: inset 0 0 0 1px var(--hairline-glass);
-  --hairline-top: inset 0 1px 0 0 var(--border-light);
+  --hairline-top: inset 0 1px 0 0 var(--border-edge);
   --hairline-top-transparent: inset 0 1px 0 0 transparent;
-  --hairline-bottom: inset 0 -1px 0 0 var(--border-light);
+  --hairline-bottom: inset 0 -1px 0 0 var(--border-edge);
   --hairline-bottom-transparent: inset 0 -1px 0 0 transparent;
-  --hairline-left: inset 1px 0 0 0 var(--border-light);
-  --hairline-right: inset -1px 0 0 0 var(--border-light);
+  --hairline-left: inset 1px 0 0 0 var(--border-edge);
+  --hairline-right: inset -1px 0 0 0 var(--border-edge);
   --hairline-left-2-transparent: inset 2px 0 0 0 transparent;
   --hairline-left-2-accent: inset 2px 0 0 0 var(--accent);
   --hairline-surface-highlight: inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
+  /**
+   * Form control edges — stronger than divider hairlines so inputs read as interactive.
+   */
+  --border-input: color-mix(in oklab, var(--border-dark) 74%, transparent);
+  --border-input-focus: color-mix(in oklab, var(--accent) 52%, var(--border-input));
+  --hairline-inset-input: inset 0 0 0 1px var(--border-input);
+  --hairline-inset-input-focus: inset 0 0 0 1px var(--border-input-focus);
+  --hairline-inset-input-glass: inset 0 0 0 1px color-mix(in oklab, var(--border-input) 82%, transparent);
   --scrollbar-thumb: color-mix(in oklab, var(--fg) 42%, var(--bg));
   --scrollbar-thumb-hover: color-mix(in oklab, var(--accent) 40%, var(--fg) 35%, var(--bg));
   --scrollbar-track: color-mix(in oklab, var(--bg) 88%, var(--fg));
@@ -121,6 +131,7 @@
   --motion-duration-switch: 220ms;
   --motion-duration-expressive: 420ms;
   --motion-duration-emphasis: 360ms;
+  --motion-duration-theme: 1s;
   --motion-duration-loading: 900ms;
   --motion-duration-skeleton: 1150ms;
   --motion-ease-standard: ease;
@@ -148,6 +159,17 @@ html, body, #root {
 
 html {
   overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-animate,
+  html.theme-animate *,
+  html.theme-animate *::before,
+  html.theme-animate *::after {
+    transition-property: background-color, color, border-color, fill, stroke, outline-color, box-shadow;
+    transition-duration: var(--motion-duration-theme);
+    transition-timing-function: var(--motion-ease-in-out);
+  }
 }
 
 body {
@@ -298,7 +320,7 @@ hr {
   background: var(--bg);
   color: var(--fg);
   border: none;
-  box-shadow: var(--hairline-inset);
+  box-shadow: var(--hairline-inset-input);
 }
 
 .input-base::placeholder,
@@ -310,7 +332,7 @@ hr {
 .sidebar-search-input:focus,
 .settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input):focus {
   outline: none;
-  box-shadow: var(--hairline-inset-accent);
+  box-shadow: var(--hairline-inset-input-focus);
 }
 
 /* Shared translucent surface used by composer and edit assistant modal. */
@@ -321,7 +343,7 @@ hr {
   -webkit-backdrop-filter: blur(16px) saturate(.80);
   backdrop-filter: blur(8px) saturate(.80);
   border: none;
-  box-shadow: var(--hairline-inset-glass), var(--hairline-surface-highlight);
+  box-shadow: var(--hairline-inset-input-glass), var(--hairline-surface-highlight);
 }
 
 /* Shared list-item base */

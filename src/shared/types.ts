@@ -38,11 +38,14 @@ export interface TranscriptDictionaryEntry {
 
 export interface Settings {
   version: number;
+  /** Legacy shape — secrets are stored in the OS credential store, not on disk. */
   openai?: {
-    apiKey: string;
+    apiKey?: string;
   };
   recording?: {
     autoSend: boolean;
+    /** macOS menu bar icon + global Fn dictation hotkey. */
+    globalFnHotkey: boolean;
   };
   transcription?: {
     cleanup?: {
@@ -56,7 +59,7 @@ export interface Settings {
   };
   /** Optional Tavily API key for the `web_search` assistant tool. */
   search?: {
-    tavilyApiKey: string;
+    tavilyApiKey?: string;
   };
   /** Defaults for the `get_weather` assistant tool. */
   weather?: {
@@ -66,10 +69,13 @@ export interface Settings {
   notes?: {
     templates: import("./writing").NoteTemplateConfig[];
   };
-  /** Provider-agnostic backup-folder sync. The user picks any folder; Harness writes a bundle + manifest there. */
-  backup?: {
-    /** Absolute path to the chosen backup folder. Empty string = unset. */
-    folderPath: string;
+  /** Cloudflare R2 remote backup (S3-compatible). Non-secret fields only — secret access key lives in the OS credential store. */
+  sync?: {
+    accountId: string;
+    bucket: string;
+    /** Object key prefix, e.g. `harness/`. */
+    prefix: string;
+    accessKeyId: string;
   };
   /** How stored user facts are injected into the chat system prompt. */
   memory?: {
@@ -116,6 +122,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   recording: {
     autoSend: true,
+    globalFnHotkey: true,
   },
   transcription: {
     cleanup: {
@@ -134,8 +141,11 @@ export const DEFAULT_SETTINGS: Settings = {
   notes: {
     templates: DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
   },
-  backup: {
-    folderPath: "",
+  sync: {
+    accountId: "",
+    bucket: "",
+    prefix: "harness/",
+    accessKeyId: "",
   },
   memory: {
     injectionStrategy: "all",

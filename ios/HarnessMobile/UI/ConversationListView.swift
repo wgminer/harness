@@ -17,10 +17,6 @@ struct ConversationListView: View {
         return app.store.conversations.filter { $0.displayTitle.lowercased().contains(query) }
     }
 
-    private var activeTaskCount: Int {
-        app.tasksStore.tasks.filter { TaskStatusPolicy.taskIsActive(TaskStatusPolicy.resolveStatus(for: $0)) }.count
-    }
-
     var body: some View {
         conversationList
         .labeledRefreshable("Pull to sync") {
@@ -33,7 +29,7 @@ struct ConversationListView: View {
                 NavigationLink {
                     TasksListView(app: app)
                 } label: {
-                    TasksToolbarIcon(activeCount: activeTaskCount)
+                    Image(systemName: "checklist")
                 }
                 .accessibilityLabel("Tasks")
             }
@@ -41,12 +37,7 @@ struct ConversationListView: View {
                 NavigationLink {
                     MobileSettingsView(app: app)
                 } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "gearshape")
-                        if let settingsAttentionColor {
-                            SyncAttentionDot(color: settingsAttentionColor)
-                        }
-                    }
+                    Image(systemName: "gearshape")
                 }
             }
         }
@@ -96,7 +87,7 @@ struct ConversationListView: View {
                 ContentUnavailableView(
                     "No conversations",
                     systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Start a new chat or sync from your Mac backup folder.")
+                    description: Text("Start a new chat or sync from R2 in Settings.")
                 )
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
@@ -163,10 +154,6 @@ struct ConversationListView: View {
         }
     }
 
-    private var settingsAttentionColor: Color? {
-        app.settingsAttentionColor
-    }
-
     private func createNewChat() {
         app.openCompose()
     }
@@ -228,27 +215,6 @@ private struct ConversationRow: View {
     }
 }
 
-private struct TasksToolbarIcon: View {
-    let activeCount: Int
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Image(systemName: "checklist")
-            if activeCount > 0 {
-                Text(activeCount > 99 ? "99+" : "\(activeCount)")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, activeCount > 9 ? 4 : 5)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.red))
-                    .offset(x: 10, y: -8)
-                    .accessibilityHidden(true)
-            }
-        }
-        .accessibilityValue(activeCount > 0 ? "\(activeCount) active tasks" : "No active tasks")
-    }
-}
-
 #Preview("Loading") {
     PreviewNavigationRoot {
         ConversationListView(app: AppModel(localDataSubpath: "preview-loading-\(UUID().uuidString)")) { _ in }
@@ -263,7 +229,7 @@ private struct TasksToolbarIcon: View {
 
 #Preview("Empty") {
     PreviewNavigationRoot {
-        ConversationListView(app: PreviewSupport.emptyApp(needsBackupFolder: false, needsAPIKey: false)) { _ in }
+        ConversationListView(app: PreviewSupport.emptyApp(syncNotConfigured: false, needsAPIKey: false)) { _ in }
     }
 }
 

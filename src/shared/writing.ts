@@ -30,6 +30,13 @@ export interface NoteEditProposal {
   proposedText: string;
 }
 
+export interface NoteSpellCheckInput {
+  selectedText: string;
+  beforeText: string;
+  afterText: string;
+  documentText: string;
+}
+
 export interface NoteTemplateConfig {
   id: string;
   title: string;

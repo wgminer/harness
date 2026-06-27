@@ -194,14 +194,16 @@ function mergeMessagesJson(local: Buffer, remote: Buffer): Buffer {
   return Buffer.from(JSON.stringify(merged, null, 2), "utf-8");
 }
 
+import { stripSettingsSecrets } from "./settingsSecrets";
+
 function mergeSettingsJson(local: Buffer, remote: Buffer): Buffer {
-  const localObj = parseJson(local) as Record<string, unknown>;
-  const remoteObj = parseJson(remote) as Record<string, unknown>;
+  const localObj = stripSettingsSecrets(parseJson(local) as Record<string, unknown>);
+  const remoteObj = stripSettingsSecrets(parseJson(remote) as Record<string, unknown>);
   const merged = mergeJsonRecords(localObj, remoteObj) as Record<string, unknown>;
-  if (localObj.backup && typeof localObj.backup === "object") {
-    merged.backup = localObj.backup;
+  if (localObj.sync && typeof localObj.sync === "object") {
+    merged.sync = localObj.sync;
   }
-  return Buffer.from(JSON.stringify(merged, null, 2), "utf-8");
+  return Buffer.from(JSON.stringify(stripSettingsSecrets(merged), null, 2), "utf-8");
 }
 
 function mergeThemeJson(local: Buffer, remote: Buffer): Buffer {

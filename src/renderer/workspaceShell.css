@@ -102,7 +102,7 @@
 
 .workspace-list-search:focus-within {
   background: color-mix(in srgb, var(--fg) 8%, transparent);
-  box-shadow: var(--hairline-inset-glass), var(--hairline-surface-highlight);
+  box-shadow: var(--hairline-inset-input-glass), var(--hairline-surface-highlight);
 }
 
 .workspace-list-search__icon {

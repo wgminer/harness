@@ -12,13 +12,12 @@ import {
   type Note,
   type NoteEditProposal,
   type NoteEditProposalInput,
+  type NoteSpellCheckInput,
   type NoteSummary,
 } from "../shared/writing";
 import { getMemoryDir } from "./memory";
-import { getSettings } from "./settings";
-import { recordOpenAIUsage } from "./usageStats";
+import { getSettings, resolveOpenAIApiKey, resolveTavilyApiKey } from "./settings";
 import { fileExists } from "./utils";
-import { openAIRequiredMessage } from "../shared/setupState";
 
 const LEGACY_DOC_FILE = "writing.md";
 const NOTES_INDEX_FILE = "notes.json";
@@ -374,6 +373,77 @@ export function buildNotesEditPrompt(input: NoteEditProposalInput): string {
   ].join("\n");
 }
 
+export function buildNotesSpellCheckPrompt(input: NoteSpellCheckInput): string {
+  const selectedText = String(input.selectedText ?? "");
+  const beforeText = String(input.beforeText ?? "");
+  const afterText = String(input.afterText ?? "");
+  const documentText = String(input.documentText ?? "");
+
+  return [
+    "Correct spelling and grammar in the selected text only.",
+    "Do not rewrite, rephrase, change tone, or alter word choice except to fix clear typos or grammatical mistakes.",
+    "Preserve the original meaning, formatting, line breaks, and punctuation style as much as possible.",
+    "Return only the corrected text with no explanation, markdown, or surrounding quotes.",
+    "When correcting, make sure the result fits naturally between the surrounding text and stays consistent with the overall document.",
+    "",
+    "[TextBeforeSelection]",
+    beforeText,
+    "",
+    "[SelectedText]",
+    selectedText,
+    "",
+    "[TextAfterSelection]",
+    afterText,
+    "",
+    "[FullDocument]",
+    documentText,
+  ].join("\n");
+}
+
+export async function proposeNoteSpellCheck(input: NoteSpellCheckInput): Promise<NoteEditProposal> {
+  const selectedText = String(input.selectedText ?? "");
+  if (!selectedText.trim()) {
+    throw new Error("Cannot spell check an empty selection.");
+  }
+
+  const apiKey = (await resolveOpenAIApiKey()).trim();
+  if (!apiKey) {
+    throw new Error("OpenAI API key required.");
+  }
+
+  const client = new OpenAI({ apiKey });
+  const response = await client.chat.completions.create(
+    {
+      model: OPENAI_CHAT_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a copy editor for a local notes app. Correct spelling and grammar only. Do not rewrite for style. Output only the corrected replacement text for the selected span.",
+        },
+        {
+          role: "user",
+          content: buildNotesSpellCheckPrompt({
+            selectedText,
+            beforeText: String(input.beforeText ?? ""),
+            afterText: String(input.afterText ?? ""),
+            documentText: String(input.documentText ?? ""),
+          }),
+        },
+      ],
+      reasoning_effort: "low",
+      max_completion_tokens: 1200,
+    },
+    { signal: AbortSignal.timeout(20_000) },
+  );
+
+  const proposedText = response.choices[0]?.message?.content?.trim() ?? "";
+  if (!proposedText) {
+    throw new Error("The model returned an empty spell check result.");
+  }
+  return { proposedText };
+}
+
 export async function proposeNoteEdit(input: NoteEditProposalInput): Promise<NoteEditProposal> {
   const selectedText = String(input.selectedText ?? "");
   const prompt = String(input.prompt ?? "").trim();
@@ -384,10 +454,9 @@ export async function proposeNoteEdit(input: NoteEditProposalInput): Promise<Not
     throw new Error("Prompt is required.");
   }
 
-  const settings = await getSettings();
-  const apiKey = settings.openai?.apiKey?.trim() ?? "";
+  const apiKey = (await resolveOpenAIApiKey()).trim();
   if (!apiKey) {
-    throw new Error(openAIRequiredMessage());
+    throw new Error("OpenAI API key required.");
   }
 
   const client = new OpenAI({ apiKey });
@@ -417,9 +486,6 @@ export async function proposeNoteEdit(input: NoteEditProposalInput): Promise<Not
     { signal: AbortSignal.timeout(20_000) },
   );
 
-  if (response.usage) {
-    recordOpenAIUsage(response.usage, OPENAI_CHAT_MODEL);
-  }
   const proposedText = response.choices[0]?.message?.content?.trim() ?? "";
   if (!proposedText) {
     throw new Error("The model returned an empty edit proposal.");
@@ -435,6 +501,7 @@ export function registerNotesHandlers(): void {
   ipcMain.handle("notes:delete", (_e, id: string) => deleteNote(id ?? ""));
   ipcMain.handle("notes:showInFolder", (_e, id: string) => showNoteInFolder(id ?? ""));
   ipcMain.handle("notes:proposeEdit", (_e, input: NoteEditProposalInput) => proposeNoteEdit(input));
+  ipcMain.handle("notes:spellCheck", (_e, input: NoteSpellCheckInput) => proposeNoteSpellCheck(input));
   ipcMain.handle("notes:print", async (_e, html: unknown, jobName?: unknown) => {
     if (typeof html !== "string" || !html.trim()) {
       throw new Error("Print HTML is required.");

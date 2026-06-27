@@ -13,13 +13,14 @@ final class ThemeResolverTests: XCTestCase {
         XCTAssertTrue(ThemeResolver.isLightBackground(derived.bg) == false)
     }
 
-    func testLightThemeUsesLightBackground() {
+    func testLightThemeUsesBackgroundForSecondarySurface() {
         let derived = ThemeResolver.resolve(
             accent: "#0052ff",
             fg: "#0a0a0a",
             bg: "#fafafa"
         )
         XCTAssertTrue(ThemeResolver.isLightBackground(derived.bg))
+        XCTAssertEqual(derived.bgSecondary.lowercased(), derived.bg.lowercased())
     }
 
     func testNormalizeSettingsReadsDesktopThemeJsonShape() {

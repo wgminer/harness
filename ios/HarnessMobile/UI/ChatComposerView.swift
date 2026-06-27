@@ -15,13 +15,16 @@ struct ChatComposerView: View {
     @FocusState.Binding var isFocused: Bool
 
     @State private var draft = ""
+    @State private var shouldFocusOnExpand = false
+    /// Keeps the composer expanded while focus moves from the collapsed tap target to the TextField.
+    @State private var isExpandedByUser = false
 
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var isExpanded: Bool {
-        !allowsCollapse || isFocused || canSend || isStreaming
+        !allowsCollapse || isExpandedByUser || isFocused || canSend || isStreaming
     }
 
     private var cornerRadius: CGFloat {
@@ -39,10 +42,6 @@ struct ChatComposerView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            isFocused = true
-        }
         .liquidGlassSurface(cornerRadius: cornerRadius, shadowOffsetY: -6)
         .animation(.easeInOut(duration: 0.22), value: isExpanded)
         .animation(nil, value: isStreaming)
@@ -50,6 +49,19 @@ struct ChatComposerView: View {
         .onChange(of: isStreaming) { _, streaming in
             if streaming {
                 isFocused = false
+            }
+        }
+        .onChange(of: isFocused) { _, focused in
+            if !focused, !canSend, !isStreaming {
+                isExpandedByUser = false
+            }
+        }
+        .onChange(of: isExpanded) { _, expanded in
+            guard expanded, shouldFocusOnExpand else { return }
+            shouldFocusOnExpand = false
+            // TextField mounts after expand; re-assert focus on the next run loop.
+            Task { @MainActor in
+                isFocused = true
             }
         }
         .onChange(of: draft) { _, newValue in
@@ -64,13 +76,19 @@ struct ChatComposerView: View {
     }
 
     private var collapsedContent: some View {
-        Text(draft.isEmpty ? "Type a message…" : draft)
-            .font(.body.weight(.semibold))
-            .foregroundStyle(draft.isEmpty ? .secondary : .primary)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, BottomBarMetrics.collapsedInnerHorizontal)
-            .padding(.vertical, BottomBarMetrics.collapsedInnerVertical)
+        Button {
+            isExpandedByUser = true
+            shouldFocusOnExpand = true
+        } label: {
+            Text(draft.isEmpty ? "Type a message…" : draft)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(draft.isEmpty ? .secondary : .primary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, BottomBarMetrics.collapsedInnerHorizontal)
+                .padding(.vertical, BottomBarMetrics.collapsedInnerVertical)
+        }
+        .buttonStyle(.plain)
     }
 
     private var expandedContent: some View {

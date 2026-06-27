@@ -129,7 +129,7 @@ export function TasksView() {
   }, [newTitle, adjustNewTaskInputHeight]);
 
   const normalizeTask = useCallback((task: TaskItem): TaskItem => {
-    const { status, tags } = migrateTaskFields(task);
+    const { status, tags } = migrateTaskFields(task as unknown as Record<string, unknown>);
     return { ...task, status, tags };
   }, []);
 

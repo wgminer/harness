@@ -78,6 +78,7 @@ test("tasks — grid snapshot", async () => {
 test("settings appearance — grid snapshot", async () => {
   const win = await page();
   await win.getByTestId("sidebar-settings").click();
+  await win.getByRole("tab", { name: "Appearance" }).click();
   await expect(win.getByTestId("settings-grid-overlay")).toHaveValue("8");
   await expectGridOverlay(win, "8");
   await prepareVisualCapture(electronApp, win);

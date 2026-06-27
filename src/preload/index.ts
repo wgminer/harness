@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AppendMessageMeta } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
-import type { NoteEditProposal, NoteEditProposalInput } from "../shared/writing";
-import type { SyncFolderSuggestion, SyncResult, SyncStatus } from "../shared/sync";
+import type { NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput } from "../shared/writing";
+import type { SyncResult, SyncStatus } from "../shared/sync";
 
 const e2eBridge =
   process.env.HARNESS_E2E === "1"
@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("electron", {
   /** Main process is source of truth (Playwright sets env on the Electron process). */
   env: {
     isHarnessE2E: () => ipcRenderer.invoke("env:isHarnessE2E") as Promise<boolean>,
+    isHarnessDev: () => ipcRenderer.invoke("env:isHarnessDev") as Promise<boolean>,
   },
   system: {
     getPlatform: () => ipcRenderer.invoke("system:getPlatform") as Promise<NodeJS.Platform>,
@@ -37,10 +38,28 @@ contextBridge.exposeInMainWorld("electron", {
     get: () => ipcRenderer.invoke("settings:get"),
     set: (partial: unknown) => ipcRenderer.invoke("settings:set", partial),
   },
+  credentials: {
+    getStatus: () =>
+      ipcRenderer.invoke("credentials:getStatus") as Promise<{
+        hasOpenAIApiKey: boolean;
+        hasTavilyApiKey: boolean;
+        hasR2SecretAccessKey: boolean;
+        encryptionAvailable: boolean;
+      }>,
+    getSecretsForSettings: () =>
+      ipcRenderer.invoke("credentials:getSecretsForSettings") as Promise<{
+        openaiApiKey: string;
+        tavilyApiKey: string;
+        r2SecretAccessKey: string;
+      }>,
+    setOpenAIApiKey: (value: string) => ipcRenderer.invoke("credentials:setOpenAIApiKey", value),
+    setTavilyApiKey: (value: string) => ipcRenderer.invoke("credentials:setTavilyApiKey", value),
+    setR2SecretAccessKey: (value: string) =>
+      ipcRenderer.invoke("credentials:setR2SecretAccessKey", value),
+  },
   usage: {
     getStats: () => ipcRenderer.invoke("usage:getStats") as Promise<UsageStatsSnapshot>,
     reset: () => ipcRenderer.invoke("usage:reset") as Promise<UsageStatsSnapshot>,
-    openOpenAIDashboard: () => ipcRenderer.invoke("usage:openOpenAIDashboard") as Promise<void>,
   },
   memory: {
     createConversation: () => ipcRenderer.invoke("memory:createConversation"),
@@ -228,6 +247,8 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("notes:showInFolder", id) as Promise<void>,
     proposeEdit: (input: NoteEditProposalInput) =>
       ipcRenderer.invoke("notes:proposeEdit", input) as Promise<NoteEditProposal>,
+    spellCheck: (input: NoteSpellCheckInput) =>
+      ipcRenderer.invoke("notes:spellCheck", input) as Promise<NoteEditProposal>,
     print: (html: string, jobName?: string) =>
       ipcRenderer.invoke("notes:print", html, jobName) as Promise<{ success: boolean }>,
   },
@@ -271,12 +292,16 @@ contextBridge.exposeInMainWorld("electron", {
   sync: {
     getStatus: () => ipcRenderer.invoke("sync:getStatus") as Promise<SyncStatus>,
     runNow: () => ipcRenderer.invoke("sync:runNow") as Promise<SyncResult>,
-    pickFolder: () => ipcRenderer.invoke("sync:pickFolder") as Promise<string | null>,
-    setFolder: (path: string) =>
-      ipcRenderer.invoke("sync:setFolder", path) as Promise<string | null>,
-    revealFolder: () => ipcRenderer.invoke("sync:revealFolder") as Promise<void>,
-    listSuggestions: () =>
-      ipcRenderer.invoke("sync:listSuggestions") as Promise<SyncFolderSuggestion[]>,
+    testConnection: () =>
+      ipcRenderer.invoke("sync:testConnection") as Promise<{ ok: boolean; error?: string }>,
+    setR2Config: (partial: {
+      accountId?: string;
+      bucket?: string;
+      prefix?: string;
+      accessKeyId?: string;
+    }) => ipcRenderer.invoke("sync:setR2Config", partial) as Promise<SyncStatus>,
+    setR2SecretAccessKey: (secret: string) =>
+      ipcRenderer.invoke("sync:setR2SecretAccessKey", secret) as Promise<void>,
     onChanged: (cb: () => void) => {
       const sub = () => cb();
       ipcRenderer.on("sync:changed", sub);

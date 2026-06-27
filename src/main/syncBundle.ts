@@ -11,6 +11,7 @@
  */
 
 import { createHash } from "crypto";
+import { redactSettingsJsonBytes } from "../shared/settingsSecrets";
 import { existsSync } from "fs";
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "fs/promises";
 import { dirname, join, posix, relative, sep } from "path";
@@ -168,7 +169,10 @@ export async function buildBundle(
   const entries: BundleEntry[] = [];
   for (const rel of files) {
     const abs = join(localDataDir, rel);
-    const data = await readFile(abs);
+    let data: Buffer = await readFile(abs);
+    if (rel === "settings/settings.json") {
+      data = Buffer.from(redactSettingsJsonBytes(data));
+    }
     entries.push({
       path: rel,
       contents: data.toString("base64"),
@@ -304,21 +308,4 @@ export async function atomicWriteFile(path: string, data: Buffer | string): Prom
   // are not crossing filesystems within a single backup folder.
   const { rename } = await import("fs/promises");
   await rename(tmp, path);
-}
-
-/** Used by Sync now to detect partially-downloaded bundles from cloud providers. */
-export async function looksLikePlaceholder(path: string): Promise<boolean> {
-  if (!existsSync(path)) return false;
-  try {
-    const s = await stat(path);
-    if (s.size === 0) return true;
-    return false;
-  } catch {
-    return true;
-  }
-}
-
-/** Heuristic for sibling iCloud `.icloud` placeholders (e.g. `.bundle.json.gz.icloud`). */
-export function placeholderSiblingFor(filename: string): string {
-  return `.${filename}.icloud`;
 }

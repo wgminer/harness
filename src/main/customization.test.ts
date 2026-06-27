@@ -43,7 +43,7 @@ describe("executeCustomizationTool", () => {
     };
     expect(payload.ok).toBe(true);
     expect(payload.settings.fontSize).toBe(DEFAULT_THEME_SETTINGS.fontSize);
-    expect(payload.presets.map((p) => p.id)).toEqual(["dark", "light", "green", "blue"]);
+    expect(payload.presets.map((p) => p.id)).toEqual(["dark", "light"]);
   });
 
   it("update_theme patches colors and returns applied settings", async () => {
@@ -67,8 +67,8 @@ describe("executeCustomizationTool", () => {
     };
     expect(payload.ok).toBe(true);
     expect(payload.preset).toBe("light");
-    expect(payload.settings.bg).toBe("#fafafa");
-    expect(payload.settings.accent).toBe("#0052ff");
+    expect(payload.settings.bg).toBe("#ffffff");
+    expect(payload.settings.accent).toBe("#3b6fd9");
   });
 
   it("accepts legacy preset aliases", async () => {
@@ -77,7 +77,7 @@ describe("executeCustomizationTool", () => {
     const payload = JSON.parse(raw) as { ok: boolean; preset: string; settings: { bg: string } };
     expect(payload.ok).toBe(true);
     expect(payload.preset).toBe("light");
-    expect(payload.settings.bg).toBe("#fafafa");
+    expect(payload.settings.bg).toBe("#ffffff");
   });
 
   it("apply_theme_preset rejects unknown ids", async () => {

@@ -62,7 +62,7 @@ test("delete conversation keeps other conversation", async () => {
 test("settings weather zip and auto-send persist", async () => {
   const win = await page();
   await win.getByTestId("sidebar-settings").click();
-  await win.getByRole("tab", { name: "Voice" }).click();
+  await win.getByRole("tab", { name: "General" }).click();
   const toggle = win.getByTestId("settings-auto-send");
   const before = await toggle.isChecked();
   await win.evaluate(() => {
@@ -72,15 +72,13 @@ test("settings weather zip and auto-send persist", async () => {
   });
   await expect(toggle).toBeChecked({ checked: !before });
 
-  await win.getByRole("tab", { name: "Tools" }).click();
   const zip = win.getByTestId("settings-weather-zip");
   await zip.fill("10001");
   await win.waitForTimeout(700);
   await win.getByTestId("sidebar-new-chat").click();
   await win.getByTestId("sidebar-settings").click();
-  await win.getByRole("tab", { name: "Voice" }).click();
+  await win.getByRole("tab", { name: "General" }).click();
   await expect(win.getByTestId("settings-auto-send")).toBeChecked({ checked: !before });
-  await win.getByRole("tab", { name: "Tools" }).click();
   await expect(win.getByTestId("settings-weather-zip")).toHaveValue("10001");
 });
 

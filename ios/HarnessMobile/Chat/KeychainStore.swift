@@ -3,9 +3,40 @@ import Security
 
 enum KeychainStore {
     private static let service = "com.harness.mobile"
-    private static let account = "openai-api-key"
+    private static let openAIAccount = "openai-api-key"
+    private static let r2SecretAccount = "r2-secret-access-key"
+    private static let importedSettingsKeyFlag = "harness.importedOpenAIKeyFromSync"
+
+    static var hasImportedOpenAIKeyFromSync: Bool {
+        get { UserDefaults.standard.bool(forKey: importedSettingsKeyFlag) }
+        set { UserDefaults.standard.set(newValue, forKey: importedSettingsKeyFlag) }
+    }
 
     static func loadAPIKey() -> String? {
+        loadGeneric(account: openAIAccount)
+    }
+
+    static func saveAPIKey(_ key: String) throws {
+        try saveGeneric(account: openAIAccount, value: key)
+    }
+
+    static func deleteAPIKey() {
+        deleteGeneric(account: openAIAccount)
+    }
+
+    static func loadR2SecretAccessKey() -> String? {
+        loadGeneric(account: r2SecretAccount)
+    }
+
+    static func saveR2SecretAccessKey(_ key: String) throws {
+        try saveGeneric(account: r2SecretAccount, value: key)
+    }
+
+    static func deleteR2SecretAccessKey() {
+        deleteGeneric(account: r2SecretAccount)
+    }
+
+    private static func loadGeneric(account: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -19,8 +50,8 @@ enum KeychainStore {
         return String(data: data, encoding: .utf8)
     }
 
-    static func saveAPIKey(_ key: String) throws {
-        let data = Data(key.utf8)
+    private static func saveGeneric(account: String, value: String) throws {
+        let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -39,7 +70,7 @@ enum KeychainStore {
         }
     }
 
-    static func deleteAPIKey() {
+    private static func deleteGeneric(account: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -54,7 +85,7 @@ enum KeychainError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .saveFailed: return "Could not save API key to Keychain."
+        case .saveFailed: return "Could not save secret to Keychain."
         }
     }
 }

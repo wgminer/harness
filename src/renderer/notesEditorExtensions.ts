@@ -4,7 +4,6 @@ import {
   Decoration,
   EditorView,
   ViewPlugin,
-  drawSelection,
   highlightActiveLine,
   keymap,
   placeholder,
@@ -263,6 +262,33 @@ const markdownStylePlugin = ViewPlugin.fromClass(
   },
 );
 
+const notesTextSelectionMark = Decoration.mark({ class: "notes-cm-text-selection" });
+
+function buildNotesTextSelectionDecorations(view: EditorView): DecorationSet {
+  const { from, to } = view.state.selection.main;
+  if (from >= to) return Decoration.none;
+  return Decoration.set([notesTextSelectionMark.range(from, to)]);
+}
+
+const notesTextSelectionPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildNotesTextSelectionDecorations(view);
+    }
+
+    update(update: ViewUpdate): void {
+      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+        this.decorations = buildNotesTextSelectionDecorations(update.view);
+      }
+    }
+  },
+  {
+    decorations: (plugin) => plugin.decorations,
+  },
+);
+
 export function createNotesCodeEditorTheme(): Extension {
   return EditorView.theme(
     {
@@ -296,12 +322,11 @@ export function createNotesCodeEditorTheme(): Extension {
       ".cm-cursor, .cm-dropCursor": {
         borderLeftColor: "var(--fg)",
       },
-      "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-        backgroundColor: "var(--selection-bg) !important",
+      ".cm-line ::selection, .cm-line::selection": {
+        backgroundColor: "transparent !important",
       },
       ".cm-content ::selection": {
-        backgroundColor: "var(--selection-bg) !important",
-        color: "var(--selection-fg) !important",
+        backgroundColor: "transparent !important",
       },
       ".cm-activeLine": {
         backgroundColor: "color-mix(in srgb, var(--fg) 3.5%, transparent)",
@@ -327,7 +352,7 @@ export interface NotesCodeEditorOptions {
 export function createNotesCodeEditorExtensions(options: NotesCodeEditorOptions): Extension[] {
   const extensions: Extension[] = [
     history(),
-    drawSelection(),
+    Prec.high(notesTextSelectionPlugin),
     highlightActiveLine(),
     EditorView.lineWrapping,
     Prec.high(markdownListKeymap),
@@ -343,7 +368,7 @@ export function createNotesCodeEditorExtensions(options: NotesCodeEditorOptions)
       if (update.focusChanged) {
         options.onFocusChange?.(update.view.hasFocus);
       }
-      if (update.scrollChanged) {
+      if (update.viewportChanged) {
         options.onScroll?.();
       }
     }),
@@ -365,19 +390,17 @@ export function createNotesCodeEditorExtensions(options: NotesCodeEditorOptions)
 export function getNotesEditorCaretCoordinates(
   view: EditorView,
   position: number,
-): { top: number; left: number; lineHeight: number } | null {
+): { top: number; left: number; bottom: number; lineHeight: number } | null {
   const wrap = view.dom.closest(".notes-surface__editor-wrap") as HTMLElement | null;
-  const coords = view.coordsAtPos(Math.max(0, Math.min(position, view.state.doc.length)));
+  const pos = Math.max(0, Math.min(position, view.state.doc.length));
+  const coords = view.coordsAtPos(pos);
   if (!wrap || !coords) return null;
   const wrapRect = wrap.getBoundingClientRect();
-  const line = view.state.doc.lineAt(position);
-  const lineStartCoords = view.coordsAtPos(line.from);
-  const lineEndCoords = view.coordsAtPos(line.to);
-  const lineHeight =
-    lineStartCoords && lineEndCoords ? lineEndCoords.bottom - lineStartCoords.top : coords.bottom - coords.top;
+  const lineHeight = coords.bottom - coords.top;
   return {
     top: coords.top - wrapRect.top,
     left: coords.left - wrapRect.left,
+    bottom: coords.bottom - wrapRect.top,
     lineHeight: lineHeight || 20,
   };
 }

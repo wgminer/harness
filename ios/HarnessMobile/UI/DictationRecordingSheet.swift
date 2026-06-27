@@ -243,7 +243,7 @@ struct DictationRecordingSheet: View {
 
 #Preview("Recording") {
     DictationRecordingSheet(
-        app: PreviewSupport.emptyApp(needsBackupFolder: false, needsAPIKey: false),
+        app: PreviewSupport.emptyApp(syncNotConfigured: false, needsAPIKey: false),
         isPresented: .constant(true),
         onConversationCreated: { _ in }
     )

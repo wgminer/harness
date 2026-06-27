@@ -65,8 +65,8 @@ describe("computeRevision", () => {
       "app-state/conversations.json": '{"a":1}',
     });
     const before = await computeRevision(a);
-    await mkdir(join(a, "recordings"), { recursive: true });
-    await writeFile(join(a, "recordings", "rec1.wav"), "fake-audio", "utf-8");
+    await mkdir(join(a, "audio-recordings"), { recursive: true });
+    await writeFile(join(a, "audio-recordings", "rec1.wav"), "fake-audio", "utf-8");
     expect(await computeRevision(a)).toBe(before);
   });
 });
@@ -116,14 +116,14 @@ describe("buildBundle / parseBundle / extractBundle", () => {
     const dst = await makeLocalData({
       "app-state/conversations.json": '{"a":1}',
     });
-    await mkdir(join(dst, "recordings"), { recursive: true });
-    await writeFile(join(dst, "recordings", "rec.wav"), "should-stay", "utf-8");
+    await mkdir(join(dst, "audio-recordings"), { recursive: true });
+    await writeFile(join(dst, "audio-recordings", "rec.wav"), "should-stay", "utf-8");
     const src = await makeLocalData({
       "app-state/conversations.json": '{"new":true}',
     });
     const { bytes } = await buildBundle(src);
     await extractBundle(dst, parseBundle(bytes));
-    expect(await readFile(join(dst, "recordings", "rec.wav"), "utf-8")).toBe("should-stay");
+    expect(await readFile(join(dst, "audio-recordings", "rec.wav"), "utf-8")).toBe("should-stay");
   });
 
   it("rejects bundles with the wrong format version", () => {

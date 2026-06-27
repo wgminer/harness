@@ -13,7 +13,7 @@ import {
 } from "../shared/taskStatus";
 import type { TaskStatus } from "../shared/taskStatus";
 import { rigSection } from "../shared/rigPage";
-import { getSettings } from "./settings";
+import { getSettings, resolveTavilyApiKey } from "./settings";
 import { getWeatherForZip } from "./weather";
 import { searchWebTavily } from "./webSearch";
 import { executeNoteTool } from "./writing";
@@ -337,7 +337,7 @@ async function fetchWeather(args: Record<string, unknown>): Promise<unknown> {
   }
   if (!zip) {
     return {
-      error: `No ZIP provided and no default ZIP is set. Add one in ${rigSection("Tools")}.`,
+      error: `No ZIP provided and no default ZIP is set. Add one in ${rigSection("General")}.`,
     };
   }
   const daysRaw = typeof args.days === "number" ? args.days : Number.parseInt(String(args.days ?? ""), 10);
@@ -347,8 +347,7 @@ async function fetchWeather(args: Record<string, unknown>): Promise<unknown> {
 
 async function fetchWebSearch(args: Record<string, unknown>): Promise<unknown> {
   const query = typeof args.query === "string" ? args.query.trim() : "";
-  const settings = await getSettings();
-  const apiKey = settings.search?.tavilyApiKey?.trim() ?? "";
+  const apiKey = (await resolveTavilyApiKey()).trim();
   const maxResultsRaw =
     typeof args.max_results === "number"
       ? args.max_results

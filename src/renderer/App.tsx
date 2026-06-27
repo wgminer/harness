@@ -16,10 +16,11 @@ import { useViewportLayout } from "./useViewportLayout";
 import { isGlobalFnRecordingEnabledForView } from "../shared/globalFnRecording";
 import {
   collectSetupGaps,
-  hasOpenAIApiKey,
+  shouldShowSetupNotice,
   type SetupGap,
 } from "../shared/setupState";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
+import { beginThemeColorTransition } from "./themeTransition";
 
 export default function App() {
   const [view, setView] = useState<View>("chat");
@@ -48,7 +49,6 @@ export default function App() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTabId | undefined>();
   const [openAIConfigured, setOpenAIConfigured] = useState(false);
   const [setupStateLoaded, setSetupStateLoaded] = useState(false);
-  const setupNoticeCheckedRef = useRef(false);
 
   // Hotkey recorder — owns the background mic capture for the global shortcut path
   const hotkeyRecorder = useRecorder();
@@ -65,9 +65,10 @@ export default function App() {
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
 
   const refreshSetupState = useCallback(async () => {
-    const [settings, syncStatus, platform] = await Promise.all([
+    const [settings, syncStatus, credentialStatus, platform] = await Promise.all([
       window.electron.settings.get() as Promise<Settings>,
       window.electron.sync.getStatus(),
+      window.electron.credentials.getStatus(),
       window.electron.system.getPlatform(),
     ]);
     let accessibilityTrusted: boolean | null = null;
@@ -75,13 +76,13 @@ export default function App() {
       accessibilityTrusted = await window.electron.system.macosAccessibilityTrusted();
     }
     const gaps = collectSetupGaps({
-      settings,
+      hasOpenAIApiKey: credentialStatus.hasOpenAIApiKey,
       syncConfigured: syncStatus.configured,
       platform,
       accessibilityTrusted,
     });
     setSetupGaps(gaps);
-    setOpenAIConfigured(hasOpenAIApiKey(settings));
+    setOpenAIConfigured(credentialStatus.hasOpenAIApiKey);
     setSetupStateLoaded(true);
     return gaps;
   }, []);
@@ -94,8 +95,10 @@ export default function App() {
 
   const dismissSetupNotice = useCallback(() => {
     setSetupNoticeOpen(false);
-    void window.electron.uiSession.set({ setupNoticeDismissed: true });
-  }, []);
+    if (!setupGaps.some((gap) => gap.severity === "required")) {
+      void window.electron.uiSession.set({ setupNoticeDismissed: true });
+    }
+  }, [setupGaps]);
 
   const openSetupSettings = useCallback(() => {
     setSettingsInitialTab("general");
@@ -153,17 +156,21 @@ export default function App() {
   }, [loadConversations]);
 
   useEffect(() => {
-    if (!uiSessionReady || setupNoticeCheckedRef.current) return;
-    setupNoticeCheckedRef.current = true;
+    if (!uiSessionReady) return;
+    let cancelled = false;
     void (async () => {
       const [gaps, session] = await Promise.all([
         refreshSetupState(),
         window.electron.uiSession.get(),
       ]);
-      if (gaps.length > 0 && !session.setupNoticeDismissed) {
+      if (cancelled) return;
+      if (shouldShowSetupNotice(gaps, session.setupNoticeDismissed === true)) {
         setSetupNoticeOpen(true);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [uiSessionReady, refreshSetupState]);
 
   const runBackgroundSync = useCallback(async () => {
@@ -248,6 +255,7 @@ export default function App() {
       if (el) document.head.appendChild(el);
     };
     const themeRequestSeqRef = { current: 0 };
+    const themeBootstrappedRef = { current: false };
     const refreshThemeCss = () => {
       const seq = ++themeRequestSeqRef.current;
       window.electron.customization.getActiveTheme().then((css) => {
@@ -255,6 +263,11 @@ export default function App() {
         ensureCustomThemeLast();
         const el = document.getElementById("custom-theme") as HTMLStyleElement | null;
         if (el) el.textContent = css;
+        if (themeBootstrappedRef.current) {
+          beginThemeColorTransition();
+        } else {
+          themeBootstrappedRef.current = true;
+        }
       });
     };
     ensureCustomThemeLast();

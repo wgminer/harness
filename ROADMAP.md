@@ -3,7 +3,7 @@
 Living document with two layers:
 
 1. **Outcomes** — what the project is *for* (steer ideas and compare work here first).
-2. **Execution** — what shipped (**Completed**), what’s active (**v0.6**), and what’s queued (**Post v0.6**).
+2. **Execution** — what shipped (**Completed**), what’s active (**v0.7**), and what’s queued (**Post v0.7**).
 
 When considering a feature, ask: *which outcome does it serve, and does anything already on the execution track do it better?*
 
@@ -31,7 +31,7 @@ One personal harness should absorb daily workflows currently spread across chat 
 | | |
 |---|---|
 | **Success picture** | You reach for Harness first for chat, memory, notes, tasks, and imports; fewer standalone AI SaaS tabs; data lives locally with clear sync/backup. |
-| **Signals today** | Chat + tools + memory; tasks & plans; Notes + `proposeEdit`; ChatGPT + Claude import; nightly memory compile; folder backup sync with **per-file conflict review**; conversation search; weather tool; provider picker (OpenAI / Ollama); dictation sessions. |
+| **Signals today** | Chat + tools + memory; tasks & plans; Notes + `proposeEdit`; ChatGPT + Claude import; nightly memory compile; **Cloudflare R2 sync** with per-file conflict review; conversation search; weather tool; provider picker (OpenAI / Ollama); dictation sessions. |
 | **Gaps** | More chat providers (Claude/Gemini APIs); backlog/inbox primitive; richer notes (metadata, search, guided actions); semantic memory; agent mode with guardrails. |
 | **Anti-goals** | Thin wrappers that still require the original app; black-box memory; importing without a path to *use* data inside Harness. |
 
@@ -42,7 +42,7 @@ A small mobile surface for capture and Q&A—not desktop parity.
 | | |
 |---|---|
 | **Success picture** | Capture ideas on the go (voice/text → inbox); ask Harness a question; optional Telegram-style bridge before a full app. |
-| **Signals today** | **Harness Mobile (iOS)** — SwiftUI chat, OpenAI streaming, same `bundle.json.gz` / `manifest.json` backup folder as desktop; conflict sheet on phone; Keychain API key. Desktop sync/conflict UI for thorough merges. |
+| **Signals today** | **Harness Mobile (iOS)** — SwiftUI chat, OpenAI streaming, **R2 remote backup** (`bundle.json.gz` / `manifest.json`); conflict sheet on phone; Keychain API keys; system/HIG styling. Desktop sync/conflict UI for thorough merges. |
 | **Gaps** | Capture-first inbox on mobile; voice capture; Android; parity only where it reduces friction. |
 | **Anti-goals** | Rebuilding desktop recording/transcription on phone v1; feature parity that doubles maintenance. |
 
@@ -54,7 +54,7 @@ Harness is where you practice the full stack: providers, tools, streaming, persi
 |---|---|
 | **Success picture** | Each meaningful feature teaches something reusable: a new tool, IPC boundary, test pattern, or provider adapter you could lift into another project. |
 | **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; memory compile pipeline; import parsers; typed `window.electron`; unit + e2e coverage; iOS sync codec tests; `docs/4PX_GRID.md` + motion audit. |
-| **Gaps** | CI on PRs (lint, tsc, Playwright, `grid:audit`); plugin/tool registry; documented patterns for adding tools/providers. |
+| **Gaps** | CI on PRs (lint, tsc, Playwright, `grid:audit`) — **landed in 0.7**; plugin/tool registry; documented patterns for adding tools/providers. |
 | **Anti-goals** | Opaque magic (no tests, no boundaries); one giant file per feature; skipping the “why” in favor of copy-paste. |
 
 ---
@@ -68,7 +68,7 @@ Quick read on **May 2026**—refresh when major work lands.
 | **O1** UI craft | **Building** | 4px grid + type scale landed; shell/session/motion improved; chat column still has room for breakpoint work. |
 | **O2** Subscription cannibal | **Building** | Core harness + imports + sync conflict review; providers and backlog still open. |
 | **O3** Mobile | **Started** | iOS chat companion ships; capture/inbox still desktop-first. |
-| **O4** Learning lab | **Building** | Good architecture and tests; CI/docs for patterns still thin. |
+| **O4** Learning lab | **Building** | Good architecture and tests; CI on PRs landed in 0.7; pattern docs still thin. |
 
 ---
 
@@ -88,6 +88,15 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 ---
 
 ## Completed
+
+### 2026-06 — v0.7.0 — R2 sync, credentials, iOS polish, CI `[O1][O2][O3][O4]`
+
+- **Cloudflare R2 remote backup** `[O2][O3]` — R2 is the **only** sync transport; `RemoteBackupStore` on desktop (`@aws-sdk/client-s3`) and iOS (URLSession + SigV4); same `bundle.json.gz` + `manifest.json` format; active polling on focus + ~30s interval; iCloud/folder backup removed.
+- **Credential hygiene** `[O2][O4]` — OpenAI/Tavily/R2 secrets in OS credential stores (desktop `safeStorage`, iOS Keychain); secrets redacted from sync bundle; per-device keys (encrypted cross-device key sync deferred to 0.8).
+- **iOS composer fixes** `[O3]` — Draft persistence, live streaming auto-scroll, composer focus/inset fixes, setup-alert Settings action.
+- **Mobile system styling** `[O1][O3]` — Custom theming removed on iOS; standard system colors + SF fonts; `theme.json` remains desktop-only in the sync bundle.
+- **CI on PRs** `[O4]` — `.github/workflows/ci.yml`: lint, `tsc`, Vitest, Playwright, `grid:audit`.
+- **Version** — Desktop package `0.7.0`; iOS `MARKETING_VERSION` `0.7.0`.
 
 ### 2026-05-24 — 4px grid, Harness Mobile iOS, v0.6 `[O1][O3][O4]`
 
@@ -147,15 +156,15 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 
 ---
 
-## v0.6.0 — release line (in progress)
+## v0.7.0 — release line (shipped)
 
-Near-term execution under the outcomes above. **Shipped on this line** is summarized in **Completed (2026-05-24\*)** and the shell line above.
+Shipped in **Completed (2026-06 — v0.7.0)** above. Remaining items below roll into **Post v0.7**.
 
 ### Layout, scaling, and shell `[O1]` — remaining
 
 - **Viewport-aware UI scaling (deeper pass)** — Fluid max-width, breakpoints, chat layout that uses large windows well.
 - **Sidebar behavior** — Focus traps, keyboard nav; motion items from [UI_TRANSITION_AUDIT.md](docs/UI_TRANSITION_AUDIT.md).
-- **Grid in CI** — Run `npm run grid:audit` on PRs.
+- ~~**Grid in CI**~~ — **Done** (0.7).
 
 ### Tools
 
@@ -186,7 +195,7 @@ Near-term execution under the outcomes above. **Shipped on this line** is summar
 
 ---
 
-## Post v0.6 — backlog
+## Post v0.7 — backlog
 
 Ordered loosely by outcome; not a commitment sequence.
 
@@ -194,35 +203,24 @@ Ordered loosely by outcome; not a commitment sequence.
 
 | Item | Outcomes |
 |------|----------|
-| **CI hardening** (lint, tsc, Playwright, `grid:audit` on PR) | O4 |
+| ~~**CI hardening** (lint, tsc, Playwright, `grid:audit` on PR)~~ | O4 — **Done** (0.7) |
 | **Chat providers** — Anthropic, Gemini APIs (≠ export import) | O2, O4 |
 | **Agent mode** with human-in-the-loop before destructive actions | O2, O4 |
 | **Semantic memory** (vectors + retrieval) | O2, O4 |
 | **Backlog pipeline** (inbox, triage, promote) | O2, O3 |
 | **Workflow automation** (minimal rules/triggers) | O2, O4 |
-| **R2 remote backup** — S3-compatible blob backup; backup-only mode first | O2, O3, O4 |
-
-#### R2 remote backup `[O2][O3][O4]`
-
-Replace slow iCloud Drive folder transport with direct HTTPS upload/download of the existing sync artifacts.
-
-- **Provider:** Cloudflare R2 — S3-compatible API, permanent free tier (10 GB), no egress fees; scoped bucket API token (no IAM maze).
-- **Artifacts:** reuse `bundle.json.gz` + `manifest.json`; no format change.
-- **Mode (v1):** **backup-only** — push local blob on edit / background; pull on app launch when remote is newer. Skip bidirectional merge initially (last-write-wins or newer-timestamp-wins is fine for personal backup). Full merge can come later.
-- **Implementation:** new `SyncProvider: "s3Backup"` alongside `"folderBackup"`; thin `RemoteBackupStore` (`readManifest`, `readBundle`, `writeBundle+Manifest`); desktop via `@aws-sdk/client-s3` + R2 endpoint (`https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, `region: "auto"`); iOS via URLSession + SigV4 (or AWS SDK for Swift); credentials in Keychain / encrypted settings.
-- **Settings:** bucket name, account ID, access key, secret (scoped to one bucket prefix, e.g. `harness/`).
-- **Bonus:** enable R2/S3 object versioning for automatic backup history without changing the bundle format.
-- **Why:** one HTTPS round-trip per direction, clear upload-complete signal, no `.icloud` placeholders or waiting for filesystem sync daemons. Folder backup (Dropbox/Drive/iCloud) stays as an option for users who prefer it.
+| **Real-time sync** — sub-second push-triggered wake (Firebase-style); deferred from 0.7 | O2, O3 |
+| **Encrypted cross-device key sync** — opt-in sync passphrase for API keys | O2, O4 |
 
 ### Medium-term
 
 | Item | Outcomes |
 |------|----------|
 | **Telegram** (or similar) as mobile bridge | O3 |
-| **Backup / sync (deeper)** — scheduled sync, bidirectional merge on R2, richer conflict rules | O2, O3 |
+| **Backup / sync (deeper)** — scheduled sync, richer conflict rules on R2 | O2, O3 |
 | **Richer tasks** — due dates, priority, conversation links | O2 |
 | **Model params in Settings** — temperature, max tokens, top-p | O4 |
-| **Auto-update** — `autoUpdater` for shipped builds | O2 |
+| **Auto-update** — `autoUpdater` for shipped builds (deferred from 0.7) | O2 |
 
 ### Longer-term
 

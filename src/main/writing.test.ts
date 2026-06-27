@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createTempDir } from "./__tests__/tempDir";
 import {
   buildNotesEditPrompt,
+  buildNotesSpellCheckPrompt,
   createNoteIn,
   deleteNoteIn,
   listNotesIn,
@@ -134,5 +135,23 @@ describe("buildNotesEditPrompt", () => {
     });
 
     expect(prompt).toContain("If the instruction is clearly a question about the selected text");
+  });
+});
+
+describe("buildNotesSpellCheckPrompt", () => {
+  it("includes selected text and surrounding context without a custom instruction", () => {
+    const prompt = buildNotesSpellCheckPrompt({
+      selectedText: "teh quick brown fox",
+      beforeText: "Once upon a time, ",
+      afterText: " jumped.",
+      documentText: "Once upon a time, teh quick brown fox jumped.",
+    });
+
+    expect(prompt).toContain("Correct spelling and grammar in the selected text only.");
+    expect(prompt).not.toContain("[Instruction]");
+    expect(prompt).toContain("[TextBeforeSelection]\nOnce upon a time, ");
+    expect(prompt).toContain("[SelectedText]\nteh quick brown fox");
+    expect(prompt).toContain("[TextAfterSelection]\n jumped.");
+    expect(prompt).toContain("Do not rewrite, rephrase, change tone");
   });
 });

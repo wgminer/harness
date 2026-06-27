@@ -10,9 +10,8 @@ import {
   setUserMemoryIn,
 } from "./memory";
 import { fileExists } from "./utils";
-import { getSettings } from "./settings";
+import { resolveOpenAIApiKey } from "./settings";
 import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
-import { recordOpenAIUsage } from "./usageStats";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
 
 const STATE_FILE = "memory_compile_state.json";
@@ -269,7 +268,6 @@ export function createOpenAIDistiller(apiKey: string): MemoryCompileLLM {
         },
         { signal: AbortSignal.timeout(60_000) }
       );
-      if (completion.usage) recordOpenAIUsage(completion.usage, OPENAI_TRANSCRIPT_CLEANUP_MODEL);
       const raw = completion.choices[0]?.message?.content?.trim() ?? "";
       return parseFactsResponse(raw);
     },
@@ -352,8 +350,7 @@ async function recordCompileError(memoryDir: string, message: string): Promise<v
 }
 
 async function buildLLMFromSettings(): Promise<MemoryCompileLLM | null> {
-  const settings = await getSettings();
-  const apiKey = settings.openai?.apiKey?.trim() ?? "";
+  const apiKey = (await resolveOpenAIApiKey()).trim();
   if (!apiKey) return null;
   return createOpenAIDistiller(apiKey);
 }

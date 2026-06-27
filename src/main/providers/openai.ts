@@ -1,7 +1,6 @@
 import OpenAI from "openai";
 import type { ChatMessage } from "../../shared/types";
 import { OPENAI_CHAT_MODEL, OPENAI_TITLE_MODEL } from "../../shared/openaiModels";
-import { recordOpenAIUsage } from "../usageStats";
 import type { LLMProvider } from "./types";
 import { TOOL_DEFINITIONS } from "./toolDefinitions";
 
@@ -35,10 +34,6 @@ export async function generateThreadTitleWithOpenAI(
     },
     { signal: AbortSignal.timeout(10_000) }
   );
-
-  if (completion.usage) {
-    recordOpenAIUsage(completion.usage, OPENAI_TITLE_MODEL);
-  }
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? "";
   if (!raw) return null;
@@ -108,7 +103,6 @@ export function createOpenAIProvider(apiKey: string): LLMProvider {
               model,
               messages: currentMessages,
               stream: true,
-              stream_options: { include_usage: true },
               tools: TOOL_DEFINITIONS,
               tool_choice: "auto",
             },
@@ -117,9 +111,6 @@ export function createOpenAIProvider(apiKey: string): LLMProvider {
 
           let message: Partial<ChatCompletionMessage> = {};
           for await (const chunk of stream) {
-            if (chunk.usage) {
-              recordOpenAIUsage(chunk.usage, model);
-            }
             message = messageReducer(message, chunk);
             const delta = chunk.choices[0]?.delta?.content;
             if (delta) yield delta;

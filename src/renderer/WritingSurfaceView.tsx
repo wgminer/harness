@@ -9,6 +9,7 @@ import {
   MoreVertical,
   Printer,
   RefreshCw,
+  SpellCheck,
   SquarePen,
   Trash2,
   X,
@@ -21,7 +22,7 @@ import {
   type NoteTemplateConfig,
 } from "../shared/writing";
 import { buildNotePrintHtml } from "../shared/notePrint";
-import { NotesCodeEditor, type NotesCodeEditorHandle } from "./NotesCodeEditor.tsx";
+import { NotesCodeEditor, type NotesCodeEditorHandle } from "./NotesCodeEditor";
 import {
   getNotesEditorCaretCoordinates,
   measureNotesEditorLineWidth,
@@ -47,17 +48,9 @@ interface SelectionRange {
   text: string;
 }
 
-function renderDraftWithSelection(draft: string, selection: SelectionRange): [string, string, string] {
-  return [
-    draft.slice(0, selection.start),
-    draft.slice(selection.start, selection.end),
-    draft.slice(selection.end),
-  ];
-}
-
 const MIN_REGENERATE_SPIN_MS = 3000;
 const ASIDE_PANEL_MEASURE_BUFFER_PX = 120;
-const NOTES_SELECTION_TOOLBAR_W_PX = 66;
+const NOTES_SELECTION_TOOLBAR_W_PX = 96;
 const NOTES_SELECTION_TOOLBAR_H_PX = 36;
 const NOTES_SELECTION_TOOLBAR_GAP_PX = 8;
 const NOTES_AUTO_SAVE_DEBOUNCE_MS = 800;
@@ -157,8 +150,6 @@ export function NotesView({
   const [panelOutput, setPanelOutput] = useState<string>("");
   const [asideStatus, setAsideStatus] = useState<AsideStatus>({ kind: "idle" });
   const [editorFocused, setEditorFocused] = useState(false);
-  const [editorScrollTop, setEditorScrollTop] = useState(0);
-  const [editorScrollLeft, setEditorScrollLeft] = useState(0);
   const [asidePosition, setAsidePosition] = useState<{ top: number; left: number; width: number }>({
     top: 24,
     left: 24,
@@ -167,6 +158,7 @@ export function NotesView({
   const [toolbarPosition, setToolbarPosition] = useState<{ top: number; left: number }>({ top: 24, left: 24 });
   const [asideExpanded, setAsideExpanded] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [spellCheckLoading, setSpellCheckLoading] = useState(false);
   const [noteWidthMode, setNoteWidthMode] = useState<NoteWidthMode>("comfortable");
   const [noteToolbarMenuOpen, setNoteToolbarMenuOpen] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
@@ -200,7 +192,6 @@ export function NotesView({
   const hasSelection = selection != null;
   const showSelectionToolbar = hasSelection && !asideExpanded;
   const showAsidePanel = hasSelection && asideExpanded;
-  const showSelectionOverlay = hasSelection && !editorFocused;
 
   const closeAsidePanel = useCallback(() => {
     setAsideExpanded(false);
@@ -221,14 +212,16 @@ export function NotesView({
     const startCoords = getNotesEditorCaretCoordinates(view, range.start);
     const endCoords = getNotesEditorCaretCoordinates(view, range.end);
     if (!startCoords || !endCoords) return;
-    const sameLine = Math.abs(endCoords.top - startCoords.top) < startCoords.lineHeight * 0.6;
+    const startLine = view.state.doc.lineAt(range.start).number;
+    const endLine = view.state.doc.lineAt(range.end).number;
+    const sameLine = startLine === endLine;
     const longestLineWidth = measureLongestSelectedLineWidth(view, range.text);
     const highlightedWidth = sameLine
       ? Math.max(260, endCoords.left - startCoords.left + ASIDE_PANEL_MEASURE_BUFFER_PX)
       : Math.max(300, longestLineWidth + ASIDE_PANEL_MEASURE_BUFFER_PX);
     const panelWidth = Math.min(620, Math.max(180, highlightedWidth));
     const rawLeft = startCoords.left - 12;
-    const rawTop = endCoords.top + endCoords.lineHeight + 10;
+    const rawTop = endCoords.bottom + 10;
     const maxLeft = Math.max(12, view.dom.clientWidth - panelWidth - 12);
     const maxTop = Math.max(12, view.dom.clientHeight - 180);
     setAsidePosition({
@@ -243,8 +236,7 @@ export function NotesView({
     if (!view || !range) return;
     const endCoords = getNotesEditorCaretCoordinates(view, range.end);
     if (!endCoords) return;
-    const lineHeight = endCoords.lineHeight;
-    const belowTop = endCoords.top + lineHeight + NOTES_SELECTION_TOOLBAR_GAP_PX;
+    const belowTop = endCoords.bottom + NOTES_SELECTION_TOOLBAR_GAP_PX;
     const top = Math.max(12, Math.min(belowTop, view.dom.clientHeight - NOTES_SELECTION_TOOLBAR_H_PX - 12));
     const rawLeft = endCoords.left - NOTES_SELECTION_TOOLBAR_W_PX + 4;
     const maxLeft = Math.max(12, view.dom.clientWidth - NOTES_SELECTION_TOOLBAR_W_PX - 12);
@@ -293,8 +285,6 @@ export function NotesView({
     });
     setAsideStatus({ kind: "idle" });
     const range = { start: selectionStart, end: selectionEnd, text: selectedText };
-    setEditorScrollTop(view.scrollDOM.scrollTop);
-    setEditorScrollLeft(view.scrollDOM.scrollLeft);
     updateAsidePosition(range);
     updateToolbarPosition(range);
   }, [closeAsidePanel, draft, selection, updateAsidePosition, updateToolbarPosition]);
@@ -612,6 +602,33 @@ export function NotesView({
     }
   }, [selection]);
 
+  const handleSpellCheckSelection = useCallback(async () => {
+    if (!selection || spellCheckLoading) return;
+    const { start, end, text } = selection;
+    setSpellCheckLoading(true);
+    try {
+      const response = await notesApi.spellCheck({
+        selectedText: text,
+        beforeText: draft.slice(0, start),
+        afterText: draft.slice(end),
+        documentText: draft,
+      });
+      const currentSlice = draft.slice(start, end);
+      if (currentSlice !== text) return;
+      setDraft((prev) => prev.slice(0, start) + response.proposedText + prev.slice(end));
+      setSelection(null);
+      requestAnimationFrame(() => {
+        const caret = start + response.proposedText.length;
+        editorRef.current?.focus();
+        editorRef.current?.setSelection(caret, caret);
+      });
+    } catch (e) {
+      setStatus({ kind: "error", message: String(e) });
+    } finally {
+      setSpellCheckLoading(false);
+    }
+  }, [selection, spellCheckLoading, draft, notesApi]);
+
   const openAiAside = useCallback(() => {
     if (!selection) return;
     setAsideExpanded(true);
@@ -622,11 +639,6 @@ export function NotesView({
   }, [selection, updateAsidePosition]);
 
   const handleEditorScroll = useCallback(() => {
-    const view = editorRef.current?.getView();
-    if (view) {
-      setEditorScrollTop(view.scrollDOM.scrollTop);
-      setEditorScrollLeft(view.scrollDOM.scrollLeft);
-    }
     if (!selection) return;
     updateAsidePosition(selection);
     updateToolbarPosition(selection);
@@ -639,10 +651,6 @@ export function NotesView({
   const handleEditorBlur = useCallback(() => {
     setEditorFocused(false);
   }, []);
-
-  const [beforeSelection, selectedSegment, afterSelection] = selection
-    ? renderDraftWithSelection(draft, selection)
-    : [draft, "", ""];
 
   const previewRows = useMemo(() => {
     const source = (panelOutput || selection?.text || "").replace(/\r/g, "");
@@ -900,18 +908,6 @@ export function NotesView({
                 onBlur={handleEditorBlur}
                 onScroll={handleEditorScroll}
               />
-              {showSelectionOverlay ? (
-                <div className="notes-surface__editor-overlay" aria-hidden>
-                  <div
-                    className="notes-surface__editor-overlay-content"
-                    style={{ transform: `translate(${-editorScrollLeft}px, ${-editorScrollTop}px)` }}
-                  >
-                    {beforeSelection}
-                    <mark className="notes-surface__editor-overlay-highlight">{selectedSegment}</mark>
-                    {afterSelection}
-                  </div>
-                </div>
-              ) : null}
               {showSelectionToolbar ? (
                 <div
                   ref={selectionToolbarRef}
@@ -932,6 +928,21 @@ export function NotesView({
                     onClick={() => void handleCopySelection()}
                   >
                     {copyFeedback ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
+                  </button>
+                  <button
+                    type="button"
+                    className="notes-selection-toolbar__btn"
+                    aria-label="Spell check"
+                    title="Spell check"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => void handleSpellCheckSelection()}
+                    disabled={spellCheckLoading}
+                  >
+                    {spellCheckLoading ? (
+                      <RefreshCw size={16} aria-hidden className="notes-aside-panel__regen-icon--spinning" />
+                    ) : (
+                      <SpellCheck size={16} aria-hidden />
+                    )}
                   </button>
                   <button
                     type="button"
@@ -1011,7 +1022,7 @@ export function NotesView({
                               return;
                             }
                             const nativeEvent = e.nativeEvent as KeyboardEvent;
-                            const isComposing = e.isComposing || nativeEvent.isComposing;
+                            const isComposing = nativeEvent.isComposing;
                             const hasModifier = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey;
                             if (isComposing || e.repeat) {
                               return;

@@ -20,6 +20,10 @@ document.head.appendChild(googleFonts);
 const customThemeEl = document.getElementById("custom-theme");
 if (customThemeEl) document.head.appendChild(customThemeEl);
 
+void window.electron.env.isHarnessDev().then((dev) => {
+  if (dev) document.title = "Harness Dev";
+});
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />

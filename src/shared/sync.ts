@@ -1,5 +1,5 @@
-/** Provider-agnostic backup-folder sync. */
-export type SyncProvider = "folderBackup";
+/** Cloudflare R2 remote backup sync. */
+export type SyncProvider = "s3Backup";
 
 export type SyncDirection = "push" | "pull" | "noop" | "merge";
 
@@ -7,12 +7,11 @@ export type SyncDecision = SyncDirection | "conflict";
 
 export interface SyncStatus {
   provider: SyncProvider;
-  /** True when the user has selected a backup folder that currently exists/accessible. */
+  /** True when R2 account, bucket, access key id, and secret are configured. */
   configured: boolean;
-  /** Persisted absolute folder path (or null if never set). */
-  backupFolderPath: string | null;
-  /** Resolved error if the path is set but inaccessible (e.g. unmounted volume). */
-  folderError: string | null;
+  accountId: string | null;
+  bucket: string | null;
+  prefix: string | null;
   lastAttemptAt: number | null;
   lastSuccessAt: number | null;
   lastError: string | null;
@@ -20,10 +19,10 @@ export interface SyncStatus {
   lastAction: SyncDirection | null;
   /** Local revision after the last successful sync. */
   lastSyncedRevision: string | null;
-  /** Conflict-copy filenames detected in the backup folder (Dropbox / Drive style). */
-  conflictCopies: string[];
-  /** Non-null when iCloud (or similar) has only partially downloaded the backup pair. */
-  backupReadiness: string | null;
+  /** Remote manifest revision last observed (for active polling UI). */
+  remoteRevision: string | null;
+  /** Human-readable sync status line for the UI. */
+  statusLine: string | null;
 }
 
 export interface SyncResult {
@@ -42,11 +41,6 @@ export function syncResultChangedLocalData(result: SyncResult): boolean {
 
 /**
  * Decide how to reconcile local data with the backup manifest.
- *
- * Uses the last synced revision as the common ancestor: only-remote-changed
- * pulls, only-local-changed pushes, both-changed conflicts. When this device
- * has never synced, a pull is safe unless local files were edited after the
- * backup was last written.
  */
 export function decideSyncAction(params: {
   localRevision: string;
@@ -81,16 +75,28 @@ export {
   type SyncFileChangeKind,
 } from "./syncMerge";
 
-/**
- * Suggested backup-folder paths for known cloud-sync providers on this OS.
- * Returned by `sync:listSuggestions` so the UI can offer convenience picks
- * without depending on any provider-specific behavior.
- */
-export interface SyncFolderSuggestion {
-  /** Human-readable label shown in the picker (e.g. "iCloud Drive"). */
-  label: string;
-  /** Absolute path the suggestion would resolve to. */
-  path: string;
-  /** True if the suggested parent already exists on disk. */
-  exists: boolean;
+export function formatSyncStatusLine(input: {
+  lastSuccessAt: number | null;
+  lastAction: SyncDirection | null;
+  isSyncing: boolean;
+  lastError: string | null;
+  configured: boolean;
+}): string | null {
+  if (!input.configured) return "Connect R2 in Settings → Data to enable sync.";
+  if (input.isSyncing) return "Syncing…";
+  if (input.lastError) return input.lastError;
+  if (input.lastSuccessAt) {
+    const agoSec = Math.max(0, Math.round((Date.now() - input.lastSuccessAt) / 1000));
+    const ago =
+      agoSec < 60
+        ? `${agoSec}s ago`
+        : agoSec < 3600
+          ? `${Math.round(agoSec / 60)}m ago`
+          : `${Math.round(agoSec / 3600)}h ago`;
+    if (input.lastAction === "pull") return `Pulled remote changes · synced ${ago}`;
+    if (input.lastAction === "push") return `Pushed local changes · synced ${ago}`;
+    if (input.lastAction === "merge") return `Merged changes · synced ${ago}`;
+    return `Synced ${ago}`;
+  }
+  return "No sync completed yet.";
 }

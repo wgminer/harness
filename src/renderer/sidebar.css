@@ -104,7 +104,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-1);
-  padding: 12px 8px 4px 12px;
+  padding: 12px 12px 4px 12px;
 }
 
 .sidebar-group-label {

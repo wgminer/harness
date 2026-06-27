@@ -2,11 +2,18 @@ import { ipcMain } from "electron";
 import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { parseMemoryInjectionStrategy } from "../shared/memoryInjection";
+import { stripSettingsSecrets } from "../shared/settingsSecrets";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings } from "../shared/types";
 import { normalizeNoteTemplates } from "../shared/writing";
+import {
+  getCredential,
+  migrateSecretsFromSettingsRaw,
+  setCredential,
+} from "./credentials";
 import { fileExists } from "./utils";
 import { ensureLocalDataMigration, getLocalDataSettingsPath } from "./localDataPaths";
+import { applyGlobalFnHotkeySetting } from "./globalRecordingMain";
 
 const SETTINGS_FILE = "settings.json";
 
@@ -48,25 +55,23 @@ function parseTranscription(raw: Record<string, unknown> | undefined): NonNullab
   };
 }
 
-/** Accept legacy settings.json and normalize to the current schema. */
+function parseSync(raw: Record<string, unknown> | undefined): NonNullable<Settings["sync"]> {
+  const prefixRaw = typeof raw?.prefix === "string" ? raw.prefix.trim() : "";
+  const prefix = prefixRaw || D.sync!.prefix;
+  return {
+    accountId: typeof raw?.accountId === "string" ? raw.accountId.trim() : D.sync!.accountId,
+    bucket: typeof raw?.bucket === "string" ? raw.bucket.trim() : D.sync!.bucket,
+    prefix: prefix.endsWith("/") ? prefix : `${prefix}/`,
+    accessKeyId: typeof raw?.accessKeyId === "string" ? raw.accessKeyId.trim() : D.sync!.accessKeyId,
+  };
+}
+
+/** Accept legacy settings.json and normalize to the current schema. Secrets are never loaded from disk. */
 export function parseSettings(data: Record<string, unknown>): Settings {
-  const openaiRaw = data.openai as Record<string, unknown> | undefined;
-  const apiKey =
-    (typeof openaiRaw?.apiKey === "string" ? openaiRaw.apiKey : null) ?? D.openai!.apiKey;
-
-  const searchRaw = data.search as Record<string, unknown> | undefined;
-  const tavilyApiKey =
-    (typeof searchRaw?.tavilyApiKey === "string" ? searchRaw.tavilyApiKey : null) ??
-    D.search!.tavilyApiKey;
-
   const weatherRaw = data.weather as Record<string, unknown> | undefined;
   const defaultZip =
     (typeof weatherRaw?.defaultZip === "string" ? weatherRaw.defaultZip : null) ??
     D.weather!.defaultZip;
-
-  const backupRaw = data.backup as Record<string, unknown> | undefined;
-  const folderPath =
-    typeof backupRaw?.folderPath === "string" ? backupRaw.folderPath : D.backup!.folderPath;
 
   const memoryRaw = data.memory as Record<string, unknown> | undefined;
   const injectionStrategy = parseMemoryInjectionStrategy(memoryRaw?.injectionStrategy);
@@ -81,12 +86,8 @@ export function parseSettings(data: Record<string, unknown>): Settings {
 
   return {
     version: D.version,
-    openai: {
-      apiKey,
-    },
-    search: {
-      tavilyApiKey,
-    },
+    openai: { apiKey: "" },
+    search: { tavilyApiKey: "" },
     weather: {
       defaultZip,
     },
@@ -98,11 +99,13 @@ export function parseSettings(data: Record<string, unknown>): Settings {
         typeof (data.recording as Record<string, unknown> | undefined)?.autoSend === "boolean"
           ? ((data.recording as Record<string, unknown>).autoSend as boolean)
           : D.recording!.autoSend,
+      globalFnHotkey:
+        typeof (data.recording as Record<string, unknown> | undefined)?.globalFnHotkey === "boolean"
+          ? ((data.recording as Record<string, unknown>).globalFnHotkey as boolean)
+          : D.recording!.globalFnHotkey,
     },
     transcription: parseTranscription(data.transcription as Record<string, unknown> | undefined),
-    backup: {
-      folderPath,
-    },
+    sync: parseSync((data.sync as Record<string, unknown> | undefined) ?? undefined),
     memory: {
       injectionStrategy,
     },
@@ -112,7 +115,23 @@ export function parseSettings(data: Record<string, unknown>): Settings {
   };
 }
 
+async function migrateSettingsFileAtPath(path: string): Promise<void> {
+  if (!(await fileExists(path))) return;
+  const rawText = await readFile(path, "utf-8");
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(rawText) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+  const migratedSecrets = await migrateSecretsFromSettingsRaw(raw);
+  const stripped = stripSettingsSecrets(raw);
+  if (!migratedSecrets && JSON.stringify(stripped) === JSON.stringify(raw)) return;
+  await writeFile(path, JSON.stringify(stripped, null, 2), "utf-8");
+}
+
 export async function loadSettingsFromPath(path: string): Promise<Settings> {
+  await migrateSettingsFileAtPath(path);
   if (!(await fileExists(path))) return { ...D };
   const raw = await readFile(path, "utf-8");
   return parseSettings(JSON.parse(raw));
@@ -122,8 +141,16 @@ async function loadSettings(): Promise<Settings> {
   return loadSettingsFromPath(getSettingsPath());
 }
 
+function stripSecretsBeforeSave(settings: Settings): Settings {
+  return {
+    ...settings,
+    openai: { apiKey: "" },
+    search: { tavilyApiKey: "" },
+  };
+}
+
 export async function saveSettingsToPath(path: string, settings: Settings): Promise<void> {
-  await writeFile(path, JSON.stringify(settings, null, 2), "utf-8");
+  await writeFile(path, JSON.stringify(stripSecretsBeforeSave(settings), null, 2), "utf-8");
 }
 
 async function saveSettings(settings: Settings): Promise<void> {
@@ -134,13 +161,21 @@ export async function getSettings(): Promise<Settings> {
   return loadSettings();
 }
 
-export async function setSettings(partial: Partial<Settings>): Promise<Settings> {
+export async function setSettings(partial: Partial<Settings>): Promise<void> {
+  if (partial.openai?.apiKey != null) {
+    await setCredential("openai.apiKey", partial.openai.apiKey);
+  }
+  if (partial.search?.tavilyApiKey != null) {
+    await setCredential("search.tavilyApiKey", partial.search.tavilyApiKey);
+  }
+
   const current = await loadSettings();
+  const prevGlobalFnHotkey = current.recording?.globalFnHotkey ?? D.recording!.globalFnHotkey;
   const next: Settings = {
     ...current,
     ...partial,
-    openai: partial.openai ? { ...current.openai, ...partial.openai } : current.openai,
-    search: partial.search ? { ...current.search, ...partial.search } : current.search,
+    openai: { apiKey: "" },
+    search: { tavilyApiKey: "" },
     weather: partial.weather ? { ...current.weather, ...partial.weather } : current.weather,
     recording: partial.recording ? { ...current.recording, ...partial.recording } : current.recording,
     transcription: partial.transcription
@@ -166,12 +201,25 @@ export async function setSettings(partial: Partial<Settings>): Promise<Settings>
               : current.notes?.templates ?? D.notes!.templates,
         }
       : current.notes,
-    backup: partial.backup ? { ...current.backup, ...partial.backup } : current.backup,
+    sync: partial.sync ? { ...current.sync, ...partial.sync } : current.sync,
     memory: partial.memory ? { ...current.memory, ...partial.memory } : current.memory,
     chat: partial.chat ? { ...current.chat, ...partial.chat } : current.chat,
   };
   await saveSettings(next);
-  return next;
+  const nextGlobalFnHotkey = next.recording?.globalFnHotkey ?? D.recording!.globalFnHotkey;
+  if (prevGlobalFnHotkey !== nextGlobalFnHotkey) {
+    await applyGlobalFnHotkeySetting(nextGlobalFnHotkey);
+  }
+}
+
+/** Main-process helper: OpenAI key from credential store. */
+export async function resolveOpenAIApiKey(): Promise<string> {
+  return (await getCredential("openai.apiKey")) ?? "";
+}
+
+/** Main-process helper: Tavily key from credential store. */
+export async function resolveTavilyApiKey(): Promise<string> {
+  return (await getCredential("search.tavilyApiKey")) ?? "";
 }
 
 export function registerSettingsHandlers(): void {

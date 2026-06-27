@@ -51,6 +51,7 @@ export async function setGridOverlay(
   value: LayoutOptions["gridOverlay"],
 ): Promise<void> {
   await win.getByTestId("sidebar-settings").click();
+  await win.getByRole("tab", { name: "Appearance" }).click();
   await win.getByTestId("settings-grid-overlay").selectOption(value);
   await win.waitForTimeout(E2E_PERSIST_FLUSH_MS);
 }
