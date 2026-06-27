@@ -40,12 +40,12 @@ enum SyncChangeSummary {
 
     static func describeNoop(hasLocalEdits: Bool, conversationCount: Int) -> String {
         if hasLocalEdits {
-            return "Revisions match, but this phone still has unsaved local edits."
+            return "Everything matches iCloud, but this phone still has changes waiting to upload."
         }
         if conversationCount == 0 {
-            return "Phone and backup folder match. No conversations yet."
+            return "Up to date with iCloud. No conversations yet."
         }
-        return "Phone and backup folder match. \(conversationCount) conversation\(conversationCount == 1 ? "" : "s") in sync."
+        return "Up to date with iCloud. \(conversationCount) conversation\(conversationCount == 1 ? "" : "s")."
     }
 
     static func describeConversationChanges(before: [String: ConversationSnapshot], after: [String: ConversationSnapshot]) -> String? {
@@ -92,7 +92,7 @@ enum SyncChangeSummary {
         if let changes = describeConversationChanges(before: baseline, after: current) {
             return changes
         }
-        return "Tasks or other data changed on this phone."
+        return "Task list changed."
     }
 }
 

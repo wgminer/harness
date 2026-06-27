@@ -57,6 +57,10 @@ interface SettingsViewProps {
   onImportComplete?: () => void;
   /** After sync pull/merge (sidebar list may have changed). */
   onSyncComplete?: () => void;
+  /** Open a specific tab when the view mounts (e.g. from first-run setup). */
+  initialTab?: SettingsTabId;
+  /** Fires after debounced settings autosave completes. */
+  onSettingsChanged?: () => void;
 }
 
 const SAVE_DEBOUNCE_MS = 500;
@@ -74,7 +78,12 @@ const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
 ];
 
 
-export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewProps) {
+export function SettingsView({
+  onImportComplete,
+  onSyncComplete,
+  initialTab,
+  onSettingsChanged,
+}: SettingsViewProps) {
   const [apiKey, setApiKey] = useState(D.openai!.apiKey);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showTavilyKey, setShowTavilyKey] = useState(false);
@@ -172,7 +181,11 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
     memory: null,
     data: null,
   });
-  const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab ?? "general");
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -288,6 +301,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
         },
       });
       setSaveStatus("saved");
+      onSettingsChanged?.();
       if (hideToastRef.current) clearTimeout(hideToastRef.current);
       hideToastRef.current = setTimeout(() => {
         setSaveStatus("idle");
@@ -301,7 +315,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
         hideToastRef.current = null;
       }
     };
-  }, [apiKey, autoSend, openToComposeOnLaunch, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip, tavilyApiKey, memoryInjectionStrategy]);
+  }, [apiKey, autoSend, openToComposeOnLaunch, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip, tavilyApiKey, memoryInjectionStrategy, onSettingsChanged]);
 
   const openCleanupPromptModal = () => {
     setCleanupPromptDraft(cleanupPrompt);
@@ -709,7 +723,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
     <div className="workspace-page settings-page">
       <WorkspaceHeader
         title={RIG_PAGE_TITLE}
-        icon={<SettingsIcon size={18} />}
+        icon={<SettingsIcon size={16} />}
         scrolled={headerScrolled}
         actions={
           <div
@@ -1143,6 +1157,7 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
               <SettingsField label="Grid overlay" htmlFor="settings-grid-overlay">
                 <select
                   id="settings-grid-overlay"
+                  data-testid="settings-grid-overlay"
                   value={layoutOptions.gridOverlay}
                   onChange={(e) =>
                     updateLayoutOptions({
@@ -1256,6 +1271,11 @@ export function SettingsView({ onImportComplete, onSyncComplete }: SettingsViewP
                     Edit prompt
                   </button>
                 </SettingsActions>
+              ) : null}
+              {cleanupEnabled && !apiKey.trim() ? (
+                <SettingsHint>
+                  Cleanup needs an OpenAI API key in General. Parakeet transcription still works without one.
+                </SettingsHint>
               ) : null}
             </SettingsGroup>
 

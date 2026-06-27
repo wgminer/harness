@@ -17,10 +17,12 @@
  *   node scripts/dist-runner.js                 # default cross-platform dist
  *   node scripts/dist-runner.js --mac           # mac dmg/zip via scripts/dist-mac.js
  *   node scripts/dist-runner.js --mac --replace # also install the built .app into /Applications
+ *   node scripts/dist-runner.js --mac --quick     # skip code signing + notarization (local only)
  *
  * Env flags:
  *   HARNESS_SKIP_VERSION_BUMP=1   skip the auto patch bump for this run
  *   REQUIRE_NOTARIZE=1            implies skip-bump (set by scripts/release.js)
+ *   CSC_IDENTITY_AUTO_DISCOVERY=false  skip code signing (also set by --quick)
  */
 const fs = require("fs");
 const path = require("path");
@@ -30,6 +32,12 @@ const root = path.join(__dirname, "..");
 const args = process.argv.slice(2);
 const isMac = args.includes("--mac");
 const replace = args.includes("--replace");
+const quick = args.includes("--quick");
+
+if (quick) {
+  process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
+  process.env.HARNESS_SKIP_VERSION_BUMP = "1";
+}
 
 const startedAt = Date.now();
 const HEARTBEAT_MS = 15_000;
@@ -157,7 +165,18 @@ async function runStep(ctx, idx, total, label, fn) {
 
 async function main() {
   const mode = isMac ? "mac" : "default";
-  console.log(color("bold", `\n▸ Harness dist (${mode}${replace ? " + replace" : ""})`));
+  const modeExtras = [replace && "replace", quick && "quick (unsigned)"].filter(Boolean);
+  console.log(
+    color("bold", `\n▸ Harness dist (${mode}${modeExtras.length ? ` + ${modeExtras.join(" + ")}` : ""})`)
+  );
+  if (quick) {
+    console.log(
+      color(
+        "yellow",
+        "  quick: code signing and notarization disabled — for local testing only"
+      )
+    );
+  }
 
   let versionInfo;
   if (shouldBumpVersion()) {

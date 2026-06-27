@@ -4,12 +4,15 @@ export interface UiSession {
   view: UiSessionView;
   conversationId: string | null;
   notesOpenNoteId: string | null;
+  /** When true, the first-run setup notice is not shown again. */
+  setupNoticeDismissed?: boolean;
 }
 
 export const DEFAULT_UI_SESSION: UiSession = {
   view: "chat",
   conversationId: null,
   notesOpenNoteId: null,
+  setupNoticeDismissed: false,
 };
 
 const UI_SESSION_VIEWS: UiSessionView[] = ["chat", "settings", "tasks", "notes"];
@@ -36,5 +39,6 @@ export function normalizeUiSession(raw: unknown): UiSession {
     view: normalizeUiSessionView(data.view),
     conversationId: normalizeOptionalId(data.conversationId),
     notesOpenNoteId: normalizeOptionalId(data.notesOpenNoteId),
+    setupNoticeDismissed: data.setupNoticeDismissed === true,
   };
 }

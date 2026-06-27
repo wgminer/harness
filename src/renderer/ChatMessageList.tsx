@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { stripSentAtPrefix } from "../shared/chatTemporalContext";
 import { resolveDictationReplyLabel } from "../shared/dictationReplyStrip";
+import { openAIRequiredMessage } from "../shared/setupState";
 import {
   type Message,
   type ToolCallDisplay,
@@ -22,6 +23,7 @@ interface ChatMessageListProps {
   streamingContent: string;
   sending: boolean;
   polishHintAfterDictation: boolean;
+  llmActionsEnabled?: boolean;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
   onGenerateReply: () => void;
@@ -36,6 +38,7 @@ export function ChatMessageList({
   streamingContent,
   sending,
   polishHintAfterDictation,
+  llmActionsEnabled = true,
   onToolConfirm,
   onPolish,
   onGenerateReply,
@@ -82,6 +85,7 @@ export function ChatMessageList({
     !streamingContent;
   const showPolishInStrip = showReplyActions && polishHintAfterDictation;
   const replyLabel = resolveDictationReplyLabel();
+  const llmBlockedTitle = openAIRequiredMessage();
 
   return (
     <>
@@ -199,7 +203,13 @@ export function ChatMessageList({
       {showReplyActions && (
         <div className="chat-secondary-actions" data-testid="chat-secondary-actions">
           {showPolishInStrip && (
-            <button type="button" className="btn btn-chat-secondary chat-pane-btn" onClick={onPolish}>
+            <button
+              type="button"
+              className="btn btn-chat-secondary chat-pane-btn"
+              onClick={onPolish}
+              disabled={!llmActionsEnabled}
+              title={llmActionsEnabled ? undefined : llmBlockedTitle}
+            >
               Polish
             </button>
           )}
@@ -208,6 +218,8 @@ export function ChatMessageList({
             className="btn btn-chat-secondary chat-pane-btn chat-pane-btn--subtle"
             onClick={onGenerateReply}
             data-testid="chat-generate-reply"
+            disabled={!llmActionsEnabled}
+            title={llmActionsEnabled ? undefined : llmBlockedTitle}
           >
             {replyLabel}
           </button>

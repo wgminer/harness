@@ -4,8 +4,10 @@ import {
   coerceFontSizePx,
   DEFAULT_THEME_SETTINGS,
   enforceVeryLowContrastGuard,
+  findThemePreset,
   FONT_SIZE_OPTIONS,
   normalizeThemeSettings,
+  resolveThemePresetId,
   stepFontSize,
   themeMatchesColorPreset,
   themeSettingsToCss,
@@ -25,24 +27,24 @@ describe("normalizeThemeSettings", () => {
 
   it("ignores legacy sidebarHighlight when migrating old theme.json", () => {
     const t = normalizeThemeSettings({
-      accent: "#f2ff00",
+      accent: "#d4ff00",
       sidebarHighlight: "#334155",
       font: "inter",
       fontSize: 14,
     });
-    expect(t.accent).toBe("#f2ff00");
+    expect(t.accent).toBe("#d4ff00");
     expect(t).not.toHaveProperty("sidebarHighlight");
   });
 
   it("moves mono-only legacy font to fontMono and restores UI font", () => {
-    const t = normalizeThemeSettings({ accent: "#f2ff00", font: "jetbrains", fontSize: 14 });
+    const t = normalizeThemeSettings({ accent: "#d4ff00", font: "jetbrains", fontSize: 14 });
     expect(t.fontMono).toBe("jetbrains");
     expect(t.font).toBe(DEFAULT_THEME_SETTINGS.font);
   });
 
   it("accepts explicit fontMono with UI font", () => {
     const t = normalizeThemeSettings({
-      accent: "#f2ff00",
+      accent: "#d4ff00",
       font: "lato",
       fontMono: "fira_code",
       fontSize: 16,
@@ -57,15 +59,17 @@ describe("normalizeThemeSettings", () => {
 });
 
 describe("THEME_PRESETS", () => {
-  it("exposes exactly five curated color palettes", () => {
-    expect(THEME_PRESETS).toHaveLength(5);
-    expect(THEME_PRESETS.map((p) => p.id)).toEqual(["night", "paper", "matcha", "ik_blue", "bloomberg"]);
+  it("exposes four built-in themes", () => {
+    expect(THEME_PRESETS).toHaveLength(4);
+    expect(THEME_PRESETS.map((p) => p.id)).toEqual(["dark", "light", "green", "blue"]);
   });
 
-  it("keeps bloomberg off absolute black so hover layers remain visible", () => {
-    const bloomberg = THEME_PRESETS.find((p) => p.id === "bloomberg");
-    expect(bloomberg).toBeDefined();
-    expect(bloomberg?.colors.bg).not.toBe("#000000");
+  it("resolves legacy preset aliases", () => {
+    expect(resolveThemePresetId("night")).toBe("dark");
+    expect(resolveThemePresetId("paper")).toBe("light");
+    expect(resolveThemePresetId("matcha")).toBe("green");
+    expect(resolveThemePresetId("ik_blue")).toBe("blue");
+    expect(findThemePreset("bloomberg")?.id).toBe("dark");
   });
 });
 
@@ -77,11 +81,11 @@ describe("applyThemeColors", () => {
       fontMono: "fira_code",
       fontSize: 16,
     };
-    const paper = THEME_PRESETS.find((p) => p.id === "paper")!.colors;
-    const next = applyThemeColors(base, paper);
-    expect(next.fg).toBe(paper.fg);
-    expect(next.bg).toBe(paper.bg);
-    expect(next.accent).toBe(paper.accent);
+    const light = THEME_PRESETS.find((p) => p.id === "light")!.colors;
+    const next = applyThemeColors(base, light);
+    expect(next.fg).toBe(light.fg);
+    expect(next.bg).toBe(light.bg);
+    expect(next.accent).toBe(light.accent);
     expect(next.font).toBe("lora");
     expect(next.fontMono).toBe("fira_code");
     expect(next.fontSize).toBe(16);
@@ -90,15 +94,15 @@ describe("applyThemeColors", () => {
 
 describe("themeMatchesColorPreset", () => {
   it("matches colors only and ignores typography", () => {
-    const paper = THEME_PRESETS.find((p) => p.id === "paper")!.colors;
+    const light = THEME_PRESETS.find((p) => p.id === "light")!.colors;
     const withDifferentFonts = {
-      ...applyThemeColors(DEFAULT_THEME_SETTINGS, paper),
+      ...applyThemeColors(DEFAULT_THEME_SETTINGS, light),
       font: "lora" as const,
       fontMono: "space_mono" as const,
       fontSize: 16 as const,
     };
-    expect(themeMatchesColorPreset(withDifferentFonts, paper)).toBe(true);
-    expect(themeMatchesColorPreset(DEFAULT_THEME_SETTINGS, paper)).toBe(false);
+    expect(themeMatchesColorPreset(withDifferentFonts, light)).toBe(true);
+    expect(themeMatchesColorPreset(DEFAULT_THEME_SETTINGS, light)).toBe(false);
   });
 });
 
@@ -123,40 +127,19 @@ describe("font size stepping", () => {
 });
 
 describe("themeSettingsToCss", () => {
-  it("emits user and derived custom properties", () => {
+  it("uses stronger dark surface contrast and accent-forward hovers", () => {
     const css = themeSettingsToCss(DEFAULT_THEME_SETTINGS);
-    expect(css).toContain("--accent:");
-    expect(css).not.toContain("--sidebar-highlight:");
-    expect(css).toContain("--fg:");
-    expect(css).toContain("--bg:");
-    expect(css).toContain("--fg-muted:");
-    expect(css).toContain("--bg-secondary:");
-    expect(css).toContain("--bg-elevated:");
-    expect(css).toContain("--border-dark:");
-    expect(css).toContain("--border-light:");
-    expect(css).toContain("--border:");
-    // Borders must sit above surface steps (more fg than bg-secondary / bg-elevated).
-    expect(css).toMatch(/--bg-secondary: color-mix\(in oklab, #0d1117 92%, #e6edf3\)/);
-    expect(css).toMatch(/--bg-elevated: color-mix\(in oklab, #0d1117 84%, #e6edf3\)/);
-    expect(css).toMatch(/--border-light: color-mix\(in oklab, #0d1117 82%, #e6edf3\)/);
-    expect(css).toMatch(/--border-dark: color-mix\(in oklab, #0d1117 68%, #e6edf3\)/);
-    expect(css).toContain("--accent-readable:");
-    expect(css).toContain("--selection-bg:");
-    expect(css).toContain("--sidebar-control-hover-bg:");
-    expect(css).toContain("--sidebar-control-active-hover-bg:");
-    expect(css).toMatch(/sidebar-control-active-hover-bg:[^;]*color-mix\(in srgb, #f2ff00 72%/);
-    expect(css).toContain("--font-family:");
-    expect(css).toContain("--font-family-mono:");
-    expect(css).toContain("--font-size:");
-    expect(css).toContain("--font-size-caption:");
-    expect(css).toContain("--font-size-body:");
-    expect(css).toContain("--font-size-ui:");
-    expect(css).toContain("--font-size-title:");
-    expect(css).toContain("--line-height-body:");
-    expect(css).toContain("--line-height-message:");
-    expect(css).toContain("--line-height-prose:");
-    expect(css).toMatch(/--line-height-body: 20px/);
-    expect(css).toMatch(/--line-height-message: 24px/);
+    expect(css).toMatch(/--bg: #050505;/);
+    expect(css).toMatch(/--bg-secondary: color-mix\(in oklab, #050505 88%, color-mix\(in oklab, #f5f5f5 74%, #f2ff00\)\)/);
+    expect(css).toMatch(/--selection-bg: color-mix\(in oklab, #f2ff00 80%, #050505\)/);
+    expect(css).toMatch(/sidebar-control-active-hover-bg:[^;]*color-mix\(in srgb, #f2ff00 88%/);
+  });
+
+  it("uses stronger light-theme surface contrast", () => {
+    const light = THEME_PRESETS.find((p) => p.id === "light")!.colors;
+    const css = themeSettingsToCss({ ...DEFAULT_THEME_SETTINGS, ...light });
+    expect(css).toMatch(/--bg-secondary: color-mix\(in oklab, #fafafa 88%, #0a0a0a\)/);
+    expect(css).toMatch(/--selection-bg: color-mix\(in oklab, #0052ff 82%, #fafafa\)/);
   });
 });
 

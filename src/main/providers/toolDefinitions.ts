@@ -116,7 +116,7 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "apply_theme_preset",
       description:
-        "Apply a built-in color palette by preset id (typography is unchanged). Use get_theme to list presets. Presets: night, paper, matcha, ik_blue, bloomberg.",
+        "Apply a built-in color palette by preset id (typography is unchanged). Use get_theme to list presets. Presets: dark, light, green, blue.",
       parameters: {
         type: "object",
         properties: {

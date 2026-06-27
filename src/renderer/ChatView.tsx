@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Minimize2 } from "lucide-react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
+import { openAIRequiredMessage } from "../shared/setupState";
 import { HOME_HEADER_QUOTE } from "../shared/headerQuote";
 import { ChatTitleModal } from "./ChatTitleModal";
 import { ChatSurface } from "./ChatSurface";
@@ -34,6 +35,9 @@ interface ChatViewProps {
   focusComposerNonce?: number;
   onWindowSizeToggle: () => void;
   onOpenNotesView?: (noteId: string) => void;
+  /** When false, chat/polish/reply are blocked with a setup message. */
+  openAIConfigured?: boolean;
+  onOpenSetup?: () => void;
 }
 
 export function ChatView({
@@ -49,6 +53,8 @@ export function ChatView({
   focusComposerNonce,
   onWindowSizeToggle,
   onOpenNotesView,
+  openAIConfigured = true,
+  onOpenSetup,
 }: ChatViewProps) {
   /** Set synchronously on first send so thread UI mounts before parent re-renders. */
   const [draftConversationId, setDraftConversationId] = useState<string | null>(null);
@@ -432,11 +438,22 @@ export function ChatView({
     []
   );
 
+  const setVoiceErrorRef = useRef<(message: string | null) => void>(() => {});
+
+  const blockLlmAction = useCallback(() => {
+    setVoiceErrorRef.current(openAIRequiredMessage());
+    onOpenSetup?.();
+  }, [onOpenSetup]);
+
   /** Core send logic; accepts text directly so it can be called programmatically (e.g. hotkey injection). */
   const sendText = useCallback(
     async (text: string, opts?: { fromDictation?: boolean }, targetConversationId?: string) => {
       const convId = targetConversationId ?? effectiveConversationId;
       if (!text.trim() || !convId) return;
+      if (!openAIConfigured) {
+        blockLlmAction();
+        return;
+      }
       if (opts?.fromDictation) setPolishHintAfterDictation(true);
       else setPolishHintAfterDictation(false);
 
@@ -472,16 +489,22 @@ export function ChatView({
     [
       appendAssistantPlaceholder,
       beginNewTurn,
+      blockLlmAction,
       effectiveConversationId,
       focusComposer,
       isTurnCurrent,
       makeMessageId,
+      openAIConfigured,
       runAssistantTurn,
     ]
   );
 
   const ensureConversationAndSend = useCallback(
     async (text: string, opts?: { fromDictation?: boolean }) => {
+      if (!openAIConfigured) {
+        blockLlmAction();
+        return;
+      }
       let convId = effectiveConversationId;
       if (!convId) {
         convId = await window.electron.memory.createConversation();
@@ -492,12 +515,16 @@ export function ChatView({
       }
       await sendText(text, opts, convId);
     },
-    [effectiveConversationId, onAssignConversationId, sendText]
+    [blockLlmAction, effectiveConversationId, onAssignConversationId, openAIConfigured, sendText]
   );
 
   /** Post-strip polish: replace last user dictation with instruction + same text, then stream. */
   const polishLastUserFromStrip = useCallback(async () => {
     if (!effectiveConversationId) return;
+    if (!openAIConfigured) {
+      blockLlmAction();
+      return;
+    }
     const last = messagesRef.current[messagesRef.current.length - 1];
     if (!last || last.role !== "user" || !last.content?.trim()) return;
     setPolishHintAfterDictation(false);
@@ -533,9 +560,11 @@ export function ChatView({
   }, [
     appendAssistantPlaceholder,
     beginNewTurn,
+    blockLlmAction,
     effectiveConversationId,
     isTurnCurrent,
     makeMessageId,
+    openAIConfigured,
     runAssistantTurn,
   ]);
 
@@ -552,9 +581,14 @@ export function ChatView({
   });
 
   resetComposerInputRef.current = composer.resetComposerInput;
+  setVoiceErrorRef.current = composer.setVoiceError;
 
   const generateReply = useCallback(async () => {
     if (!effectiveConversationId) return;
+    if (!openAIConfigured) {
+      blockLlmAction();
+      return;
+    }
     const { turnId, signal } = beginNewTurn();
     const assistantMessageId = makeMessageId("assistant");
     activeAssistantMessageIdRef.current = assistantMessageId;
@@ -569,7 +603,15 @@ export function ChatView({
       assistantId: assistantMessageId,
       backend: () => window.electron.chat.generateReply(effectiveConversationId),
     });
-  }, [appendAssistantPlaceholder, beginNewTurn, effectiveConversationId, makeMessageId, runAssistantTurn]);
+  }, [
+    appendAssistantPlaceholder,
+    beginNewTurn,
+    blockLlmAction,
+    effectiveConversationId,
+    makeMessageId,
+    openAIConfigured,
+    runAssistantTurn,
+  ]);
 
   const saveMessageToNotes = useCallback(
     async (messageId: string, content: string) => {
@@ -708,6 +750,7 @@ export function ChatView({
         streamingContent={streamingContent}
         sending={sending}
         polishHintAfterDictation={polishHintAfterDictation}
+        llmActionsEnabled={openAIConfigured}
         onToolConfirm={handleToolConfirm}
         onPolish={polishLastUserFromStrip}
         onGenerateReply={generateReply}

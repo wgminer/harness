@@ -1,33 +1,6 @@
-/* List view: rely on .workspace-scroll for vertical scrolling so the panel
-   can size to its natural content height + bottom padding. */
-.notes-surface__panel {
-  max-width: var(--content-width);
-  width: 100%;
-  margin: 0 auto;
-  padding: var(--space-2) var(--space-4) var(--space-12);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-/* Small muted eyebrow above each block. Sits on the panel's outer rail (no
-   horizontal padding) so its left edge aligns with the header icon above,
-   forming one continuous 16px column from header → label → card edge → row. */
-.notes-surface__section-label {
-  margin: 0 0 var(--space-2);
-  padding: 0;
-  font-size: var(--font-size-caption);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--fg-muted);
-}
-
-.notes-surface__section {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
+/* List view: rely on .workspace-scroll for vertical scrolling so content
+   can size to its natural height + bottom padding. Layout rhythm lives in
+   .workspace-content / .workspace-stack (shared with Tasks). */
 
 /* Detail view: turn the scroll container into a flex column with hidden
    overflow so the editor (.notes-surface__detail) can fill the viewport. */
@@ -36,6 +9,11 @@
   flex-direction: column;
   overflow: hidden;
   padding: 0;
+}
+
+.notes-surface__scroll--detail > .notes-surface__detail {
+  flex: 1;
+  min-height: 0;
 }
 
 .notes-surface__notes {
@@ -58,8 +36,7 @@
   margin: 0;
 }
 
-/* Calm card style. Shares hover tokens with .notes-surface__note-item so the
-   two stacked blocks read as one consistent list-of-actions. */
+/* Calm card style. Template cards stay elevated; recent rows use flat list-item hover. */
 .notes-surface__template-btn {
   flex: 1 1 160px;
   min-width: 0;
@@ -67,10 +44,10 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
   gap: 2px;
   padding: var(--space-3);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--fg);
@@ -79,7 +56,6 @@
   cursor: pointer;
   transition:
     background-color var(--motion-duration-normal) var(--motion-ease-standard),
-    border-color var(--motion-duration-normal) var(--motion-ease-standard),
     box-shadow var(--motion-duration-normal) var(--motion-ease-standard);
 }
 
@@ -87,11 +63,13 @@
 .notes-surface__template-btn:focus-visible:not(:disabled) {
   outline: none;
   background: var(--list-row-hover-bg);
-  border-color: var(--list-row-hover-border);
+  box-shadow: inset 0 0 0 1px var(--list-row-hover-border);
 }
 
 .notes-surface__template-btn:focus-visible:not(:disabled) {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow:
+    inset 0 0 0 1px var(--list-row-hover-border),
+    0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .notes-surface__template-btn:active:not(:disabled) {
@@ -115,7 +93,7 @@
   line-height: var(--line-height-snug);
   color: var(--fg-muted);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -154,60 +132,30 @@
 
 .notes-surface__note-item {
   width: 100%;
-  border: 1px solid transparent;
+  border: none;
+  box-shadow: none;
   background: transparent;
   color: var(--fg);
   border-radius: 0;
   text-align: left;
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: var(--space-3);
   cursor: pointer;
   font: inherit;
 }
 
-.notes-surface__notes > li {
-  position: relative;
-}
-
-.notes-surface__notes > li + li::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: var(--space-3);
-  right: var(--space-3);
-  border-top: 1px solid var(--border-light);
-  pointer-events: none;
-}
-
-/* Hide the hairlines above/below the active row so they don't stack on the glass border (no margin trick). */
-.notes-surface__notes > li:has(.notes-surface__note-item:hover)::before,
-.notes-surface__notes > li:has(.notes-surface__note-item:focus-visible)::before,
-.notes-surface__notes > li:has(.notes-surface__note-item:hover) + li::before,
-.notes-surface__notes > li:has(.notes-surface__note-item:focus-visible) + li::before {
-  opacity: 0;
-}
-
-/* Align with `.chat-composer-inner` / `.surface-elevated-glass` (composer glass), not accent tint. */
 .notes-surface__note-item:hover,
 .notes-surface__note-item:focus-visible {
   outline: none;
   background: var(--list-row-hover-bg);
-  -webkit-backdrop-filter: blur(16px) saturate(1.45);
-  backdrop-filter: blur(8px) saturate(1.45);
-  border-color: var(--list-row-hover-border);
-}
-
-.notes-surface__note-item:hover,
-.notes-surface__note-item:focus-visible {
   border-radius: var(--radius-md);
 }
 
 .notes-surface__note-title {
-  display: block;
-  width: 100%;
-  max-width: 100%;
+  flex: 1;
+  min-width: 0;
   font-size: var(--font-size);
   line-height: var(--line-height-normal);
   font-weight: 400;
@@ -216,40 +164,44 @@
   text-overflow: ellipsis;
 }
 
-.notes-surface__note-time {
+.notes-surface__note-meta {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
   font-size: var(--font-size-caption);
-  line-height: var(--line-height-normal);
+  line-height: var(--line-height-caption);
   color: var(--fg-muted);
+  white-space: nowrap;
 }
 
-.notes-surface__note-time-default {
-  display: inline;
-}
-
-.notes-surface__note-time-hover {
+.notes-surface__note-word-count {
   display: none;
 }
 
-.notes-surface__note-item:hover .notes-surface__note-time-default,
-.notes-surface__note-item:focus-visible .notes-surface__note-time-default {
-  display: none;
+.notes-surface__note-word-count::after {
+  content: " · ";
 }
 
-.notes-surface__note-item:hover .notes-surface__note-time-hover,
-.notes-surface__note-item:focus-visible .notes-surface__note-time-hover {
+.notes-surface__note-item:hover .notes-surface__note-word-count,
+.notes-surface__note-item:focus-visible .notes-surface__note-word-count {
   display: inline;
+}
+
+.notes-surface__note-time {
+  flex-shrink: 0;
 }
 
 .notes-surface__toolbar {
   width: 100%;
   margin: 0;
-  padding: 8px;
+  height: var(--shell-bar-height);
+  padding: 0 var(--space-2);
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  border-bottom: 1px solid var(--border-light);
-  position: sticky;
-  top: 0;
+  box-shadow: var(--hairline-bottom);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
   z-index: 2;
 }
 
@@ -273,7 +225,8 @@
   max-width: 100%;
   color: var(--fg);
   font-size: var(--font-size);
-  font-weight: 600;
+  font-weight: 500;
+  line-height: var(--line-height-tight);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -304,11 +257,11 @@
   right: 0;
   min-width: 220px;
   padding: 4px;
-  border: 1px solid var(--border-light);
+  border: none;
   border-radius: 1px;
   background: var(--bg);
-  box-shadow: 0 var(--space-4) var(--space-8) color-mix(in srgb, #000 26%, transparent);
-  z-index: 10;
+  box-shadow: var(--hairline-inset), 0 var(--space-4) var(--space-8) color-mix(in srgb, #000 26%, transparent);
+  z-index: 60;
 }
 
 .notes-surface__toolbar-menu-item {
@@ -347,6 +300,10 @@
   flex: 1;
   min-height: 0;
   width: 100%;
+}
+
+/* Legacy textarea rules kept for aside panel textareas only. */
+.notes-surface__editor--textarea {
   margin: 0;
   border: 0;
   border-radius: 0;
@@ -359,15 +316,21 @@
   font-family: var(--font-family-mono);
   font-size: var(--font-size);
   line-height: var(--line-height-prose);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
   background: transparent;
   color: var(--fg);
 }
 
 .notes-surface__editor-wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   width: 100%;
+  overflow: hidden;
   background-color: var(--bg);
   container-type: inline-size;
   --notes-editor-inline-pad: max(var(--space-4), calc((100% - var(--notes-editor-content-width, 100%)) / 2));
@@ -383,7 +346,105 @@
 }
 
 .notes-surface__editor-wrap--comfortable {
-  --notes-editor-content-width: 560px;
+  --notes-editor-content-width: 640px;
+}
+
+.notes-code-editor {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.notes-code-editor .cm-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.notes-code-editor .cm-scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.notes-code-editor .cm-content {
+  padding-top: clamp(var(--space-4), var(--notes-editor-inline-pad), calc(var(--space-4) + var(--space-12)));
+  padding-bottom: var(--space-4);
+  padding-inline: var(--notes-editor-inline-pad);
+}
+
+.notes-surface__editor-wrap--narrow .notes-code-editor .cm-content {
+  padding-top: var(--space-4);
+}
+
+.notes-code-editor .cm-line.cm-md-list-item,
+.notes-code-editor .cm-line.cm-md-list-continuation {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Markdown source styling — muted markers, heading hierarchy, section rhythm. */
+.notes-code-editor .cm-md-marker {
+  color: var(--fg-muted);
+  opacity: 0.5;
+}
+
+.notes-code-editor .cm-line.cm-md-h1 {
+  font-weight: 600;
+  font-size: 1.125em;
+  letter-spacing: -0.015em;
+}
+
+.notes-code-editor .cm-line.cm-md-h1.cm-md-section-gap {
+  padding-top: var(--space-4);
+}
+
+.notes-code-editor .cm-line.cm-md-h2 {
+  font-weight: 600;
+  font-size: 1.0625em;
+  letter-spacing: -0.01em;
+}
+
+.notes-code-editor .cm-line.cm-md-h2.cm-md-section-gap {
+  padding-top: var(--space-3);
+}
+
+.notes-code-editor .cm-line.cm-md-h3 {
+  font-weight: 600;
+}
+
+.notes-code-editor .cm-line.cm-md-h3.cm-md-section-gap {
+  padding-top: var(--space-2);
+}
+
+.notes-code-editor .cm-line.cm-md-h4,
+.notes-code-editor .cm-line.cm-md-h5,
+.notes-code-editor .cm-line.cm-md-h6 {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--fg) 90%, var(--fg-muted));
+}
+
+.notes-code-editor .cm-line.cm-md-h4.cm-md-section-gap,
+.notes-code-editor .cm-line.cm-md-h5.cm-md-section-gap,
+.notes-code-editor .cm-line.cm-md-h6.cm-md-section-gap {
+  padding-top: var(--space-2);
+}
+
+.notes-code-editor .cm-line.cm-md-blockquote {
+  color: color-mix(in srgb, var(--fg) 82%, var(--fg-muted));
+}
+
+/* When unfocused, persist selection via the mirror overlay instead of CM chrome. */
+.notes-code-editor .cm-editor:not(.cm-focused) .cm-selectionBackground {
+  background: transparent !important;
 }
 
 .notes-surface__editor-overlay {
@@ -393,7 +454,7 @@
   pointer-events: none;
   overflow: hidden;
   background: transparent;
-  border-top: 1px solid transparent;
+  box-shadow: var(--hairline-top-transparent);
 }
 
 .notes-surface__editor-overlay-content {
@@ -425,10 +486,10 @@
   gap: 2px;
   width: fit-content;
   padding: 4px;
+  border: none;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-light);
+  box-shadow: var(--hairline-inset), 0 var(--space-3) var(--space-6) color-mix(in srgb, #000 22%, transparent);
   background: color-mix(in srgb, var(--bg) 96%, var(--accent) 4%);
-  box-shadow: 0 var(--space-3) var(--space-6) color-mix(in srgb, #000 22%, transparent);
 }
 
 .notes-selection-toolbar__btn {
@@ -458,14 +519,14 @@
 }
 
 .notes-aside-panel {
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset), 0 var(--space-4) var(--space-8) color-mix(in srgb, #000 26%, transparent);
   background: transparent;
   padding: 0;
   display: flex;
   flex-direction: column;
   border-radius: 1px;
   overflow: hidden;
-  box-shadow: 0 var(--space-4) var(--space-8) color-mix(in srgb, #000 26%, transparent);
 }
 
 .notes-aside-panel--floating {
@@ -519,7 +580,7 @@
 }
 
 .notes-aside-panel__preview {
-  border-bottom: 1px solid var(--border-light);
+  box-shadow: var(--hairline-bottom);
 }
 
 .notes-aside-panel__header {
@@ -632,10 +693,6 @@
     padding: var(--space-3);
   }
 
-  .notes-surface__template-description {
-    -webkit-line-clamp: 1;
-  }
-
   .notes-aside-panel {
     padding: 0;
   }
@@ -649,4 +706,41 @@
     left: 8px !important;
     max-height: min(60%, calc(100% - var(--space-4)));
   }
+}
+
+/* Writing focus — blur chrome labels and icons while the editor has focus. */
+.app[data-editor-focused] {
+  --editor-chrome-blur: 4px;
+  --editor-chrome-content-blur: blur(var(--editor-chrome-blur));
+}
+
+.app[data-editor-focused]:has(.editor-chrome:hover, .editor-chrome:focus-within) {
+  --editor-chrome-content-blur: none;
+}
+
+.app[data-editor-focused] .editor-chrome :is(
+  .sidebar-new-chat-label,
+  .sidebar-new-chat-icon,
+  .sidebar-workspace__btn > *,
+  .sidebar-workspace__icon,
+  .sidebar-workspace__label,
+  .sidebar-group-label,
+  .sidebar-group-sort-toggle,
+  .sidebar-item-title,
+  .sidebar-item-title-skeleton,
+  .sidebar-item-icon,
+  .sidebar-item-spinner,
+  .sidebar-list-expand-btn,
+  .sidebar-version,
+  .sidebar-search-input,
+  .sidebar-search-empty,
+  .sidebar .btn-icon,
+  .sidebar-footer__sync-toggle,
+  .search-result-title,
+  .search-result-snippet,
+  .notes-surface__meta-title,
+  .notes-surface__toolbar .btn-icon
+) {
+  filter: var(--editor-chrome-content-blur);
+  transition: filter var(--motion-duration-expressive) var(--motion-ease-standard);
 }

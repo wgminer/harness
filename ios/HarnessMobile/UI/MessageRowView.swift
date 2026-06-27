@@ -74,6 +74,7 @@ private struct AssistantMessageView: View {
 }
 
 private struct UserMessageCard: View {
+    @Environment(\.harnessTheme) private var theme
     let content: String
     @Binding var isExpanded: Bool
     @State private var isOverflowing = false
@@ -95,8 +96,8 @@ private struct UserMessageCard: View {
                 if !isExpanded && isOverflowing {
                     LinearGradient(
                         colors: [
-                            Color(.secondarySystemGroupedBackground).opacity(0),
-                            Color(.secondarySystemGroupedBackground),
+                            theme.bgSecondaryColor.opacity(0),
+                            theme.bgSecondaryColor,
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -120,7 +121,7 @@ private struct UserMessageCard: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(theme.bgSecondaryColor)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onPreferenceChange(UserMessageHeightKey.self) { height in
             guard !isExpanded else {

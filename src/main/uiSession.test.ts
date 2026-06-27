@@ -22,6 +22,7 @@ describe("uiSession persistence", () => {
       view: "notes",
       conversationId: null,
       notesOpenNoteId: "n1",
+      setupNoticeDismissed: false,
     });
 
     mergeUiSessionInDir(temp.path, { view: "chat", conversationId: "c1" });
@@ -29,6 +30,7 @@ describe("uiSession persistence", () => {
       view: "chat",
       conversationId: "c1",
       notesOpenNoteId: "n1",
+      setupNoticeDismissed: false,
     });
 
     const raw = await readFile(`${temp.path}/ui-session.json`, "utf-8");

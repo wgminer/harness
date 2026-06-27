@@ -39,7 +39,7 @@ final class BundleCodecTests: XCTestCase {
     func testBuildParseRoundTrip() throws {
         try write("app-state/conversations.json", contents: "{\"keep\":\"me\"}")
         try write("settings/settings.json", contents: "{\"version\":1}")
-        try write("themes/active.json", contents: "{\"accent\":\"#000\"}")
+        try write("themes/theme.json", contents: "{\"accent\":\"#000\"}")
 
         let built = try BundleCodec.buildBundle(localDataDir: localDataDir)
         XCTAssertEqual(BundleCodec.hashBundleBytes(built.bytes), built.bundleHash)

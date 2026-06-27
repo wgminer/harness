@@ -46,7 +46,8 @@ test("notes persist across relaunch", async () => {
   await win.getByRole("button", { name: /Blank/ }).click();
   const editor = win.getByTestId("notes-editor");
   await expect(editor).toBeVisible({ timeout: 10_000 });
-  await editor.fill("# Notes\n\nkeep this text");
+  await editor.click();
+  await win.keyboard.type("# Notes\n\nkeep this text");
   await win.waitForTimeout(E2E_PERSIST_FLUSH_MS);
 
   await electronApp.close();
@@ -56,9 +57,11 @@ test("notes persist across relaunch", async () => {
   });
   win = await page();
   await win.getByRole("button", { name: /^Notes/ }).click();
-  await expect(win.getByTestId("notes-editor")).toHaveValue("# Notes\n\nkeep this text", {
-    timeout: 15_000,
-  });
+  await expect
+    .poll(async () =>
+      win.getByTestId("notes-editor").evaluate((el) => el.querySelector(".cm-content")?.textContent ?? ""),
+    )
+    .toBe("# Notes\n\nkeep this text");
 });
 
 test("chatgpt import is deduped on rerun", async () => {

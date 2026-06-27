@@ -37,6 +37,7 @@ import {
   nextSidebarListSortMode,
   pickSidebarConversationsForList,
 } from "./sidebarUtils";
+import { useScrollFadeEdges } from "./useScrollFadeEdges";
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -98,6 +99,8 @@ export function Sidebar({
   const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("recent");
   const [syncConfigured, setSyncConfigured] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const { scrollRef: sidebarListRef, fadeTop, fadeBottom, onScroll: onSidebarListScroll } =
+    useScrollFadeEdges();
 
   const refreshSyncConfigured = useCallback(() => {
     void window.electron.sync.getStatus().then((status) => {
@@ -265,7 +268,7 @@ export function Sidebar({
 
   return (
     <div className="sidebar-dock">
-      <aside className="sidebar">
+      <aside className="sidebar editor-chrome">
         {searchOpen ? (
           <div className="sidebar-search-row">
             <input
@@ -348,8 +351,16 @@ export function Sidebar({
             </button>
           </nav>
         )}
-        <div className="sidebar-list-wrap">
-          <ul className="sidebar-list">
+        <div
+          className={[
+            "sidebar-list-wrap",
+            fadeTop ? "sidebar-list-wrap--fade-top" : "",
+            fadeBottom ? "sidebar-list-wrap--fade-bottom" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <ul ref={sidebarListRef} className="sidebar-list" onScroll={onSidebarListScroll}>
           {searchOpen ? (
             searchQuery.trim() ? (
               searchLoading ? (

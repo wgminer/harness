@@ -4,6 +4,9 @@ import Foundation
 final class TasksStore: ObservableObject {
     @Published private(set) var tasks: [TaskItem] = []
 
+    /// Fired after tasks.json is written locally.
+    var onContentChanged: (() -> Void)?
+
     let localDataDir: URL
 
     init(localDataDir: URL) {
@@ -26,8 +29,7 @@ final class TasksStore: ObservableObject {
             action: .create(args: ["title": title, "tags": tags, "status": status.rawValue])
         )
         if payload.error == nil {
-            try Self.saveTasks(payload.tasks, in: localDataDir)
-            tasks = payload.tasks
+            try persistTasks(payload.tasks)
         }
         return payload
     }
@@ -43,8 +45,7 @@ final class TasksStore: ObservableObject {
             action: .update(args: args)
         )
         if payload.error == nil {
-            try Self.saveTasks(payload.tasks, in: localDataDir)
-            tasks = payload.tasks
+            try persistTasks(payload.tasks)
         }
         return payload
     }
@@ -56,8 +57,7 @@ final class TasksStore: ObservableObject {
             action: .delete(args: ["id": id])
         )
         if payload.error == nil {
-            try Self.saveTasks(payload.tasks, in: localDataDir)
-            tasks = payload.tasks
+            try persistTasks(payload.tasks)
         }
         return payload
     }
@@ -75,8 +75,7 @@ final class TasksStore: ObservableObject {
             task.updatedAt = nowMs
             state.tasks[taskIndex] = task
         }
-        try Self.saveTasks(state.tasks, in: localDataDir)
-        tasks = state.tasks
+        try persistTasks(state.tasks)
     }
 
     @discardableResult
@@ -85,8 +84,7 @@ final class TasksStore: ObservableObject {
             state: try Self.loadTasks(in: localDataDir),
             action: .clearCompleted
         )
-        try Self.saveTasks(payload.tasks, in: localDataDir)
-        tasks = payload.tasks
+        try persistTasks(payload.tasks)
         return payload
     }
 
@@ -109,8 +107,7 @@ final class TasksStore: ObservableObject {
 
         let payload = Self.applyTaskAction(state: try Self.loadTasks(in: localDataDir), action: action)
         if payload.error == nil, name != "task_list" {
-            try Self.saveTasks(payload.tasks, in: localDataDir)
-            tasks = payload.tasks
+            try persistTasks(payload.tasks)
         } else if payload.error == nil {
             tasks = payload.tasks
         }
@@ -271,6 +268,12 @@ final class TasksStore: ObservableObject {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(envelope)
         try data.write(to: path, options: .atomic)
+    }
+
+    private func persistTasks(_ tasks: [TaskItem]) throws {
+        try Self.saveTasks(tasks, in: localDataDir)
+        self.tasks = tasks
+        onContentChanged?()
     }
 
     private static func migrateRawTask(_ raw: [String: Any]) -> TaskItem? {

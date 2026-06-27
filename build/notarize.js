@@ -8,6 +8,14 @@ const { notarize } = require("@electron/notarize");
 module.exports = async function afterSign(context) {
   if (process.platform !== "darwin") return;
 
+  const unsigned =
+    process.env.CSC_IDENTITY_AUTO_DISCOVERY === "false" ||
+    process.env.CSC_IDENTITY_AUTO_DISCOVERY === "0";
+  if (unsigned) {
+    console.warn("Skipping notarization: code signing disabled (CSC_IDENTITY_AUTO_DISCOVERY=false).");
+    return;
+  }
+
   const appName = context.packager.appInfo.productFilename;
   const appPath = path.join(context.appOutDir, `${appName}.app`);
 

@@ -13,6 +13,22 @@ Automated E2E uses `HARNESS_E2E=1` with a dedicated user data dir (see `src/main
 
 It still does **not** validate OS-level behavior.
 
+## Visual grid regression (8px overlay)
+
+Playwright captures full-window screenshots with the **8px design grid overlay** enabled
+(`HARNESS_E2E_GRID_OVERLAY=8`, seeded in `layout.json` via `e2eBootstrap`).
+
+```bash
+npm run test:e2e:visual          # compare against committed baselines
+npm run test:e2e:visual:update   # refresh baselines after intentional UI changes
+npx playwright show-report       # inspect pixel diffs
+```
+
+Baselines live in `e2e/visual-grid.spec.ts-snapshots/`. They are **OS-specific** (font
+rendering); update them on the machine you use for visual review (typically macOS).
+
+Screens covered: new-chat compose, chat thread, tasks, settings appearance.
+
 ## Global Fn recording (macOS only)
 
 - The Swift helper [`native/HarnessFnMonitor`](../native/HarnessFnMonitor) watches the Fn key and prints JSON lines; the main process state machine lives in [`src/main/globalRecordingSession.ts`](../src/main/globalRecordingSession.ts).

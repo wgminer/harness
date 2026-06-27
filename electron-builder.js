@@ -10,6 +10,10 @@ if (fs.existsSync(fnMonitorPath)) {
   extraResources.push({ from: "resources/HarnessFnMonitor", to: "HarnessFnMonitor" });
 }
 
+const unsigned =
+  process.env.CSC_IDENTITY_AUTO_DISCOVERY === "false" ||
+  process.env.CSC_IDENTITY_AUTO_DISCOVERY === "0";
+
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId: "com.yourcompany.harness",
@@ -27,9 +31,14 @@ module.exports = {
     category: "public.app-category.utilities",
     icon: "build/icon.icns",
     target: ["dmg", "zip"],
-    hardenedRuntime: true,
-    entitlements: "build/entitlements.mac.plist",
-    entitlementsInherit: "build/entitlements.mac.plist",
+    identity: unsigned ? null : undefined,
+    hardenedRuntime: !unsigned,
+    ...(unsigned
+      ? {}
+      : {
+          entitlements: "build/entitlements.mac.plist",
+          entitlementsInherit: "build/entitlements.mac.plist",
+        }),
     gatekeeperAssess: false,
     extendInfo: {
       NSMicrophoneUsageDescription: "Harness uses your microphone to record voice messages for transcription.",
@@ -38,5 +47,5 @@ module.exports = {
   dmg: {
     sign: false,
   },
-  afterSign: "build/notarize.js",
+  afterSign: unsigned ? undefined : "build/notarize.js",
 };

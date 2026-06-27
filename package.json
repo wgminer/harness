@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "0.6.2",
+  "version": "0.6.5",
   "private": true,
   "main": "out/main/index.js",
   "author": "Your Name",
@@ -11,7 +11,9 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "node scripts/dist-runner.js",
+    "dist:quick": "node scripts/dist-runner.js --mac --quick",
     "dist:mac": "node scripts/dist-runner.js --mac",
+    "dist:mac:quick": "node scripts/dist-runner.js --mac --quick",
     "dist:mac:replace": "node scripts/dist-runner.js --mac --replace",
     "verify:mac-trust": "node scripts/verify-mac-trust.js",
     "icon:icns": "node build/make-icns.js",
@@ -25,9 +27,15 @@
     "grid:audit": "node scripts/grid-audit.js",
     "test:all": "npm run test && npm run test:e2e",
     "test:e2e": "electron-vite build && playwright test",
-    "test:e2e:ui": "electron-vite build && playwright test --ui"
+    "test:e2e:ui": "electron-vite build && playwright test --ui",
+    "test:e2e:visual": "electron-vite build && playwright test e2e/visual-grid.spec.ts",
+    "test:e2e:visual:update": "electron-vite build && playwright test e2e/visual-grid.spec.ts --update-snapshots"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.43.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "lucide-react": "^0.575.0",
     "mermaid": "^11.15.0",

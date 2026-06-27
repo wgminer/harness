@@ -62,42 +62,25 @@ struct MobileSettingsView: View {
                         Spacer()
                         if app.isSyncing {
                             ProgressView()
-                        } else if app.syncStatus.showsAttentionDot {
-                            Label("Issue", systemImage: "circle.fill")
+                        } else if let color = app.settingsAttentionColor {
+                            Label("Sync status", systemImage: "circle.fill")
                                 .labelStyle(.iconOnly)
-                                .foregroundStyle(.red)
-                                .font(.caption2)
-                        } else if app.store.hasLocalEdits {
-                            Label("Pending", systemImage: "circle.fill")
-                                .labelStyle(.iconOnly)
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(color)
                                 .font(.caption2)
                         }
                     }
                 }
                 .disabled(app.isSyncing)
 
+                Text(app.syncStatusSummary)
+                    .font(.caption)
+                    .foregroundStyle(syncSummaryColor)
+
                 if let lastSuccessfulSyncAt = app.lastSuccessfulSyncAt {
-                    LabeledContent("Last successful sync") {
+                    LabeledContent("Last sync") {
                         Text(lastSuccessfulSyncAt, style: .relative)
                             .foregroundStyle(.secondary)
                     }
-                } else {
-                    Text("No successful sync recorded yet.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if app.store.hasLocalEdits {
-                    Text(app.pendingChangesDetail ?? "This phone has unsynced changes.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-
-                if let rev = app.syncEngine.lastSyncedRevision {
-                    Text("Last synced revision: \(String(rev.prefix(12)))…")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
                 }
 
                 if app.syncStatus.isVisible {
@@ -230,6 +213,16 @@ struct MobileSettingsView: View {
                 url.stopAccessingSecurityScopedResource()
             }
         }
+    }
+
+    private var syncSummaryColor: Color {
+        if app.syncStatus.kind == .error {
+            return .red
+        }
+        if app.showsPendingUploadAttention {
+            return .orange
+        }
+        return .secondary
     }
 
     private func reloadRecordings() {

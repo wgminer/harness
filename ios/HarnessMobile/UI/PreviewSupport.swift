@@ -24,7 +24,8 @@ enum PreviewSupport {
         }
         app.isSyncing = isSyncing
         if hasLocalEdits {
-            app.store.markEdited()
+            UserDefaults.standard.set("stale-preview-revision", forKey: SyncEngine.lastSyncedContentRevisionKey)
+            try? app.store.refreshPendingSyncState()
         }
         app.needsBackupFolder = needsBackupFolder
         app.needsAPIKey = needsAPIKey

@@ -4,15 +4,22 @@ import { SettingsView } from "./SettingsView";
 import { TasksView } from "./TasksView";
 import { NotesView } from "./WritingSurfaceView";
 import { Sidebar } from "./Sidebar";
+import { SetupNoticeModal } from "./SetupNoticeModal";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
-import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan } from "../shared/types";
+import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan, type Settings } from "../shared/types";
 import type {} from "../shared/electronAPI";
 import { isSidebarVisibleConversation } from "../shared/conversationSession";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
 import type { Conversation, View } from "./sidebarUtils";
 import { useViewportLayout } from "./useViewportLayout";
 import { isGlobalFnRecordingEnabledForView } from "../shared/globalFnRecording";
+import {
+  collectSetupGaps,
+  hasOpenAIApiKey,
+  type SetupGap,
+} from "../shared/setupState";
+import type { SettingsTabId } from "./settings/settingsNavConfig";
 
 export default function App() {
   const [view, setView] = useState<View>("chat");
@@ -34,7 +41,14 @@ export default function App() {
   const [notesScreen, setNotesScreen] = useState<"list" | "detail">("list");
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [notesOverviewNonce, setNotesOverviewNonce] = useState(0);
+  const [notesEditorFocused, setNotesEditorFocused] = useState(false);
   const [uiSessionReady, setUiSessionReady] = useState(false);
+  const [setupGaps, setSetupGaps] = useState<SetupGap[]>([]);
+  const [setupNoticeOpen, setSetupNoticeOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTabId | undefined>();
+  const [openAIConfigured, setOpenAIConfigured] = useState(false);
+  const [setupStateLoaded, setSetupStateLoaded] = useState(false);
+  const setupNoticeCheckedRef = useRef(false);
 
   // Hotkey recorder — owns the background mic capture for the global shortcut path
   const hotkeyRecorder = useRecorder();
@@ -49,6 +63,44 @@ export default function App() {
 
   const conversationIdRef = useRef(conversationId);
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+
+  const refreshSetupState = useCallback(async () => {
+    const [settings, syncStatus, platform] = await Promise.all([
+      window.electron.settings.get() as Promise<Settings>,
+      window.electron.sync.getStatus(),
+      window.electron.system.getPlatform(),
+    ]);
+    let accessibilityTrusted: boolean | null = null;
+    if (platform === "darwin") {
+      accessibilityTrusted = await window.electron.system.macosAccessibilityTrusted();
+    }
+    const gaps = collectSetupGaps({
+      settings,
+      syncConfigured: syncStatus.configured,
+      platform,
+      accessibilityTrusted,
+    });
+    setSetupGaps(gaps);
+    setOpenAIConfigured(hasOpenAIApiKey(settings));
+    setSetupStateLoaded(true);
+    return gaps;
+  }, []);
+
+  const openSettingsForGap = useCallback((gap: SetupGap) => {
+    setSettingsInitialTab(gap.settingsTab);
+    setView("settings");
+    setSetupNoticeOpen(false);
+  }, []);
+
+  const dismissSetupNotice = useCallback(() => {
+    setSetupNoticeOpen(false);
+    void window.electron.uiSession.set({ setupNoticeDismissed: true });
+  }, []);
+
+  const openSetupSettings = useCallback(() => {
+    setSettingsInitialTab("general");
+    setView("settings");
+  }, []);
 
   const resolveConversationId = useCallback(
     (list: Conversation[], preferredId: string | null): string | null => {
@@ -99,6 +151,45 @@ export default function App() {
   useEffect(() => {
     void loadConversations();
   }, [loadConversations]);
+
+  useEffect(() => {
+    if (!uiSessionReady || setupNoticeCheckedRef.current) return;
+    setupNoticeCheckedRef.current = true;
+    void (async () => {
+      const [gaps, session] = await Promise.all([
+        refreshSetupState(),
+        window.electron.uiSession.get(),
+      ]);
+      if (gaps.length > 0 && !session.setupNoticeDismissed) {
+        setSetupNoticeOpen(true);
+      }
+    })();
+  }, [uiSessionReady, refreshSetupState]);
+
+  const runBackgroundSync = useCallback(async () => {
+    const status = await window.electron.sync.getStatus();
+    if (!status.configured) return;
+    await window.electron.sync.runNow();
+  }, []);
+
+  useEffect(() => {
+    void runBackgroundSync();
+  }, [runBackgroundSync]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      void runBackgroundSync();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [runBackgroundSync]);
+
+  useEffect(() => {
+    const unsub = window.electron.sync.onChanged(() => {
+      void refreshConversations();
+    });
+    return unsub;
+  }, [refreshConversations]);
 
   useEffect(() => {
     if (!uiSessionReady) return;
@@ -319,6 +410,12 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (view !== "notes") {
+      setNotesEditorFocused(false);
+    }
+  }, [view]);
+
   const sidebarConversations = useMemo(
     () => conversations.filter(isSidebarVisibleConversation),
     [conversations]
@@ -339,7 +436,7 @@ export default function App() {
   void presetSmall;
 
   return (
-    <div className="app" data-sidebar={layout.sidebar}>
+    <div className="app" data-sidebar={layout.sidebar} data-editor-focused={notesEditorFocused || undefined}>
       <Sidebar
         conversations={sidebarConversations}
         conversationId={conversationId}
@@ -390,11 +487,17 @@ export default function App() {
                 setPendingOpenNoteId(noteId);
                 setView("notes");
               }}
+              openAIConfigured={!setupStateLoaded || openAIConfigured}
+              onOpenSetup={openSetupSettings}
             />
           </div>
         )}
         {view === "settings" && (
           <SettingsView
+            initialTab={settingsInitialTab}
+            onSettingsChanged={() => {
+              void refreshSetupState();
+            }}
             onImportComplete={loadConversations}
             onSyncComplete={refreshConversations}
           />
@@ -407,12 +510,24 @@ export default function App() {
             resetToOverviewNonce={notesOverviewNonce}
             onScreenChange={setNotesScreen}
             onActiveNoteChange={setActiveNoteId}
+            onEditorFocusChange={setNotesEditorFocused}
           />
         )}
       </main>
       {layout.gridOverlay !== "off" && (
-        <div className="app-grid-overlay" data-grid-overlay={layout.gridOverlay} aria-hidden />
+        <div
+          className="app-grid-overlay"
+          data-grid-overlay={layout.gridOverlay}
+          data-testid="app-grid-overlay"
+          aria-hidden
+        />
       )}
+      <SetupNoticeModal
+        open={setupNoticeOpen && setupGaps.length > 0}
+        gaps={setupGaps}
+        onConfigure={openSettingsForGap}
+        onDismiss={dismissSetupNotice}
+      />
     </div>
   );
 }

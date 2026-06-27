@@ -3,6 +3,12 @@ import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import { audioFileToWav } from "./audioFileToWav";
 import type { VoiceState } from "./chatHelpers";
+import {
+  hasOpenAIApiKey,
+  openAIRequiredMessage,
+  transcriptCleanupSkippedMessage,
+} from "../shared/setupState";
+import type { Settings } from "../shared/types";
 
 const MAX_RECORDING_MS = 5 * 60 * 1000;
 
@@ -117,23 +123,38 @@ export function useChatComposer({
     submitMessageRef.current = submitMessage;
   });
 
+  const applyTranscriptToComposer = useCallback(
+    async (text: string, result?: { cleanupSkipped?: "no_api_key" }) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const settings = (await window.electron.settings.get()) as Settings;
+      const autoSend = settings.recording?.autoSend ?? true;
+      const canChat = hasOpenAIApiKey(settings);
+      if (autoSend && canChat && !pendingHotkeyDraftOnly) {
+        await submitMessageRef.current(trimmed, { fromDictation: true });
+      } else {
+        setInput((prev) => (prev ? `${prev} ${trimmed}` : trimmed));
+        if (autoSend && !canChat) {
+          setVoiceError(openAIRequiredMessage());
+        } else if (result?.cleanupSkipped === "no_api_key") {
+          setVoiceError(transcriptCleanupSkippedMessage());
+        }
+      }
+    },
+    [pendingHotkeyDraftOnly]
+  );
+
   useEffect(() => {
     if (!pendingHotkeyText) return;
     const hotkeyAllowed = hasConversation || allowHotkeyWithoutConversation;
     if (!hotkeyAllowed) return;
-    void window.electron.settings.get().then((s) => {
-      const autoSend = (s as { recording?: { autoSend: boolean } }).recording?.autoSend ?? true;
-      if (autoSend && !pendingHotkeyDraftOnly) {
-        void submitMessageRef.current(pendingHotkeyText, { fromDictation: true });
-      } else {
-        setInput((prev) => (prev ? `${prev} ${pendingHotkeyText}` : pendingHotkeyText));
-      }
+    void applyTranscriptToComposer(pendingHotkeyText).finally(() => {
       onPendingHotkeyTextConsumed?.();
     });
   }, [
     allowHotkeyWithoutConversation,
+    applyTranscriptToComposer,
     hasConversation,
-    pendingHotkeyDraftOnly,
     pendingHotkeyText,
     onPendingHotkeyTextConsumed,
   ]);
@@ -158,14 +179,7 @@ export function useChatComposer({
       if ("error" in result) {
         setVoiceError(result.error);
       } else {
-        const text = result.text.trim();
-        if (!text) return;
-        const s = (await window.electron.settings.get()) as { recording?: { autoSend: boolean } };
-        if (s.recording?.autoSend ?? true) {
-          await submitMessageRef.current(text, { fromDictation: true });
-        } else {
-          setInput((prev) => (prev ? `${prev} ${text}` : text));
-        }
+        await applyTranscriptToComposer(result.text, result);
       }
     } catch (err) {
       setVoiceError(err instanceof Error ? err.message : "Recording failed.");
@@ -173,7 +187,7 @@ export function useChatComposer({
       transcriptionRequestIdRef.current = null;
       setVoiceState("idle");
     }
-  }, [recorder]);
+  }, [applyTranscriptToComposer, recorder]);
 
   const startRecording = useCallback(async () => {
     setVoiceError(null);
@@ -244,6 +258,7 @@ export function useChatComposer({
     inputRef,
     voiceState,
     voiceError,
+    setVoiceError,
     recordingMs,
     attachedAudioFile,
     setAttachedAudioFile,

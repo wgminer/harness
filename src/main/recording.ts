@@ -139,7 +139,10 @@ export function registerRecordingHandlers(): void {
       }
       const key = settings.openai?.apiKey?.trim() ?? "";
       if (!key) {
-        return { text: applyTranscriptDictionary(text, dictionary) };
+        return {
+          text: applyTranscriptDictionary(text, dictionary),
+          cleanupSkipped: shouldCleanup ? ("no_api_key" as const) : undefined,
+        };
       }
       try {
         const cleanupPrompt =

@@ -164,13 +164,7 @@ struct ConversationListView: View {
     }
 
     private var settingsAttentionColor: Color? {
-        if app.syncStatus.showsAttentionDot {
-            return .red
-        }
-        if app.store.hasLocalEdits {
-            return .orange
-        }
-        return nil
+        app.settingsAttentionColor
     }
 
     private func createNewChat() {
