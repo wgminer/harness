@@ -65,6 +65,38 @@ describe("mergeFileBytes", () => {
     expect(byId.t1).toBe("Local");
     expect(byId.t2).toBe("Only remote");
   });
+
+  it("merges theme.json preferring newer updatedAt", () => {
+    const merged = mergeFileBytes(
+      "themes/theme.json",
+      Buffer.from(
+        JSON.stringify({
+          accent: "#f2ff00",
+          fg: "#e6edf3",
+          bg: "#0d1117",
+          font: "inter",
+          fontMono: "sf",
+          fontSize: 14,
+          updatedAt: 100,
+        }),
+      ),
+      Buffer.from(
+        JSON.stringify({
+          accent: "#9a7b52",
+          fg: "#3d3832",
+          bg: "#f4efe6",
+          font: "lora",
+          fontMono: "fira_code",
+          fontSize: 16,
+          updatedAt: 200,
+        }),
+      ),
+    );
+    const parsed = JSON.parse(merged.toString("utf-8")) as Record<string, unknown>;
+    expect(parsed.bg).toBe("#f4efe6");
+    expect(parsed.font).toBe("lora");
+    expect(parsed.updatedAt).toBe(200);
+  });
 });
 
 describe("buildMergedFileMap", () => {

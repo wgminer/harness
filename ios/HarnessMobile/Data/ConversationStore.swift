@@ -5,6 +5,9 @@ final class ConversationStore: ObservableObject {
     @Published private(set) var conversations: [ConversationListItem] = []
     @Published private(set) var hasLocalEdits = false
 
+    /// Fired after local synced content is written (not after sync pulls).
+    var onContentChanged: (() -> Void)?
+
     let localDataDir: URL
 
     init(localDataDir: URL) {
@@ -83,7 +86,7 @@ final class ConversationStore: ObservableObject {
         let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.messagesPath(conversationId: conversationId))
         let data = try JSONEncoder().encode(messages)
         try data.write(to: path, options: .atomic)
-        markEdited()
+        notifyContentChanged()
     }
 
     @discardableResult
@@ -248,10 +251,6 @@ final class ConversationStore: ObservableObject {
         try reload()
     }
 
-    func markEdited() {
-        hasLocalEdits = true
-    }
-
     func clearLocalEditsFlag() {
         hasLocalEdits = false
         if let snapshot = try? snapshotConversations() {
@@ -259,17 +258,23 @@ final class ConversationStore: ObservableObject {
         }
     }
 
-    /// Reconcile the pending-sync flag with the last synced content revision.
+    /// Reconcile the pending-upload flag with the last synced content revision.
     func refreshPendingSyncState() throws {
-        guard let lastRevision = UserDefaults.standard.string(forKey: SyncEngine.lastSyncedContentRevisionKey),
-              !lastRevision.isEmpty
-        else { return }
-
         let localRevision = try BundleCodec.computeRevision(
             localDataDir: localDataDir,
             scopes: SyncScopes.userContentScopes
         )
+        guard let lastRevision = UserDefaults.standard.string(forKey: SyncEngine.lastSyncedContentRevisionKey),
+              !lastRevision.isEmpty
+        else {
+            hasLocalEdits = false
+            return
+        }
         hasLocalEdits = localRevision != lastRevision
+    }
+
+    private func notifyContentChanged() {
+        onContentChanged?()
     }
 
     func snapshotConversations() throws -> [String: ConversationSnapshot] {
@@ -328,7 +333,7 @@ final class ConversationStore: ObservableObject {
         let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.conversationsFile)
         let data = try JSONEncoder().encode(map)
         try data.write(to: path, options: .atomic)
-        markEdited()
+        notifyContentChanged()
     }
 
     private func generateId(prefix: String) -> String {

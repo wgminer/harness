@@ -17,7 +17,7 @@
 
 import { BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
-import { existsSync } from "fs";
+import { existsSync, watch } from "fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
 import { join } from "path";
 import type { SyncConflictReview, SyncFolderSuggestion, SyncResult, SyncStatus } from "../shared/sync";
@@ -26,7 +26,9 @@ import {
   buildMergedFileMap,
   buildSyncConflictReview,
   decideSyncAction,
+  syncResultChangedLocalData,
 } from "../shared/sync";
+import { isHarnessE2E } from "./e2eStub";
 import type { SyncFileChoice } from "../shared/syncMerge";
 import { getLocalDataDir, getLocalDataSyncDir } from "./localDataPaths";
 import { getSettings, setSettings } from "./settings";
@@ -365,6 +367,7 @@ async function mergeConflictResolution(
   choices: Record<string, SyncFileChoice>,
   now: number,
 ): Promise<void> {
+  suppressSyncSchedule();
   const localFiles = await loadLocalScopedFileMap();
   const remoteFiles = await loadRemoteScopedFileMap(folderPath, remoteManifest);
   const mergedFiles = buildMergedFileMap(localFiles, remoteFiles, choices);
@@ -421,6 +424,7 @@ async function pullBackupIntoLocal(
   manifest: BackupManifest,
   now: number,
 ): Promise<{ filesWritten: number }> {
+  suppressSyncSchedule();
   const bundlePath = join(folder, BUNDLE_FILENAME);
   const bytes = await readFile(bundlePath);
   const actualHash = hashBundleBytes(bytes);
@@ -438,6 +442,58 @@ async function pullBackupIntoLocal(
 
 let inFlight: Promise<SyncResult> | null = null;
 
+const SYNC_DEBOUNCE_MS = 2500;
+const SYNC_SUPPRESS_MS = 3000;
+
+let syncScheduleTimer: ReturnType<typeof setTimeout> | null = null;
+let suppressScheduleUntil = 0;
+let autoSyncWatcherStarted = false;
+
+function suppressSyncSchedule(ms = SYNC_SUPPRESS_MS): void {
+  suppressScheduleUntil = Date.now() + ms;
+}
+
+function broadcastSyncChanged(): void {
+  const wins = BrowserWindow.getAllWindows?.() ?? [];
+  for (const win of wins) {
+    if (!win.isDestroyed()) {
+      win.webContents.send("sync:changed");
+    }
+  }
+}
+
+function runScheduledSync(): void {
+  void runSyncNow();
+}
+
+/** Debounced push/pull after local synced data changes (chat, tasks, notes, settings). */
+export function scheduleSyncAfterLocalChange(): void {
+  if (isHarnessE2E()) return;
+  if (Date.now() < suppressScheduleUntil) return;
+  if (syncScheduleTimer) clearTimeout(syncScheduleTimer);
+  syncScheduleTimer = setTimeout(() => {
+    syncScheduleTimer = null;
+    runScheduledSync();
+  }, SYNC_DEBOUNCE_MS);
+}
+
+function startAutoSyncWatcher(): void {
+  if (autoSyncWatcherStarted || isHarnessE2E()) return;
+  autoSyncWatcherStarted = true;
+
+  const localDataDir = getLocalDataDir();
+  const watchedDirs = [
+    join(localDataDir, "app-state"),
+    join(localDataDir, "themes"),
+    join(localDataDir, "settings"),
+  ];
+
+  for (const dir of watchedDirs) {
+    if (!existsSync(dir)) continue;
+    watch(dir, { recursive: true }, () => scheduleSyncAfterLocalChange());
+  }
+}
+
 function runExclusive(task: () => Promise<SyncResult>): Promise<SyncResult> {
   if (inFlight) return inFlight;
   inFlight = task().finally(() => {
@@ -447,7 +503,13 @@ function runExclusive(task: () => Promise<SyncResult>): Promise<SyncResult> {
 }
 
 export async function runSyncNow(): Promise<SyncResult> {
-  return runExclusive(() => runSyncNowInner());
+  return runExclusive(async () => {
+    const result = await runSyncNowInner();
+    if (syncResultChangedLocalData(result)) {
+      broadcastSyncChanged();
+    }
+    return result;
+  });
 }
 
 async function runSyncNowInner(): Promise<SyncResult> {
@@ -676,6 +738,7 @@ async function finishSyncAction(params: {
 }
 
 export function registerSyncHandlers(): void {
+  startAutoSyncWatcher();
   ipcMain.handle("sync:getStatus", () => getSyncStatus());
   ipcMain.handle("sync:runNow", () => runSyncNow());
   ipcMain.handle("sync:pickFolder", () => pickBackupFolder());

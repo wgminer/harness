@@ -4,12 +4,12 @@ import XCTest
 final class SyncChangeSummaryTests: XCTestCase {
     func testDescribeNoopWithConversations() {
         let detail = SyncChangeSummary.describeNoop(hasLocalEdits: false, conversationCount: 3)
-        XCTAssertEqual(detail, "Phone and backup folder match. 3 conversations in sync.")
+        XCTAssertEqual(detail, "Up to date with iCloud. 3 conversations.")
     }
 
     func testDescribeNoopWithLocalEdits() {
         let detail = SyncChangeSummary.describeNoop(hasLocalEdits: true, conversationCount: 1)
-        XCTAssertEqual(detail, "Revisions match, but this phone still has unsaved local edits.")
+        XCTAssertEqual(detail, "Everything matches iCloud, but this phone still has changes waiting to upload.")
     }
 
     func testDescribeConversationChangesAddedAndUpdated() {
@@ -50,7 +50,7 @@ final class SyncChangeSummaryTests: XCTestCase {
         let current = ["a": snapshot]
 
         let detail = SyncChangeSummary.describePendingLocalChanges(baseline: baseline, current: current)
-        XCTAssertEqual(detail, "Tasks or other data changed on this phone.")
+        XCTAssertEqual(detail, "Task list changed.")
     }
 
     func testDescribePendingLocalChangesWithoutBaseline() {

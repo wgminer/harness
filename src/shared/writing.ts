@@ -230,6 +230,25 @@ export function stripLeadingMarkdownHeading(text: string): string {
   return trimmed.replace(/^\s{0,3}#{1,6}\s*/, "").trim();
 }
 
+export interface ParsedMarkdownHeadingLine {
+  level: 1 | 2 | 3 | 4 | 5 | 6;
+  /** Character length of leading indent + `#` markers + required trailing space. */
+  markerLength: number;
+}
+
+/** Parses ATX markdown heading lines (`# Title`). Requires whitespace after `#` markers. */
+export function parseMarkdownHeadingLine(line: string): ParsedMarkdownHeadingLine | null {
+  const match = line.match(/^(\s{0,3})(#{1,6})\s+(.*)$/);
+  if (!match) return null;
+  const [, indent, hashes] = match;
+  const level = hashes.length;
+  if (level < 1 || level > 6) return null;
+  return {
+    level: level as ParsedMarkdownHeadingLine["level"],
+    markerLength: indent.length + hashes.length + 1,
+  };
+}
+
 /**
  * Returns the markdown list prefix to continue on the next line, if the given
  * line looks like a non-empty bullet/numbered list item.
@@ -249,6 +268,30 @@ export function getListContinuationPrefixForLine(line: string): string | null {
     if (content.trim()) {
       const nextNumber = Number.parseInt(rawNumber, 10) + 1;
       return `${indent}${nextNumber}. `;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Returns leading spaces for a soft line break inside a list item so wrapped
+ * or Shift+Enter continuation lines align under the item text, not the marker.
+ */
+export function getListSoftBreakPrefixForLine(line: string): string | null {
+  const unorderedMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
+  if (unorderedMatch) {
+    const [, indent, bullet, content] = unorderedMatch;
+    if (content.trim()) {
+      return `${indent}${" ".repeat(bullet.length + 1)}`;
+    }
+  }
+
+  const orderedMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+  if (orderedMatch) {
+    const [, indent, rawNumber, content] = orderedMatch;
+    if (content.trim()) {
+      return `${indent}${" ".repeat(`${rawNumber}. `.length)}`;
     }
   }
 
@@ -300,4 +343,204 @@ export function adjustMarkdownListItemIndent(
     deltaTotal,
     changed,
   };
+}
+
+export interface ParsedMarkdownListItemLine {
+  headPrefix: string;
+  softPrefix: string;
+  content: string;
+}
+
+/** Splits a markdown list item line into marker prefixes and body text. */
+export function parseMarkdownListItemLine(line: string): ParsedMarkdownListItemLine | null {
+  const unorderedMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
+  if (unorderedMatch) {
+    const [, indent, bullet, content] = unorderedMatch;
+    const headPrefix = `${indent}${bullet} `;
+    return {
+      headPrefix,
+      softPrefix: `${indent}${" ".repeat(bullet.length + 1)}`,
+      content,
+    };
+  }
+
+  const orderedMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+  if (orderedMatch) {
+    const [, indent, rawNumber, content] = orderedMatch;
+    const headPrefix = `${indent}${rawNumber}. `;
+    return {
+      headPrefix,
+      softPrefix: `${indent}${" ".repeat(`${rawNumber}. `.length)}`,
+      content,
+    };
+  }
+
+  return null;
+}
+
+function wrapListItemTextToLines(
+  text: string,
+  headPrefix: string,
+  softPrefix: string,
+  maxContentWidthPx: number,
+  measureLine: (line: string) => number,
+): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return [headPrefix.trimEnd() ? headPrefix : text];
+  }
+
+  const lines: string[] = [];
+  let chunk: string[] = [];
+
+  const currentPrefix = () => (lines.length === 0 ? headPrefix : softPrefix);
+
+  const flush = () => {
+    if (chunk.length === 0) return;
+    lines.push(`${currentPrefix()}${chunk.join(" ")}`);
+    chunk = [];
+  };
+
+  for (const word of words) {
+    const candidate = chunk.length ? `${chunk.join(" ")} ${word}` : word;
+    const measured = measureLine(`${currentPrefix()}${candidate}`);
+    if (measured <= maxContentWidthPx || chunk.length === 0) {
+      chunk.push(word);
+      continue;
+    }
+    flush();
+    chunk = [word];
+  }
+
+  flush();
+  return lines;
+}
+
+export function findListItemHeadForLine(lines: string[], lineIndex: number): ParsedMarkdownListItemLine | null {
+  for (let index = lineIndex; index >= 0; index -= 1) {
+    const parsed = parseMarkdownListItemLine(lines[index] ?? "");
+    if (parsed) return parsed;
+    const line = lines[index] ?? "";
+    if (!line.trim()) return null;
+    if (!/^\s/.test(line)) return null;
+  }
+  return null;
+}
+
+export function isListItemContinuationLine(lines: string[], lineIndex: number): boolean {
+  if (lineIndex <= 0) return false;
+  const line = lines[lineIndex] ?? "";
+  if (!line.trim() || isMarkdownListItemLine(line)) return false;
+  const head = findListItemHeadForLine(lines, lineIndex);
+  if (!head) return false;
+  return line.startsWith(head.softPrefix) || /^\s+/.test(line);
+}
+
+function remapSelectionForWrappedLines(
+  lineStart: number,
+  oldLine: string,
+  oldPrefix: string,
+  newLines: string[],
+  newPrefixes: string[],
+  selection: number,
+): number {
+  const oldLineEnd = lineStart + oldLine.length;
+  if (selection <= lineStart) return selection;
+  if (selection >= oldLineEnd) {
+    return selection + (newLines.join("\n").length - oldLine.length);
+  }
+
+  const contentOffset = Math.max(0, Math.min(selection - lineStart - oldPrefix.length, oldLine.length - oldPrefix.length));
+  let remaining = contentOffset;
+  let pos = lineStart;
+
+  for (let index = 0; index < newLines.length; index += 1) {
+    const prefix = newPrefixes[index] ?? "";
+    const content = newLines[index]?.slice(prefix.length) ?? "";
+    if (remaining <= content.length) {
+      return pos + prefix.length + remaining;
+    }
+    remaining -= content.length;
+    pos += (newLines[index]?.length ?? 0) + 1;
+  }
+
+  return lineStart + newLines.join("\n").length;
+}
+
+/**
+ * Hard-wraps overflowing markdown list lines using soft-break indentation so
+ * wrapped rows align under list item text in a monospace textarea.
+ */
+export function reflowMarkdownListWrapInDraft(
+  draft: string,
+  selection: number,
+  maxContentWidthPx: number,
+  measureLine: (line: string) => number,
+): { draft: string; selection: number } {
+  if (maxContentWidthPx <= 0 || !draft) {
+    return { draft, selection };
+  }
+
+  const lines = draft.split("\n");
+  let nextSelection = selection;
+  let lineStart = 0;
+  let changed = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+
+    const parsedListItem = parseMarkdownListItemLine(line);
+    const continuationHead = parsedListItem ? null : findListItemHeadForLine(lines, index);
+    const isContinuation = !parsedListItem && isListItemContinuationLine(lines, index);
+
+    let wrapped: string[] | null = null;
+    let oldPrefix = "";
+    let newPrefixes: string[] = [];
+
+    if (parsedListItem && measureLine(line) > maxContentWidthPx) {
+      wrapped = wrapListItemTextToLines(
+        parsedListItem.content,
+        parsedListItem.headPrefix,
+        parsedListItem.softPrefix,
+        maxContentWidthPx,
+        measureLine,
+      );
+      oldPrefix = parsedListItem.headPrefix;
+      newPrefixes = wrapped.map((_, wrappedIndex) =>
+        wrappedIndex === 0 ? parsedListItem.headPrefix : parsedListItem.softPrefix,
+      );
+    } else if (isContinuation && continuationHead && measureLine(line) > maxContentWidthPx) {
+      const content = line.startsWith(continuationHead.softPrefix)
+        ? line.slice(continuationHead.softPrefix.length)
+        : line.trimStart();
+      wrapped = wrapListItemTextToLines(
+        content,
+        continuationHead.softPrefix,
+        continuationHead.softPrefix,
+        maxContentWidthPx,
+        measureLine,
+      );
+      oldPrefix = line.startsWith(continuationHead.softPrefix)
+        ? continuationHead.softPrefix
+        : line.slice(0, line.length - line.trimStart().length);
+      newPrefixes = wrapped.map(() => continuationHead.softPrefix);
+    }
+
+    if (wrapped && wrapped.join("\n") !== line) {
+      changed = true;
+      nextSelection = remapSelectionForWrappedLines(lineStart, line, oldPrefix, wrapped, newPrefixes, nextSelection);
+      lines.splice(index, 1, ...wrapped);
+      lineStart += wrapped.join("\n").length + 1;
+      index += wrapped.length - 1;
+      continue;
+    }
+
+    lineStart += line.length + 1;
+  }
+
+  if (!changed) {
+    return { draft, selection };
+  }
+
+  return { draft: lines.join("\n"), selection: nextSelection };
 }

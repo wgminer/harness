@@ -76,7 +76,7 @@ describe("buildBundle / parseBundle / extractBundle", () => {
     const src = await makeLocalData({
       "app-state/conversations.json": '{"keep":"me"}',
       "settings/settings.json": '{"version":1}',
-      "themes/active.json": '{"accent":"#000"}',
+      "themes/theme.json": '{"accent":"#000"}',
     });
     const { bytes, bundleHash } = await buildBundle(src);
     expect(hashBundleBytes(bytes)).toBe(bundleHash);
@@ -91,7 +91,7 @@ describe("buildBundle / parseBundle / extractBundle", () => {
     expect(await readFile(join(dst, "app-state", "conversations.json"), "utf-8")).toBe(
       '{"keep":"me"}',
     );
-    expect(await readFile(join(dst, "themes", "active.json"), "utf-8")).toBe(
+    expect(await readFile(join(dst, "themes", "theme.json"), "utf-8")).toBe(
       '{"accent":"#000"}',
     );
   });
@@ -137,7 +137,7 @@ describe("backupScopedFiles", () => {
   it("copies all in-scope files into the snapshot directory", async () => {
     const src = await makeLocalData({
       "app-state/conversations.json": '{"a":1}',
-      "themes/active.json": '{"accent":"#fff"}',
+      "themes/theme.json": '{"accent":"#fff"}',
     });
     const tempDest = await createTempDir("bundle-snap-");
     cleanups.push(tempDest.cleanup);

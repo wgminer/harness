@@ -277,6 +277,11 @@ contextBridge.exposeInMainWorld("electron", {
     revealFolder: () => ipcRenderer.invoke("sync:revealFolder") as Promise<void>,
     listSuggestions: () =>
       ipcRenderer.invoke("sync:listSuggestions") as Promise<SyncFolderSuggestion[]>,
+    onChanged: (cb: () => void) => {
+      const sub = () => cb();
+      ipcRenderer.on("sync:changed", sub);
+      return () => ipcRenderer.removeListener("sync:changed", sub);
+    },
   },
   ...(e2eBridge ? { e2e: e2eBridge } : {}),
 });

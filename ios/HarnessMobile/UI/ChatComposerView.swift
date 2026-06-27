@@ -5,20 +5,75 @@ struct ChatComposerView: View {
     let conversationId: String
     let isStreaming: Bool
     let autofocusOnAppear: Bool
+    let allowsCollapse: Bool
     let initialDraft: String
     let onDraftChange: (String) -> Void
     let onClearDraft: () -> Void
     let onSend: (String) -> Void
     let onStop: () -> Void
 
+    @FocusState.Binding var isFocused: Bool
+
     @State private var draft = ""
-    @FocusState private var isFocused: Bool
 
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var isExpanded: Bool {
+        !allowsCollapse || isFocused || canSend || isStreaming
+    }
+
+    private var cornerRadius: CGFloat {
+        isExpanded ? BottomBarMetrics.expandedCornerRadius : BottomBarMetrics.collapsedCornerRadius
+    }
+
     var body: some View {
+        Group {
+            if isExpanded {
+                expandedContent
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+            } else {
+                collapsedContent
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isFocused = true
+        }
+        .liquidGlassSurface(cornerRadius: cornerRadius, shadowOffsetY: -6)
+        .animation(.easeInOut(duration: 0.22), value: isExpanded)
+        .animation(nil, value: isStreaming)
+        .animation(nil, value: canSend)
+        .onChange(of: isStreaming) { _, streaming in
+            if streaming {
+                isFocused = false
+            }
+        }
+        .onChange(of: draft) { _, newValue in
+            onDraftChange(newValue)
+        }
+        .onAppear {
+            draft = initialDraft
+            if autofocusOnAppear {
+                isFocused = true
+            }
+        }
+    }
+
+    private var collapsedContent: some View {
+        Text(draft.isEmpty ? "Type a message…" : draft)
+            .font(.body.weight(.semibold))
+            .foregroundStyle(draft.isEmpty ? .secondary : .primary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, BottomBarMetrics.collapsedInnerHorizontal)
+            .padding(.vertical, BottomBarMetrics.collapsedInnerVertical)
+    }
+
+    private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             TextField("Type a message…", text: $draft, axis: .vertical)
                 .lineLimit(1 ... 8)
@@ -68,27 +123,6 @@ struct ChatComposerView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 14)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassSurface(
-            cornerRadius: BottomBarMetrics.expandedCornerRadius,
-            shadowOffsetY: -6
-        )
-        .animation(nil, value: isStreaming)
-        .animation(nil, value: canSend)
-        .onChange(of: isStreaming) { _, streaming in
-            if streaming {
-                isFocused = false
-            }
-        }
-        .onChange(of: draft) { _, newValue in
-            onDraftChange(newValue)
-        }
-        .onAppear {
-            draft = initialDraft
-            if autofocusOnAppear {
-                isFocused = true
-            }
-        }
     }
 
     private func submitDraft() {
@@ -103,6 +137,8 @@ struct ChatComposerView: View {
 
 #Preview("Composer") {
     struct Host: View {
+        @FocusState private var isFocused: Bool
+
         var body: some View {
             VStack {
                 Spacer()
@@ -110,11 +146,13 @@ struct ChatComposerView: View {
                     conversationId: "preview",
                     isStreaming: false,
                     autofocusOnAppear: false,
+                    allowsCollapse: true,
                     initialDraft: "",
                     onDraftChange: { _ in },
                     onClearDraft: {},
                     onSend: { _ in },
-                    onStop: {}
+                    onStop: {},
+                    isFocused: $isFocused
                 )
                 .padding(.horizontal, BottomBarMetrics.horizontalInset)
                 .padding(.bottom, BottomBarMetrics.bottomInset)

@@ -16,13 +16,7 @@ struct SyncToolbarButton: View {
     var action: () -> Void
 
     private var attentionColor: Color? {
-        if app.syncStatus.showsAttentionDot {
-            return .red
-        }
-        if app.store.hasLocalEdits {
-            return .orange
-        }
-        return nil
+        app.settingsAttentionColor
     }
 
     var body: some View {
@@ -52,10 +46,10 @@ struct SyncToolbarButton: View {
         if let detail = app.pendingChangesDetail {
             return detail
         }
-        if app.store.hasLocalEdits {
-            return "Unsynced changes on this phone"
+        if app.isSyncing {
+            return "Syncing with iCloud"
         }
-        return ""
+        return app.syncStatusSummary
     }
 }
 

@@ -331,7 +331,6 @@ struct TasksListView: View {
         defer { creating = false }
         do {
             _ = try app.tasksStore.create(title: title)
-            app.store.markEdited()
             newTitle = ""
         } catch {
             loadError = error.localizedDescription
@@ -367,7 +366,6 @@ struct TasksListView: View {
         Task {
             do {
                 _ = try app.tasksStore.update(id: id, status: status)
-                app.store.markEdited()
             } catch {
                 loadError = error.localizedDescription
             }
@@ -378,7 +376,6 @@ struct TasksListView: View {
         Task {
             do {
                 _ = try app.tasksStore.delete(id: id)
-                app.store.markEdited()
             } catch {
                 loadError = error.localizedDescription
             }
@@ -389,7 +386,6 @@ struct TasksListView: View {
         Task {
             do {
                 _ = try app.tasksStore.clearCompleted()
-                app.store.markEdited()
             } catch {
                 loadError = error.localizedDescription
             }
@@ -402,7 +398,6 @@ struct TasksListView: View {
         Task {
             do {
                 try app.tasksStore.reorderActive(taskIds: ordered.map(\.id))
-                app.store.markEdited()
             } catch {
                 loadError = error.localizedDescription
             }
@@ -436,7 +431,6 @@ struct TasksListView: View {
         defer { modalSaving = false }
         do {
             _ = try app.tasksStore.update(id: task.id, title: trimmed, status: modalStatus, tags: modalTags)
-            app.store.markEdited()
             modalTask = nil
         } catch {
             loadError = error.localizedDescription
@@ -450,7 +444,6 @@ struct TasksListView: View {
         defer { modalSaving = false }
         do {
             _ = try app.tasksStore.delete(id: task.id)
-            app.store.markEdited()
             modalTask = nil
         } catch {
             loadError = error.localizedDescription

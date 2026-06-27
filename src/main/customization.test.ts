@@ -43,13 +43,7 @@ describe("executeCustomizationTool", () => {
     };
     expect(payload.ok).toBe(true);
     expect(payload.settings.fontSize).toBe(DEFAULT_THEME_SETTINGS.fontSize);
-    expect(payload.presets.map((p) => p.id)).toEqual([
-      "night",
-      "paper",
-      "matcha",
-      "ik_blue",
-      "bloomberg",
-    ]);
+    expect(payload.presets.map((p) => p.id)).toEqual(["dark", "light", "green", "blue"]);
   });
 
   it("update_theme patches colors and returns applied settings", async () => {
@@ -65,16 +59,25 @@ describe("executeCustomizationTool", () => {
   it("apply_theme_preset applies palette colors", async () => {
     await makeUserDataDir();
     executeCustomizationTool("update_theme", { accent: "#ff00ff" });
-    const raw = executeCustomizationTool("apply_theme_preset", { preset: "paper" });
+    const raw = executeCustomizationTool("apply_theme_preset", { preset: "light" });
     const payload = JSON.parse(raw) as {
       ok: boolean;
       preset: string;
       settings: { accent: string; fg: string; bg: string };
     };
     expect(payload.ok).toBe(true);
-    expect(payload.preset).toBe("paper");
-    expect(payload.settings.bg).toBe("#f4efe6");
-    expect(payload.settings.accent).toBe("#9a7b52");
+    expect(payload.preset).toBe("light");
+    expect(payload.settings.bg).toBe("#fafafa");
+    expect(payload.settings.accent).toBe("#0052ff");
+  });
+
+  it("accepts legacy preset aliases", async () => {
+    await makeUserDataDir();
+    const raw = executeCustomizationTool("apply_theme_preset", { preset: "paper" });
+    const payload = JSON.parse(raw) as { ok: boolean; preset: string; settings: { bg: string } };
+    expect(payload.ok).toBe(true);
+    expect(payload.preset).toBe("light");
+    expect(payload.settings.bg).toBe("#fafafa");
   });
 
   it("apply_theme_preset rejects unknown ids", async () => {
@@ -82,6 +85,6 @@ describe("executeCustomizationTool", () => {
     const raw = executeCustomizationTool("apply_theme_preset", { preset: "neon" });
     const payload = JSON.parse(raw) as { error: string; presets: string[] };
     expect(payload.error).toContain("Unknown preset");
-    expect(payload.presets).toContain("night");
+    expect(payload.presets).toContain("dark");
   });
 });

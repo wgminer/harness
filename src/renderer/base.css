@@ -2,13 +2,13 @@
    User theme overrides live in #custom-theme (moved after bundled CSS in main.tsx). */
 :root {
   color-scheme: dark;
-  --bg: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-elevated: #21262d;
-  --fg: #e6edf3;
-  --fg-muted: #9aa4af;
-  --border-dark: #30363d;
-  --border-light: #21262d;
+  --bg: #050505;
+  --bg-secondary: #121212;
+  --bg-elevated: #1c1c1c;
+  --fg: #f5f5f5;
+  --fg-muted: #c2c2c2;
+  --border-dark: #333333;
+  --border-light: #262626;
   /** @deprecated Use --border-dark or --border-light; aliases dark for legacy rules. */
   --border: var(--border-dark);
   --accent: #f2ff00;
@@ -21,7 +21,12 @@
    * outlines, and backgrounds, keep using --accent.
    */
   --accent-readable: color-mix(in oklab, var(--accent) 70%, var(--fg));
-  --selection-bg: color-mix(in srgb, var(--accent) 38%, var(--fg) 22%);
+  /**
+   * Selection highlight pair — accent-tinted fill with foreground pulled toward --bg
+   * so selected text stays readable on vivid accents (default yellow on dark UI).
+   */
+  --selection-bg: color-mix(in oklab, var(--accent) 68%, var(--bg));
+  --selection-fg: color-mix(in oklab, var(--bg) 75%, var(--fg));
   --danger: #c0392b;
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   --btn-shadow: none;
@@ -65,10 +70,31 @@
   /** Universal list-row hover (sidebar nav, notes rows, search results). */
   --list-row-hover-bg: color-mix(in srgb, var(--fg) 6%, transparent);
   --list-row-hover-border: color-mix(in oklab, var(--border-light) 68%, transparent);
+  /**
+   * Hairline edges — painted with inset box-shadow so declared heights and widths
+   * stay on the 4px grid (CSS borders consume px inside border-box sizing).
+   */
+  --hairline-glass: color-mix(in oklab, var(--border-light) 68%, transparent);
+  --hairline-inset: inset 0 0 0 1px var(--border-light);
+  --hairline-inset-dark: inset 0 0 0 1px var(--border-dark);
+  --hairline-inset-accent: inset 0 0 0 1px var(--accent);
+  --hairline-inset-transparent: inset 0 0 0 1px transparent;
+  --hairline-inset-glass: inset 0 0 0 1px var(--hairline-glass);
+  --hairline-top: inset 0 1px 0 0 var(--border-light);
+  --hairline-top-transparent: inset 0 1px 0 0 transparent;
+  --hairline-bottom: inset 0 -1px 0 0 var(--border-light);
+  --hairline-bottom-transparent: inset 0 -1px 0 0 transparent;
+  --hairline-left: inset 1px 0 0 0 var(--border-light);
+  --hairline-right: inset -1px 0 0 0 var(--border-light);
+  --hairline-left-2-transparent: inset 2px 0 0 0 transparent;
+  --hairline-left-2-accent: inset 2px 0 0 0 var(--accent);
+  --hairline-surface-highlight: inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
   --scrollbar-thumb: color-mix(in oklab, var(--fg) 42%, var(--bg));
   --scrollbar-thumb-hover: color-mix(in oklab, var(--accent) 40%, var(--fg) 35%, var(--bg));
   --scrollbar-track: color-mix(in oklab, var(--bg) 88%, var(--fg));
   --input-height: calc(var(--grid) * 9);
+  /** Compact shell bar — sidebar button row, scrolled workspace headers, notes toolbar. */
+  --shell-bar-height: calc(var(--grid) * 13);
   /** Line heights as px on the 4px grid — overridden by theme CSS when a custom theme is active. */
   --line-height-tight: 16px;
   --line-height-caption: 16px;
@@ -158,7 +184,7 @@ body {
 /* Easier to see what is selected when dragging to copy (esp. on dark backgrounds). */
 ::selection {
   background: var(--selection-bg);
-  color: var(--fg);
+  color: var(--selection-fg);
 }
 
 .message-block .content,
@@ -181,7 +207,8 @@ body {
 hr {
   margin: var(--space-5) 0;
   border: 0;
-  border-top: 1px solid var(--border-light);
+  height: 0;
+  box-shadow: var(--hairline-top);
 }
 
 /* Buttons – single source of truth for all app buttons */
@@ -262,7 +289,6 @@ hr {
 /* Shared input base */
 .input-base,
 .sidebar-search-input,
-.workspace-search-input,
 .settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input),
 .settings-section select {
   font-family: var(--font-family);
@@ -271,29 +297,20 @@ hr {
   padding: 0 var(--space-3);
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
 }
 
 .input-base::placeholder,
-.sidebar-search-input::placeholder,
-.workspace-search-input::placeholder {
+.sidebar-search-input::placeholder {
   color: var(--fg-muted);
 }
 
 .input-base:focus,
 .sidebar-search-input:focus,
-.workspace-search-input:focus,
 .settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input):focus {
   outline: none;
-  border-color: var(--accent);
-}
-
-/* Strip the platform "search" affordances so this matches our other inputs. */
-.workspace-search-input::-webkit-search-decoration,
-.workspace-search-input::-webkit-search-cancel-button,
-.workspace-search-input::-webkit-search-results-button,
-.workspace-search-input::-webkit-search-results-decoration {
-  appearance: none;
+  box-shadow: var(--hairline-inset-accent);
 }
 
 /* Shared translucent surface used by composer and edit assistant modal. */
@@ -303,8 +320,8 @@ hr {
   background: transparent;
   -webkit-backdrop-filter: blur(16px) saturate(.80);
   backdrop-filter: blur(8px) saturate(.80);
-  border: 1px solid color-mix(in oklab, var(--border-light) 68%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
+  border: none;
+  box-shadow: var(--hairline-inset-glass), var(--hairline-surface-highlight);
 }
 
 /* Shared list-item base */
@@ -312,7 +329,8 @@ hr {
 .sidebar-item,
 .search-result-item {
   padding: var(--space-2) var(--space-3);
-  border-left: 2px solid transparent;
+  border: none;
+  box-shadow: var(--hairline-left-2-transparent);
   cursor: pointer;
   overflow: hidden;
 }
@@ -326,7 +344,7 @@ hr {
 .list-item-base.active,
 .sidebar-item.active,
 .search-result-item.active {
-  border-left-color: var(--accent);
+  box-shadow: var(--hairline-left-2-accent);
   background: var(--bg);
 }
 
@@ -412,17 +430,18 @@ hr {
 }
 
 .sidebar {
+  position: relative;
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
-  border-right: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-right);
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
 }
 
 .app[data-sidebar="right"] .sidebar {
-  border-right: none;
-  border-left: 1px solid var(--border-light);
+  box-shadow: var(--hairline-left);
 }
 
 .main {

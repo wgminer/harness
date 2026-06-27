@@ -12,14 +12,9 @@
   pointer-events: none;
 }
 
-.tasks-section {
-  margin-bottom: var(--space-4);
-}
-
 .tasks-group {
-  margin-top: var(--space-4);
   padding-top: var(--space-4);
-  border-top: 1px solid var(--border-light);
+  box-shadow: var(--hairline-top);
 }
 
 .tasks-section-heading {
@@ -27,7 +22,7 @@
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
   padding: 0;
   font-family: var(--font-family);
   font-size: var(--font-size);
@@ -76,14 +71,15 @@
   resize: vertical;
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
   border-radius: 2px;
 }
 
 .tasks-textarea:focus,
 .tasks-modal-body textarea:focus {
   outline: none;
-  border-color: var(--accent);
+  box-shadow: var(--hairline-inset-accent);
 }
 
 .tasks-textarea--modal {
@@ -340,13 +336,14 @@
   padding: 0 var(--space-3);
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
   border-radius: var(--radius-sm);
 }
 
 .tasks-tags-input:focus {
   outline: none;
-  border-color: var(--accent);
+  box-shadow: var(--hairline-inset-accent);
 }
 
 .tasks-tag-remove svg {

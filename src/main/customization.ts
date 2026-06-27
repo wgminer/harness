@@ -7,6 +7,7 @@ import { DEFAULT_LAYOUT } from "../shared/types";
 import {
   applyThemeColors,
   DEFAULT_THEME_SETTINGS,
+  findThemePreset,
   normalizeThemeSettings,
   THEME_PRESETS,
   themeSettingsToCss,
@@ -64,7 +65,7 @@ function setThemeSettings(settings: ThemeSettings | null): void {
     writeThemeFile(null);
     return;
   }
-  const next = normalizeThemeSettings(settings);
+  const next = { ...normalizeThemeSettings(settings), updatedAt: Date.now() };
   const json = JSON.stringify(next);
   if (json.length > MAX_THEME_JSON) throw new Error("Theme data too large");
   writeThemeFile(next);
@@ -154,7 +155,7 @@ export function executeCustomizationTool(name: string, args: Record<string, unkn
     }
     if (name === "apply_theme_preset") {
       const presetId = typeof args.preset === "string" ? args.preset.trim() : "";
-      const preset = THEME_PRESETS.find((p) => p.id === presetId);
+      const preset = findThemePreset(presetId);
       if (!preset) {
         return JSON.stringify({
           error: `Unknown preset: ${presetId || "(missing)"}`,

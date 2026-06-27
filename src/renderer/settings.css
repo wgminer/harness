@@ -35,7 +35,8 @@
   height: 24px;
   min-height: 24px;
   padding: 0 8px;
-  border: 1px solid transparent;
+  border: none;
+  box-shadow: var(--hairline-inset-transparent);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--fg-muted);
@@ -53,7 +54,7 @@
 
 .settings-tab--active {
   color: var(--fg);
-  border-color: color-mix(in srgb, var(--border-light) 80%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-light) 80%, transparent);
   background: color-mix(in srgb, var(--fg) 12%, transparent);
 }
 
@@ -69,13 +70,13 @@
 .settings-group {
   margin-top: var(--space-4);
   padding-top: var(--space-4);
-  border-top: 1px solid var(--border-light);
+  box-shadow: var(--hairline-top);
 }
 
 .settings-group:first-child {
   margin-top: 0;
   padding-top: 0;
-  border-top: none;
+  box-shadow: none;
 }
 
 .settings-group__title {
@@ -215,7 +216,8 @@
   height: var(--input-height);
   margin: 0;
   padding: 0 var(--space-2);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
   border-radius: var(--radius-sm);
   background: var(--bg);
 }
@@ -256,7 +258,7 @@
 
 .settings-font-size-stepper__input-wrap:focus-within {
   outline: none;
-  border-color: var(--accent);
+  box-shadow: var(--hairline-inset-accent);
 }
 
 .settings-font-size-stepper__unit {
@@ -281,7 +283,7 @@
 .settings-section--usage {
   margin-top: 20px;
   padding-top: var(--space-4);
-  border-top: 1px solid var(--border-light);
+  box-shadow: var(--hairline-top);
 }
 
 .usage-stats {
@@ -295,11 +297,11 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2) 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-light) 70%, transparent);
+  box-shadow: inset 0 -1px 0 0 color-mix(in srgb, var(--border-light) 70%, transparent);
 }
 
 .usage-stats__row:last-child {
-  border-bottom: none;
+  box-shadow: none;
 }
 
 .usage-stats__row dt {
@@ -435,11 +437,11 @@
   align-items: flex-start;
   gap: var(--space-2);
   padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border-light);
+  box-shadow: var(--hairline-bottom);
 }
 
 .settings-entry-row:last-child {
-  border-bottom: none;
+  box-shadow: none;
 }
 
 .settings-entry-row__body {
@@ -565,12 +567,13 @@
   padding: 0 var(--space-3);
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
 }
 
 .settings-section--inline input:not([type="checkbox"]):not([type="radio"]):focus {
   outline: none;
-  border-color: var(--accent);
+  box-shadow: var(--hairline-inset-accent);
 }
 
 .settings-input--key {
@@ -610,7 +613,8 @@
 .settings-storage-diagram {
   margin: var(--space-3) 0 0;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
   border-radius: var(--radius-md);
   background: var(--bg);
   overflow-x: auto;
@@ -629,7 +633,8 @@
   margin-top: 8px;
   margin-bottom: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
   border-radius: var(--radius-md);
   background: var(--bg);
   font-size: var(--font-size-caption);
@@ -646,7 +651,7 @@
 }
 
 .settings-data-status--error {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-light));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, var(--border-light));
   background: color-mix(in srgb, var(--accent) 8%, var(--bg));
 }
 
@@ -710,18 +715,19 @@
   resize: vertical;
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
   border-radius: 2px;
 }
 
 .settings-section select:focus {
   outline: none;
-  border-color: var(--accent);
+  box-shadow: var(--hairline-inset-accent);
 }
 
 .settings-section textarea:focus {
   outline: none;
-  border-color: var(--accent);
+  box-shadow: var(--hairline-inset-accent);
 }
 
 /* Settings toast — outside scroll area; visibility toggled to avoid layout jumps */
@@ -733,9 +739,9 @@
   font-size: var(--font-size-caption);
   background: var(--bg-secondary);
   color: var(--fg-muted);
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset), var(--shadow);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow);
   z-index: 1000;
   opacity: 0;
   visibility: hidden;
@@ -773,7 +779,7 @@
 .settings-playground-block + .settings-playground-block {
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid var(--border-light);
+  box-shadow: var(--hairline-top);
 }
 
 .settings-playground-block__title {
@@ -883,7 +889,8 @@
   width: 40px;
   height: var(--input-height);
   padding: 2px;
-  border: 1px solid var(--border-light);
+  border: none;
+  box-shadow: var(--hairline-inset);
   border-radius: var(--radius-sm);
   background: var(--bg);
   cursor: pointer;
@@ -925,7 +932,8 @@
   position: relative;
   height: 52px;
   border-radius: var(--radius-md);
-  border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
+  border: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 14%, transparent);
   overflow: hidden;
   padding: var(--space-2) var(--space-3);
   display: flex;
@@ -933,7 +941,6 @@
   gap: var(--space-1);
   justify-content: center;
   transition:
-    border-color var(--motion-duration-fast) var(--motion-ease-standard),
     box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
@@ -957,7 +964,8 @@
   width: var(--space-4);
   height: var(--space-4);
   border-radius: 50%;
-  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  border: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, currentColor 28%, transparent);
 }
 
 .settings-playground-theme-card__label {
@@ -967,12 +975,13 @@
 }
 
 .settings-playground-theme-card:hover .settings-playground-theme-preview {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--fg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, var(--fg));
 }
 
 .settings-playground-theme-card--selected .settings-playground-theme-preview {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--fg));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, var(--fg)),
+    0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .settings-playground-status {
@@ -1005,8 +1014,8 @@
 }
 
 .settings-page .workspace-header-title-row svg {
-  width: var(--icon-size-lg);
-  height: var(--icon-size-lg);
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
 }
 
 .settings-api-key-row .btn-icon svg {

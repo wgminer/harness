@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
     let syncEngine: SyncEngine
     let chatService: ChatService
     let dictationService: DictationService
+    let themeStore: ThemeStore
 
     private var pendingAutoGenerateReply: Set<String> = []
     private var pendingComposerFocus: Set<String> = []
@@ -42,10 +43,82 @@ final class AppModel: ObservableObject {
         syncEngine = SyncEngine(localDataDir: localDataDir)
         chatService = ChatService(store: store, tasksStore: tasksStore)
         dictationService = DictationService(localDataDir: localDataDir)
+        themeStore = ThemeStore(localDataDir: localDataDir)
         syncEngine.store = store
         lastSuccessfulSyncAt = UserDefaults.standard.object(forKey: Self.lastSuccessfulSyncAtKey) as? Date
         forwardObjectWillChange(from: store)
         forwardObjectWillChange(from: tasksStore)
+        forwardObjectWillChange(from: themeStore)
+        wireContentChangeHandlers()
+    }
+
+    private static let autoSyncDelayNs: UInt64 = 2_500_000_000
+    private static let pendingStateRefreshDelayNs: UInt64 = 200_000_000
+
+    private var scheduledSyncTask: Task<Void, Never>?
+    private var pendingStateRefreshTask: Task<Void, Never>?
+    @Published private(set) var hasScheduledSync = false
+
+    private func wireContentChangeHandlers() {
+        let onLocalContentChanged: () -> Void = { [weak self] in
+            self?.schedulePendingStateRefresh()
+            self?.scheduleSyncAfterLocalChange()
+        }
+        store.onContentChanged = onLocalContentChanged
+        tasksStore.onContentChanged = onLocalContentChanged
+    }
+
+    func scheduleSyncAfterLocalChange() {
+        guard BookmarkStore.hasBookmark else { return }
+        scheduledSyncTask?.cancel()
+        hasScheduledSync = true
+        scheduledSyncTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: Self.autoSyncDelayNs)
+            } catch {
+                await self?.clearScheduledSync()
+                return
+            }
+            guard !Task.isCancelled else {
+                await self?.clearScheduledSync()
+                return
+            }
+            await self?.performSync()
+            await self?.clearScheduledSync()
+        }
+    }
+
+    private func schedulePendingStateRefresh() {
+        pendingStateRefreshTask?.cancel()
+        pendingStateRefreshTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: Self.pendingStateRefreshDelayNs)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            try? self?.store.refreshPendingSyncState()
+        }
+    }
+
+    private func clearScheduledSync() {
+        hasScheduledSync = false
+        scheduledSyncTask = nil
+    }
+
+    /// Orange/red dot on the settings gear — only real upload backlog or sync errors.
+    var settingsAttentionColor: Color? {
+        if syncStatus.showsAttentionDot {
+            return .red
+        }
+        if showsPendingUploadAttention {
+            return .orange
+        }
+        return nil
+    }
+
+    var showsPendingUploadAttention: Bool {
+        store.hasLocalEdits && !isSyncing && !hasScheduledSync
     }
 
     private func forwardObjectWillChange<P: ObservableObject>(from publisher: P) {
@@ -115,6 +188,7 @@ final class AppModel: ObservableObject {
     func bootstrap() async {
         try? LocalDataLayout.ensureDirectories(at: localDataDir)
         try? LocalDataLayout.ensureConversationsFile(at: localDataDir)
+        themeStore.reload()
         do {
             try store.pruneEmptyConversations()
             try store.reload()
@@ -155,12 +229,15 @@ final class AppModel: ObservableObject {
     }
 
     func performSync(forcePull: Bool = false) async {
+        scheduledSyncTask?.cancel()
+        clearScheduledSync()
         isSyncing = true
         defer { isSyncing = false }
 
         do {
             let outcome = try await syncEngine.syncNow(forcePull: forcePull)
             applyOutcome(outcome)
+            themeStore.reload()
             try store.reload()
             try tasksStore.reload()
             try store.refreshPendingSyncState()
@@ -226,15 +303,38 @@ final class AppModel: ObservableObject {
     }
 
     var pendingChangesDetail: String? {
-        guard store.hasLocalEdits else { return nil }
+        guard showsPendingUploadAttention else { return nil }
         guard let current = try? store.snapshotConversations() else {
-            return "This phone has unsynced changes."
+            return "Changes waiting to upload to iCloud."
         }
         if let baseline = PendingSyncTracker.loadBaseline(),
            let detail = SyncChangeSummary.describePendingLocalChanges(baseline: baseline, current: current) {
             return detail
         }
-        return "This phone has unsynced changes."
+        return "Changes waiting to upload to iCloud."
+    }
+
+    /// Plain-language sync line for Settings.
+    var syncStatusSummary: String {
+        if isSyncing {
+            return "Syncing with iCloud…"
+        }
+        if hasScheduledSync {
+            return "Uploading changes shortly…"
+        }
+        if syncStatus.kind == .error {
+            return syncStatus.title
+        }
+        if showsPendingUploadAttention {
+            return pendingChangesDetail ?? "Changes waiting to upload to iCloud."
+        }
+        if lastSuccessfulSyncAt != nil {
+            return "Up to date with iCloud."
+        }
+        if BookmarkStore.hasBookmark {
+            return "No sync completed yet on this phone."
+        }
+        return "Choose a backup folder to enable sync."
     }
 
     private func applyOutcome(_ outcome: SyncOutcome) {

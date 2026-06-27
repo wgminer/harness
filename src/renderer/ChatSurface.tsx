@@ -29,6 +29,7 @@ interface ChatSurfaceProps {
   streamingContent: string;
   sending: boolean;
   polishHintAfterDictation: boolean;
+  llmActionsEnabled?: boolean;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
   onGenerateReply: () => void;
@@ -67,6 +68,7 @@ export function ChatSurface({
   streamingContent,
   sending,
   polishHintAfterDictation,
+  llmActionsEnabled = true,
   onToolConfirm,
   onPolish,
   onGenerateReply,
@@ -207,6 +209,7 @@ export function ChatSurface({
             streamingContent={streamingContent}
             sending={sending}
             polishHintAfterDictation={polishHintAfterDictation}
+            llmActionsEnabled={llmActionsEnabled}
             onToolConfirm={onToolConfirm}
             onPolish={onPolish}
             onGenerateReply={onGenerateReply}

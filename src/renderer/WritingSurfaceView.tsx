@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRightLeft,
@@ -14,18 +14,21 @@ import {
   X,
 } from "lucide-react";
 import {
-  adjustMarkdownListItemIndent,
   DEFAULT_NOTE_TEMPLATES,
-  getListContinuationPrefixForLine,
-  isMarkdownListItemLine,
   normalizeNoteTemplates,
   stripLeadingMarkdownHeading,
   type NoteSummary,
   type NoteTemplateConfig,
 } from "../shared/writing";
 import { buildNotePrintHtml } from "../shared/notePrint";
+import { NotesCodeEditor, type NotesCodeEditorHandle } from "./NotesCodeEditor.tsx";
+import {
+  getNotesEditorCaretCoordinates,
+  measureNotesEditorLineWidth,
+} from "./notesEditorExtensions";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { WorkspaceListSearch } from "./WorkspaceListSearch";
 
 type Status =
   | { kind: "idle" }
@@ -44,10 +47,12 @@ interface SelectionRange {
   text: string;
 }
 
-interface CaretCoordinates {
-  top: number;
-  left: number;
-  lineHeight: number;
+function renderDraftWithSelection(draft: string, selection: SelectionRange): [string, string, string] {
+  return [
+    draft.slice(0, selection.start),
+    draft.slice(selection.start, selection.end),
+    draft.slice(selection.end),
+  ];
 }
 
 const MIN_REGENERATE_SPIN_MS = 3000;
@@ -60,97 +65,16 @@ const NOTE_WIDTH_MODES = ["narrow", "comfortable"] as const;
 type NoteWidthMode = (typeof NOTE_WIDTH_MODES)[number];
 const NOTE_WIDTH_LABELS: Record<NoteWidthMode, string> = {
   narrow: "100%",
-  comfortable: "560px",
+  comfortable: "640px",
 };
 
-function getTextareaCaretCoordinates(textarea: HTMLTextAreaElement, position: number): CaretCoordinates {
-  const computed = window.getComputedStyle(textarea);
-  const mirror = document.createElement("div");
-  const props = [
-    "boxSizing",
-    "width",
-    "height",
-    "overflowX",
-    "overflowY",
-    "borderTopWidth",
-    "borderRightWidth",
-    "borderBottomWidth",
-    "borderLeftWidth",
-    "paddingTop",
-    "paddingRight",
-    "paddingBottom",
-    "paddingLeft",
-    "fontStyle",
-    "fontVariant",
-    "fontWeight",
-    "fontStretch",
-    "fontSize",
-    "lineHeight",
-    "fontFamily",
-    "textAlign",
-    "textTransform",
-    "textIndent",
-    "textDecoration",
-    "letterSpacing",
-    "wordSpacing",
-    "tabSize",
-  ] as const;
-
-  mirror.style.position = "absolute";
-  mirror.style.visibility = "hidden";
-  mirror.style.whiteSpace = "pre-wrap";
-  mirror.style.wordWrap = "break-word";
-  mirror.style.top = "0";
-  mirror.style.left = "-9999px";
-  for (const prop of props) {
-    mirror.style[prop] = computed[prop];
-  }
-
-  const safePos = Math.max(0, Math.min(position, textarea.value.length));
-  mirror.textContent = textarea.value.slice(0, safePos);
-  const marker = document.createElement("span");
-  marker.textContent = textarea.value.slice(safePos) || " ";
-  mirror.appendChild(marker);
-  document.body.appendChild(mirror);
-
-  const lineHeight = Number.parseFloat(computed.lineHeight) || Number.parseFloat(computed.fontSize) * 1.4 || 20;
-  const top = marker.offsetTop + Number.parseFloat(computed.borderTopWidth || "0");
-  const left = marker.offsetLeft + Number.parseFloat(computed.borderLeftWidth || "0");
-  document.body.removeChild(mirror);
-  return { top, left, lineHeight };
-}
-
-function renderDraftWithSelection(draft: string, selection: SelectionRange): [string, string, string] {
-  return [
-    draft.slice(0, selection.start),
-    draft.slice(selection.start, selection.end),
-    draft.slice(selection.end),
-  ];
-}
-
-function measureLongestSelectedLineWidth(textarea: HTMLTextAreaElement, selectedText: string): number {
+function measureLongestSelectedLineWidth(view: NonNullable<ReturnType<NotesCodeEditorHandle["getView"]>>, selectedText: string): number {
   const normalized = selectedText.replace(/\r/g, "");
   if (!normalized) return 0;
   const lines = normalized.split("\n");
-  if (lines.length === 0) return 0;
-  const style = window.getComputedStyle(textarea);
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return 0;
-  ctx.font = [
-    style.fontStyle,
-    style.fontVariant,
-    style.fontWeight,
-    style.fontStretch,
-    style.fontSize,
-    style.fontFamily,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
   let maxWidth = 0;
   for (const line of lines) {
-    const measured = ctx.measureText(line || " ").width;
+    const measured = measureNotesEditorLineWidth(view, line);
     if (measured > maxWidth) {
       maxWidth = measured;
     }
@@ -206,6 +130,7 @@ interface NotesViewProps {
   resetToOverviewNonce?: number;
   onScreenChange?: (screen: "list" | "detail") => void;
   onActiveNoteChange?: (noteId: string | null) => void;
+  onEditorFocusChange?: (focused: boolean) => void;
 }
 
 export function NotesView({
@@ -214,9 +139,11 @@ export function NotesView({
   resetToOverviewNonce,
   onScreenChange,
   onActiveNoteChange,
+  onEditorFocusChange,
 }: NotesViewProps) {
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const [notes, setNotes] = useState<NoteSummary[]>([]);
+  const [listSearchQuery, setListSearchQuery] = useState("");
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
     DEFAULT_NOTE_TEMPLATES.map((template) => ({ ...template })),
   );
@@ -229,9 +156,9 @@ export function NotesView({
   const [panelPrompt, setPanelPrompt] = useState<string>("");
   const [panelOutput, setPanelOutput] = useState<string>("");
   const [asideStatus, setAsideStatus] = useState<AsideStatus>({ kind: "idle" });
-  const [editorFocused, setEditorFocused] = useState<boolean>(false);
-  const [editorScrollTop, setEditorScrollTop] = useState<number>(0);
-  const [editorScrollLeft, setEditorScrollLeft] = useState<number>(0);
+  const [editorFocused, setEditorFocused] = useState(false);
+  const [editorScrollTop, setEditorScrollTop] = useState(0);
+  const [editorScrollLeft, setEditorScrollLeft] = useState(0);
   const [asidePosition, setAsidePosition] = useState<{ top: number; left: number; width: number }>({
     top: 24,
     left: 24,
@@ -246,15 +173,29 @@ export function NotesView({
   const autoSaveTimerRef = useRef<number | null>(null);
   const copyFeedbackTimerRef = useRef<number | null>(null);
   const noteToolbarMenuRef = useRef<HTMLDivElement | null>(null);
-  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorWrapRef = useRef<HTMLDivElement | null>(null);
+  const editorRef = useRef<NotesCodeEditorHandle | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const selectionToolbarRef = useRef<HTMLDivElement | null>(null);
   const asidePanelRef = useRef<HTMLElement | null>(null);
+  const pendingEditorFocusRef = useRef(false);
+  const pendingEditorCaretRef = useRef<number | null>(null);
+
+  const scheduleEditorFocus = useCallback((caret?: number) => {
+    pendingEditorFocusRef.current = true;
+    pendingEditorCaretRef.current = caret ?? null;
+  }, []);
 
   const activeNote = useMemo(
     () => notes.find((note) => note.id === selectedNoteId) ?? null,
     [selectedNoteId, notes],
   );
+  const filteredNotes = useMemo(() => {
+    const q = listSearchQuery.trim().toLowerCase();
+    if (!q) return notes;
+    return notes.filter((note) => getDisplayNoteTitle(note.title).toLowerCase().includes(q));
+  }, [notes, listSearchQuery]);
+  const listSearching = listSearchQuery.trim().length > 0;
   const notesApi = window.electron.notes;
   const hasSelection = selection != null;
   const showSelectionToolbar = hasSelection && !asideExpanded;
@@ -275,20 +216,21 @@ export function NotesView({
   }, []);
 
   const updateAsidePosition = useCallback((range: SelectionRange | null) => {
-    const editor = editorRef.current;
-    if (!editor || !range) return;
-    const startCoords = getTextareaCaretCoordinates(editor, range.start);
-    const endCoords = getTextareaCaretCoordinates(editor, range.end);
+    const view = editorRef.current?.getView();
+    if (!view || !range) return;
+    const startCoords = getNotesEditorCaretCoordinates(view, range.start);
+    const endCoords = getNotesEditorCaretCoordinates(view, range.end);
+    if (!startCoords || !endCoords) return;
     const sameLine = Math.abs(endCoords.top - startCoords.top) < startCoords.lineHeight * 0.6;
-    const longestLineWidth = measureLongestSelectedLineWidth(editor, range.text);
+    const longestLineWidth = measureLongestSelectedLineWidth(view, range.text);
     const highlightedWidth = sameLine
       ? Math.max(260, endCoords.left - startCoords.left + ASIDE_PANEL_MEASURE_BUFFER_PX)
       : Math.max(300, longestLineWidth + ASIDE_PANEL_MEASURE_BUFFER_PX);
     const panelWidth = Math.min(620, Math.max(180, highlightedWidth));
-    const rawLeft = startCoords.left - editor.scrollLeft - 12;
-    const rawTop = endCoords.top - editor.scrollTop + endCoords.lineHeight + 10;
-    const maxLeft = Math.max(12, editor.clientWidth - panelWidth - 12);
-    const maxTop = Math.max(12, editor.clientHeight - 180);
+    const rawLeft = startCoords.left - 12;
+    const rawTop = endCoords.top + endCoords.lineHeight + 10;
+    const maxLeft = Math.max(12, view.dom.clientWidth - panelWidth - 12);
+    const maxTop = Math.max(12, view.dom.clientHeight - 180);
     setAsidePosition({
       left: Math.max(12, Math.min(rawLeft, maxLeft)),
       top: Math.max(12, Math.min(rawTop, maxTop)),
@@ -297,19 +239,15 @@ export function NotesView({
   }, []);
 
   const updateToolbarPosition = useCallback((range: SelectionRange | null) => {
-    const editor = editorRef.current;
-    if (!editor || !range) return;
-    const endCoords = getTextareaCaretCoordinates(editor, range.end);
+    const view = editorRef.current?.getView();
+    if (!view || !range) return;
+    const endCoords = getNotesEditorCaretCoordinates(view, range.end);
+    if (!endCoords) return;
     const lineHeight = endCoords.lineHeight;
-    const belowTop =
-      endCoords.top - editor.scrollTop + lineHeight + NOTES_SELECTION_TOOLBAR_GAP_PX;
-    const top = Math.max(
-      12,
-      Math.min(belowTop, editor.clientHeight - NOTES_SELECTION_TOOLBAR_H_PX - 12),
-    );
-    const anchorLeft = endCoords.left - editor.scrollLeft;
-    const rawLeft = anchorLeft - NOTES_SELECTION_TOOLBAR_W_PX + 4;
-    const maxLeft = Math.max(12, editor.clientWidth - NOTES_SELECTION_TOOLBAR_W_PX - 12);
+    const belowTop = endCoords.top + lineHeight + NOTES_SELECTION_TOOLBAR_GAP_PX;
+    const top = Math.max(12, Math.min(belowTop, view.dom.clientHeight - NOTES_SELECTION_TOOLBAR_H_PX - 12));
+    const rawLeft = endCoords.left - NOTES_SELECTION_TOOLBAR_W_PX + 4;
+    const maxLeft = Math.max(12, view.dom.clientWidth - NOTES_SELECTION_TOOLBAR_W_PX - 12);
     setToolbarPosition({
       top,
       left: Math.max(12, Math.min(rawLeft, maxLeft)),
@@ -317,20 +255,19 @@ export function NotesView({
   }, []);
 
   const updateSelectionState = useCallback(() => {
-    const editor = editorRef.current;
-    if (!editor) {
+    const view = editorRef.current?.getView();
+    if (!view) {
       closeAsidePanel();
       return;
     }
-    const start = editor.selectionStart ?? 0;
-    const end = editor.selectionEnd ?? 0;
-    if (start === end) {
+    const { from, to } = view.state.selection.main;
+    if (from === to) {
       closeAsidePanel();
       return;
     }
-    const selectionStart = Math.min(start, end);
-    const selectionEnd = Math.max(start, end);
-    const selectedText = draft.slice(selectionStart, selectionEnd);
+    const selectionStart = Math.min(from, to);
+    const selectionEnd = Math.max(from, to);
+    const selectedText = view.state.sliceDoc(selectionStart, selectionEnd);
     if (!selectedText.trim()) {
       closeAsidePanel();
       return;
@@ -356,6 +293,8 @@ export function NotesView({
     });
     setAsideStatus({ kind: "idle" });
     const range = { start: selectionStart, end: selectionEnd, text: selectedText };
+    setEditorScrollTop(view.scrollDOM.scrollTop);
+    setEditorScrollLeft(view.scrollDOM.scrollLeft);
     updateAsidePosition(range);
     updateToolbarPosition(range);
   }, [closeAsidePanel, draft, selection, updateAsidePosition, updateToolbarPosition]);
@@ -425,19 +364,21 @@ export function NotesView({
     if (!initialOpenNoteId) return;
     let cancelled = false;
     const openInitialNote = async () => {
+      scheduleEditorFocus();
       setScreen("detail");
       setStatus({ kind: "loading" });
       await loadActiveNote(initialOpenNoteId);
       if (!cancelled) {
-        requestAnimationFrame(() => editorRef.current?.focus());
+        onInitialOpenNoteHandled?.();
       }
-      onInitialOpenNoteHandled?.();
     };
     void openInitialNote();
     return () => {
       cancelled = true;
+      pendingEditorFocusRef.current = false;
+      pendingEditorCaretRef.current = null;
     };
-  }, [initialOpenNoteId, loadActiveNote, onInitialOpenNoteHandled]);
+  }, [initialOpenNoteId, loadActiveNote, onInitialOpenNoteHandled, scheduleEditorFocus]);
 
   useEffect(() => {
     onScreenChange?.(screen);
@@ -446,6 +387,30 @@ export function NotesView({
   useEffect(() => {
     onActiveNoteChange?.(screen === "detail" ? selectedNoteId : null);
   }, [onActiveNoteChange, screen, selectedNoteId]);
+
+  useEffect(() => {
+    onEditorFocusChange?.(screen === "detail" && editorFocused);
+  }, [editorFocused, onEditorFocusChange, screen]);
+
+  useEffect(() => {
+    if (!pendingEditorFocusRef.current) return;
+    if (screen !== "detail") return;
+    if (status.kind === "loading" || status.kind === "deleting") return;
+    if (status.kind === "error") {
+      pendingEditorFocusRef.current = false;
+      pendingEditorCaretRef.current = null;
+      return;
+    }
+    pendingEditorFocusRef.current = false;
+    const caret = pendingEditorCaretRef.current;
+    pendingEditorCaretRef.current = null;
+    requestAnimationFrame(() => {
+      editorRef.current?.focus();
+      if (caret != null) {
+        editorRef.current?.setSelection(caret, caret);
+      }
+    });
+  }, [screen, selectedNoteId, status.kind]);
 
   useEffect(() => {
     if (resetToOverviewNonce == null) return;
@@ -520,18 +485,13 @@ export function NotesView({
       setScreen("detail");
       closeAsidePanel();
       setStatus({ kind: "idle" });
-      requestAnimationFrame(() => {
-        const editor = editorRef.current;
-        if (!editor) return;
-        const initialCursorOffset = typeof note.initialCursorOffset === "number" ? note.initialCursorOffset : null;
-        const caret = Math.max(0, Math.min(initialCursorOffset ?? editor.value.length, editor.value.length));
-        editor.focus();
-        editor.setSelectionRange(caret, caret);
-      });
+      const initialCursorOffset = typeof note.initialCursorOffset === "number" ? note.initialCursorOffset : null;
+      const caret = Math.max(0, Math.min(initialCursorOffset ?? note.content.length, note.content.length));
+      scheduleEditorFocus(caret);
     } catch (e) {
       setStatus({ kind: "error", message: String(e) });
     }
-  }, [closeAsidePanel, notesApi]);
+  }, [closeAsidePanel, notesApi, scheduleEditorFocus]);
 
   const deleteActiveNote = useCallback(async () => {
     if (!selectedNoteId) return;
@@ -552,12 +512,12 @@ export function NotesView({
 
   const openNote = useCallback(
     async (id: string) => {
-      setSelectedNoteId(id);
+      scheduleEditorFocus();
       setScreen("detail");
       setStatus({ kind: "loading" });
       await loadActiveNote(id);
     },
-    [loadActiveNote],
+    [loadActiveNote, scheduleEditorFocus],
   );
 
   const goBackToList = useCallback(() => {
@@ -620,21 +580,18 @@ export function NotesView({
     setDraft((prev) => prev.slice(0, selection.start) + panelOutput + prev.slice(selection.end));
     closeAsidePanel();
     requestAnimationFrame(() => {
-      const editor = editorRef.current;
-      if (!editor) return;
-      editor.focus();
-      editor.setSelectionRange(insertionStart, insertionStart);
+      editorRef.current?.focus();
+      editorRef.current?.setSelection(insertionStart, insertionStart);
     });
   }, [selection, draft, panelOutput, closeAsidePanel]);
 
   const dismissAside = useCallback(() => {
     closeAsidePanel();
     requestAnimationFrame(() => {
-      const editor = editorRef.current;
-      if (!editor) return;
-      const caret = editor.selectionEnd ?? 0;
-      editor.focus();
-      editor.setSelectionRange(caret, caret);
+      const view = editorRef.current?.getView();
+      const caret = view?.state.selection.main.head ?? 0;
+      editorRef.current?.focus();
+      editorRef.current?.setSelection(caret, caret);
     });
   }, [closeAsidePanel]);
 
@@ -665,129 +622,15 @@ export function NotesView({
   }, [selection, updateAsidePosition]);
 
   const handleEditorScroll = useCallback(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    setEditorScrollTop(editor.scrollTop);
-    setEditorScrollLeft(editor.scrollLeft);
+    const view = editorRef.current?.getView();
+    if (view) {
+      setEditorScrollTop(view.scrollDOM.scrollTop);
+      setEditorScrollLeft(view.scrollDOM.scrollLeft);
+    }
     if (!selection) return;
     updateAsidePosition(selection);
     updateToolbarPosition(selection);
   }, [selection, updateAsidePosition, updateToolbarPosition]);
-
-  const handleEditorKeyDown = useCallback((e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      const nativeEvent = e.nativeEvent as KeyboardEvent;
-      if (e.isComposing || nativeEvent.isComposing || e.repeat) return;
-      const editor = e.currentTarget;
-      const value = editor.value;
-      const selectionStart = editor.selectionStart ?? 0;
-      const selectionEnd = editor.selectionEnd ?? 0;
-      if (selectionStart !== selectionEnd) return;
-      const lineStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
-      const lineEnd = value.indexOf("\n", selectionStart);
-      const safeLineEnd = lineEnd === -1 ? value.length : lineEnd;
-      if (selectionStart !== safeLineEnd) return;
-      const line = value.slice(lineStart, safeLineEnd);
-      const continuation = getListContinuationPrefixForLine(line);
-      if (!continuation) return;
-      e.preventDefault();
-      const nextDraft = `${value.slice(0, selectionStart)}\n${continuation}${value.slice(selectionEnd)}`;
-      const nextCaret = selectionStart + 1 + continuation.length;
-      setDraft(nextDraft);
-      requestAnimationFrame(() => editor.setSelectionRange(nextCaret, nextCaret));
-      return;
-    }
-
-    if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const editor = e.currentTarget;
-    const value = editor.value;
-    const selectionStart = editor.selectionStart ?? 0;
-    const selectionEnd = editor.selectionEnd ?? 0;
-    const blockStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
-    const blockEnd =
-      selectionStart === selectionEnd
-        ? (() => {
-            const lineEnd = value.indexOf("\n", selectionStart);
-            return lineEnd === -1 ? value.length : lineEnd;
-          })()
-        : selectionEnd;
-    const block = value.slice(blockStart, blockEnd);
-    const listDirection = e.shiftKey ? "outdent" : "indent";
-    const useListIndent =
-      selectionStart === selectionEnd
-        ? isMarkdownListItemLine(block)
-        : block.split("\n").some(isMarkdownListItemLine);
-
-    if (useListIndent) {
-      const adjusted = adjustMarkdownListItemIndent(block, listDirection);
-      if (adjusted.changed) {
-        const nextDraft = `${value.slice(0, blockStart)}${adjusted.block}${value.slice(blockEnd)}`;
-        setDraft(nextDraft);
-        if (selectionStart === selectionEnd) {
-          const caretDelta = listDirection === "indent" ? adjusted.deltaAtStart : -adjusted.deltaAtStart;
-          const nextCaret = Math.max(blockStart, selectionStart + caretDelta);
-          requestAnimationFrame(() => editor.setSelectionRange(nextCaret, nextCaret));
-        } else {
-          requestAnimationFrame(() => {
-            editor.setSelectionRange(
-              Math.max(blockStart, selectionStart + (listDirection === "indent" ? adjusted.deltaAtStart : -adjusted.deltaAtStart)),
-              Math.max(blockStart, selectionEnd + (listDirection === "indent" ? adjusted.deltaTotal : -adjusted.deltaTotal)),
-            );
-          });
-        }
-        return;
-      }
-      if (selectionStart === selectionEnd) {
-        return;
-      }
-    }
-
-    if (selectionStart === selectionEnd) {
-      if (e.shiftKey) {
-        const lineStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
-        if (value[lineStart] !== "\t") {
-          return;
-        }
-        const nextDraft = `${value.slice(0, lineStart)}${value.slice(lineStart + 1)}`;
-        const nextCaret = selectionStart > lineStart ? selectionStart - 1 : selectionStart;
-        setDraft(nextDraft);
-        requestAnimationFrame(() => editor.setSelectionRange(nextCaret, nextCaret));
-        return;
-      }
-      const nextDraft = `${value.slice(0, selectionStart)}\t${value.slice(selectionEnd)}`;
-      setDraft(nextDraft);
-      requestAnimationFrame(() => editor.setSelectionRange(selectionStart + 1, selectionStart + 1));
-      return;
-    }
-
-    const selectedBlockStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
-    const selectedBlock = value.slice(selectedBlockStart, selectionEnd);
-
-    if (e.shiftKey) {
-      const unindentedBlock = selectedBlock.replace(/^\t/gm, "");
-      const nextDraft = value.slice(0, selectedBlockStart) + unindentedBlock + value.slice(selectionEnd);
-      const removedAtStart = value[selectedBlockStart] === "\t" ? 1 : 0;
-      const removedTotal = selectedBlock.length - unindentedBlock.length;
-      setDraft(nextDraft);
-      requestAnimationFrame(() => {
-        editor.setSelectionRange(
-          Math.max(selectedBlockStart, selectionStart - removedAtStart),
-          Math.max(selectedBlockStart, selectionEnd - removedTotal),
-        );
-      });
-      return;
-    }
-
-    const indentedBlock = selectedBlock.replace(/^/gm, "\t");
-    const nextDraft = value.slice(0, selectedBlockStart) + indentedBlock + value.slice(selectionEnd);
-    const addedTotal = indentedBlock.length - selectedBlock.length;
-    setDraft(nextDraft);
-    requestAnimationFrame(() => {
-      editor.setSelectionRange(selectionStart + 1, selectionEnd + addedTotal);
-    });
-  }, []);
 
   const handleEditorFocus = useCallback(() => {
     setEditorFocused(true);
@@ -853,7 +696,7 @@ export function NotesView({
     const onPointerDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (selectionToolbarRef.current?.contains(t)) return;
-      if (editorRef.current?.contains(t)) return;
+      if (editorRef.current?.getView()?.dom.contains(t)) return;
       dismissAside();
     };
     window.addEventListener("pointerdown", onPointerDown, true);
@@ -876,7 +719,7 @@ export function NotesView({
       {screen === "list" ? (
         <WorkspaceHeader
           title="Editor"
-          icon={<SquarePen size={18} />}
+          icon={<SquarePen size={16} />}
           scrolled={headerScrolled}
           titleRowClassName="notes-surface__header-title-row"
         />
@@ -887,9 +730,15 @@ export function NotesView({
         onScroll={onScroll}
       >
         {screen === "list" ? (
-          <section className="notes-surface__panel">
-            <div className="notes-surface__section" aria-labelledby="notes-templates-label">
-              <h3 id="notes-templates-label" className="notes-surface__section-label">
+          <section className="workspace-content workspace-stack">
+            <WorkspaceListSearch
+              value={listSearchQuery}
+              onChange={setListSearchQuery}
+              placeholder="Search notes…"
+              aria-label="Search notes"
+            />
+            <div className="workspace-section" aria-labelledby="notes-templates-label">
+              <h3 id="notes-templates-label" className="workspace-section-label">
                 Templates
               </h3>
               <div className="notes-surface__templates" role="group" aria-labelledby="notes-templates-label">
@@ -907,12 +756,12 @@ export function NotesView({
                 ))}
               </div>
             </div>
-            <div className="notes-surface__section" aria-labelledby="notes-recent-label">
-              <h3 id="notes-recent-label" className="notes-surface__section-label">
+            <div className="workspace-section" aria-labelledby="notes-recent-label">
+              <h3 id="notes-recent-label" className="workspace-section-label">
                 Recent
               </h3>
               <ul className="notes-surface__notes" aria-labelledby="notes-recent-label">
-                {notes.map((note) => {
+                {filteredNotes.map((note) => {
                   const displayTitle = getDisplayNoteTitle(note.title);
                   return (
                     <li key={note.id}>
@@ -924,25 +773,25 @@ export function NotesView({
                         <span className="notes-surface__note-title" title={displayTitle}>
                           {displayTitle}
                         </span>
-                        <span className="notes-surface__note-time">
-                          <span className="notes-surface__note-time-default">{formatTimeAgo(note.updatedAt)}</span>
-                          <span className="notes-surface__note-time-hover">
-                            {formatTimeAgo(note.updatedAt)} · {formatWordCount(note.wordCount)}
-                          </span>
+                        <span className="notes-surface__note-meta">
+                          <span className="notes-surface__note-word-count">{formatWordCount(note.wordCount)}</span>
+                          <span className="notes-surface__note-time">{formatTimeAgo(note.updatedAt)}</span>
                         </span>
                       </button>
                     </li>
                   );
                 })}
               </ul>
-              {notes.length === 0 ? (
-                <p className="notes-surface__empty">No notes yet. Create one to get started.</p>
+              {filteredNotes.length === 0 ? (
+                <p className="notes-surface__empty">
+                  {listSearching ? "No notes match your search." : "No notes yet. Create one to get started."}
+                </p>
               ) : null}
             </div>
           </section>
         ) : (
           <section className="notes-surface__detail">
-            <div className="notes-surface__toolbar">
+            <div className="notes-surface__toolbar editor-chrome">
               <button
                 type="button"
                 className="btn btn-icon"
@@ -1033,23 +882,23 @@ export function NotesView({
                 ) : null}
               </div>
             </div>
-            <div className={`notes-surface__editor-wrap notes-surface__editor-wrap--${noteWidthMode}`}>
-              <textarea
+            <div
+              ref={editorWrapRef}
+              className={`notes-surface__editor-wrap notes-surface__editor-wrap--${noteWidthMode}`}
+            >
+              <NotesCodeEditor
                 ref={editorRef}
-                className="notes-surface__editor"
+                className="notes-surface__editor notes-code-editor"
                 data-testid="notes-editor"
                 aria-label="Editor"
                 placeholder={status.kind === "loading" ? "Loading..." : "Write your note here..."}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onSelect={updateSelectionState}
-                onMouseUp={updateSelectionState}
-                onKeyDown={handleEditorKeyDown}
-                onKeyUp={updateSelectionState}
-                onScroll={handleEditorScroll}
+                readOnly={status.kind === "loading" || status.kind === "deleting"}
+                onChange={setDraft}
+                onSelectionChange={updateSelectionState}
                 onFocus={handleEditorFocus}
                 onBlur={handleEditorBlur}
-                spellCheck
+                onScroll={handleEditorScroll}
               />
               {showSelectionOverlay ? (
                 <div className="notes-surface__editor-overlay" aria-hidden>

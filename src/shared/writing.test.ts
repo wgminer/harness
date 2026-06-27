@@ -4,11 +4,14 @@ import {
   NOTE_TEMPLATE_TODAY_TOKEN,
   adjustMarkdownListItemIndent,
   getListContinuationPrefixForLine,
+  getListSoftBreakPrefixForLine,
   isMarkdownListItemLine,
   interpolateNoteTemplateContent,
   interpolateNoteTemplateTitle,
   normalizeNoteTemplateDescription,
   normalizeNoteTemplates,
+  parseMarkdownHeadingLine,
+  reflowMarkdownListWrapInDraft,
   resolveNoteTemplateContent,
   stripLeadingMarkdownHeading,
 } from "./writing";
@@ -138,6 +141,23 @@ describe("getListContinuationPrefixForLine", () => {
   });
 });
 
+describe("getListSoftBreakPrefixForLine", () => {
+  it("indents soft breaks under unordered list text", () => {
+    expect(getListSoftBreakPrefixForLine("- item")).toBe("  ");
+    expect(getListSoftBreakPrefixForLine("  - nested item")).toBe("    ");
+  });
+
+  it("indents soft breaks under ordered list text", () => {
+    expect(getListSoftBreakPrefixForLine("1. first")).toBe("   ");
+    expect(getListSoftBreakPrefixForLine("  10. nested")).toBe("      ");
+  });
+
+  it("does not soft-break blank or non-list lines", () => {
+    expect(getListSoftBreakPrefixForLine("- ")).toBeNull();
+    expect(getListSoftBreakPrefixForLine("plain text")).toBeNull();
+  });
+});
+
 describe("isMarkdownListItemLine", () => {
   it("matches unordered and ordered list markers", () => {
     expect(isMarkdownListItemLine("- item")).toBe(true);
@@ -180,6 +200,56 @@ describe("adjustMarkdownListItemIndent", () => {
       deltaTotal: 8,
       changed: true,
     });
+  });
+});
+
+describe("reflowMarkdownListWrapInDraft", () => {
+  const charWidth = 8;
+  const measureLine = (line: string) => line.length * charWidth;
+
+  it("wraps overflowing unordered list items with soft-break indentation", () => {
+    const draft = "- alpha beta gamma delta epsilon zeta eta theta iota";
+    const maxWidth = 24 * charWidth;
+    const { draft: reflowed } = reflowMarkdownListWrapInDraft(draft, draft.length, maxWidth, measureLine);
+    expect(reflowed).toContain("\n  ");
+    expect(reflowed.split("\n").every((line) => measureLine(line) <= maxWidth || line.trim() === "")).toBe(true);
+  });
+
+  it("wraps overflowing continuation lines under the list marker", () => {
+    const draft = "- short\n  alpha beta gamma delta epsilon zeta eta theta iota kappa";
+    const maxWidth = 24 * charWidth;
+    const { draft: reflowed } = reflowMarkdownListWrapInDraft(draft, draft.length, maxWidth, measureLine);
+    expect(reflowed.split("\n").length).toBeGreaterThan(2);
+    expect(reflowed.split("\n").slice(1).every((line) => line.startsWith("  "))).toBe(true);
+  });
+
+  it("wraps overflowing nested unordered list items", () => {
+    const draft =
+      "  - The core need is that it must become much simpler and more coherent to get an app into Slack or to get an agent into Slack.";
+    const maxWidth = 48 * charWidth;
+    const { draft: reflowed } = reflowMarkdownListWrapInDraft(draft, draft.length, maxWidth, measureLine);
+    expect(reflowed.split("\n").length).toBeGreaterThan(1);
+    expect(reflowed.split("\n").slice(1).every((line) => line.startsWith("    "))).toBe(true);
+  });
+
+  it("leaves short list items unchanged", () => {
+    const draft = "- fits on one line";
+    const { draft: reflowed } = reflowMarkdownListWrapInDraft(draft, draft.length, 80 * charWidth, measureLine);
+    expect(reflowed).toBe(draft);
+  });
+});
+
+describe("parseMarkdownHeadingLine", () => {
+  it("parses ATX headings with required marker spacing", () => {
+    expect(parseMarkdownHeadingLine("# Title")).toEqual({ level: 1, markerLength: 2 });
+    expect(parseMarkdownHeadingLine("## Subtitle")).toEqual({ level: 2, markerLength: 3 });
+    expect(parseMarkdownHeadingLine("   ### Indented")).toEqual({ level: 3, markerLength: 7 });
+  });
+
+  it("rejects lines without marker spacing or non-headings", () => {
+    expect(parseMarkdownHeadingLine("#NoSpace")).toBeNull();
+    expect(parseMarkdownHeadingLine("- list item")).toBeNull();
+    expect(parseMarkdownHeadingLine("plain text")).toBeNull();
   });
 });
 

@@ -334,8 +334,8 @@ export type ThemeSettings = ThemeColors & {
 
 export const DEFAULT_THEME_COLORS: ThemeColors = {
   accent: "#f2ff00",
-  fg: "#e6edf3",
-  bg: "#0d1117",
+  fg: "#f5f5f5",
+  bg: "#050505",
 };
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
@@ -351,30 +351,46 @@ export type ThemePreset = {
   colors: ThemeColors;
 };
 
-/** Color palettes for quick selection in Theme studio (typography is separate). */
+/** Four built-in color themes. Typography is configured separately. */
 export const THEME_PRESETS: readonly ThemePreset[] = [
-  { id: "night", label: "Night", colors: { ...DEFAULT_THEME_COLORS } },
+  { id: "dark", label: "Dark", colors: { ...DEFAULT_THEME_COLORS } },
   {
-    id: "paper",
-    label: "Paper",
-    colors: { accent: "#9a7b52", fg: "#3d3832", bg: "#f4efe6" },
+    id: "light",
+    label: "Light",
+    colors: { accent: "#0052ff", fg: "#0a0a0a", bg: "#fafafa" },
   },
   {
-    id: "matcha",
-    label: "Matcha",
-    colors: { accent: "#6d8f4a", fg: "#364829", bg: "#eef4e4" },
+    id: "green",
+    label: "Green",
+    colors: { accent: "#32d74b", fg: "#b8f5a8", bg: "#031508" },
   },
   {
-    id: "ik_blue",
-    label: "IK blue",
-    colors: { accent: "#7eb8ff", fg: "#ffffff", bg: "#002fa7" },
+    id: "blue",
+    label: "Blue",
+    colors: { accent: "#0091ff", fg: "#b8dcff", bg: "#010810" },
   },
-  {
-    id: "bloomberg",
-    label: "Bloomberg",
-    colors: { accent: "#ffb000", fg: "#ffb347", bg: "#101010" },
-  },
-];
+] as const;
+
+/** Legacy preset ids still accepted by tools and older backups. */
+export const THEME_PRESET_ALIASES: Readonly<Record<string, string>> = {
+  night: "dark",
+  paper: "light",
+  matcha: "green",
+  ik_blue: "blue",
+  bloomberg: "dark",
+};
+
+/** Resolve a preset id, including legacy aliases. */
+export function resolveThemePresetId(raw: string): string | undefined {
+  const id = raw.trim().toLowerCase();
+  const resolved = THEME_PRESET_ALIASES[id] ?? id;
+  return THEME_PRESETS.some((p) => p.id === resolved) ? resolved : undefined;
+}
+
+export function findThemePreset(id: string): ThemePreset | undefined {
+  const resolved = resolveThemePresetId(id);
+  return resolved ? THEME_PRESETS.find((p) => p.id === resolved) : undefined;
+}
 
 /** Apply a color palette to existing theme settings without changing typography. */
 export function applyThemeColors(settings: ThemeSettings, colors: ThemeColors): ThemeSettings {
@@ -410,24 +426,82 @@ export function coerceFontSizePx(raw: number): FontSizePx {
   return closest;
 }
 
+/** Whether the theme background reads as light (for surface mix + mobile chrome). */
+export function isLightThemeBackground(bg: string): boolean {
+  const rgb = hexToRgb(parseHexColor(bg) ?? bg);
+  if (!rgb) return false;
+  return relativeLuminance(rgb) > 0.55;
+}
+
+type ThemeSurfaceMix = {
+  fgMutedFgPct: number;
+  bgSecondaryBgPct: number;
+  bgElevatedBgPct: number;
+  borderLightBgPct: number;
+  borderDarkBgPct: number;
+  accentReadableAccentPct: number;
+  selectionAccentPct: number;
+  sidebarActiveAccentPct: number;
+  sidebarHoverFgPct: number;
+};
+
+function themeSurfaceMix(bg: string): ThemeSurfaceMix {
+  if (isLightThemeBackground(bg)) {
+    return {
+      fgMutedFgPct: 62,
+      bgSecondaryBgPct: 88,
+      bgElevatedBgPct: 78,
+      borderLightBgPct: 68,
+      borderDarkBgPct: 58,
+      accentReadableAccentPct: 88,
+      selectionAccentPct: 82,
+      sidebarActiveAccentPct: 88,
+      sidebarHoverFgPct: 14,
+    };
+  }
+  return {
+    fgMutedFgPct: 70,
+    bgSecondaryBgPct: 88,
+    bgElevatedBgPct: 78,
+    borderLightBgPct: 68,
+    borderDarkBgPct: 58,
+    accentReadableAccentPct: 86,
+    selectionAccentPct: 80,
+    sidebarActiveAccentPct: 88,
+    sidebarHoverFgPct: 14,
+  };
+}
+
+/** Dark-theme surface tone pulls fg toward accent so panels keep chromatic punch. */
+function themeSurfaceTone(fg: string, accent: string, bg: string): string {
+  if (isLightThemeBackground(bg)) return fg;
+  return `color-mix(in oklab, ${fg} 74%, ${accent})`;
+}
+
 function themeResolvedCssVars(s: ThemeSettings): Record<string, string> {
   const accent = s.accent.trim();
   const fg = s.fg.trim();
   const bg = s.bg.trim();
+  const mix = themeSurfaceMix(bg);
+  const surfaceTone = themeSurfaceTone(fg, accent, bg);
+  const fgMutedTone = isLightThemeBackground(bg)
+    ? fg
+    : `color-mix(in oklab, ${fg} 68%, ${accent})`;
   return {
     "--accent": accent,
     "--fg": fg,
     "--bg": bg,
-    "--fg-muted": `color-mix(in oklab, ${fg} 60%, ${bg})`,
-    "--bg-secondary": `color-mix(in oklab, ${bg} 92%, ${fg})`,
-    "--bg-elevated": `color-mix(in oklab, ${bg} 84%, ${fg})`,
-    "--border-dark": `color-mix(in oklab, ${bg} 68%, ${fg})`,
-    "--border-light": `color-mix(in oklab, ${bg} 82%, ${fg})`,
-    "--border": `color-mix(in oklab, ${bg} 68%, ${fg})`,
-    "--accent-readable": `color-mix(in oklab, ${accent} 70%, ${fg})`,
-    "--selection-bg": `color-mix(in srgb, ${accent} 38%, ${fg} 22%)`,
-    "--sidebar-control-hover-bg": `color-mix(in srgb, ${fg} 10%, var(--bg-secondary))`,
-    "--sidebar-control-active-hover-bg": `color-mix(in srgb, ${accent} 72%, var(--bg-secondary))`,
+    "--fg-muted": `color-mix(in oklab, ${fgMutedTone} ${mix.fgMutedFgPct}%, ${bg})`,
+    "--bg-secondary": `color-mix(in oklab, ${bg} ${mix.bgSecondaryBgPct}%, ${surfaceTone})`,
+    "--bg-elevated": `color-mix(in oklab, ${bg} ${mix.bgElevatedBgPct}%, ${surfaceTone})`,
+    "--border-dark": `color-mix(in oklab, ${bg} ${mix.borderDarkBgPct}%, ${surfaceTone})`,
+    "--border-light": `color-mix(in oklab, ${bg} ${mix.borderLightBgPct}%, ${surfaceTone})`,
+    "--border": `color-mix(in oklab, ${bg} ${mix.borderDarkBgPct}%, ${surfaceTone})`,
+    "--accent-readable": `color-mix(in oklab, ${accent} ${mix.accentReadableAccentPct}%, ${fg})`,
+    "--selection-bg": `color-mix(in oklab, ${accent} ${mix.selectionAccentPct}%, ${bg})`,
+    "--selection-fg": `color-mix(in oklab, ${bg} 70%, ${fg})`,
+    "--sidebar-control-hover-bg": `color-mix(in srgb, ${fg} ${mix.sidebarHoverFgPct}%, var(--bg-secondary))`,
+    "--sidebar-control-active-hover-bg": `color-mix(in srgb, ${accent} ${mix.sidebarActiveAccentPct}%, var(--bg-secondary))`,
     "--font-family": FONT_STACKS[s.font],
     "--font-family-mono": FONT_STACKS[s.fontMono],
     "--font-size": `${s.fontSize}px`,

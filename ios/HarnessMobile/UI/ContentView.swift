@@ -22,6 +22,9 @@ struct ContentView: View {
                 }
             }
         }
+        .environment(\.harnessTheme, app.themeStore.harnessTheme)
+        .preferredColorScheme(app.themeStore.preferredColorScheme)
+        .tint(Color(themeHex: app.themeStore.harnessTheme.derived.accent))
         .task {
             await app.bootstrap()
         }

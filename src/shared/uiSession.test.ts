@@ -13,11 +13,13 @@ describe("normalizeUiSession", () => {
         view: "tasks",
         conversationId: "  abc  ",
         notesOpenNoteId: "note-1",
+        setupNoticeDismissed: true,
       })
     ).toEqual({
       view: "tasks",
       conversationId: "abc",
       notesOpenNoteId: "note-1",
+      setupNoticeDismissed: true,
     });
   });
 
@@ -32,6 +34,7 @@ describe("normalizeUiSession", () => {
       view: "chat",
       conversationId: null,
       notesOpenNoteId: null,
+      setupNoticeDismissed: false,
     });
   });
 });

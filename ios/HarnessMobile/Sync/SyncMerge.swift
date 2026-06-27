@@ -41,6 +41,7 @@ enum SyncMerge {
         "app-state/plans.json",
         "app-state/user_memory.json",
         "settings/settings.json",
+        "themes/theme.json",
     ]
 
     static func buildConflictReview(
@@ -141,6 +142,9 @@ enum SyncMerge {
         if path == "settings/settings.json" {
             return mergeSettingsJson(local: local, remote: remote)
         }
+        if path == "themes/theme.json" {
+            return mergeThemeJson(local: local, remote: remote)
+        }
         if path.hasSuffix(".json"),
            let localObj = parseJSONObject(local),
            let remoteObj = parseJSONObject(remote) {
@@ -187,6 +191,7 @@ enum SyncMerge {
         case "app-state/user_memory.json": return "User context"
         case "app-state/writing.md": return "Writing surface"
         case "settings/settings.json": return "App preferences"
+        case "themes/theme.json": return "Theme"
         default:
             if path.hasPrefix("themes/") {
                 return String(path.dropFirst("themes/".count))
@@ -320,6 +325,21 @@ enum SyncMerge {
         if let backup = localObj["backup"] {
             merged["backup"] = backup
         }
+        return encodeJSON(merged)
+    }
+
+    private static func mergeThemeJson(local: Data, remote: Data) -> Data {
+        let localObj = parseJSONObject(local) ?? [:]
+        let remoteObj = parseJSONObject(remote) ?? [:]
+        let localTs = tsFromValue(localObj)
+        let remoteTs = tsFromValue(remoteObj)
+        let newer = localTs >= remoteTs ? localObj : remoteObj
+        let older = localTs >= remoteTs ? remoteObj : localObj
+        var merged = older
+        for (key, value) in newer {
+            merged[key] = value
+        }
+        merged["updatedAt"] = max(localTs, remoteTs)
         return encodeJSON(merged)
     }
 }

@@ -35,7 +35,6 @@ final class PendingSyncTrackerTests: XCTestCase {
         UserDefaults.standard.set(revision, forKey: SyncEngine.lastSyncedContentRevisionKey)
 
         let store = ConversationStore(localDataDir: localDataDir)
-        store.markEdited()
         try store.refreshPendingSyncState()
 
         XCTAssertFalse(store.hasLocalEdits)

@@ -7,6 +7,7 @@ enum LocalDataLayout {
     static let userMemoryFile = "app-state/user_memory.json"
     static let tasksFile = "app-state/tasks.json"
     static let settingsFile = "settings/settings.json"
+    static let themeFile = "themes/theme.json"
 
     static func noteFile(id: String) -> String {
         "app-state/notes/\(id).md"

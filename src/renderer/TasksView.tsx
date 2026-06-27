@@ -15,6 +15,7 @@ import {
 import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { WorkspaceListSearch } from "./WorkspaceListSearch";
 import { TASK_COMPLETE_MS } from "../shared/motion";
 
 function TagChips({ tags, className }: { tags: string[]; className?: string }) {
@@ -326,15 +327,13 @@ export function TasksView() {
 
   return (
     <div ref={tasksPaneRef} className="workspace-page tasks-page">
-      <WorkspaceHeader title="Tasks" icon={<ListTodo size={18} />} scrolled={headerScrolled} />
+      <WorkspaceHeader title="Tasks" icon={<ListTodo size={16} />} scrolled={headerScrolled} />
       <div ref={scrollRef} className="workspace-scroll tasks-scroll" onScroll={onScroll}>
-        <div className="workspace-content tasks-content">
-          <input
-            type="search"
-            className="workspace-search-input"
-            placeholder="Search tasks…"
+        <div className="workspace-content workspace-stack tasks-content">
+          <WorkspaceListSearch
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={setSearchQuery}
+            placeholder="Search tasks…"
             aria-label="Search tasks"
           />
           <div className="tasks-section">

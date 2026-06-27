@@ -21,7 +21,7 @@ import { executeAssistantTool, isAssistantToolName } from "./assistantTools";
 import type { ChatMessage } from "../shared/types";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { HARNESS_E2E_ASSISTANT_REPLY, getHarnessE2EStreamDelayMs, isHarnessE2E } from "./e2eStub";
-import { RIG_PAGE_TITLE } from "../shared/rigPage";
+import { openAIRequiredMessage } from "../shared/setupState";
 
 function activeChatModelLabel(): string {
   return OPENAI_CHAT_MODEL;
@@ -68,7 +68,7 @@ async function buildMessageList(
       "You are a helpful assistant running in a local desktop app.",
       "Prefer concise, practical, high-signal responses.",
       "For complex writing/thinking tasks, start with structure (questions, outline, tradeoffs) unless the user explicitly asks for a full draft immediately.",
-      "Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); get_theme, update_theme, apply_theme_preset, and set_layout (app appearance — call get_theme before edits; presets: night, paper, matcha, ik_blue, bloomberg); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat; short saved snippets belong in a note titled \"Clippings\" as a numbered markdown list, optionally with inline #tags). Call them when appropriate.",
+      "Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); get_theme, update_theme, apply_theme_preset, and set_layout (app appearance — call get_theme before edits; presets: dark, light, green, blue); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat; short saved snippets belong in a note titled \"Clippings\" as a numbered markdown list, optionally with inline #tags). Call them when appropriate.",
       "",
       "[FORMATTING_CAPABILITIES]",
       "Standard markdown (bold, italic, lists, tables, fenced code, blockquotes) is supported. Use plain prose by default. Only reach for the layout blocks below when they add genuine clarity over a paragraph or list. Never wrap an entire reply in a single block.",
@@ -247,8 +247,8 @@ async function streamAssistantReply(conversationId: string, messages: ChatMessag
     return;
   }
 
-  if (!settings.openai?.apiKey) {
-    throw new Error(`OpenAI API key not set. Configure it in ${RIG_PAGE_TITLE}.`);
+  if (!settings.openai?.apiKey?.trim()) {
+    throw new Error(openAIRequiredMessage());
   }
 
   const win = getMainWindow();

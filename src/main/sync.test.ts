@@ -98,7 +98,7 @@ describe("folder-backup sync", () => {
     currentUserDataDir = await makeDevice({
       "app-state/conversations.json": '{"from":"A"}',
       "settings/settings.json": '{"version":1,"openai":{"apiKey":"k1"}}',
-      "themes/active.json": '{"accent":"#fff"}',
+      "themes/theme.json": '{"accent":"#fff"}',
     });
     await setBackupFolderInSettings(backup);
     const pushResult = await runSyncNow();
@@ -116,7 +116,7 @@ describe("folder-backup sync", () => {
     );
     expect(restored).toBe('{"from":"A"}');
     const themeRestored = await readFile(
-      join(currentUserDataDir, "local-data", "themes", "active.json"),
+      join(currentUserDataDir, "local-data", "themes", "theme.json"),
       "utf-8",
     );
     expect(themeRestored).toBe('{"accent":"#fff"}');

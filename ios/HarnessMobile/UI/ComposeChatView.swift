@@ -3,8 +3,10 @@ import UIKit
 
 struct ComposeChatView: View {
     @ObservedObject var app: AppModel
+    @Environment(\.harnessTheme) private var theme
 
     @State private var sendError: String?
+    @FocusState private var isComposerFocused: Bool
 
     private var headerQuote: String {
         HeaderQuotePolicy.homeHeaderQuote
@@ -29,7 +31,7 @@ struct ComposeChatView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(theme.bgColor.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -53,11 +55,13 @@ struct ComposeChatView: View {
             conversationId: "compose",
             isStreaming: app.chatService.isStreaming,
             autofocusOnAppear: true,
+            allowsCollapse: false,
             initialDraft: app.composeDraft,
             onDraftChange: { app.cacheComposeDraft($0) },
             onClearDraft: { app.clearComposeDraft() },
             onSend: { text in Task { await sendFirstMessage(text) } },
-            onStop: { app.chatService.stop() }
+            onStop: { app.chatService.stop() },
+            isFocused: $isComposerFocused
         )
         .padding(.horizontal, BottomBarMetrics.horizontalInset)
         .padding(.bottom, BottomBarMetrics.bottomInset)

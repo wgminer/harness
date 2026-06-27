@@ -9,25 +9,24 @@
 
 .workspace-header {
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  padding: var(--space-4) 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: var(--shell-bar-height);
   background: var(--bg-secondary);
-  border-bottom: 1px solid transparent;
-  transition:
-    border-color var(--motion-duration-normal) var(--motion-ease-standard),
-    box-shadow var(--motion-duration-normal) var(--motion-ease-standard);
+  box-shadow: var(--hairline-bottom-transparent);
+  transition: box-shadow var(--motion-duration-normal) var(--motion-ease-standard);
 }
 
 .workspace-header--scrolled {
-  border-bottom-color: var(--border-light);
+  box-shadow: var(--hairline-bottom);
 }
 
 .workspace-header-inner {
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
+  min-height: var(--input-height);
   padding: 0 var(--space-4);
   display: flex;
   align-items: center;
@@ -44,8 +43,9 @@
 
 .workspace-title {
   font-family: var(--font-family);
-  font-size: var(--font-size-title);
+  font-size: var(--font-size);
   font-weight: 600;
+  line-height: var(--line-height-tight);
   margin: 0;
 }
 
@@ -58,13 +58,87 @@
 .workspace-content {
   max-width: var(--content-width);
   margin: 0 auto;
-  padding: var(--space-2) var(--space-4) var(--space-6);
+  padding: var(--space-2) var(--space-4) var(--space-12);
 }
 
-/* Top-of-page search input shared by workspace pages (Tasks, Clippings, …). */
-.workspace-search-input {
-  display: block;
+/** Vertical stack for list pages (Tasks, Editor) — one gap token, no sibling margins. */
+.workspace-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.workspace-section-label {
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  font-size: var(--font-size-caption);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+}
+
+.workspace-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Soft filter field shared by Tasks and Editor list views — top of scroll panel. */
+.workspace-list-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   width: 100%;
-  margin-bottom: var(--space-4);
-  border-radius: var(--radius-sm);
+  height: calc(var(--grid) * 8);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  box-shadow: var(--hairline-inset-transparent);
+  transition:
+    background var(--motion-duration-ui) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.workspace-list-search:focus-within {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  box-shadow: var(--hairline-inset-glass), var(--hairline-surface-highlight);
+}
+
+.workspace-list-search__icon {
+  flex-shrink: 0;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  color: var(--fg-muted);
+}
+
+.workspace-list-search__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  font-family: var(--font-family);
+  font-size: var(--font-size-ui);
+  line-height: var(--line-height-ui);
+  color: var(--fg);
+}
+
+.workspace-list-search__input::placeholder {
+  color: var(--fg-muted);
+}
+
+.workspace-list-search__input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.workspace-list-search__input::-webkit-search-decoration,
+.workspace-list-search__input::-webkit-search-cancel-button,
+.workspace-list-search__input::-webkit-search-results-button,
+.workspace-list-search__input::-webkit-search-results-decoration {
+  appearance: none;
 }

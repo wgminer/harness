@@ -200,13 +200,26 @@ Ordered loosely by outcome; not a commitment sequence.
 | **Semantic memory** (vectors + retrieval) | O2, O4 |
 | **Backlog pipeline** (inbox, triage, promote) | O2, O3 |
 | **Workflow automation** (minimal rules/triggers) | O2, O4 |
+| **R2 remote backup** — S3-compatible blob backup; backup-only mode first | O2, O3, O4 |
+
+#### R2 remote backup `[O2][O3][O4]`
+
+Replace slow iCloud Drive folder transport with direct HTTPS upload/download of the existing sync artifacts.
+
+- **Provider:** Cloudflare R2 — S3-compatible API, permanent free tier (10 GB), no egress fees; scoped bucket API token (no IAM maze).
+- **Artifacts:** reuse `bundle.json.gz` + `manifest.json`; no format change.
+- **Mode (v1):** **backup-only** — push local blob on edit / background; pull on app launch when remote is newer. Skip bidirectional merge initially (last-write-wins or newer-timestamp-wins is fine for personal backup). Full merge can come later.
+- **Implementation:** new `SyncProvider: "s3Backup"` alongside `"folderBackup"`; thin `RemoteBackupStore` (`readManifest`, `readBundle`, `writeBundle+Manifest`); desktop via `@aws-sdk/client-s3` + R2 endpoint (`https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, `region: "auto"`); iOS via URLSession + SigV4 (or AWS SDK for Swift); credentials in Keychain / encrypted settings.
+- **Settings:** bucket name, account ID, access key, secret (scoped to one bucket prefix, e.g. `harness/`).
+- **Bonus:** enable R2/S3 object versioning for automatic backup history without changing the bundle format.
+- **Why:** one HTTPS round-trip per direction, clear upload-complete signal, no `.icloud` placeholders or waiting for filesystem sync daemons. Folder backup (Dropbox/Drive/iCloud) stays as an option for users who prefer it.
 
 ### Medium-term
 
 | Item | Outcomes |
 |------|----------|
 | **Telegram** (or similar) as mobile bridge | O3 |
-| **Backup / sync (deeper)** — scheduled sync, richer merge rules | O2, O3 |
+| **Backup / sync (deeper)** — scheduled sync, bidirectional merge on R2, richer conflict rules | O2, O3 |
 | **Richer tasks** — due dates, priority, conversation links | O2 |
 | **Model params in Settings** — temperature, max tokens, top-p | O4 |
 | **Auto-update** — `autoUpdater` for shipped builds | O2 |
@@ -221,4 +234,4 @@ Ordered loosely by outcome; not a commitment sequence.
 
 ---
 
-*Last updated: 2026-05-24*
+*Last updated: 2026-06-14*

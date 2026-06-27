@@ -186,7 +186,13 @@ export interface ElectronAPI {
     showInFolder: (path: string) => Promise<void>;
     exportWav: (data: ArrayBuffer, suggestedName?: string) => Promise<{ path: string } | { cancelled: true }>;
     openFolder: () => Promise<void>;
-    transcribe: (data: ArrayBuffer, options?: { requestId?: string }) => Promise<{ text: string } | { error: string }>;
+    transcribe: (
+      data: ArrayBuffer,
+      options?: { requestId?: string }
+    ) => Promise<
+      | { text: string; cleanupSkipped?: "no_api_key" }
+      | { error: string }
+    >;
     cancelTranscription: (requestId: string) => Promise<void>;
     pasteText: (text: string) => Promise<void>;
     done: () => Promise<void>;
@@ -205,6 +211,8 @@ export interface ElectronAPI {
     revealFolder: () => Promise<void>;
     /** Best-effort suggestions for known cloud-sync providers' folders. */
     listSuggestions: () => Promise<SyncFolderSuggestion[]>;
+    /** Fired when a sync pull or merge wrote remote data into local storage. */
+    onChanged: (cb: () => void) => () => void;
   };
   /** Present when the app is launched with `HARNESS_E2E=1`. */
   e2e?: {

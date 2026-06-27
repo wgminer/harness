@@ -11,6 +11,7 @@ private enum ChatThreadLayout {
 
 struct ChatThreadView: View {
     @ObservedObject var app: AppModel
+    @Environment(\.harnessTheme) private var theme
     let conversationId: String
 
     @State private var messages: [MessageRecord]
@@ -24,6 +25,7 @@ struct ChatThreadView: View {
     @State private var showRenameAlert = false
     @State private var renameDraft = ""
     @State private var showDeleteConfirm = false
+    @FocusState private var isComposerFocused: Bool
 
     private let autofocusComposer: Bool
 
@@ -129,12 +131,17 @@ struct ChatThreadView: View {
             .scrollDisabled(centerSingleMessage)
             .defaultScrollAnchor(centerSingleMessage ? .center : .bottom)
             .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    isComposerFocused = false
+                }
+            )
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composerDock
             }
             .onAppear { scrollProxy = proxy }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(theme.bgColor.ignoresSafeArea())
         .navigationTitle(titleForConversation)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -202,11 +209,13 @@ struct ChatThreadView: View {
             conversationId: conversationId,
             isStreaming: app.chatService.isStreaming,
             autofocusOnAppear: autofocusComposer,
+            allowsCollapse: true,
             initialDraft: app.cachedComposerDraft(conversationId: conversationId),
             onDraftChange: { app.cacheComposerDraft($0, conversationId: conversationId) },
             onClearDraft: { app.clearComposerDraft(conversationId: conversationId) },
             onSend: { text in Task { await send(text: text) } },
-            onStop: { app.chatService.stop() }
+            onStop: { app.chatService.stop() },
+            isFocused: $isComposerFocused
         )
         .padding(.horizontal, ChatThreadLayout.horizontalInset)
         .padding(.bottom, BottomBarMetrics.bottomInset)
