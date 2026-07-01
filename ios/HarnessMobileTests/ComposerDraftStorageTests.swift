@@ -2,9 +2,19 @@ import XCTest
 @testable import HarnessMobile
 
 final class ComposerDraftStorageTests: XCTestCase {
+    private var defaults: UserDefaults!
+    private let suiteName = "HarnessMobileTests.ComposerDraftStorage"
+
+    override func setUp() {
+        super.setUp()
+        defaults = UserDefaults(suiteName: suiteName)
+        defaults.removePersistentDomain(forName: suiteName)
+        ComposerDraftStorage.userDefaults = defaults
+    }
+
     override func tearDown() {
-        UserDefaults.standard.removeObject(forKey: ComposerDraftStorage.composeDraftKey)
-        UserDefaults.standard.removeObject(forKey: ComposerDraftStorage.threadDraftsKey)
+        defaults.removePersistentDomain(forName: suiteName)
+        ComposerDraftStorage.userDefaults = .standard
         super.tearDown()
     }
 

@@ -55,6 +55,7 @@ struct ComposeChatView: View {
             conversationId: "compose",
             isStreaming: app.chatService.isStreaming,
             autofocusOnAppear: true,
+            startsExpanded: true,
             allowsCollapse: false,
             initialDraft: app.composeDraft,
             onDraftChange: { app.cacheComposeDraft($0) },
@@ -63,6 +64,7 @@ struct ComposeChatView: View {
             onStop: { app.chatService.stop() },
             isFocused: $isComposerFocused
         )
+        .animation(nil, value: isComposerFocused)
         .padding(.horizontal, BottomBarMetrics.horizontalInset)
         .padding(.bottom, BottomBarMetrics.bottomInset)
     }

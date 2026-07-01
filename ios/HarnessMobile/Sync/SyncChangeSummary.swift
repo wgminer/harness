@@ -13,17 +13,6 @@ struct ConversationSnapshot: Equatable, Codable {
 }
 
 enum SyncChangeSummary {
-    static func describePullChanges(before: [String: ConversationSnapshot], after: [String: ConversationSnapshot], fileCount: Int) -> String {
-        let conversationDetail = describeConversationChanges(before: before, after: after)
-        if let conversationDetail {
-            return "\(conversationDetail) (\(fileCount) files applied)"
-        }
-        if fileCount > 0 {
-            return "Applied \(fileCount) files from backup folder."
-        }
-        return "Backup folder matched what was already on this phone."
-    }
-
     static func describePush(fileCount: Int, conversationCount: Int) -> String {
         var parts: [String] = []
         if conversationCount > 0 {
@@ -40,12 +29,12 @@ enum SyncChangeSummary {
 
     static func describeNoop(hasLocalEdits: Bool, conversationCount: Int) -> String {
         if hasLocalEdits {
-            return "Everything matches iCloud, but this phone still has changes waiting to upload."
+            return "Everything matches remote backup, but this phone still has changes waiting to upload."
         }
         if conversationCount == 0 {
-            return "Up to date with iCloud. No conversations yet."
+            return "Up to date with R2. No conversations yet."
         }
-        return "Up to date with iCloud. \(conversationCount) conversation\(conversationCount == 1 ? "" : "s")."
+        return "Up to date with R2. \(conversationCount) conversation\(conversationCount == 1 ? "" : "s")."
     }
 
     static func describeConversationChanges(before: [String: ConversationSnapshot], after: [String: ConversationSnapshot]) -> String? {
@@ -97,7 +86,7 @@ enum SyncChangeSummary {
 }
 
 enum PendingSyncTracker {
-    static let baselineKey = "harness.syncBaselineConversations"
+    static let baselineKey = HarnessStorageKeys.syncBaselineConversations
 
     static func saveBaseline(_ snapshot: [String: ConversationSnapshot]) {
         guard let data = try? JSONEncoder().encode(snapshot) else { return }

@@ -81,4 +81,25 @@ final class SyncMergeTests: XCTestCase {
         let parsed = try JSONSerialization.jsonObject(with: merged) as? [String: Any]
         XCTAssertNotNil(parsed)
     }
+
+    func testMergeSettingsPreservesLocalSyncAndStripsSecrets() throws {
+        let local = Data(
+            #"{"version":1,"sync":{"bucket":"phone"},"openai":{"apiKey":"local-key"}}"#.utf8
+        )
+        let remote = Data(
+            #"{"version":2,"sync":{"bucket":"desktop"},"openai":{"apiKey":"remote-key"},"search":{"tavilyApiKey":"tvly"}}"#.utf8
+        )
+        let merged = SyncMerge.mergeFileBytes(
+            path: "settings/settings.json",
+            local: local,
+            remote: remote
+        )
+        let parsed = try JSONSerialization.jsonObject(with: merged) as? [String: Any]
+        let sync = parsed?["sync"] as? [String: Any]
+        XCTAssertEqual(sync?["bucket"] as? String, "phone")
+        let openai = parsed?["openai"] as? [String: Any]
+        let search = parsed?["search"] as? [String: Any]
+        XCTAssertNil(openai?["apiKey"])
+        XCTAssertNil(search?["tavilyApiKey"])
+    }
 }

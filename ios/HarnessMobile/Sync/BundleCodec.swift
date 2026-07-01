@@ -172,11 +172,14 @@ enum BundleCodec {
         )
         var entries: [BundleEntry] = []
         for rel in files {
-            let data = try readScopedFileData(
+            var data = try readScopedFileData(
                 localDataDir: localDataDir,
                 relativePath: rel,
                 fallbackData: passthroughData
             )
+            if rel == "settings/settings.json" {
+                data = SettingsSecrets.redactSettingsJsonBytes(data)
+            }
             entries.append(BundleEntry(
                 path: rel,
                 contents: data.base64EncodedString(),
@@ -190,6 +193,27 @@ enum BundleCodec {
         }
         let bundleHash = SHA256.hash(data: gzipped).hexString
         return BuiltBundle(bytes: gzipped, bundleHash: bundleHash, entries: entries)
+    }
+
+    static func parseBundleFromEntryMap(_ entryMap: [String: Data]) -> BundleDocument {
+        let entries = entryMap.keys.sorted().map { path in
+            let data = entryMap[path] ?? Data()
+            return BundleEntry(
+                path: path,
+                contents: data.base64EncodedString(),
+                size: data.count
+            )
+        }
+        return BundleDocument(version: SyncScopes.bundleFormatVersion, entries: entries)
+    }
+
+    static func buildBundleBytes(from entryMap: [String: Data]) throws -> Data {
+        let doc = parseBundleFromEntryMap(entryMap)
+        let json = try JSONEncoder().encode(doc)
+        guard let gzipped = gzipEncode(json) else {
+            throw BundleCodecError.gzipFailed
+        }
+        return gzipped
     }
 
     static func parseBundle(_ bytes: Data) throws -> BundleDocument {

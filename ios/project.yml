@@ -9,6 +9,7 @@ settings:
     SWIFT_VERSION: "5.0"
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 0.1.0
+    DEVELOPMENT_TEAM: C64DYYG928
 packages:
   MarkdownUI:
     url: https://github.com/gonzalezreal/swift-markdown-ui
@@ -16,6 +17,9 @@ packages:
   Highlightr:
     url: https://github.com/raspu/Highlightr
     from: 2.2.0
+  Soto:
+    url: https://github.com/soto-project/soto
+    from: 7.0.0
 targets:
   HarnessMobile:
     type: application
@@ -31,6 +35,8 @@ targets:
     dependencies:
       - package: MarkdownUI
       - package: Highlightr
+      - product: SotoS3
+        package: Soto
   HarnessMobileTests:
     type: bundle.unit-test
     platform: iOS
@@ -42,3 +48,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.harness.mobile.tests
         GENERATE_INFOPLIST_FILE: YES
+schemes:
+  HarnessMobile:
+    build:
+      targets:
+        HarnessMobile: all
+    test:
+      targets:
+        - HarnessMobileTests

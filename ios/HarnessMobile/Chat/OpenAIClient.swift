@@ -1,5 +1,13 @@
 import Foundation
 
+enum OpenAIEndpoint {
+    static let chatCompletions = URL(string: "https://api.openai.com/v1/chat/completions")!
+    static let audioTranscriptions = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
+    static let titleTimeout: TimeInterval = 10
+    static let whisperTimeout: TimeInterval = 120
+    static let cleanupTimeout: TimeInterval = 8
+}
+
 enum OpenAIModel {
     /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_CHAT_MODEL`).
     static let chat = "gpt-5.4"
@@ -79,19 +87,6 @@ final class OpenAIClient {
         streamTask = nil
     }
 
-    func streamChat(
-        messages: [ChatCompletionMessage],
-        onChunk: @escaping (String) -> Void
-    ) async throws -> String {
-        let result = try await streamChatWithTools(
-            messages: messages,
-            tools: nil,
-            executeTool: nil,
-            onChunk: onChunk
-        )
-        return result.content
-    }
-
     func streamChatWithTools(
         messages: [ChatCompletionMessage],
         tools: [[String: Any]]?,
@@ -155,7 +150,7 @@ final class OpenAIClient {
         tools: [[String: Any]]?,
         onChunk: @escaping (String) -> Void
     ) async throws -> StreamIteration {
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        var request = URLRequest(url: OpenAIEndpoint.chatCompletions)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -200,11 +195,11 @@ final class OpenAIClient {
     }
 
     func generateThreadTitle(previousTitle: String?, context: String) async throws -> String? {
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        var request = URLRequest(url: OpenAIEndpoint.chatCompletions)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 10
+        request.timeoutInterval = OpenAIEndpoint.titleTimeout
 
         let system =
             "You name chat threads for a sidebar. Reply with a short, descriptive title (a few words). " +
@@ -251,11 +246,11 @@ final class OpenAIClient {
 
     func transcribeAudio(at url: URL) async throws -> String {
         let boundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
+        var request = URLRequest(url: OpenAIEndpoint.audioTranscriptions)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 120
+        request.timeoutInterval = OpenAIEndpoint.whisperTimeout
 
         let fileData = try Data(contentsOf: url)
         let filename = url.lastPathComponent
@@ -291,11 +286,11 @@ final class OpenAIClient {
             "You are an expert transcript editor for dictation text. Rewrite the transcript to remove filler words, verbal stumbles, and false starts while preserving meaning. Improve punctuation and readability. Do not add new facts. Keep proper nouns and technical terms intact. Return only the cleaned transcript text.\n\nAdditional user instructions:\n" +
             userInstructions
 
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        var request = URLRequest(url: OpenAIEndpoint.chatCompletions)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 8
+        request.timeoutInterval = OpenAIEndpoint.cleanupTimeout
 
         let body: [String: Any] = [
             "model": OpenAIModel.transcriptCleanup,

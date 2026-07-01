@@ -28,7 +28,7 @@ struct DictationReplyStrip: View {
                     .padding(.vertical, 10)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(Color.primary.opacity(0.08))
+                            .strokeBorder(Color.primary.opacity(0.25), lineWidth: 1)
                     )
             }
             .buttonStyle(.plain)

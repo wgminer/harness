@@ -39,7 +39,6 @@ final class BundleCodecTests: XCTestCase {
     func testBuildParseRoundTrip() throws {
         try write("app-state/conversations.json", contents: "{\"keep\":\"me\"}")
         try write("settings/settings.json", contents: "{\"version\":1}")
-        try write("themes/theme.json", contents: "{\"accent\":\"#000\"}")
 
         let built = try BundleCodec.buildBundle(localDataDir: localDataDir)
         XCTAssertEqual(BundleCodec.hashBundleBytes(built.bytes), built.bundleHash)
@@ -47,13 +46,33 @@ final class BundleCodecTests: XCTestCase {
         let dst = try makeEmptyLocalData()
         let doc = try BundleCodec.parseBundle(built.bytes)
         let written = try BundleCodec.extractBundle(localDataDir: dst, doc: doc)
-        XCTAssertEqual(written, 3)
+        XCTAssertEqual(written, 2)
 
         let conv = try String(
             data: Data(contentsOf: LocalDataLayout.fileURL(in: dst, relativePath: "app-state/conversations.json")),
             encoding: .utf8
         )
         XCTAssertEqual(conv, "{\"keep\":\"me\"}")
+    }
+
+    func testBuildBundleRedactsSettingsSecrets() throws {
+        try write(
+            "settings/settings.json",
+            contents: #"{"openai":{"apiKey":"secret-key"},"search":{"tavilyApiKey":"tvly"},"sync":{"bucket":"b"}}"#
+        )
+        try write("app-state/conversations.json", contents: "{}")
+
+        let built = try BundleCodec.buildBundle(localDataDir: localDataDir)
+        let doc = try BundleCodec.parseBundle(built.bytes)
+        let settingsEntry = doc.entries.first { $0.path == "settings/settings.json" }
+        XCTAssertNotNil(settingsEntry)
+        let settingsData = Data(base64Encoded: settingsEntry!.contents)
+        let parsed = try JSONSerialization.jsonObject(with: XCTUnwrap(settingsData)) as? [String: Any]
+        let openai = parsed?["openai"] as? [String: Any]
+        let search = parsed?["search"] as? [String: Any]
+        XCTAssertNil(openai?["apiKey"])
+        XCTAssertNil(search?["tavilyApiKey"])
+        XCTAssertNotNil(parsed?["sync"])
     }
 
     func testRevisionChangesWhenContentChanges() throws {

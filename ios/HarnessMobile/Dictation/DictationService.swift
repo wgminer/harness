@@ -10,19 +10,13 @@ enum TranscriptionSource: String, Equatable {
 }
 
 enum DictationServiceError: LocalizedError {
-    case missingAPIKey
     case emptyTranscript
-    case cancelled
     case transcriptionUnavailable
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return "Add your OpenAI API key in Settings to use cloud transcription, or use a Voice Memo that already has an Apple transcript."
         case .emptyTranscript:
             return "No speech was detected. Try recording again."
-        case .cancelled:
-            return "Transcription cancelled."
         case .transcriptionUnavailable:
             return "Could not transcribe this recording. Try opening it in Voice Memos first so Apple can generate a transcript, or add an OpenAI API key for cloud transcription."
         }

@@ -102,10 +102,6 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    var hasExceededMaxDuration: Bool {
-        elapsedMs >= Int(RecordingStorage.maxRecordingDuration * 1000)
-    }
-
     private func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in

@@ -5,7 +5,7 @@ enum KeychainStore {
     private static let service = "com.harness.mobile"
     private static let openAIAccount = "openai-api-key"
     private static let r2SecretAccount = "r2-secret-access-key"
-    private static let importedSettingsKeyFlag = "harness.importedOpenAIKeyFromSync"
+    private static let importedSettingsKeyFlag = HarnessStorageKeys.importedOpenAIKeyFromSync
 
     static var hasImportedOpenAIKeyFromSync: Bool {
         get { UserDefaults.standard.bool(forKey: importedSettingsKeyFlag) }
