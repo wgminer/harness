@@ -1,0 +1,49 @@
+---
+description: Default agent work to desktop; require explicit approval for iOS changes
+alwaysApply: true
+---
+
+# Platform scope
+
+Harness has two clients: the **desktop app** (Electron) and **Harness Mobile** (iOS). Unless the user clearly asks for iOS work, agents should stay on desktop.
+
+## Default: desktop only
+
+Treat these as in scope without asking:
+
+- `src/main/`, `src/preload/`, `src/renderer/`, `src/shared/`
+- Root npm scripts, Electron build/config, Playwright e2e, desktop docs
+- Shared TypeScript logic that backs desktop behavior (sync, themes, chat, tasks, etc.)
+
+When a task is ambiguous (“fix sync”, “update chat UI”, “add a setting”), implement it for desktop first.
+
+## iOS requires explicit scope
+
+Do **not** edit `ios/` unless one of these is true:
+
+1. The user explicitly asks for iOS / mobile / Swift / Harness Mobile work, or
+2. You ask first and the user confirms iOS changes are wanted.
+
+If a fix might belong on both platforms, ship the desktop change, then ask whether to mirror it on iOS.
+
+## When both platforms are mentioned
+
+If the user says “both”, “desktop and iOS”, or “everywhere”, work on both.
+
+If they only say “the app” or “Harness” with no platform, assume **desktop**.
+
+## Examples
+
+| User request | Action |
+|---|---|
+| “Fix chat composer padding” | Desktop only (`src/renderer/`) |
+| “Update sync merge logic” | Desktop first (`src/shared/`, `src/main/`); ask before `ios/` |
+| “Add this to iOS too” | Desktop + iOS |
+| “Fix the iPhone sync bug” | iOS (`ios/`) |
+| “Make themes simpler” | Desktop only unless user names iOS |
+
+## Out of scope unless asked
+
+- Regenerating Xcode projects (`xcodegen`) or editing `ios/project.yml`
+- SwiftUI views, Swift tests, or iOS-specific settings flows
+- iOS README or simulator/device testing instructions
