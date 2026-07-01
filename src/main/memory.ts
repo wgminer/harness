@@ -14,7 +14,6 @@ import {
   getLegacyMemoryDir,
   getLocalDataDir,
   getLocalDataSettingsPath,
-  getLocalDataThemesDir,
   getUserDataDir,
 } from "./localDataPaths";
 import { getRecordingsDir } from "./recording";
@@ -378,7 +377,6 @@ export interface DataStatusSnapshot {
   messageFilesCount: number;
   notesFilesCount: number;
   hasSettingsFile: boolean;
-  hasThemesDir: boolean;
   recordingsDir: string;
   recordingsLocalOnly: true;
   legacyMemoryDir: string;
@@ -400,7 +398,6 @@ async function getDataStatus(): Promise<DataStatusSnapshot> {
     messageFilesCount: appStateFiles.filter((name) => name.startsWith("messages_") && name.endsWith(".json")).length,
     notesFilesCount: notesFiles.filter((name) => name.endsWith(".md")).length,
     hasSettingsFile: existsSync(getLocalDataSettingsPath()),
-    hasThemesDir: existsSync(getLocalDataThemesDir()),
     recordingsDir: getRecordingsDir(),
     recordingsLocalOnly: true,
     legacyMemoryDir: getLegacyMemoryDir(),

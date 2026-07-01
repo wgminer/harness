@@ -25,7 +25,7 @@ interface ChatSurfaceProps {
   copiedId: string | null;
   savedToNotesId: string | null;
   onCopied: (id: string | null) => void;
-  onSaveToNotes: (id: string, content: string) => void | Promise<void>;
+  onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   streamingContent: string;
   sending: boolean;
   polishHintAfterDictation: boolean;

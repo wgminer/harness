@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
-import { ExternalLink, Eye, EyeOff, Minus, Plus, Settings as SettingsIcon } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Settings as SettingsIcon } from "lucide-react";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import { LLM_CONTEXT_EXPORT_PROMPT } from "../shared/memoryImport";
 import {
@@ -21,10 +21,6 @@ import {
   normalizeNoteTemplates,
   type NoteTemplateConfig,
 } from "../shared/writing";
-import {
-  beginThemeColorTransition,
-  themeColorsChanged,
-} from "./themeTransition";
 import { Modal } from "./Modal";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
@@ -39,21 +35,6 @@ import {
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
-import {
-  applyThemeColors,
-  coerceFontSizePx,
-  DEFAULT_THEME_SETTINGS,
-  FONT_SIZE_OPTIONS,
-  matchThemePresetId,
-  stepFontSize,
-  themeSettingsToCss,
-  THEME_PRESETS,
-  UI_FONTS,
-  MONO_FONTS,
-  type MonoFontId,
-  type ThemeSettings,
-  type UiFontId,
-} from "../shared/theme";
 
 interface SettingsViewProps {
   /** After ChatGPT import (new conversations in sidebar). */
@@ -75,7 +56,7 @@ type PersistedFormState = {
   tavilyApiKey: string;
   r2SecretAccessKey: string;
   autoSend: boolean;
-  globalFnHotkey: string;
+  globalFnHotkey: boolean;
   openToComposeOnLaunch: boolean;
   cleanupEnabled: boolean;
   cleanupPrompt: string;
@@ -178,7 +159,6 @@ export function SettingsView({
     messageFilesCount: number;
     notesFilesCount: number;
     hasSettingsFile: boolean;
-    hasThemesDir: boolean;
     recordingsDir: string;
     recordingsLocalOnly: true;
     legacyMemoryDir: string;
@@ -193,10 +173,7 @@ export function SettingsView({
   }, []);
   const isMac = platform === "darwin";
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
-  const [themeForm, setThemeForm] = useState<ThemeSettings>({ ...DEFAULT_THEME_SETTINGS });
-  const [themeApplyError, setThemeApplyError] = useState<string | null>(null);
   const [layoutOptions, setLayoutOptions] = useState<LayoutOptions>(DEFAULT_LAYOUT);
-  const themeApplySeqRef = useRef(0);
   const settingsHydratedRef = useRef(false);
   const skipAutosaveRef = useRef(false);
   const lastPersistedRef = useRef("");
@@ -210,7 +187,6 @@ export function SettingsView({
     data: null,
   });
   const [activeTab, setActiveTab] = useState<SettingsTabId>(normalizeSettingsTab(initialTab));
-  const activeThemePresetId = useMemo(() => matchThemePresetId(themeForm), [themeForm]);
 
   useEffect(() => {
     if (initialTab) setActiveTab(normalizeSettingsTab(initialTab));
@@ -278,7 +254,6 @@ export function SettingsView({
       });
     void window.electron.usage.getStats().then(setUsageStats);
     window.electron.memory.getUserMemory().then(setUserMemory);
-    window.electron.customization.getThemeSettings().then(setThemeForm);
     window.electron.customization.getLayoutOptions().then(setLayoutOptions);
     return () => {
       cancelled = true;
@@ -310,9 +285,6 @@ export function SettingsView({
 
   useEffect(() => {
     const unsub = window.electron.customization.onUpdated((payload) => {
-      if (payload.type === "theme") {
-        void window.electron.customization.getThemeSettings().then(setThemeForm);
-      }
       if (payload.type === "layout") {
         void window.electron.customization.getLayoutOptions().then(setLayoutOptions);
       }
@@ -707,35 +679,6 @@ export function SettingsView({
     }
   };
 
-  const applyThemeCssImmediately = (settings: ThemeSettings | null) => {
-    const el = document.getElementById("custom-theme") as HTMLStyleElement | null;
-    if (!el) return;
-    if (settings === null) {
-      el.textContent = "";
-      return;
-    }
-    el.textContent = themeSettingsToCss(settings);
-  };
-
-  const updateThemeForm = (updater: (prev: ThemeSettings) => ThemeSettings) => {
-    setThemeForm((prev) => {
-      const next = updater(prev);
-      if (themeColorsChanged(prev, next)) {
-        beginThemeColorTransition();
-      }
-      applyThemeCssImmediately(next);
-      const seq = ++themeApplySeqRef.current;
-      setThemeApplyError(null);
-      void window.electron.customization
-        .setThemeSettings(next)
-        .catch((e) => {
-          if (seq !== themeApplySeqRef.current) return;
-          setThemeApplyError(e instanceof Error ? e.message : String(e));
-        });
-      return next;
-    });
-  };
-
   const updateLayoutOptions = (patch: Partial<LayoutOptions>) => {
     setLayoutOptions((prev) => ({ ...prev, ...patch }));
     void window.electron.customization.setLayout(patch);
@@ -970,191 +913,6 @@ export function SettingsView({
             aria-labelledby="settings-tab-appearance"
           >
             <SettingsGroup
-              title="Color theme"
-              description="Dark or light. Typography below is independent."
-            >
-              <div className="settings-theme-toggle" role="group" aria-label="Color theme">
-                {THEME_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    className={`settings-theme-toggle__option${
-                      activeThemePresetId === preset.id ? " settings-theme-toggle__option--selected" : ""
-                    }`}
-                    data-testid={`settings-theme-${preset.id}`}
-                    aria-pressed={activeThemePresetId === preset.id}
-                    onClick={() => updateThemeForm((f) => applyThemeColors(f, preset.colors))}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-              {themeApplyError && (
-                <p className="settings-group__hint settings-group__hint--flush" role="alert">
-                  {themeApplyError}
-                </p>
-              )}
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Typography"
-              description="UI and editor fonts load with the app. Independent of color theme above."
-            >
-              <SettingsField label="UI font" htmlFor="theme-font">
-                <select
-                  id="theme-font"
-                  value={themeForm.font}
-                  onChange={(e) =>
-                    updateThemeForm((f) => ({ ...f, font: e.target.value as UiFontId }))
-                  }
-                >
-                  {UI_FONTS.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </SettingsField>
-              <SettingsField label="Code / notes font" htmlFor="theme-font-mono">
-                <select
-                  id="theme-font-mono"
-                  value={themeForm.fontMono}
-                  onChange={(e) =>
-                    updateThemeForm((f) => ({ ...f, fontMono: e.target.value as MonoFontId }))
-                  }
-                >
-                  {MONO_FONTS.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </SettingsField>
-              <SettingsField label="Base font size" htmlFor="theme-font-size">
-                <div
-                  className="settings-font-size-stepper"
-                  role="group"
-                  aria-label="Base font size"
-                >
-                  <div
-                    className="settings-font-size-stepper__control"
-                    role="button"
-                    tabIndex={themeForm.fontSize === FONT_SIZE_OPTIONS[0] ? -1 : 0}
-                    aria-disabled={themeForm.fontSize === FONT_SIZE_OPTIONS[0] || undefined}
-                    aria-label="Decrease base font size"
-                    onClick={() => {
-                      if (themeForm.fontSize === FONT_SIZE_OPTIONS[0]) return;
-                      updateThemeForm((f) => ({
-                        ...f,
-                        fontSize: stepFontSize(f.fontSize, -1),
-                      }));
-                    }}
-                    onKeyDown={(e) => {
-                      if (themeForm.fontSize === FONT_SIZE_OPTIONS[0]) return;
-                      if (e.key !== "Enter" && e.key !== " ") return;
-                      e.preventDefault();
-                      updateThemeForm((f) => ({
-                        ...f,
-                        fontSize: stepFontSize(f.fontSize, -1),
-                      }));
-                    }}
-                  >
-                    <Minus size={16} aria-hidden />
-                  </div>
-                  <div className="settings-font-size-stepper__input-wrap">
-                    <input
-                      id="theme-font-size"
-                      className="settings-font-size-stepper__input"
-                      type="number"
-                      inputMode="numeric"
-                      min={FONT_SIZE_OPTIONS[0]}
-                      max={FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]}
-                      value={themeForm.fontSize}
-                      onChange={(e) => {
-                        const n = Math.round(Number(e.target.value));
-                        if (!Number.isFinite(n)) return;
-                        if (!FONT_SIZE_OPTIONS.includes(n as (typeof FONT_SIZE_OPTIONS)[number])) {
-                          return;
-                        }
-                        updateThemeForm((f) => ({
-                          ...f,
-                          fontSize: n as (typeof FONT_SIZE_OPTIONS)[number],
-                        }));
-                      }}
-                      onBlur={(e) => {
-                        const n = Number(e.target.value);
-                        if (!Number.isFinite(n)) return;
-                        updateThemeForm((f) => ({
-                          ...f,
-                          fontSize: coerceFontSizePx(n),
-                        }));
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "ArrowUp") {
-                          e.preventDefault();
-                          updateThemeForm((f) => ({
-                            ...f,
-                            fontSize: stepFontSize(f.fontSize, 1),
-                          }));
-                        } else if (e.key === "ArrowDown") {
-                          e.preventDefault();
-                          updateThemeForm((f) => ({
-                            ...f,
-                            fontSize: stepFontSize(f.fontSize, -1),
-                          }));
-                        }
-                      }}
-                      aria-label="Base font size in pixels"
-                    />
-                    <span className="settings-font-size-stepper__unit" aria-hidden="true">
-                      px
-                    </span>
-                  </div>
-                  <div
-                    className="settings-font-size-stepper__control"
-                    role="button"
-                    tabIndex={
-                      themeForm.fontSize === FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
-                        ? -1
-                        : 0
-                    }
-                    aria-disabled={
-                      themeForm.fontSize === FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1] ||
-                      undefined
-                    }
-                    aria-label="Increase base font size"
-                    onClick={() => {
-                      if (
-                        themeForm.fontSize === FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
-                      ) {
-                        return;
-                      }
-                      updateThemeForm((f) => ({
-                        ...f,
-                        fontSize: stepFontSize(f.fontSize, 1),
-                      }));
-                    }}
-                    onKeyDown={(e) => {
-                      if (
-                        themeForm.fontSize === FONT_SIZE_OPTIONS[FONT_SIZE_OPTIONS.length - 1]
-                      ) {
-                        return;
-                      }
-                      if (e.key !== "Enter" && e.key !== " ") return;
-                      e.preventDefault();
-                      updateThemeForm((f) => ({
-                        ...f,
-                        fontSize: stepFontSize(f.fontSize, 1),
-                      }));
-                    }}
-                  >
-                    <Plus size={16} aria-hidden />
-                  </div>
-                </div>
-              </SettingsField>
-            </SettingsGroup>
-
-            <SettingsGroup
               title="Grid overlay"
               description="Optional visual grid for alignment checks while designing screens. Overlay is visual only and does not capture clicks."
             >
@@ -1359,8 +1117,6 @@ export function SettingsView({
                     key={k}
                     title={k}
                     detail={v}
-                    detailSingleLine
-                    actionsOnHover
                     onEdit={() => openEditMemoryModal(k, v)}
                     onDelete={() => void deleteMemoryEntry(k)}
                     editAriaLabel={`Edit ${k}`}
@@ -1404,24 +1160,24 @@ export function SettingsView({
                 </button>
               </SettingsActions>
               {exportPromptOpen && (
-                <label className="settings-entry-field">
-                  <span className="settings-entry-field__label">Export prompt</span>
+                <label className="app-modal-field">
+                  <span className="app-modal-field__label">Export prompt</span>
                   <textarea
                     readOnly
                     value={LLM_CONTEXT_EXPORT_PROMPT}
-                    className="app-modal-input settings-entry-detail-input settings-llm-import-prompt"
+                    className="app-modal-input app-modal-input--multiline settings-llm-import-prompt"
                     rows={12}
                     aria-label="Export prompt for other assistants"
                   />
                 </label>
               )}
-              <label className="settings-entry-field">
-                <span className="settings-entry-field__label">Pasted export</span>
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Pasted export</span>
                 <textarea
                   placeholder="Paste the structured export from the other assistant…"
                   value={llmImportDraft}
                   onChange={(e) => setLlmImportDraft(e.target.value)}
-                  className="app-modal-input settings-entry-detail-input settings-llm-import-export"
+                  className="app-modal-input app-modal-input--multiline settings-llm-import-export"
                   rows={14}
                   data-testid="settings-llm-import-export"
                 />
@@ -1515,14 +1271,14 @@ export function SettingsView({
               </>
             }
           >
-            <div className="settings-entry-modal-stack">
-              <label className="settings-entry-field">
-                <span className="settings-entry-field__label">Prompt text</span>
+            <div className="app-modal-stack">
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Prompt text</span>
                 <textarea
                   placeholder="Describe how dictation should be cleaned up."
                   value={cleanupPromptDraft}
                   onChange={(e) => setCleanupPromptDraft(e.target.value)}
-                  className="app-modal-input settings-entry-detail-input"
+                  className="app-modal-input app-modal-input--multiline"
                   rows={6}
                 />
               </label>
@@ -1549,9 +1305,9 @@ export function SettingsView({
               </>
             }
           >
-            <div className="settings-entry-modal-stack">
-              <label className="settings-entry-field">
-                <span className="settings-entry-field__label">Heard as</span>
+            <div className="app-modal-stack">
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Heard as</span>
                 <input
                   type="text"
                   placeholder="e.g. wig em"
@@ -1561,8 +1317,8 @@ export function SettingsView({
                   autoComplete="off"
                 />
               </label>
-              <label className="settings-entry-field">
-                <span className="settings-entry-field__label">Replace with</span>
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Replace with</span>
                 <input
                   type="text"
                   placeholder="e.g. WGM"
@@ -1596,9 +1352,9 @@ export function SettingsView({
               </>
             }
           >
-            <div className="settings-entry-modal-stack">
-              <label className="settings-entry-field">
-                <span className="settings-entry-field__label">Label</span>
+            <div className="app-modal-stack">
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Label</span>
                 <input
                   type="text"
                   placeholder="e.g. timezone"
@@ -1608,13 +1364,13 @@ export function SettingsView({
                   autoComplete="off"
                 />
               </label>
-              <label className="settings-entry-field">
-                <span className="settings-entry-field__label">Detail</span>
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Detail</span>
                 <textarea
                   placeholder="What to remember"
                   value={newMemDetail}
                   onChange={(e) => setNewMemDetail(e.target.value)}
-                  className="app-modal-input settings-entry-detail-input"
+                  className="app-modal-input app-modal-input--multiline"
                   rows={4}
                   autoComplete="off"
                 />
@@ -1643,9 +1399,9 @@ export function SettingsView({
               </>
             }
           >
-            <div className="settings-entry-modal-stack">
-              <label className="settings-entry-field">
-                <span className="settings-entry-field__label">Title</span>
+            <div className="app-modal-stack">
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Title</span>
                 <input
                   type="text"
                   value={templateTitleDraft}
@@ -1654,8 +1410,8 @@ export function SettingsView({
                   autoComplete="off"
                 />
               </label>
-              <label className="settings-entry-field">
-                <span className="settings-entry-field__label">Description</span>
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Description</span>
                 <input
                   type="text"
                   value={templateDescriptionDraft}
@@ -1664,16 +1420,16 @@ export function SettingsView({
                   autoComplete="off"
                 />
               </label>
-              <label className="settings-entry-field">
-                <span className="settings-entry-field__label">Template body</span>
-                <p className="settings-group__hint settings-entry-hint">
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Template body</span>
+                <p className="app-modal-field__hint">
                   Use <code>{NOTE_TEMPLATE_TODAY_TOKEN}</code> for today&apos;s date and{" "}
                   <code>{NOTE_TEMPLATE_CURSOR_TOKEN}</code> to place the cursor when the note opens.
                 </p>
                 <textarea
                   value={templateContentDraft}
                   onChange={(e) => setTemplateContentDraft(e.target.value)}
-                  className="app-modal-input settings-entry-detail-input settings-entry-template-content-input"
+                  className="app-modal-input app-modal-input--multiline settings-template-content-input"
                   rows={10}
                 />
               </label>

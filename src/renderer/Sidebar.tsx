@@ -268,7 +268,7 @@ export function Sidebar({
 
   return (
     <div className="sidebar-dock">
-      <aside className="sidebar editor-chrome">
+      <aside className="sidebar">
         {searchOpen ? (
           <div className="sidebar-search-row">
             <input

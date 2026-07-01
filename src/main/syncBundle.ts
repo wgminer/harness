@@ -45,13 +45,11 @@ export interface SyncScope {
 export const DEFAULT_SYNC_SCOPES: readonly SyncScope[] = [
   { relPath: "app-state", kind: "dir" },
   { relPath: "settings/settings.json", kind: "file" },
-  { relPath: "themes", kind: "dir" },
 ] as const;
 
 /** Scopes used to detect local edits for sync conflict decisions (excludes settings). */
 export const USER_CONTENT_SYNC_SCOPES: readonly SyncScope[] = [
   { relPath: "app-state", kind: "dir" },
-  { relPath: "themes", kind: "dir" },
 ] as const;
 
 function toPosix(p: string): string {

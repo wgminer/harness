@@ -10,6 +10,7 @@ import { useChatComposer } from "./useChatComposer";
 import {
   type Message,
   type ToolCallDisplay,
+  formatMessageNoteTitle,
 } from "./chatHelpers";
 import { shouldApplyTurnUpdate } from "./chatTurnFlow";
 import { stripSentAtPrefix } from "../shared/chatTemporalContext";
@@ -612,11 +613,13 @@ export function ChatView({
   ]);
 
   const saveMessageToNotes = useCallback(
-    async (messageId: string, content: string) => {
+    async (messageId: string, content: string, messageTimestamp?: number) => {
       const trimmed = content.trim();
       if (!trimmed) return;
       try {
-        const note = await window.electron.notes.create(undefined, trimmed);
+        const title =
+          messageTimestamp != null ? formatMessageNoteTitle(messageTimestamp) : undefined;
+        const note = await window.electron.notes.create(title, trimmed);
         setSavedToNotesId(messageId);
         window.setTimeout(() => {
           setSavedToNotesId((current) => (current === messageId ? null : current));

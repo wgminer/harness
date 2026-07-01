@@ -7,7 +7,7 @@ import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import {
   interpolateNoteTemplateTitle,
   resolveNoteTemplateContent,
-  stripLeadingMarkdownHeading,
+  titleFromMarkdownContent,
   UNTITLED_NOTE_TITLE,
   type Note,
   type NoteEditProposal,
@@ -23,7 +23,6 @@ const LEGACY_DOC_FILE = "writing.md";
 const NOTES_INDEX_FILE = "notes.json";
 const NOTES_DIR = "notes";
 const LEGACY_IMPORTED_NOTE_TITLE = "Imported note";
-const DEFAULT_NOTE_TITLE = "Note";
 
 interface NotesIndexEntry {
   id: string;
@@ -60,17 +59,6 @@ export function normalizeContent(content: string): string {
 function normalizeTitle(title: string | undefined, fallback: string): string {
   const cleaned = String(title ?? "").trim().replace(/\s+/g, " ");
   return cleaned || fallback;
-}
-
-function titleFromContent(content: string, fallback: string): string {
-  const firstLine = content
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.length > 0);
-  if (!firstLine) return fallback;
-  const cleaned = stripLeadingMarkdownHeading(firstLine);
-  if (!cleaned) return fallback;
-  return cleaned.length > 80 ? `${cleaned.slice(0, 80).trimEnd()}...` : cleaned;
 }
 
 function countWords(content: string): number {
@@ -162,7 +150,7 @@ async function migrateLegacyDocIn(memoryDir: string): Promise<void> {
     notes: [
       {
         id,
-        title: titleFromContent(normalized, LEGACY_IMPORTED_NOTE_TITLE),
+        title: titleFromMarkdownContent(normalized, LEGACY_IMPORTED_NOTE_TITLE),
         createdAt,
         updatedAt: createdAt,
         wordCount: countWords(normalized),
@@ -207,10 +195,10 @@ export async function createNoteIn(memoryDir: string, title?: string, content = 
   const resolvedTemplate = resolveNoteTemplateContent(content);
   const normalizedContent = normalizeContent(resolvedTemplate.content);
   const interpolatedTitle = typeof title === "string" ? interpolateNoteTemplateTitle(title) : title;
-  const fallbackTitle = normalizeTitle(interpolatedTitle, `${DEFAULT_NOTE_TITLE} ${index.notes.length + 1}`);
+  const fallbackTitle = normalizeTitle(interpolatedTitle, UNTITLED_NOTE_TITLE);
   const entry: NotesIndexEntry = {
     id,
-    title: titleFromContent(normalizedContent, fallbackTitle),
+    title: titleFromMarkdownContent(normalizedContent, fallbackTitle),
     createdAt: now,
     updatedAt: now,
     wordCount: countWords(normalizedContent),
@@ -264,7 +252,7 @@ export async function saveNoteIn(memoryDir: string, id: string, content: string)
   const current = index.notes[noteIndex];
   const updatedEntry: NotesIndexEntry = {
     ...current,
-    title: titleFromContent(normalized, current.title || UNTITLED_NOTE_TITLE),
+    title: titleFromMarkdownContent(normalized, current.title || UNTITLED_NOTE_TITLE),
     updatedAt: now,
     wordCount: countWords(normalized),
   };

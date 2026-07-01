@@ -1,6 +1,6 @@
 /* Tasks view */
 .tasks-page {
-  --tasks-composer-dock-height: calc(var(--grid) * 29);
+  --chat-composer-dock-height: var(--space-35);
   position: relative;
 }
 
@@ -8,13 +8,13 @@
   content: "";
   display: block;
   flex-shrink: 0;
-  height: var(--tasks-composer-dock-height);
+  height: var(--chat-composer-dock-height);
   pointer-events: none;
 }
 
 .tasks-group {
   padding-top: var(--space-4);
-  box-shadow: var(--hairline-top);
+  border-top: 1px solid var(--border-edge);
 }
 
 .tasks-section-heading {
@@ -39,7 +39,7 @@
 }
 
 .tasks-section-heading:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -59,8 +59,7 @@
   transform: rotate(90deg);
 }
 
-.tasks-textarea,
-.tasks-modal-body textarea {
+.tasks-textarea {
   font-family: var(--font-family);
   font-size: var(--font-size-ui);
   line-height: var(--line-height-normal);
@@ -69,21 +68,18 @@
   min-height: 72px;
   padding: var(--space-2) var(--space-3);
   resize: vertical;
-  background: var(--bg);
+  background: var(--bg-secondary);
   color: var(--fg);
-  border: none;
-  box-shadow: var(--hairline-inset-input);
+  border: 1px solid var(--border-input);
   border-radius: 2px;
 }
 
-.tasks-textarea:focus,
-.tasks-modal-body textarea:focus {
+.tasks-textarea:focus {
   outline: none;
-  box-shadow: var(--hairline-inset-input-focus);
+  border-color: var(--border-input-focus);
 }
 
-.tasks-textarea--modal {
-  max-width: none;
+.tasks-modal-title-input {
   min-height: 120px;
 }
 
@@ -158,20 +154,19 @@
 }
 
 .tasks-section-lead--error {
-  color: var(--danger, #e55);
+  color: var(--danger-fg);
   margin-bottom: var(--space-3);
 }
 
 .tasks-row-check {
   flex-shrink: 0;
   margin: 0 0 0;
-  padding: 0 2px 2px;
+  padding: var(--space-1);
   width: auto;
   min-width: unset;
-  border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  box-shadow: none;
+  border: none;
   color: var(--fg-muted);
   cursor: pointer;
   line-height: 0;
@@ -186,7 +181,7 @@
 }
 
 .tasks-row-check:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -273,7 +268,7 @@
   line-height: var(--line-height-compact);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--fg-muted) 12%, transparent);
+  background: var(--fg-muted);
   color: var(--fg-muted);
   text-transform: none;
 }
@@ -281,7 +276,7 @@
 .tasks-tag--editable {
   padding-right: 4px;
   gap: 2px;
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: var(--accent-tint);
   color: var(--fg);
 }
 
@@ -291,7 +286,6 @@
   justify-content: center;
   padding: 2px;
   margin-left: 2px;
-  border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
@@ -304,16 +298,10 @@
 }
 
 .tasks-tag-remove:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 1px;
 }
 
-.tasks-modal-hint {
-  margin: 0;
-  font-size: var(--font-size-caption);
-  color: var(--fg-muted);
-  line-height: var(--line-height-normal);
-}
 
 .tasks-tag-field {
   display: flex;
@@ -334,16 +322,15 @@
   width: 100%;
   height: var(--input-height);
   padding: 0 var(--space-3);
-  background: var(--bg);
+  background: var(--bg-secondary);
   color: var(--fg);
-  border: none;
-  box-shadow: var(--hairline-inset-input);
+  border: 1px solid var(--border-input);
   border-radius: var(--radius-sm);
 }
 
 .tasks-tags-input:focus {
   outline: none;
-  box-shadow: var(--hairline-inset-input-focus);
+  border-color: var(--border-input-focus);
 }
 
 .tasks-tag-remove svg {
@@ -356,21 +343,3 @@
   height: var(--icon-size-compact);
 }
 
-/* Bottom task composer — transparent shell; glass on `.chat-composer-inner`. */
-.tasks-composer-dock {
-  display: flex;
-  flex-direction: column;
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  flex-shrink: 0;
-  z-index: 3;
-  width: 100%;
-  padding: 0 var(--space-4);
-  background: transparent;
-}
-
-.tasks-composer-dock .chat-input {
-  font-size: var(--font-size);
-}

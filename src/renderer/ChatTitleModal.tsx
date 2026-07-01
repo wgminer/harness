@@ -44,21 +44,23 @@ export function ChatTitleModal({
         </>
       }
     >
-      <label htmlFor="chat-title-modal-input">Title</label>
-      <input
-        id="chat-title-modal-input"
-        type="text"
-        className="app-modal-input"
-        value={titleDraft}
-        onChange={(e) => onTitleDraftChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onSave();
-          }
-        }}
-        autoFocus
-      />
+      <label className="app-modal-field" htmlFor="chat-title-modal-input">
+        <span className="app-modal-field__label">Title</span>
+        <input
+          id="chat-title-modal-input"
+          type="text"
+          className="app-modal-input"
+          value={titleDraft}
+          onChange={(e) => onTitleDraftChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onSave();
+            }
+          }}
+          autoFocus
+        />
+      </label>
     </Modal>
   );
 }

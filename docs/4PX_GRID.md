@@ -10,8 +10,8 @@ Harness desktop UI spacing, typography, and fixed dimensions align to a **4px ba
 | **Spacing & size** | Padding, margin, gap, width, height, border-radius (when fixed px), and icon sizes should be multiples of 4px |
 | **Line height** | Use theme CSS variables (`--line-height-*`), not unitless ratios like `line-height: 1.5` |
 | **Dynamic layout** | Measured heights (e.g. chat composer dock) call `snapToGrid()` before writing CSS variables |
-| **Exceptions** | `1px` hairlines in **box-shadow** (`--hairline-*` tokens), `2px` focus rings, `999px` / `9999px` pill caps; shadow/blur values are not audited |
-| **Edges** | UI hairlines use `--hairline-*` inset `box-shadow` tokens in `base.css`, not CSS `border`, so `--input-height` and other box sizes stay on-grid under `border-box` |
+| **Exceptions** | `1px` borders, `2px` focus rings and list accents, `999px` / `9999px` pill caps; drop-shadow/blur values are not audited |
+| **Edges** | UI edges use `--border-edge` and `--border-input` tokens with standard CSS `border` |
 
 ## Shared module (`src/shared/grid.ts`)
 
@@ -47,7 +47,6 @@ npm run grid:audit
 
 1. Hardcoded `Npx` values where `N % 4 !== 0` (with allowed exceptions above)
 2. Unitless `line-height` numbers (prefer tokens)
-3. Layout-affecting CSS borders (`border: 1px`, `border-color`, etc.) — use `--hairline-*` tokens instead
 
 Vitest runs the same checks via `scripts/grid-audit.test.ts` (`npm test`).
 

@@ -119,7 +119,6 @@ contextBridge.exposeInMainWorld("electron", {
         messageFilesCount: number;
         notesFilesCount: number;
         hasSettingsFile: boolean;
-        hasThemesDir: boolean;
         recordingsDir: string;
         recordingsLocalOnly: true;
         legacyMemoryDir: string;
@@ -196,9 +195,6 @@ contextBridge.exposeInMainWorld("electron", {
     set: (partial: unknown) => ipcRenderer.invoke("uiSession:set", partial),
   },
   customization: {
-    getActiveTheme: () => ipcRenderer.invoke("customization:getActiveTheme"),
-    getThemeSettings: () => ipcRenderer.invoke("customization:getThemeSettings"),
-    setThemeSettings: (settings: unknown) => ipcRenderer.invoke("customization:setThemeSettings", settings),
     getLayoutOptions: () => ipcRenderer.invoke("customization:getLayoutOptions"),
     setLayout: (options: unknown) => ipcRenderer.invoke("customization:setLayout", options),
     onUpdated: (cb: (payload: { type: string }) => void) => {

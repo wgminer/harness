@@ -1,10 +1,4 @@
 import { rigSection } from "../../shared/rigPage";
-import {
-  FONT_MONO_IDS_FOR_SCHEMA,
-  FONT_SIZE_OPTIONS,
-  FONT_UI_IDS_FOR_SCHEMA,
-  THEME_PRESET_IDS_FOR_SCHEMA,
-} from "../../shared/theme";
 
 const toolsSection = rigSection("General");
 
@@ -69,64 +63,6 @@ export const TOOL_DEFINITIONS = [
         type: "object",
         properties: { path: { type: "string", description: "Absolute path for the new directory" } },
         required: ["path"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "get_theme",
-      description:
-        "Read the current app theme and list built-in color presets. Call before changing colors or typography so you know the starting point.",
-      parameters: {
-        type: "object",
-        properties: {},
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "update_theme",
-      description:
-        "Update the app theme (accent, text/background colors, UI font, editor font for code/notes, base size). Omit fields you do not want to change. Returns the applied settings. Prefer get_theme first when unsure of current values.",
-      parameters: {
-        type: "object",
-        properties: {
-          accent: { type: "string", description: "Accent color as #RGB or #RRGGBB hex" },
-          fg: { type: "string", description: "Primary text color as #RGB or #RRGGBB hex" },
-          bg: { type: "string", description: "Primary background color as #RGB or #RRGGBB hex" },
-          font: { type: "string", enum: FONT_UI_IDS_FOR_SCHEMA, description: "UI / app chrome font id" },
-          fontMono: {
-            type: "string",
-            enum: FONT_MONO_IDS_FOR_SCHEMA,
-            description: "Editor font id for code and notes (monospace or proportional, e.g. ui_serif)",
-          },
-          fontSize: {
-            type: "number",
-            enum: [...FONT_SIZE_OPTIONS],
-            description: "Base UI font size in px",
-          },
-        },
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "apply_theme_preset",
-      description:
-        "Apply a built-in color palette by preset id (typography is unchanged). Use get_theme to list presets. Presets: dark, light.",
-      parameters: {
-        type: "object",
-        properties: {
-          preset: {
-            type: "string",
-            enum: THEME_PRESET_IDS_FOR_SCHEMA,
-            description: "Color palette preset id",
-          },
-        },
-        required: ["preset"],
       },
     },
   },

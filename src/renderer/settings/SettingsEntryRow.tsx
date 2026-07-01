@@ -27,8 +27,8 @@ export function SettingsEntryRow({
   editAriaLabel,
   deleteAriaLabel,
   editButtonTitle = "Edit",
-  detailSingleLine = false,
-  actionsOnHover = false,
+  detailSingleLine = true,
+  actionsOnHover = true,
 }: SettingsEntryRowProps) {
   const rowClass = [
     "settings-entry-row",

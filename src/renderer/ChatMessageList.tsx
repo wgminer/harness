@@ -18,7 +18,7 @@ interface ChatMessageListProps {
   copiedId: string | null;
   savedToNotesId: string | null;
   onCopied: (id: string | null) => void;
-  onSaveToNotes: (id: string, content: string) => void | Promise<void>;
+  onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   streamingContent: string;
   sending: boolean;
   polishHintAfterDictation: boolean;
@@ -188,6 +188,7 @@ export function ChatMessageList({
                 <SaveToNotesButton
                   content={m.content}
                   messageId={m.id}
+                  messageTimestamp={m.timestamp}
                   savedNoteId={savedToNotesId}
                   onSaveToNotes={onSaveToNotes}
                 />
@@ -211,7 +212,7 @@ export function ChatMessageList({
           )}
           <button
             type="button"
-            className="btn btn-chat-secondary chat-pane-btn chat-pane-btn--subtle"
+            className="btn btn-outline btn-chat-secondary chat-pane-btn"
             onClick={onGenerateReply}
             data-testid="chat-generate-reply"
             disabled={!llmActionsEnabled}

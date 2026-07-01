@@ -70,7 +70,7 @@ export function Modal({
             disabled={closeDisabled}
             aria-label="Close"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
         <div className="app-modal-body">{children}</div>

@@ -34,7 +34,7 @@ async function makeDir(): Promise<string> {
 }
 
 describe("local data migration", () => {
-  it("copies legacy memory/settings/themes into local-data on first access", async () => {
+  it("copies legacy memory/settings into local-data and removes themes on first access", async () => {
     const dir = await makeDir();
     currentUserDataDir = dir;
 
@@ -48,12 +48,12 @@ describe("local data migration", () => {
 
     const appStateDir = getAppStateDir();
     const settingsPath = getLocalDataSettingsPath();
-    const migratedThemePath = join(dir, "local-data", "themes", "theme.json");
 
     expect(appStateDir).toBe(join(dir, "local-data", "app-state"));
     expect(JSON.parse(await readFile(join(appStateDir, "conversations.json"), "utf-8"))).toEqual({});
     expect(JSON.parse(await readFile(settingsPath, "utf-8"))).toMatchObject({ openai: { apiKey: "k1" } });
-    expect(JSON.parse(await readFile(migratedThemePath, "utf-8"))).toMatchObject({ accent: "#ffffff" });
+    await expect(readFile(join(dir, "local-data", "themes", "theme.json"), "utf-8")).rejects.toThrow();
+    await expect(readFile(join(legacyThemes, "theme.json"), "utf-8")).rejects.toThrow();
 
     await rm(join(dir, "memory"), { recursive: true, force: true });
     getAppStateDir();

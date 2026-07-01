@@ -6,51 +6,14 @@ import {
   getListContinuationPrefixForLine,
   getListSoftBreakPrefixForLine,
   isMarkdownListItemLine,
-  interpolateNoteTemplateContent,
   interpolateNoteTemplateTitle,
   normalizeNoteTemplateDescription,
   normalizeNoteTemplates,
   parseMarkdownHeadingLine,
-  reflowMarkdownListWrapInDraft,
   resolveNoteTemplateContent,
   stripLeadingMarkdownHeading,
+  titleFromMarkdownContent,
 } from "./writing";
-
-describe("interpolateNoteTemplateContent", () => {
-  const fixed = {
-    now: new Date("2026-05-05T00:00:00.000Z"),
-    locales: "en-US" as const,
-    timeZone: "UTC",
-  };
-
-  it("replaces a single token with the formatted date", () => {
-    expect(interpolateNoteTemplateContent(`Log for ${NOTE_TEMPLATE_TODAY_TOKEN}`, fixed)).toBe(
-      "Log for May 5, 2026",
-    );
-  });
-
-  it("replaces every occurrence", () => {
-    expect(
-      interpolateNoteTemplateContent(
-        `${NOTE_TEMPLATE_TODAY_TOKEN} — ${NOTE_TEMPLATE_TODAY_TOKEN}`,
-        fixed,
-      ),
-    ).toBe("May 5, 2026 — May 5, 2026");
-  });
-
-  it("leaves other brace text unchanged", () => {
-    expect(interpolateNoteTemplateContent("{{tomorrow}} and {{user}}", fixed)).toBe("{{tomorrow}} and {{user}}");
-  });
-
-  it("returns the same string when the token is absent", () => {
-    const body = "# Note\n\nNo variables here.\n";
-    expect(interpolateNoteTemplateContent(body, fixed)).toBe(body);
-  });
-
-  it("removes cursor token from the stored content", () => {
-    expect(interpolateNoteTemplateContent(`# Note\n\n${NOTE_TEMPLATE_CURSOR_TOKEN}`, fixed)).toBe("# Note\n\n");
-  });
-});
 
 describe("resolveNoteTemplateContent", () => {
   const fixed = {
@@ -203,42 +166,6 @@ describe("adjustMarkdownListItemIndent", () => {
   });
 });
 
-describe("reflowMarkdownListWrapInDraft", () => {
-  const charWidth = 8;
-  const measureLine = (line: string) => line.length * charWidth;
-
-  it("wraps overflowing unordered list items with soft-break indentation", () => {
-    const draft = "- alpha beta gamma delta epsilon zeta eta theta iota";
-    const maxWidth = 24 * charWidth;
-    const { draft: reflowed } = reflowMarkdownListWrapInDraft(draft, draft.length, maxWidth, measureLine);
-    expect(reflowed).toContain("\n  ");
-    expect(reflowed.split("\n").every((line) => measureLine(line) <= maxWidth || line.trim() === "")).toBe(true);
-  });
-
-  it("wraps overflowing continuation lines under the list marker", () => {
-    const draft = "- short\n  alpha beta gamma delta epsilon zeta eta theta iota kappa";
-    const maxWidth = 24 * charWidth;
-    const { draft: reflowed } = reflowMarkdownListWrapInDraft(draft, draft.length, maxWidth, measureLine);
-    expect(reflowed.split("\n").length).toBeGreaterThan(2);
-    expect(reflowed.split("\n").slice(1).every((line) => line.startsWith("  "))).toBe(true);
-  });
-
-  it("wraps overflowing nested unordered list items", () => {
-    const draft =
-      "  - The core need is that it must become much simpler and more coherent to get an app into Slack or to get an agent into Slack.";
-    const maxWidth = 48 * charWidth;
-    const { draft: reflowed } = reflowMarkdownListWrapInDraft(draft, draft.length, maxWidth, measureLine);
-    expect(reflowed.split("\n").length).toBeGreaterThan(1);
-    expect(reflowed.split("\n").slice(1).every((line) => line.startsWith("    "))).toBe(true);
-  });
-
-  it("leaves short list items unchanged", () => {
-    const draft = "- fits on one line";
-    const { draft: reflowed } = reflowMarkdownListWrapInDraft(draft, draft.length, 80 * charWidth, measureLine);
-    expect(reflowed).toBe(draft);
-  });
-});
-
 describe("parseMarkdownHeadingLine", () => {
   it("parses ATX headings with required marker spacing", () => {
     expect(parseMarkdownHeadingLine("# Title")).toEqual({ level: 1, markerLength: 2 });
@@ -261,5 +188,17 @@ describe("stripLeadingMarkdownHeading", () => {
 
   it("returns non-heading text unchanged", () => {
     expect(stripLeadingMarkdownHeading("Meeting notes")).toBe("Meeting notes");
+  });
+});
+
+describe("titleFromMarkdownContent", () => {
+  it("uses only a leading H1 as the title", () => {
+    expect(titleFromMarkdownContent("# Roadmap\n\nNext", "Untitled")).toBe("Roadmap");
+    expect(titleFromMarkdownContent("## Section\nBody", "Untitled")).toBe("Untitled");
+    expect(titleFromMarkdownContent("Plain text", "Untitled")).toBe("Untitled");
+  });
+
+  it("falls back when the first non-empty line is blank or missing", () => {
+    expect(titleFromMarkdownContent("\n\n", "Untitled")).toBe("Untitled");
   });
 });

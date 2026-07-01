@@ -4,7 +4,7 @@
   flex: 1;
   height: 100%;
   min-height: 0;
-  background: var(--bg-secondary);
+  background: var(--bg);
 }
 
 .workspace-header {
@@ -13,13 +13,13 @@
   flex-direction: column;
   justify-content: center;
   height: var(--shell-bar-height);
-  background: var(--bg-secondary);
-  box-shadow: var(--hairline-bottom-transparent);
-  transition: box-shadow var(--motion-duration-normal) var(--motion-ease-standard);
+  background: var(--bg);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--motion-duration-normal) var(--motion-ease-standard);
 }
 
 .workspace-header--scrolled {
-  box-shadow: var(--hairline-bottom);
+  border-bottom: 1px solid var(--border-edge);
 }
 
 .workspace-header-inner {
@@ -84,25 +84,22 @@
   min-width: 0;
 }
 
-/* Soft filter field shared by Tasks and Editor list views — top of scroll panel. */
+/* Search field shared by Tasks and Editor list views — matches settings input styling. */
 .workspace-list-search {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  height: calc(var(--grid) * 8);
+  height: var(--input-height);
   padding: 0 var(--space-3);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--fg) 5%, transparent);
-  box-shadow: var(--hairline-inset-transparent);
-  transition:
-    background var(--motion-duration-ui) var(--motion-ease-standard),
-    box-shadow var(--motion-duration-ui) var(--motion-ease-standard);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-input);
+  transition: border-color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .workspace-list-search:focus-within {
-  background: color-mix(in srgb, var(--fg) 8%, transparent);
-  box-shadow: var(--hairline-inset-input-glass), var(--hairline-surface-highlight);
+  border-color: var(--border-input-focus);
 }
 
 .workspace-list-search__icon {
@@ -120,10 +117,9 @@
   padding: 0;
   border: none;
   background: transparent;
-  box-shadow: none;
   font-family: var(--font-family);
-  font-size: var(--font-size-ui);
-  line-height: var(--line-height-ui);
+  font-size: var(--font-size);
+  line-height: var(--line-height-body);
   color: var(--fg);
 }
 
@@ -133,7 +129,6 @@
 
 .workspace-list-search__input:focus {
   outline: none;
-  box-shadow: none;
 }
 
 .workspace-list-search__input::-webkit-search-decoration,

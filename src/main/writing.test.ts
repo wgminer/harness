@@ -74,13 +74,28 @@ describe("notes storage", () => {
     expect(legacy?.content).toContain("hello");
   });
 
-  it("strips markdown heading markers from derived note titles", async () => {
+  it("uses H1 headings for derived note titles", async () => {
     const dir = await makeDir();
     const note = await createNoteIn(dir, undefined, "# Roadmap\n\nNext steps");
     expect(note.title).toBe("Roadmap");
 
     const saved = await saveNoteIn(dir, note.id, "## Updated plan\nMore text");
-    expect(saved.title).toBe("Updated plan");
+    expect(saved.title).toBe("Roadmap");
+  });
+
+  it("does not infer titles from plain text or lower-level headings", async () => {
+    const dir = await makeDir();
+    const plain = await createNoteIn(dir, undefined, "Hello world\nMore text");
+    expect(plain.title).toBe("Untitled");
+
+    const h2 = await createNoteIn(dir, undefined, "## Section\nBody");
+    expect(h2.title).toBe("Untitled");
+  });
+
+  it("keeps an explicit create-time title when content has no H1", async () => {
+    const dir = await makeDir();
+    const note = await createNoteIn(dir, "Mar 5, 2026, 3:45 PM", "Hello from chat");
+    expect(note.title).toBe("Mar 5, 2026, 3:45 PM");
   });
 
   it("applies title and content template tokens during create", async () => {

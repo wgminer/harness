@@ -30,7 +30,6 @@ const MERGEABLE_PATHS = new Set([
   "app-state/plans.json",
   "app-state/user_memory.json",
   "settings/settings.json",
-  "themes/theme.json",
 ]);
 
 function fileBytesEqual(a: Buffer, b: Buffer): boolean {
@@ -58,8 +57,6 @@ function labelForPath(path: string, bytes: Buffer | undefined): string {
   if (path === "app-state/user_memory.json") return "User context";
   if (path === "app-state/writing.md") return "Writing surface";
   if (path === "settings/settings.json") return "App preferences";
-  if (path === "themes/theme.json") return "Theme";
-  if (path.startsWith("themes/")) return path.slice("themes/".length);
   return path;
 }
 
@@ -206,22 +203,10 @@ function mergeSettingsJson(local: Buffer, remote: Buffer): Buffer {
   return Buffer.from(JSON.stringify(stripSettingsSecrets(merged), null, 2), "utf-8");
 }
 
-function mergeThemeJson(local: Buffer, remote: Buffer): Buffer {
-  const localObj = parseJson(local) as Record<string, unknown>;
-  const remoteObj = parseJson(remote) as Record<string, unknown>;
-  const localTs = typeof localObj.updatedAt === "number" ? localObj.updatedAt : 0;
-  const remoteTs = typeof remoteObj.updatedAt === "number" ? remoteObj.updatedAt : 0;
-  const newer = localTs >= remoteTs ? localObj : remoteObj;
-  const older = localTs >= remoteTs ? remoteObj : localObj;
-  const merged = { ...older, ...newer, updatedAt: Math.max(localTs, remoteTs) };
-  return Buffer.from(JSON.stringify(merged, null, 2), "utf-8");
-}
-
 export function mergeFileBytes(path: string, local: Buffer, remote: Buffer): Buffer {
   if (path === "app-state/tasks.json") return mergeTasksJson(local, remote);
   if (path.startsWith("app-state/messages_")) return mergeMessagesJson(local, remote);
   if (path === "settings/settings.json") return mergeSettingsJson(local, remote);
-  if (path === "themes/theme.json") return mergeThemeJson(local, remote);
   if (path.endsWith(".json")) {
     const localObj = parseJson(local);
     const remoteObj = parseJson(remote);
