@@ -30,6 +30,8 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const root = path.join(__dirname, "..");
+require("dotenv").config({ path: path.join(root, ".env") });
+
 const args = process.argv.slice(2);
 const isMac = args.includes("--mac");
 const replace = args.includes("--replace");
