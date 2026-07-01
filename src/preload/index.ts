@@ -3,6 +3,7 @@ import type { AppendMessageMeta } from "../shared/types";
 import type { UsageStatsSnapshot } from "../shared/usageStats";
 import type { NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput } from "../shared/writing";
 import type { SyncResult, SyncStatus } from "../shared/sync";
+import type { UpdateStatus } from "../shared/updateStatus";
 
 const e2eBridge =
   process.env.HARNESS_E2E === "1"
@@ -302,6 +303,16 @@ contextBridge.exposeInMainWorld("electron", {
       const sub = () => cb();
       ipcRenderer.on("sync:changed", sub);
       return () => ipcRenderer.removeListener("sync:changed", sub);
+    },
+  },
+  updater: {
+    check: () => ipcRenderer.invoke("updater:check") as Promise<void>,
+    getStatus: () => ipcRenderer.invoke("updater:getStatus") as Promise<UpdateStatus>,
+    downloadAndInstall: () => ipcRenderer.invoke("updater:downloadAndInstall") as Promise<void>,
+    onStatus: (cb: (status: UpdateStatus) => void) => {
+      const sub = (_: unknown, status: UpdateStatus) => cb(status);
+      ipcRenderer.on("updater:status", sub);
+      return () => ipcRenderer.removeListener("updater:status", sub);
     },
   },
   ...(e2eBridge ? { e2e: e2eBridge } : {}),

@@ -26,6 +26,7 @@ import {
   isConversationTitlePending,
 } from "../shared/conversationSession";
 import { syncResultChangedLocalData } from "../shared/sync";
+import type { UpdateStatus } from "../shared/updateStatus";
 import {
   type Conversation,
   type View,
@@ -50,6 +51,8 @@ interface SidebarProps {
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
   appVersion: string | null;
+  updateStatus: UpdateStatus;
+  onUpdateClick: () => void;
   notesItemActive: boolean;
   onNotesClick: () => void;
   /** Called after sync when local conversation data may have changed. */
@@ -82,10 +85,38 @@ export function Sidebar({
   activeChatProcessing,
   titleGenInFlight,
   appVersion,
+  updateStatus,
+  onUpdateClick,
   notesItemActive,
   onNotesClick,
   onSyncComplete,
 }: SidebarProps) {
+  const updateButtonLabel = (() => {
+    switch (updateStatus.status) {
+      case "available":
+        return updateStatus.version ? `Update to v${updateStatus.version}` : "Update";
+      case "downloading":
+        return `Updating… ${updateStatus.percent}%`;
+      case "ready":
+        return "Restarting…";
+      case "checking":
+        return "Checking…";
+      default:
+        return "Update";
+    }
+  })();
+
+  const showUpdateButton =
+    updateStatus.status === "available" ||
+    updateStatus.status === "downloading" ||
+    updateStatus.status === "ready" ||
+    updateStatus.status === "checking";
+
+  const updateButtonDisabled =
+    updateStatus.status === "downloading" ||
+    updateStatus.status === "ready" ||
+    updateStatus.status === "checking";
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -447,6 +478,18 @@ export function Sidebar({
               <span className="sidebar-version" title={`Harness ${appVersion}`}>
                 v{appVersion}
               </span>
+            ) : null}
+            {showUpdateButton ? (
+              <button
+                type="button"
+                className="btn sidebar-footer__update-btn"
+                data-testid="sidebar-update"
+                onClick={onUpdateClick}
+                disabled={updateButtonDisabled}
+                title={updateButtonLabel}
+              >
+                {updateButtonLabel}
+              </button>
             ) : null}
           </div>
           <button

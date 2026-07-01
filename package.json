@@ -1,10 +1,14 @@
 {
   "name": "harness",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "main": "out/main/index.js",
   "author": "Your Name",
   "description": "Personal all-in-one desktop harness for LLMs (chat, memory, tasks, tools)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wgminer/harness.git"
+  },
   "scripts": {
     "dev": "node scripts/make-dev-icons.js && electron-vite dev",
     "prebuild": "npm run icon:icns && npm run parakeet:setup && npm run build:fn-monitor",
@@ -46,7 +50,8 @@
     "rehype-highlight": "^7.0.2",
     "remark-directive": "^4.0.0",
     "remark-gfm": "^4.0.1",
-    "unist-util-visit": "^5.1.0"
+    "unist-util-visit": "^5.1.0",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "@electron/notarize": "^2.2.2",

@@ -67,6 +67,29 @@
 .sidebar-footer__meta {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-footer__update-btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
+  color: var(--fg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-input);
+}
+
+.sidebar-footer__update-btn:hover:not(:disabled) {
+  border-color: var(--border-light);
+}
+
+.sidebar-footer__update-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
 }
 
 .sidebar-version {

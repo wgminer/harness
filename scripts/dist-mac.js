@@ -14,7 +14,11 @@ const applications = "/Applications";
 
 const rawArgs = process.argv.slice(2);
 const replace = rawArgs.includes("--replace");
-const builderArgs = rawArgs.filter((a) => a !== "--replace");
+const publish = rawArgs.includes("--publish");
+const builderArgs = rawArgs.filter((a) => a !== "--replace" && a !== "--publish");
+if (publish) {
+  builderArgs.push("--publish", "always");
+}
 
 function findBuiltApp() {
   const dist = path.join(root, "dist");

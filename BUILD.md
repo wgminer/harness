@@ -169,17 +169,19 @@ You can double‑click `Harness.app` in `dist/mac-`* or the DMG to install and o
 
 ---
 
-## 8. Simple distribution flow (Release page + Pages)
+## 8. Release and auto-update
 
-This project does not commit DMGs to git. Build artifacts are produced under `dist/` and hosted externally.
+This project does not commit DMGs to git. Build artifacts are produced under `dist/` and published to GitHub Releases.
 
 The GitHub Pages download button points to:
 
 - `https://github.com/wgminer/harness/releases/latest`
 
-### Quick release command
+### One-command release
 
-Run:
+1. Bump `version` in `package.json` and commit to `main`.
+2. Set `GH_TOKEN` (GitHub personal access token with `repo` scope) in your shell or `.env`.
+3. Run:
 
 ```bash
 npm run release
@@ -188,16 +190,21 @@ npm run release
 This command:
 
 1. Verifies your git working tree is clean.
-2. Builds `dist:mac` with `**REQUIRE_NOTARIZE=1**`.
-3. Prints commands for verification and release publishing.
+2. Builds `dist:mac` with `REQUIRE_NOTARIZE=1` (signed + notarized).
+3. Runs `verify:mac-trust`.
+4. Publishes to GitHub Releases (DMG, zip, blockmap, and `latest-mac.yml` for in-app updates).
+5. Creates git tag `vX.Y.Z` and pushes tag + `main`.
 
-### Manual checklist
+Installed copies of Harness check GitHub on launch and show an **Update** button in the sidebar when a newer release exists.
 
-1. Build locally (`npm run dist:mac`) with your signing/notarization env vars set.
-2. Verify notarization and Gatekeeper trust (`npm run verify:mac-trust`).
-3. Publish `dist/harness-vx.x.x-mac.dmg` on an artifact host (GitHub Release assets reject files >= 2 GiB).
-4. Push tag/branch updates.
-5. Confirm the site button opens the latest release page.
+Optional flags:
+
+- `npm run release -- --dry-run` — build and verify only; skip publish and git tag.
+- `npm run release -- --no-tag` — publish to GitHub but skip git tag push.
+
+### GitHub asset size limit
+
+GitHub Release assets reject individual files **>= 2 GiB**. If upload fails due to size, host artifacts on a public bucket (e.g. R2) and switch `publish.provider` in `electron-builder.js` to `generic`.
 
 ### GitHub Pages setup
 
