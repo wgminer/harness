@@ -47,5 +47,10 @@ module.exports = {
   dmg: {
     sign: false,
   },
+  publish: {
+    provider: "github",
+    owner: "wgminer",
+    repo: "harness",
+  },
   afterSign: unsigned ? undefined : "build/notarize.js",
 };

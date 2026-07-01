@@ -20,6 +20,7 @@ import {
   type SetupGap,
 } from "../shared/setupState";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
+import { IDLE_UPDATE_STATUS, type UpdateStatus } from "../shared/updateStatus";
 
 export default function App() {
   const [view, setView] = useState<View>("chat");
@@ -32,6 +33,7 @@ export default function App() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(IDLE_UPDATE_STATUS);
   /** True while the open chat is waiting on / streaming from the chat model (not composer voice). */
   const [activeChatProcessing, setActiveChatProcessing] = useState(false);
   /** Per-conversation refcount for async LLM thread title generation after a reply. */
@@ -251,6 +253,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    void window.electron.updater.getStatus().then(setUpdateStatus).catch(() => {});
+    const unsub = window.electron.updater.onStatus(setUpdateStatus);
+    void window.electron.updater.check();
+    return unsub;
+  }, []);
+
+  const handleUpdateClick = useCallback(() => {
+    if (updateStatus.status === "available") {
+      void window.electron.updater.downloadAndInstall();
+    }
+  }, [updateStatus.status]);
+
+  useEffect(() => {
     window.electron.customization.getLayoutOptions().then(setLayout);
     const unsub = window.electron.customization.onUpdated((p) => {
       if (p.type === "layout") {
@@ -431,6 +446,8 @@ export default function App() {
         activeChatProcessing={activeChatProcessing}
         titleGenInFlight={titleGenInFlight}
         appVersion={appVersion}
+        updateStatus={updateStatus}
+        onUpdateClick={handleUpdateClick}
         notesItemActive={view === "notes" && notesScreen === "list"}
         onNotesClick={handleNotesClick}
         onSyncComplete={refreshConversations}

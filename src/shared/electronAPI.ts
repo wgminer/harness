@@ -4,6 +4,7 @@ import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
+import type { UpdateStatus } from "./updateStatus";
 
 export interface TaskItem {
   id: string;
@@ -223,6 +224,12 @@ export interface ElectronAPI {
     }) => Promise<SyncStatus>;
     setR2SecretAccessKey: (secret: string) => Promise<void>;
     onChanged: (cb: () => void) => () => void;
+  };
+  updater: {
+    check: () => Promise<void>;
+    getStatus: () => Promise<UpdateStatus>;
+    downloadAndInstall: () => Promise<void>;
+    onStatus: (cb: (status: UpdateStatus) => void) => () => void;
   };
   /** Present when the app is launched with `HARNESS_E2E=1`. */
   e2e?: {

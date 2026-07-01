@@ -16,7 +16,8 @@
  * Usage:
  *   node scripts/dist-runner.js                 # default cross-platform dist
  *   node scripts/dist-runner.js --mac           # mac dmg/zip via scripts/dist-mac.js
- *   node scripts/dist-runner.js --mac --replace # also install the built .app into /Applications
+ *   node scripts/dist-runner.js --mac --replace   # also install the built .app into /Applications
+ *   node scripts/dist-runner.js --mac --publish   # build + upload to GitHub Releases
  *   node scripts/dist-runner.js --mac --quick     # skip code signing + notarization (local only)
  *
  * Env flags:
@@ -33,6 +34,7 @@ const args = process.argv.slice(2);
 const isMac = args.includes("--mac");
 const replace = args.includes("--replace");
 const quick = args.includes("--quick");
+const publish = args.includes("--publish");
 
 if (quick) {
   process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
@@ -165,7 +167,7 @@ async function runStep(ctx, idx, total, label, fn) {
 
 async function main() {
   const mode = isMac ? "mac" : "default";
-  const modeExtras = [replace && "replace", quick && "quick (unsigned)"].filter(Boolean);
+  const modeExtras = [replace && "replace", quick && "quick (unsigned)", publish && "publish"].filter(Boolean);
   console.log(
     color("bold", `\n▸ Harness dist (${mode}${modeExtras.length ? ` + ${modeExtras.join(" + ")}` : ""})`)
   );
@@ -228,10 +230,13 @@ async function main() {
   if (isMac) {
     const distMacArgs = [path.join(root, "scripts", "dist-mac.js")];
     if (replace) distMacArgs.push("--replace");
+    if (publish) distMacArgs.push("--publish");
     steps.push({
-      label: replace
-        ? "electron-builder (mac) + install to /Applications"
-        : "electron-builder (mac dmg/zip)",
+      label: publish
+        ? "electron-builder (mac dmg/zip) + publish"
+        : replace
+          ? "electron-builder (mac) + install to /Applications"
+          : "electron-builder (mac dmg/zip)",
       run: () => runChild(process.execPath, distMacArgs),
     });
   } else {
