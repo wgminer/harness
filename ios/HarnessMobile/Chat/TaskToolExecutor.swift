@@ -121,6 +121,9 @@ final class GatedToolCoordinator: ObservableObject {
     private var continuation: CheckedContinuation<GatedToolAction, Never>?
 
     func request(toolName: String, args: [String: Any]) async -> GatedToolAction {
+        if continuation != nil {
+            return .cancel
+        }
         let pendingId = UUID().uuidString
         pending = PendingGatedTool(id: pendingId, toolName: toolName, args: args)
         return await withCheckedContinuation { continuation in

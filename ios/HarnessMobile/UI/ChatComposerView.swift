@@ -1,10 +1,18 @@
 import SwiftUI
 
+private enum ComposerLayout {
+    static let textAreaMinHeight: CGFloat = 52
+    /// Delay keyboard until navigation transition finishes (compose screen).
+    static let autofocusDelayNs: UInt64 = 400_000_000
+}
+
 /// Message composer for chat threads.
 struct ChatComposerView: View {
     let conversationId: String
     let isStreaming: Bool
     let autofocusOnAppear: Bool
+    /// When true, mounts expanded and stays expanded until the user dismisses an empty draft.
+    let startsExpanded: Bool
     let allowsCollapse: Bool
     let initialDraft: String
     let onDraftChange: (String) -> Void
@@ -18,6 +26,34 @@ struct ChatComposerView: View {
     @State private var shouldFocusOnExpand = false
     /// Keeps the composer expanded while focus moves from the collapsed tap target to the TextField.
     @State private var isExpandedByUser = false
+
+    init(
+        conversationId: String,
+        isStreaming: Bool,
+        autofocusOnAppear: Bool,
+        startsExpanded: Bool,
+        allowsCollapse: Bool,
+        initialDraft: String,
+        onDraftChange: @escaping (String) -> Void,
+        onClearDraft: @escaping () -> Void,
+        onSend: @escaping (String) -> Void,
+        onStop: @escaping () -> Void,
+        isFocused: FocusState<Bool>.Binding
+    ) {
+        self.conversationId = conversationId
+        self.isStreaming = isStreaming
+        self.autofocusOnAppear = autofocusOnAppear
+        self.startsExpanded = startsExpanded
+        self.allowsCollapse = allowsCollapse
+        self.initialDraft = initialDraft
+        self.onDraftChange = onDraftChange
+        self.onClearDraft = onClearDraft
+        self.onSend = onSend
+        self.onStop = onStop
+        self._isFocused = isFocused
+        _draft = State(initialValue: initialDraft)
+        _isExpandedByUser = State(initialValue: startsExpanded)
+    }
 
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -35,15 +71,16 @@ struct ChatComposerView: View {
         Group {
             if isExpanded {
                 expandedContent
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+                    .transition(allowsCollapse ? .opacity : .identity)
             } else {
                 collapsedContent
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+                    .transition(allowsCollapse ? .opacity : .identity)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .liquidGlassSurface(cornerRadius: cornerRadius, shadowOffsetY: -6)
-        .animation(.easeInOut(duration: 0.22), value: isExpanded)
+        .animation(allowsCollapse ? .smooth(duration: 0.3) : nil, value: isExpanded)
+        .animation(nil, value: isFocused)
         .animation(nil, value: isStreaming)
         .animation(nil, value: canSend)
         .onChange(of: isStreaming) { _, streaming in
@@ -68,41 +105,54 @@ struct ChatComposerView: View {
             onDraftChange(newValue)
         }
         .onAppear {
-            draft = initialDraft
             if autofocusOnAppear {
-                isFocused = true
+                isExpandedByUser = true
+                scheduleAutofocus()
             }
         }
     }
 
     private var collapsedContent: some View {
         Button {
-            isExpandedByUser = true
-            shouldFocusOnExpand = true
+            expandAndFocus()
         } label: {
-            Text(draft.isEmpty ? "Type a message…" : draft)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(draft.isEmpty ? .secondary : .primary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, BottomBarMetrics.collapsedInnerHorizontal)
-                .padding(.vertical, BottomBarMetrics.collapsedInnerVertical)
+            HStack(spacing: 0) {
+                Text(draft.isEmpty ? "Type a message…" : draft)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(draft.isEmpty ? .secondary : .primary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, BottomBarMetrics.collapsedInnerHorizontal)
+            .padding(.vertical, BottomBarMetrics.collapsedInnerVertical)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TextField("Type a message…", text: $draft, axis: .vertical)
-                .lineLimit(1 ... 8)
-                .focused($isFocused)
-                .font(.body)
-                .textFieldStyle(.plain)
-                .frame(minHeight: 24, alignment: .topLeading)
-                .padding(.horizontal, 18)
-                .padding(.top, 18)
-                .padding(.bottom, 10)
-                .disabled(isStreaming)
+            ZStack(alignment: .topLeading) {
+                TextField("Type a message…", text: $draft, axis: .vertical)
+                    .lineLimit(1 ... 8)
+                    .focused($isFocused)
+                    .font(.body)
+                    .textFieldStyle(.plain)
+                    .frame(maxWidth: .infinity, minHeight: ComposerLayout.textAreaMinHeight, alignment: .topLeading)
+                    .disabled(isStreaming)
+
+                if !isFocused, !isStreaming {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            expandAndFocus()
+                        }
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 10)
 
             HStack(alignment: .center, spacing: 12) {
                 Spacer(minLength: 0)
@@ -143,6 +193,22 @@ struct ChatComposerView: View {
         }
     }
 
+    private func expandAndFocus() {
+        isExpandedByUser = true
+        shouldFocusOnExpand = true
+    }
+
+    private func scheduleAutofocus() {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: ComposerLayout.autofocusDelayNs)
+            shouldFocusOnExpand = true
+            if isExpanded {
+                shouldFocusOnExpand = false
+                isFocused = true
+            }
+        }
+    }
+
     private func submitDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -164,6 +230,7 @@ struct ChatComposerView: View {
                     conversationId: "preview",
                     isStreaming: false,
                     autofocusOnAppear: false,
+                    startsExpanded: false,
                     allowsCollapse: true,
                     initialDraft: "",
                     onDraftChange: { _ in },

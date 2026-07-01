@@ -8,8 +8,7 @@ private enum TaskCompleteTiming {
 struct TasksListView: View {
     @ObservedObject var app: AppModel
 
-    @State private var newTitle = ""
-    @State private var creating = false
+    @FocusState private var isComposerFocused: Bool
     @State private var searchQuery = ""
     @State private var activeOpen = true
     @State private var completedOpen = false
@@ -204,27 +203,24 @@ struct TasksListView: View {
         return "No active tasks."
     }
 
+    private static let composerConversationId = "tasks"
+
     private var composerDock: some View {
-        VStack(spacing: 10) {
-            TextField("Describe the task…", text: $newTitle, axis: .vertical)
-                .lineLimit(1 ... 4)
-                .textFieldStyle(.roundedBorder)
-                .submitLabel(.done)
-                .onSubmit {
-                    Task { await createTask() }
-                }
-            HStack {
-                Spacer()
-                Button("Add") {
-                    Task { await createTask() }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(creating || newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
+        ChatComposerView(
+            conversationId: Self.composerConversationId,
+            isStreaming: false,
+            autofocusOnAppear: true,
+            startsExpanded: true,
+            allowsCollapse: false,
+            initialDraft: app.cachedComposerDraft(conversationId: Self.composerConversationId),
+            onDraftChange: { app.cacheComposerDraft($0, conversationId: Self.composerConversationId) },
+            onClearDraft: { app.clearComposerDraft(conversationId: Self.composerConversationId) },
+            onSend: { text in Task { await createTask(title: text) } },
+            onStop: {},
+            isFocused: $isComposerFocused
+        )
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.bar)
+        .padding(.bottom, BottomBarMetrics.bottomInset)
     }
 
     private func taskRow(_ task: TaskItem, completing: Bool) -> some View {
@@ -324,14 +320,11 @@ struct TasksListView: View {
     }
 
     @MainActor
-    private func createTask() async {
-        let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
-        creating = true
-        defer { creating = false }
+    private func createTask(title: String) async {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
         do {
-            _ = try app.tasksStore.create(title: title)
-            newTitle = ""
+            _ = try app.tasksStore.create(title: trimmed)
         } catch {
             loadError = error.localizedDescription
         }

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 enum MessageRole: String, Codable {
@@ -7,7 +8,7 @@ enum MessageRole: String, Codable {
 }
 
 struct MessageRecord: Codable, Identifiable, Equatable {
-    var id: String { "\(role)-\(timestamp ?? 0)-\(content.hashValue)" }
+    var id: String { "\(role)-\(timestamp ?? 0)-\(Self.stableContentKey(content))" }
     let role: String
     let content: String
     let timestamp: Int64?
@@ -30,6 +31,11 @@ struct MessageRecord: Codable, Identifiable, Equatable {
 
     var messageRole: MessageRole {
         MessageRole(rawValue: role) ?? .user
+    }
+
+    private static func stableContentKey(_ content: String) -> String {
+        let digest = SHA256.hash(data: Data(content.utf8))
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 }
 

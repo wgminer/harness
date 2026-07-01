@@ -8,24 +8,25 @@ enum ChatRoute: Hashable {
 }
 
 enum ComposerDraftStorage {
-    static let composeDraftKey = "harness.composeDraft"
-    static let threadDraftsKey = "harness.composerDraftCache"
+    static let composeDraftKey = HarnessStorageKeys.composeDraft
+    static let threadDraftsKey = HarnessStorageKeys.threadDrafts
+    static var userDefaults: UserDefaults = .standard
 
     static func loadComposeDraft() -> String {
-        UserDefaults.standard.string(forKey: composeDraftKey) ?? ""
+        userDefaults.string(forKey: composeDraftKey) ?? ""
     }
 
     static func saveComposeDraft(_ draft: String) {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            UserDefaults.standard.removeObject(forKey: composeDraftKey)
+            userDefaults.removeObject(forKey: composeDraftKey)
         } else {
-            UserDefaults.standard.set(draft, forKey: composeDraftKey)
+            userDefaults.set(draft, forKey: composeDraftKey)
         }
     }
 
     static func loadThreadDrafts() -> [String: String] {
-        guard let data = UserDefaults.standard.data(forKey: threadDraftsKey),
+        guard let data = userDefaults.data(forKey: threadDraftsKey),
               let drafts = try? JSONDecoder().decode([String: String].self, from: data) else {
             return [:]
         }
@@ -34,17 +35,17 @@ enum ComposerDraftStorage {
 
     static func saveThreadDrafts(_ drafts: [String: String]) {
         if drafts.isEmpty {
-            UserDefaults.standard.removeObject(forKey: threadDraftsKey)
+            userDefaults.removeObject(forKey: threadDraftsKey)
         } else if let data = try? JSONEncoder().encode(drafts) {
-            UserDefaults.standard.set(data, forKey: threadDraftsKey)
+            userDefaults.set(data, forKey: threadDraftsKey)
         }
     }
 }
 
 @MainActor
 final class AppModel: ObservableObject {
-    static let lastSuccessfulSyncAtKey = "harness.lastSuccessfulSyncAt"
-    static let setupNoticeDismissedKey = "harness.setupNoticeDismissed"
+    static let lastSuccessfulSyncAtKey = HarnessStorageKeys.lastSuccessfulSyncAt
+    static let setupNoticeDismissedKey = HarnessStorageKeys.setupNoticeDismissed
 
     @Published var syncStatus = SyncStatusSnapshot(kind: .idle, title: "", detail: nil, occurredAt: nil)
     @Published var isSyncing = false
@@ -66,6 +67,7 @@ final class AppModel: ObservableObject {
     let syncEngine: SyncEngine
     let chatService: ChatService
     let dictationService: DictationService
+    let themeStore: ThemeStore
 
     private var pendingAutoGenerateReply: Set<String> = []
     private var cancellables = Set<AnyCancellable>()
@@ -78,6 +80,7 @@ final class AppModel: ObservableObject {
         syncEngine = SyncEngine(localDataDir: localDataDir)
         chatService = ChatService(store: store, tasksStore: tasksStore)
         dictationService = DictationService(localDataDir: localDataDir)
+        themeStore = ThemeStore()
         syncEngine.store = store
         lastSuccessfulSyncAt = UserDefaults.standard.object(forKey: Self.lastSuccessfulSyncAtKey) as? Date
         setupNoticeDismissed = UserDefaults.standard.bool(forKey: Self.setupNoticeDismissedKey)
@@ -166,6 +169,10 @@ final class AppModel: ObservableObject {
 
     func queueOutboundMessage(conversationId: String, text: String) {
         pendingOutboundMessages[conversationId] = text
+    }
+
+    func hasPendingOutboundMessage(conversationId: String) -> Bool {
+        pendingOutboundMessages[conversationId] != nil
     }
 
     func takePendingOutboundMessage(conversationId: String) -> String? {
@@ -275,6 +282,10 @@ final class AppModel: ObservableObject {
     }
 
     func performSync(forcePull: Bool = false) async {
+        guard R2SettingsStore.isConfigured else {
+            syncNotConfigured = true
+            return
+        }
         scheduledSyncTask?.cancel()
         clearScheduledSync()
         isSyncing = true
@@ -382,14 +393,23 @@ final class AppModel: ObservableObject {
         if R2SettingsStore.isConfigured {
             return "No sync completed yet on this phone."
         }
-        return "Configure R2 sync to enable backup."
+        return "Configure Cloudflare R2 in Settings to sync with desktop."
     }
 
     private func applyOutcome(_ outcome: SyncOutcome) {
         switch outcome.kind {
         case .noop, .pulled, .pushed:
             recordSuccessfulSync()
-            syncStatus = SyncStatusSnapshot(kind: .idle, title: "", detail: nil, occurredAt: nil)
+            if let mergeWarning = outcome.mergeWarning, !mergeWarning.isEmpty {
+                syncStatus = SyncStatusSnapshot(
+                    kind: .idle,
+                    title: mergeWarning,
+                    detail: nil,
+                    occurredAt: Date()
+                )
+            } else {
+                syncStatus = SyncStatusSnapshot(kind: .idle, title: "", detail: nil, occurredAt: nil)
+            }
         }
     }
 

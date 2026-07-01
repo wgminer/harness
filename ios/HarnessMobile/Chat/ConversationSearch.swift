@@ -74,7 +74,7 @@ enum ConversationSearch {
         return (snippet, [clampedStart, clampedEnd])
     }
 
-    static func search(in localDataDir: URL, query: String) throws -> [ConversationSearchResult] {
+    static func search(in localDataDir: URL, query: String, composeFirstOnly: Bool = true) throws -> [ConversationSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let q = trimmed.lowercased()
         guard !q.isEmpty else { return [] }
@@ -112,6 +112,8 @@ enum ConversationSearch {
             } else {
                 messages = []
             }
+
+            if composeFirstOnly, messages.isEmpty { continue }
 
             var snippet = ""
             var snippetMatchRange = [-1, -1]

@@ -23,6 +23,8 @@ struct ContentView: View {
                 }
             }
         }
+        .preferredColorScheme(app.themeStore.preferredColorScheme)
+        .environment(\.harnessTheme, app.themeStore.harnessTheme)
         .task {
             await app.bootstrap()
         }

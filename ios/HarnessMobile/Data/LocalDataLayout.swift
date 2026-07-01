@@ -7,7 +7,6 @@ enum LocalDataLayout {
     static let userMemoryFile = "app-state/user_memory.json"
     static let tasksFile = "app-state/tasks.json"
     static let settingsFile = "settings/settings.json"
-    static let themeFile = "themes/theme.json"
 
     static func noteFile(id: String) -> String {
         "app-state/notes/\(id).md"
@@ -43,7 +42,6 @@ enum LocalDataLayout {
         try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: appStateDir), withIntermediateDirectories: true)
         try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: "app-state/notes"), withIntermediateDirectories: true)
         try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: "settings"), withIntermediateDirectories: true)
-        try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: "themes"), withIntermediateDirectories: true)
     }
 
     /// Desktop expects `{}` when no chats exist; create it so reads never fail on a missing file.

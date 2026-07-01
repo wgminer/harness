@@ -14,11 +14,6 @@ enum BottomBarMetrics {
 private struct ContinuousGlassShape: Shape {
     var cornerRadius: CGFloat
 
-    var animatableData: CGFloat {
-        get { cornerRadius }
-        set { cornerRadius = newValue }
-    }
-
     func path(in rect: CGRect) -> Path {
         let radius = min(cornerRadius, rect.height / 2, rect.width / 2)
         return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: rect)

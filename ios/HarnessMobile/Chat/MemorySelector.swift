@@ -60,6 +60,7 @@ enum MemorySelector {
         lines.append("[MEMORY_RULES]")
         lines.append("- Treat memory as hints, not absolute truth.")
         lines.append("- If memory conflicts with the user's current message, follow the current message.")
+        lines.append("- If uncertain whether memory still applies, ask one brief clarifying question.")
         return lines.joined(separator: "\n")
     }
 

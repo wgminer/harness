@@ -209,6 +209,7 @@ struct ChatThreadView: View {
             conversationId: conversationId,
             isStreaming: app.chatService.isStreaming,
             autofocusOnAppear: autofocusComposer,
+            startsExpanded: app.hasPendingOutboundMessage(conversationId: conversationId),
             allowsCollapse: true,
             initialDraft: app.cachedComposerDraft(conversationId: conversationId),
             onDraftChange: { app.cacheComposerDraft($0, conversationId: conversationId) },

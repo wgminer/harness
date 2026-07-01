@@ -61,6 +61,14 @@ final class ConversationSearchTests: XCTestCase {
     func testSearchSortsNewestFirst() throws {
         try writeConversation(id: "old", title: "budget old", createdAt: 100)
         try writeConversation(id: "new", title: "budget new", createdAt: 500)
+        try writeMessages(
+            conversationId: "old",
+            messages: [MessageRecord(role: "user", content: "budget old thread", timestamp: 100, model: nil)]
+        )
+        try writeMessages(
+            conversationId: "new",
+            messages: [MessageRecord(role: "user", content: "budget new thread", timestamp: 500, model: nil)]
+        )
 
         let results = try ConversationSearch.search(in: tempDir, query: "budget")
         XCTAssertEqual(results.map(\.id), ["new", "old"])

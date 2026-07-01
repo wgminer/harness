@@ -1,21 +1,24 @@
 import Foundation
+import NIOCore
+import SotoCore
+import SotoS3
 
 enum SyncEngineError: LocalizedError {
-    case noBackupFolder
-    case iCloudPlaceholder(String)
+    case notConfigured
     case bundleHashMismatch
     case manifestMissing
+    case bundleMissing
 
     var errorDescription: String? {
         switch self {
-        case .noBackupFolder:
-            return "Choose your Harness backup folder in Settings (same folder as desktop Sync)."
-        case .iCloudPlaceholder(let name):
-            return "Waiting for iCloud to download \(name). Open Files and wait for the download to finish."
+        case .notConfigured:
+            return "Configure Cloudflare R2 in Settings to sync with desktop Harness."
         case .bundleHashMismatch:
             return "Backup bundle failed integrity check."
         case .manifestMissing:
-            return "No manifest in backup folder. Sync from desktop Harness first."
+            return "No manifest in remote backup. Sync from desktop Harness first."
+        case .bundleMissing:
+            return "No backup bundle in remote storage. Sync from desktop Harness first."
         }
     }
 }
@@ -28,12 +31,13 @@ struct SyncOutcome: Equatable {
     }
 
     let kind: Kind
+    let mergeWarning: String?
 }
 
 @MainActor
 final class SyncEngine {
-    static let lastSyncedRevisionKey = "harness.lastSyncedRevision"
-    static let lastSyncedContentRevisionKey = "harness.lastSyncedContentRevision"
+    static let lastSyncedRevisionKey = HarnessStorageKeys.lastSyncedRevision
+    static let lastSyncedContentRevisionKey = HarnessStorageKeys.lastSyncedContentRevision
 
     let localDataDir: URL
     weak var store: ConversationStore?
@@ -47,17 +51,12 @@ final class SyncEngine {
     }
 
     func syncNow(forcePull: Bool = false) async throws -> SyncOutcome {
-        let backupFolder = try BookmarkStore.resolveFolderURL()
-        _ = backupFolder.startAccessingSecurityScopedResource()
-        defer { backupFolder.stopAccessingSecurityScopedResource() }
-
-        let bundleURL = backupFolder.appendingPathComponent(SyncScopes.bundleFileName)
-        let manifestURL = backupFolder.appendingPathComponent(SyncScopes.manifestFileName)
-
-        try checkPlaceholder(in: backupFolder, filename: SyncScopes.bundleFileName)
+        let remote = try RemoteBackupStore.makeConfigured()
         try pruneNonMaterializedFiles()
 
-        let remoteBundleData = try loadRemoteBundleData(bundleURL: bundleURL)
+        let remoteManifest = try await remote.readManifest()
+        let remoteBundleData = try await loadRemoteBundleData(from: remote)
+
         let localRevision = try BundleCodec.computeRevision(
             localDataDir: localDataDir,
             fallbackData: remoteBundleData
@@ -71,26 +70,25 @@ final class SyncEngine {
             localDataDir: localDataDir,
             scopes: SyncScopes.userContentScopes
         )
-        let remoteManifest = try BackupManifest.load(from: manifestURL)
 
         if forcePull {
-            _ = try await pull(bundleURL: bundleURL, manifestURL: manifestURL)
-            return SyncOutcome(kind: .pulled)
+            _ = try await pull(remote: remote, remoteManifest: remoteManifest, remoteBundleData: remoteBundleData)
+            return SyncOutcome(kind: .pulled, mergeWarning: nil)
         }
 
         guard let remoteManifest else {
             _ = try await push(
-                bundleURL: bundleURL,
-                manifestURL: manifestURL,
+                remote: remote,
                 localRevision: localRevision,
-                localContentRevision: localContentRevision
+                localContentRevision: localContentRevision,
+                passthroughData: remoteBundleData
             )
-            return SyncOutcome(kind: .pushed)
+            return SyncOutcome(kind: .pushed, mergeWarning: nil)
         }
 
         let remoteContentRevision = try remoteContentRevision(
             manifest: remoteManifest,
-            bundleURL: bundleURL
+            remoteBundleData: remoteBundleData
         )
         let decision = SyncDecisionEngine.resolve(params: (
             localRevision: localRevision,
@@ -107,21 +105,25 @@ final class SyncEngine {
         case .noop:
             recordSyncedRevisions(revision: localRevision, contentRevision: localContentRevision)
             store?.markSynced(revision: localRevision)
-            return SyncOutcome(kind: .noop)
+            return SyncOutcome(kind: .noop, mergeWarning: nil)
         case .pull:
-            _ = try await pull(bundleURL: bundleURL, manifestURL: manifestURL)
-            return SyncOutcome(kind: .pulled)
+            _ = try await pull(remote: remote, remoteManifest: remoteManifest, remoteBundleData: remoteBundleData)
+            return SyncOutcome(kind: .pulled, mergeWarning: nil)
         case .push:
             _ = try await push(
-                bundleURL: bundleURL,
-                manifestURL: manifestURL,
+                remote: remote,
                 localRevision: localRevision,
-                localContentRevision: localContentRevision
+                localContentRevision: localContentRevision,
+                passthroughData: remoteBundleData
             )
-            return SyncOutcome(kind: .pushed)
+            return SyncOutcome(kind: .pushed, mergeWarning: nil)
         case .conflict:
-            _ = try await merge(bundleURL: bundleURL, manifestURL: manifestURL)
-            return SyncOutcome(kind: .pushed)
+            let mergeWarning = try await merge(
+                remote: remote,
+                remoteManifest: remoteManifest,
+                remoteBundleData: remoteBundleData
+            )
+            return SyncOutcome(kind: .pushed, mergeWarning: mergeWarning)
         }
     }
 
@@ -134,23 +136,25 @@ final class SyncEngine {
         UserDefaults.standard.set(contentRevision, forKey: Self.lastSyncedContentRevisionKey)
     }
 
-    private func remoteContentRevision(manifest: BackupManifest, bundleURL: URL) throws -> String {
+    private func remoteContentRevision(manifest: BackupManifest, remoteBundleData: [String: Data]) throws -> String {
         if let contentRevision = manifest.contentRevision, !contentRevision.isEmpty {
             return contentRevision
         }
-        guard FileManager.default.fileExists(atPath: bundleURL.path) else { return "" }
-        let bytes = try Data(contentsOf: bundleURL)
-        let doc = try BundleCodec.parseBundle(bytes)
+        guard !remoteBundleData.isEmpty else { return "" }
+        let doc = BundleCodec.parseBundleFromEntryMap(remoteBundleData)
         return BundleCodec.computeContentRevisionFromBundle(doc)
     }
 
-    private func pull(bundleURL: URL, manifestURL: URL) async throws -> Int {
-        guard FileManager.default.fileExists(atPath: bundleURL.path) else {
-            throw SyncEngineError.manifestMissing
+    private func pull(
+        remote: RemoteBackupStore,
+        remoteManifest: BackupManifest?,
+        remoteBundleData: [String: Data]
+    ) async throws -> Int {
+        let bytes = try await remote.readBundle()
+        guard !bytes.isEmpty else {
+            throw SyncEngineError.bundleMissing
         }
-        let bytes = try Data(contentsOf: bundleURL)
-        let manifest = try BackupManifest.load(from: manifestURL)
-        if let manifest, BundleCodec.hashBundleBytes(bytes) != manifest.bundleHash {
+        if let remoteManifest, BundleCodec.hashBundleBytes(bytes) != remoteManifest.bundleHash {
             throw SyncEngineError.bundleHashMismatch
         }
         let doc = try BundleCodec.parseBundle(bytes)
@@ -158,14 +162,14 @@ final class SyncEngine {
         let fileCount = try BundleCodec.extractBundle(localDataDir: localDataDir, doc: doc)
         try pruneNonMaterializedFiles()
         let contentRevision: String
-        if let manifest {
-            contentRevision = try remoteContentRevision(manifest: manifest, bundleURL: bundleURL)
+        if let remoteManifest {
+            contentRevision = try remoteContentRevision(manifest: remoteManifest, remoteBundleData: remoteBundleData)
         } else {
             contentRevision = BundleCodec.computeContentRevisionFromBundle(doc)
         }
-        let revision = try manifest?.revision ?? BundleCodec.computeRevision(
+        let revision = try remoteManifest?.revision ?? BundleCodec.computeRevision(
             localDataDir: localDataDir,
-            fallbackData: BundleCodec.entryDataMap(from: doc)
+            fallbackData: remoteBundleData
         )
         recordSyncedRevisions(revision: revision, contentRevision: contentRevision)
         store?.clearLocalEditsFlag()
@@ -173,27 +177,22 @@ final class SyncEngine {
         return fileCount
     }
 
-    private struct MergeResult {
-        let fileCount: Int
-        let afterSnapshot: [String: ConversationSnapshot]
-        let mergeWarning: String?
-    }
-
-    private func merge(bundleURL: URL, manifestURL: URL) async throws -> MergeResult {
-        guard FileManager.default.fileExists(atPath: bundleURL.path) else {
-            throw SyncEngineError.manifestMissing
-        }
-        let remoteManifest = try BackupManifest.load(from: manifestURL)
+    @discardableResult
+    private func merge(
+        remote: RemoteBackupStore,
+        remoteManifest: BackupManifest?,
+        remoteBundleData: [String: Data]
+    ) async throws -> String? {
         guard remoteManifest != nil else { throw SyncEngineError.manifestMissing }
+        guard !remoteBundleData.isEmpty else { throw SyncEngineError.bundleMissing }
 
         let localFiles = try loadLocalScopedFileMap()
-        let remoteFiles = try loadRemoteBundleData(bundleURL: bundleURL)
-        let review = SyncMerge.buildConflictReview(localFiles: localFiles, remoteFiles: remoteFiles)
+        let review = SyncMerge.buildConflictReview(localFiles: localFiles, remoteFiles: remoteBundleData)
         let choices = SyncMerge.buildDefaultMergeChoices(review: review)
         let mergeWarning = SyncMerge.mergeWarning(from: review)
         let mergedFiles = SyncMerge.buildMergedFileMap(
             localFiles: localFiles,
-            remoteFiles: remoteFiles,
+            remoteFiles: remoteBundleData,
             choices: choices
         )
 
@@ -214,34 +213,31 @@ final class SyncEngine {
             scopes: SyncScopes.userContentScopes,
             fallbackData: mergedFiles
         )
-        let fileCount = try await push(
-            bundleURL: bundleURL,
-            manifestURL: manifestURL,
+        _ = try await push(
+            remote: remote,
             localRevision: localRevision,
             localContentRevision: localContentRevision,
-            extraPassthrough: passthrough
+            passthroughData: passthrough
         )
-        let afterSnapshot = try store?.snapshotConversations() ?? [:]
-        return MergeResult(fileCount: fileCount, afterSnapshot: afterSnapshot, mergeWarning: mergeWarning)
+        return mergeWarning
     }
 
     private func push(
-        bundleURL: URL,
-        manifestURL: URL,
+        remote: RemoteBackupStore,
         localRevision: String,
         localContentRevision: String,
+        passthroughData: [String: Data],
         extraPassthrough: [String: Data] = [:]
     ) async throws -> Int {
-        var passthroughData = try loadRemoteBundleData(bundleURL: bundleURL)
+        var mergedPassthrough = passthroughData
         for (path, data) in extraPassthrough {
-            passthroughData[path] = data
+            mergedPassthrough[path] = data
         }
         let built = try BundleCodec.buildBundle(
             localDataDir: localDataDir,
             scopes: SyncScopes.mobilePushScopes,
-            passthroughData: passthroughData
+            passthroughData: mergedPassthrough
         )
-        try BundleCodec.atomicWrite(built.bytes, to: bundleURL)
         let manifest = BackupManifest(
             version: SyncScopes.manifestVersion,
             revision: localRevision,
@@ -249,24 +245,10 @@ final class SyncEngine {
             updatedAt: Int64(Date().timeIntervalSince1970 * 1000),
             bundleHash: built.bundleHash
         )
-        try manifest.save(to: manifestURL)
+        try await remote.writeBundleAndManifest(bundleBytes: built.bytes, manifest: manifest)
         recordSyncedRevisions(revision: localRevision, contentRevision: localContentRevision)
         store?.markSynced(revision: localRevision)
         return built.entries.count
-    }
-
-    private func checkPlaceholder(in folder: URL, filename: String) throws {
-        let placeholder = folder.appendingPathComponent(SyncScopes.placeholderSibling(for: filename))
-        if FileManager.default.fileExists(atPath: placeholder.path) {
-            throw SyncEngineError.iCloudPlaceholder(filename)
-        }
-        let target = folder.appendingPathComponent(filename)
-        if FileManager.default.fileExists(atPath: target.path) {
-            let attrs = try FileManager.default.attributesOfItem(atPath: target.path)
-            if let size = attrs[.size] as? Int, size == 0 {
-                throw SyncEngineError.iCloudPlaceholder(filename)
-            }
-        }
     }
 
     private func loadLocalScopedFileMap() throws -> [String: Data] {
@@ -307,11 +289,28 @@ final class SyncEngine {
         }
     }
 
-    private func loadRemoteBundleData(bundleURL: URL) throws -> [String: Data] {
-        guard FileManager.default.fileExists(atPath: bundleURL.path) else { return [:] }
-        let bytes = try Data(contentsOf: bundleURL)
-        let doc = try BundleCodec.parseBundle(bytes)
-        return BundleCodec.entryDataMap(from: doc)
+    private func loadRemoteBundleData(from remote: RemoteBackupStore) async throws -> [String: Data] {
+        do {
+            let bytes = try await remote.readBundle()
+            guard !bytes.isEmpty else { return [:] }
+            let doc = try BundleCodec.parseBundle(bytes)
+            return BundleCodec.entryDataMap(from: doc)
+        } catch {
+            if isNotFound(error) { return [:] }
+            throw error
+        }
+    }
+
+    private func isNotFound(_ error: Error) -> Bool {
+        if let awsError = error as? AWSResponseError {
+            if awsError.errorCode.lowercased().contains("nosuchkey") { return true }
+            if awsError.context?.responseCode == .notFound { return true }
+        }
+        if let rawError = error as? AWSRawError, rawError.context.responseCode == .notFound {
+            return true
+        }
+        let message = error.localizedDescription.lowercased()
+        return message.contains("404") || message.contains("not found") || message.contains("nosuchkey")
     }
 
     private func pruneNonMaterializedFiles() throws {

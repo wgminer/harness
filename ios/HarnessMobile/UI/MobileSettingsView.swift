@@ -5,13 +5,18 @@ struct MobileSettingsView: View {
     @StateObject private var recordingPlayer = RecordingPlayer()
     @Environment(\.dismiss) private var dismiss
     @State private var apiKey = ""
-    @State private var showFolderPicker = false
+    @State private var r2AccountId = ""
+    @State private var r2Bucket = ""
+    @State private var r2Prefix = "harness/"
+    @State private var r2AccessKeyId = ""
+    @State private var r2SecretAccessKey = ""
     @State private var showVoiceMemoImport = false
     @State private var settingsMessage = ""
     @State private var recordingCount = 0
     @State private var recentRecordings: [VoiceRecording] = []
     @State private var retranscribingRecordingId: String?
     @State private var retranscribeError: String?
+    @State private var isTestingR2 = false
 
     var body: some View {
         Form {
@@ -39,18 +44,39 @@ struct MobileSettingsView: View {
                 }
             }
 
-            Section("iCloud backup folder") {
-                if let path = BookmarkStore.displayPath {
-                    Text(path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            Section {
+                TextField("Account ID", text: $r2AccountId)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Bucket", text: $r2Bucket)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Prefix", text: $r2Prefix)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Access Key ID", text: $r2AccessKeyId)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                SecureField("Secret Access Key", text: $r2SecretAccessKey)
+                Button("Save R2 settings") {
+                    saveR2Settings()
                 }
-                Button("Choose backup folder") {
-                    showFolderPicker = true
+                Button {
+                    Task { await testR2Connection() }
+                } label: {
+                    HStack {
+                        Text("Test connection")
+                        Spacer()
+                        if isTestingR2 {
+                            ProgressView()
+                        }
+                    }
                 }
-                Text("Pick the same folder as Harness desktop → Settings → Data → backup folder (e.g. iCloud Drive/Harness).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .disabled(isTestingR2)
+            } header: {
+                Text("Cloudflare R2")
+            } footer: {
+                Text("Use the same R2 bucket as Harness desktop → Settings → Data. Sync stores bundle.json.gz and manifest.json under the prefix.")
             }
 
             Section("Sync") {
@@ -70,7 +96,7 @@ struct MobileSettingsView: View {
                         }
                     }
                 }
-                .disabled(app.isSyncing)
+                .disabled(app.isSyncing || !R2SettingsStore.isConfigured)
 
                 Text(app.syncStatusSummary)
                     .font(.caption)
@@ -94,7 +120,7 @@ struct MobileSettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                         if app.syncStatus.kind == .error {
-                            Text("Sync keeps running in the background when you return to the app. Fix iCloud downloads in Files if needed, then tap Sync now.")
+                            Text("Check your R2 credentials in Settings, then tap Sync now.")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -117,7 +143,7 @@ struct MobileSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Text("Recordings stay on this device and are not synced to your backup folder.")
+                Text("Recordings stay on this device and are not synced to R2.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -188,6 +214,7 @@ struct MobileSettingsView: View {
         .navigationTitle("Settings")
         .onAppear {
             apiKey = KeychainStore.loadAPIKey() ?? ""
+            loadR2Fields()
             reloadRecordings()
         }
         .onDisappear {
@@ -197,20 +224,6 @@ struct MobileSettingsView: View {
             VoiceMemoImportSheet(app: app, isPresented: $showVoiceMemoImport) { conversationId in
                 app.openThread(id: conversationId)
                 dismiss()
-            }
-        }
-        .sheet(isPresented: $showFolderPicker) {
-            FolderPicker { url in
-                _ = url.startAccessingSecurityScopedResource()
-                do {
-                    try BookmarkStore.saveBookmark(from: url)
-                    app.syncNotConfigured = false
-                    settingsMessage = "Backup folder linked."
-                    Task { await app.performSync(forcePull: true) }
-                } catch {
-                    settingsMessage = error.localizedDescription
-                }
-                url.stopAccessingSecurityScopedResource()
             }
         }
     }
@@ -223,6 +236,55 @@ struct MobileSettingsView: View {
             return .orange
         }
         return .secondary
+    }
+
+    private func loadR2Fields() {
+        r2AccountId = R2SettingsStore.accountId
+        r2Bucket = R2SettingsStore.bucket
+        r2Prefix = R2SettingsStore.prefix
+        r2AccessKeyId = R2SettingsStore.accessKeyId
+        r2SecretAccessKey = KeychainStore.loadR2SecretAccessKey() ?? ""
+    }
+
+    private func saveR2Settings() {
+        R2SettingsStore.accountId = r2AccountId
+        R2SettingsStore.bucket = r2Bucket
+        R2SettingsStore.prefix = r2Prefix
+        R2SettingsStore.accessKeyId = r2AccessKeyId
+        do {
+            let trimmedSecret = r2SecretAccessKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedSecret.isEmpty {
+                try KeychainStore.saveR2SecretAccessKey(trimmedSecret)
+            }
+            app.refreshSetupFlags()
+            settingsMessage = R2SettingsStore.isConfigured
+                ? "R2 settings saved."
+                : "Saved fields, but secret access key is required for sync."
+        } catch {
+            settingsMessage = error.localizedDescription
+        }
+    }
+
+    private func testR2Connection() async {
+        saveR2Settings()
+        guard R2SettingsStore.isConfigured else {
+            settingsMessage = "Enter account ID, bucket, access key ID, and secret access key."
+            return
+        }
+        isTestingR2 = true
+        defer { isTestingR2 = false }
+        let store = try? RemoteBackupStore.makeConfigured()
+        guard let store else {
+            settingsMessage = "R2 is not fully configured."
+            return
+        }
+        let result = await store.testConnection()
+        if result.ok {
+            settingsMessage = "R2 connection OK."
+            await app.performSync(forcePull: true)
+        } else {
+            settingsMessage = result.error ?? "R2 connection failed."
+        }
     }
 
     private func reloadRecordings() {

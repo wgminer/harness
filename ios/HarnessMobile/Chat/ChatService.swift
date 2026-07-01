@@ -1,15 +1,26 @@
 import Foundation
 
+enum ChatServiceError: LocalizedError {
+    case missingUserMessage
+
+    var errorDescription: String? {
+        switch self {
+        case .missingUserMessage:
+            return "No user message to polish."
+        }
+    }
+}
+
 @MainActor
 final class ChatService: ObservableObject {
     @Published var isStreaming = false
-    @Published var errorMessage: String?
 
     private let store: ConversationStore
     private let tasksStore: TasksStore
     let gatedToolCoordinator: GatedToolCoordinator
     private var taskToolExecutor: TaskToolExecutor?
     private var client: OpenAIClient?
+    private var titleRefinementTasks: [String: Task<Void, Never>] = [:]
 
     init(store: ConversationStore, tasksStore: TasksStore) {
         self.store = store
@@ -70,7 +81,6 @@ final class ChatService: ObservableObject {
         let trimmed = userContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        errorMessage = nil
         isStreaming = true
         defer { isStreaming = false }
 
@@ -128,7 +138,6 @@ final class ChatService: ObservableObject {
         onToolCall: @escaping (ToolCallRecord) -> Void
     ) async throws {
         guard let client else { throw OpenAIError.missingAPIKey }
-        errorMessage = nil
         isStreaming = true
         defer { isStreaming = false }
 
@@ -184,10 +193,9 @@ final class ChatService: ObservableObject {
         guard let client else { throw OpenAIError.missingAPIKey }
         guard let taskToolExecutor else { throw OpenAIError.missingAPIKey }
         guard let transcript = try store.popLastUserMessage(conversationId: conversationId) else {
-            throw OpenAIError.httpFailure
+            throw ChatServiceError.missingUserMessage
         }
 
-        errorMessage = nil
         isStreaming = true
         defer { isStreaming = false }
 
@@ -267,7 +275,9 @@ final class ChatService: ObservableObject {
     }
 
     func scheduleTitleRefinement(conversationId: String) {
-        Task {
+        titleRefinementTasks[conversationId]?.cancel()
+        titleRefinementTasks[conversationId] = Task {
+            defer { titleRefinementTasks[conversationId] = nil }
             guard let client else { return }
             do {
                 let messages = try store.loadMessages(conversationId: conversationId)

@@ -1,10 +1,10 @@
 import Foundation
 
 enum R2SettingsStore {
-    private static let accountIdKey = "harness.r2.accountId"
-    private static let bucketKey = "harness.r2.bucket"
-    private static let prefixKey = "harness.r2.prefix"
-    private static let accessKeyIdKey = "harness.r2.accessKeyId"
+    private static let accountIdKey = HarnessStorageKeys.r2AccountId
+    private static let bucketKey = HarnessStorageKeys.r2Bucket
+    private static let prefixKey = HarnessStorageKeys.r2Prefix
+    private static let accessKeyIdKey = HarnessStorageKeys.r2AccessKeyId
 
     static var accountId: String {
         get { UserDefaults.standard.string(forKey: accountIdKey) ?? "" }

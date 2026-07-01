@@ -15,7 +15,7 @@ final class ConversationStore: ObservableObject {
     }
 
     func reload() throws {
-        let map = try loadConversationMap()
+        let map = try loadConversationMapRaw()
         conversations = map
             .compactMap { id, meta -> ConversationListItem? in
                 let messageCount = (try? loadMessages(conversationId: id).count) ?? 0
@@ -294,10 +294,6 @@ final class ConversationStore: ObservableObject {
     }
 
     // MARK: - Private
-
-    private func loadConversationMap() throws -> [String: ConversationMeta] {
-        try loadConversationMapRaw()
-    }
 
     private func loadConversationMapRaw() throws -> [String: ConversationMeta] {
         let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.conversationsFile)

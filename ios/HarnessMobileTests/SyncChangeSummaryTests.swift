@@ -4,12 +4,12 @@ import XCTest
 final class SyncChangeSummaryTests: XCTestCase {
     func testDescribeNoopWithConversations() {
         let detail = SyncChangeSummary.describeNoop(hasLocalEdits: false, conversationCount: 3)
-        XCTAssertEqual(detail, "Up to date with iCloud. 3 conversations.")
+        XCTAssertEqual(detail, "Up to date with R2. 3 conversations.")
     }
 
     func testDescribeNoopWithLocalEdits() {
         let detail = SyncChangeSummary.describeNoop(hasLocalEdits: true, conversationCount: 1)
-        XCTAssertEqual(detail, "Everything matches iCloud, but this phone still has changes waiting to upload.")
+        XCTAssertEqual(detail, "Everything matches remote backup, but this phone still has changes waiting to upload.")
     }
 
     func testDescribeConversationChangesAddedAndUpdated() {
