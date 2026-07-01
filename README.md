@@ -2,7 +2,7 @@
 
 **Harness** is a personal, all-in-one desktop harness for working with LLMs: one app for chat, memory, tasks, file tools, and UI customization—without shipping your data to a third-party chat product. It is an Electron app with a pluggable LLM backend (OpenAI cloud or OpenAI-compatible locals such as Ollama), streaming and tools, and everything else stored on disk.
 
-Use it as your daily driver when you want API flexibility (model choice, keys in Settings) plus a focused, terminal-inspired interface you can reshape (theme, layout, sidebar) and let the assistant adjust via built-in tools. The direction is broader than chat: Harness is a personal "tool for thought" intended to replace a fragmented set of SaaS tools with one trust-first system you control.
+Use it as your daily driver when you want API flexibility (model choice, keys in Settings) plus a focused, terminal-inspired interface you can reshape (layout, sidebar) and let the assistant adjust via built-in tools. The direction is broader than chat: Harness is a personal "tool for thought" intended to replace a fragmented set of SaaS tools with one trust-first system you control.
 
 ## Product direction
 
@@ -18,7 +18,7 @@ Use it as your daily driver when you want API flexibility (model choice, keys in
 - **Tasks & plans**: Track work across conversations (see Tasks in the app).
 - **Backlog capture**: Quickly capture ideas and route them into a backlog/inbox for later triage into tasks, plans, or conversations.
 - **File tools**: The assistant can list, read, write, and delete files and create directories within allowed roots (e.g. app user data, home, desktop—see main process configuration).
-- **Self-improvement**: Ask for layout or theme changes; the assistant uses `get_theme`, `update_theme`, `apply_theme_preset`, and `set_layout`. Preferences live under the app user data directory.
+- **Self-improvement**: Ask for layout changes; the assistant uses `set_layout` (sidebar position and optional design grid overlay). The app uses a fixed dark theme baked into CSS.
 - **Import**: Bring in exported ChatGPT conversation folders when you need to migrate context.
 - **Recording & transcription**: Capture audio in-app, save or export WAV, transcribe via OpenAI or a local Whisper-compatible server; the menu bar icon can reflect recording state.
 - **Settings**: API key and model (OpenAI), or base URL and model for Ollama; transcription provider and recording options; memory editor.

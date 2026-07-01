@@ -69,3 +69,26 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  ios:
+    name: iOS unit tests
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Run iOS tests
+        working-directory: ios
+        run: |
+          xcodebuild test \
+            -scheme HarnessMobile \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' \
+            -quiet
