@@ -7,9 +7,6 @@ export type SettingsTabId =
   | "memory"
   | "data";
 
-/** @deprecated Pre–5-tab layout ids; mapped by {@link normalizeSettingsTab}. */
-export type LegacySettingsTabId = "tools" | "notes";
-
 export type SettingsNavIconId =
   | "SlidersHorizontal"
   | "Palette"
@@ -48,9 +45,9 @@ export const SETTINGS_NAV: Array<{
   {
     id: "appearance",
     label: RIG_APPEARANCE_TAB_LABEL,
-    subtitle: "Theme, layout & editor",
+    subtitle: "Layout & editor",
     icon: "Palette",
-    keywords: ["theme", "color", "font", "grid", "overlay", "typography", "template", "notes", "writing", "editor"],
+    keywords: ["grid", "overlay", "template", "notes", "writing", "editor"],
   },
   {
     id: "voice",
@@ -93,15 +90,4 @@ export function normalizeSettingsTab(tab: string | undefined): SettingsTabId {
     return tab;
   }
   return "general";
-}
-
-export function filterSettingsNav(query: string): typeof SETTINGS_NAV {
-  const q = query.trim().toLowerCase();
-  if (!q) return SETTINGS_NAV;
-  return SETTINGS_NAV.filter(
-    (item) =>
-      item.label.toLowerCase().includes(q) ||
-      (item.subtitle?.toLowerCase().includes(q) ?? false) ||
-      item.keywords.some((kw) => kw.includes(q)),
-  );
 }

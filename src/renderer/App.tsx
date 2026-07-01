@@ -20,7 +20,6 @@ import {
   type SetupGap,
 } from "../shared/setupState";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
-import { beginThemeColorTransition } from "./themeTransition";
 
 export default function App() {
   const [view, setView] = useState<View>("chat");
@@ -38,11 +37,13 @@ export default function App() {
   /** Per-conversation refcount for async LLM thread title generation after a reply. */
   const [titleGenInFlight, setTitleGenInFlight] = useState<Record<string, number>>({});
   /** Note id to open when entering Notes from chat message action. */
-  const [pendingOpenNoteId, setPendingOpenNoteId] = useState<string | null>(null);
+  const [pendingOpenNoteRequest, setPendingOpenNoteRequest] = useState<{
+    id: string;
+    nonce: number;
+  } | null>(null);
   const [notesScreen, setNotesScreen] = useState<"list" | "detail">("list");
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [notesOverviewNonce, setNotesOverviewNonce] = useState(0);
-  const [notesEditorFocused, setNotesEditorFocused] = useState(false);
   const [uiSessionReady, setUiSessionReady] = useState(false);
   const [setupGaps, setSetupGaps] = useState<SetupGap[]>([]);
   const [setupNoticeOpen, setSetupNoticeOpen] = useState(false);
@@ -138,7 +139,7 @@ export default function App() {
       setView(session.view);
       setConversationId(resolveConversationId(list, session.conversationId));
       if (session.notesOpenNoteId) {
-        setPendingOpenNoteId(session.notesOpenNoteId);
+        setPendingOpenNoteRequest({ id: session.notesOpenNoteId, nonce: Date.now() });
       }
     }
     setUiSessionReady(true);
@@ -250,33 +251,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const ensureCustomThemeLast = () => {
-      const el = document.getElementById("custom-theme");
-      if (el) document.head.appendChild(el);
-    };
-    const themeRequestSeqRef = { current: 0 };
-    const themeBootstrappedRef = { current: false };
-    const refreshThemeCss = () => {
-      const seq = ++themeRequestSeqRef.current;
-      window.electron.customization.getActiveTheme().then((css) => {
-        if (seq !== themeRequestSeqRef.current) return;
-        ensureCustomThemeLast();
-        const el = document.getElementById("custom-theme") as HTMLStyleElement | null;
-        if (el) el.textContent = css;
-        if (themeBootstrappedRef.current) {
-          beginThemeColorTransition();
-        } else {
-          themeBootstrappedRef.current = true;
-        }
-      });
-    };
-    ensureCustomThemeLast();
     window.electron.customization.getLayoutOptions().then(setLayout);
-    refreshThemeCss();
     const unsub = window.electron.customization.onUpdated((p) => {
-      if (p.type === "theme") {
-        refreshThemeCss();
-      }
       if (p.type === "layout") {
         window.electron.customization.getLayoutOptions().then(setLayout);
       }
@@ -328,7 +304,7 @@ export default function App() {
   }, [conversationId, conversations]);
 
   const handleNotesClick = useCallback(() => {
-    setPendingOpenNoteId(null);
+    setPendingOpenNoteRequest(null);
     setActiveNoteId(null);
     setNotesOverviewNonce((n) => n + 1);
     setView("notes");
@@ -423,12 +399,6 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (view !== "notes") {
-      setNotesEditorFocused(false);
-    }
-  }, [view]);
-
   const sidebarConversations = useMemo(
     () => conversations.filter(isSidebarVisibleConversation),
     [conversations]
@@ -449,7 +419,7 @@ export default function App() {
   void presetSmall;
 
   return (
-    <div className="app" data-sidebar={layout.sidebar} data-editor-focused={notesEditorFocused || undefined}>
+    <div className="app" data-sidebar={layout.sidebar}>
       <Sidebar
         conversations={sidebarConversations}
         conversationId={conversationId}
@@ -497,7 +467,7 @@ export default function App() {
               focusComposerNonce={focusComposerNonce}
               onWindowSizeToggle={handleWindowSizeToggle}
               onOpenNotesView={(noteId) => {
-                setPendingOpenNoteId(noteId);
+                setPendingOpenNoteRequest({ id: noteId, nonce: Date.now() });
                 setView("notes");
               }}
               openAIConfigured={!setupStateLoaded || openAIConfigured}
@@ -518,12 +488,12 @@ export default function App() {
         {view === "tasks" && <TasksView />}
         {view === "notes" && (
           <NotesView
-            initialOpenNoteId={pendingOpenNoteId}
-            onInitialOpenNoteHandled={() => setPendingOpenNoteId(null)}
+            initialOpenNoteId={pendingOpenNoteRequest?.id ?? null}
+            initialOpenNoteRequestNonce={pendingOpenNoteRequest?.nonce}
+            onInitialOpenNoteHandled={() => setPendingOpenNoteRequest(null)}
             resetToOverviewNonce={notesOverviewNonce}
             onScreenChange={setNotesScreen}
             onActiveNoteChange={setActiveNoteId}
-            onEditorFocusChange={setNotesEditorFocused}
           />
         )}
       </main>

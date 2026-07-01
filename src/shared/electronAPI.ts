@@ -1,5 +1,4 @@
 import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult, Settings } from "./types";
-import type { ThemeSettings } from "./theme";
 import type { UsageStatsSnapshot } from "./usageStats";
 import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput, NoteSummary } from "./writing";
 import type { SyncResult, SyncStatus } from "./sync";
@@ -120,7 +119,6 @@ export interface ElectronAPI {
       messageFilesCount: number;
       notesFilesCount: number;
       hasSettingsFile: boolean;
-      hasThemesDir: boolean;
       recordingsDir: string;
       recordingsLocalOnly: true;
       legacyMemoryDir: string;
@@ -172,10 +170,6 @@ export interface ElectronAPI {
     set: (partial: Partial<UiSession>) => Promise<UiSession>;
   };
   customization: {
-    /** CSS from persisted theme (empty when using built-in base.css only). */
-    getActiveTheme: () => Promise<string>;
-    getThemeSettings: () => Promise<ThemeSettings>;
-    setThemeSettings: (settings: ThemeSettings | null) => Promise<void>;
     getLayoutOptions: () => Promise<LayoutOptions>;
     setLayout: (o: Partial<LayoutOptions>) => Promise<void>;
     onUpdated: (cb: (p: { type: string }) => void) => () => void;

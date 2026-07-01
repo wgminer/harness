@@ -31,6 +31,14 @@ export function formatMessageTime(ts: number): string {
   });
 }
 
+/** Default note title when saving a chat message to the editor. */
+export function formatMessageNoteTitle(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 /** Inline “waiting for first token” state for the assistant bubble. */
 export function ReplyingIndicator() {
   return (
@@ -139,9 +147,6 @@ export function toolLabel(name: string): string {
     note_read: "Read note",
     note_save: "Saved note",
     note_delete: "Deleted note",
-    get_theme: "Read theme",
-    update_theme: "Updated theme",
-    apply_theme_preset: "Applied theme preset",
     set_layout: "Updated layout",
   };
   return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
@@ -188,20 +193,22 @@ export function CopyButton({
 export function SaveToNotesButton({
   content,
   messageId,
+  messageTimestamp,
   savedNoteId,
   onSaveToNotes,
 }: {
   content: string;
   messageId: string;
+  messageTimestamp?: number;
   savedNoteId: string | null;
-  onSaveToNotes: (messageId: string, content: string) => void | Promise<void>;
+  onSaveToNotes: (messageId: string, content: string, messageTimestamp?: number) => void | Promise<void>;
 }) {
   const justSaved = savedNoteId === messageId;
   return (
     <button
       type="button"
       className="message-footer-icon-btn"
-      onClick={() => void onSaveToNotes(messageId, content)}
+      onClick={() => void onSaveToNotes(messageId, content, messageTimestamp)}
       disabled={!content.trim()}
       title={justSaved ? "Added to editor" : "Add to editor"}
       aria-label={justSaved ? "Added to editor" : "Add message to editor"}

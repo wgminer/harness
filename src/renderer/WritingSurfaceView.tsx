@@ -119,20 +119,20 @@ function getDisplayNoteTitle(title: string): string {
 
 interface NotesViewProps {
   initialOpenNoteId?: string | null;
+  initialOpenNoteRequestNonce?: number;
   onInitialOpenNoteHandled?: () => void;
   resetToOverviewNonce?: number;
   onScreenChange?: (screen: "list" | "detail") => void;
   onActiveNoteChange?: (noteId: string | null) => void;
-  onEditorFocusChange?: (focused: boolean) => void;
 }
 
 export function NotesView({
   initialOpenNoteId,
+  initialOpenNoteRequestNonce,
   onInitialOpenNoteHandled,
   resetToOverviewNonce,
   onScreenChange,
   onActiveNoteChange,
-  onEditorFocusChange,
 }: NotesViewProps) {
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const [notes, setNotes] = useState<NoteSummary[]>([]);
@@ -149,7 +149,6 @@ export function NotesView({
   const [panelPrompt, setPanelPrompt] = useState<string>("");
   const [panelOutput, setPanelOutput] = useState<string>("");
   const [asideStatus, setAsideStatus] = useState<AsideStatus>({ kind: "idle" });
-  const [editorFocused, setEditorFocused] = useState(false);
   const [asidePosition, setAsidePosition] = useState<{ top: number; left: number; width: number }>({
     top: 24,
     left: 24,
@@ -172,6 +171,7 @@ export function NotesView({
   const asidePanelRef = useRef<HTMLElement | null>(null);
   const pendingEditorFocusRef = useRef(false);
   const pendingEditorCaretRef = useRef<number | null>(null);
+  const lastOverviewNonceRef = useRef(resetToOverviewNonce);
 
   const scheduleEditorFocus = useCallback((caret?: number) => {
     pendingEditorFocusRef.current = true;
@@ -308,6 +308,19 @@ export function NotesView({
         setStatus({ kind: "error", message: "Note not found" });
         return;
       }
+      setNotes((prev) => {
+        const summary = {
+          id: note.id,
+          title: note.title,
+          updatedAt: note.updatedAt,
+          createdAt: note.createdAt,
+          wordCount: note.wordCount,
+        };
+        const next = prev.some((item) => item.id === note.id)
+          ? prev.map((item) => (item.id === note.id ? summary : item))
+          : [summary, ...prev];
+        return next.sort((a, b) => b.updatedAt - a.updatedAt);
+      });
       setSelectedNoteId(note.id);
       setDraft(note.content);
       setSavedDraft(note.content);
@@ -368,7 +381,21 @@ export function NotesView({
       pendingEditorFocusRef.current = false;
       pendingEditorCaretRef.current = null;
     };
-  }, [initialOpenNoteId, loadActiveNote, onInitialOpenNoteHandled, scheduleEditorFocus]);
+  }, [
+    initialOpenNoteId,
+    initialOpenNoteRequestNonce,
+    loadActiveNote,
+    onInitialOpenNoteHandled,
+    scheduleEditorFocus,
+  ]);
+
+  useEffect(() => {
+    if (resetToOverviewNonce == null) return;
+    if (lastOverviewNonceRef.current === resetToOverviewNonce) return;
+    lastOverviewNonceRef.current = resetToOverviewNonce;
+    closeAsidePanel();
+    setScreen("list");
+  }, [closeAsidePanel, resetToOverviewNonce]);
 
   useEffect(() => {
     onScreenChange?.(screen);
@@ -377,10 +404,6 @@ export function NotesView({
   useEffect(() => {
     onActiveNoteChange?.(screen === "detail" ? selectedNoteId : null);
   }, [onActiveNoteChange, screen, selectedNoteId]);
-
-  useEffect(() => {
-    onEditorFocusChange?.(screen === "detail" && editorFocused);
-  }, [editorFocused, onEditorFocusChange, screen]);
 
   useEffect(() => {
     if (!pendingEditorFocusRef.current) return;
@@ -401,12 +424,6 @@ export function NotesView({
       }
     });
   }, [screen, selectedNoteId, status.kind]);
-
-  useEffect(() => {
-    if (resetToOverviewNonce == null) return;
-    closeAsidePanel();
-    setScreen("list");
-  }, [closeAsidePanel, resetToOverviewNonce]);
 
   useEffect(() => {
     if (screen !== "detail") setNoteToolbarMenuOpen(false);
@@ -644,14 +661,6 @@ export function NotesView({
     updateToolbarPosition(selection);
   }, [selection, updateAsidePosition, updateToolbarPosition]);
 
-  const handleEditorFocus = useCallback(() => {
-    setEditorFocused(true);
-  }, []);
-
-  const handleEditorBlur = useCallback(() => {
-    setEditorFocused(false);
-  }, []);
-
   const previewRows = useMemo(() => {
     const source = (panelOutput || selection?.text || "").replace(/\r/g, "");
     if (!source) return 2;
@@ -799,7 +808,7 @@ export function NotesView({
           </section>
         ) : (
           <section className="notes-surface__detail">
-            <div className="notes-surface__toolbar editor-chrome">
+            <div className="notes-surface__toolbar">
               <button
                 type="button"
                 className="btn btn-icon"
@@ -904,8 +913,6 @@ export function NotesView({
                 readOnly={status.kind === "loading" || status.kind === "deleting"}
                 onChange={setDraft}
                 onSelectionChange={updateSelectionState}
-                onFocus={handleEditorFocus}
-                onBlur={handleEditorBlur}
                 onScroll={handleEditorScroll}
               />
               {showSelectionToolbar ? (

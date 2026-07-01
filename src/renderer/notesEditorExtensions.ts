@@ -329,7 +329,7 @@ export function createNotesCodeEditorTheme(): Extension {
         backgroundColor: "transparent !important",
       },
       ".cm-activeLine": {
-        backgroundColor: "color-mix(in srgb, var(--fg) 3.5%, transparent)",
+        backgroundColor: "var(--overlay-subtle)",
       },
       ".cm-placeholder": {
         color: "var(--fg-muted)",
@@ -421,23 +421,4 @@ export function measureNotesEditorLineWidth(view: EditorView, line: string): num
     .filter(Boolean)
     .join(" ");
   return ctx.measureText(line || " ").width;
-}
-
-export function getNotesEditorContentWidth(view: EditorView): number {
-  const content = view.contentDOM;
-  const style = window.getComputedStyle(content);
-  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
-  const paddingRight = Number.parseFloat(style.paddingRight) || 0;
-  const fromContent = content.clientWidth - paddingLeft - paddingRight;
-  if (fromContent > 0) return fromContent;
-
-  const wrap = view.dom.closest(".notes-surface__editor-wrap");
-  if (!wrap) return 0;
-  const wrapStyle = getComputedStyle(wrap);
-  const contentWidthVar = wrapStyle.getPropertyValue("--notes-editor-content-width").trim();
-  if (contentWidthVar.endsWith("px")) {
-    const parsed = Number.parseFloat(contentWidthVar);
-    if (parsed > 0) return parsed;
-  }
-  return Math.max(0, wrap.clientWidth - paddingLeft - paddingRight);
 }

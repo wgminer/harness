@@ -17,6 +17,8 @@ import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceListSearch } from "./WorkspaceListSearch";
 import { TASK_COMPLETE_MS } from "../shared/motion";
+import { ChatComposer } from "./ChatComposer";
+import { useChatComposer } from "./useChatComposer";
 
 function TagChips({ tags, className }: { tags: string[]; className?: string }) {
   if (tags.length === 0) return null;
@@ -82,8 +84,6 @@ function TaskRow({
 export function TasksView() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newTitle, setNewTitle] = useState("");
-  const [creating, setCreating] = useState(false);
   const [modalTask, setModalTask] = useState<TaskItem | null>(null);
   const [modalTitle, setModalTitle] = useState("");
   const [modalTags, setModalTags] = useState<string[]>([]);
@@ -91,7 +91,6 @@ export function TasksView() {
   const [modalSaving, setModalSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
-  const newTaskInputRef = useRef<HTMLTextAreaElement>(null);
   const tagFieldRef = useRef<HTMLInputElement>(null);
   const [activeOpen, setActiveOpen] = useState(true);
   const [completedOpen, setCompletedOpen] = useState(false);
@@ -100,12 +99,32 @@ export function TasksView() {
   const tasksPaneRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
 
+  const normalizeTask = useCallback((task: TaskItem): TaskItem => {
+    const { status, tags } = migrateTaskFields(task as unknown as Record<string, unknown>);
+    return { ...task, status, tags };
+  }, []);
+
+  const refreshFromPayload = useCallback((payload: unknown) => {
+    const p = payload as Partial<TasksPayload> | null;
+    if (p && Array.isArray(p.tasks)) {
+      setTasks(p.tasks.map(normalizeTask));
+    }
+  }, [normalizeTask]);
+
+  const composer = useChatComposer({
+    onSubmit: async (text) => {
+      const payload = await window.electron.tasks.create(text, []);
+      refreshFromPayload(payload);
+    },
+    composerRef,
+  });
+
   useEffect(() => {
     const id = requestAnimationFrame(() => {
-      newTaskInputRef.current?.focus();
+      composer.inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, []);
+  }, [composer.inputRef]);
 
   useEffect(() => {
     const timeouts = completionTimeoutsRef.current;
@@ -115,22 +134,6 @@ export function TasksView() {
       }
       timeouts.clear();
     };
-  }, []);
-
-  const adjustNewTaskInputHeight = useCallback(() => {
-    const el = newTaskInputRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, []);
-
-  useEffect(() => {
-    adjustNewTaskInputHeight();
-  }, [newTitle, adjustNewTaskInputHeight]);
-
-  const normalizeTask = useCallback((task: TaskItem): TaskItem => {
-    const { status, tags } = migrateTaskFields(task as unknown as Record<string, unknown>);
-    return { ...task, status, tags };
   }, []);
 
   useEffect(() => {
@@ -152,7 +155,7 @@ export function TasksView() {
 
     const sync = () => {
       const h = Math.ceil(dock.getBoundingClientRect().height);
-      pane.style.setProperty("--tasks-composer-dock-height", `${snapToGrid(h)}px`);
+      pane.style.setProperty("--chat-composer-dock-height", `${snapToGrid(h)}px`);
     };
 
     sync();
@@ -168,26 +171,6 @@ export function TasksView() {
       window.removeEventListener("resize", sync);
     };
   }, []);
-
-  const refreshFromPayload = (payload: unknown) => {
-    const p = payload as Partial<TasksPayload> | null;
-    if (p && Array.isArray(p.tasks)) {
-      setTasks(p.tasks.map(normalizeTask));
-    }
-  };
-
-  const createTask = async () => {
-    const title = newTitle.trim();
-    if (!title) return;
-    setCreating(true);
-    try {
-      const payload = await window.electron.tasks.create(title, []);
-      refreshFromPayload(payload);
-      setNewTitle("");
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const patchTask = async (
     id: string,
@@ -415,35 +398,38 @@ export function TasksView() {
         </div>
       </div>
 
-      <div ref={composerRef} className="tasks-composer-dock" data-testid="tasks-composer">
-        <div className="chat-composer-inner">
-          <textarea
-            ref={newTaskInputRef}
-            id="tasks-new-input"
-            className="chat-input"
-            aria-label="New task"
-            placeholder="Describe the task…"
-            rows={1}
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void createTask();
-              }
-            }}
-          />
-          <div className="input-actions">
-            <button
-              type="button"
-              className="btn chat-pane-btn"
-              onClick={() => void createTask()}
-              disabled={creating || !newTitle.trim()}
-            >
-              Add
-            </button>
-          </div>
-        </div>
+      <div
+        ref={composerRef}
+        className="chat-composer-dock"
+        data-testid="tasks-composer"
+        role="group"
+        aria-label="Task composer"
+      >
+        <ChatComposer
+          input={composer.input}
+          onInputChange={composer.setInput}
+          onSend={() => void composer.send()}
+          onStop={() => {}}
+          sending={composer.composerBusy}
+          voiceState={composer.voiceState}
+          voiceError={composer.voiceError}
+          recordingMs={composer.recordingMs}
+          onStartRecording={() => void composer.startRecording()}
+          onStopRecording={() => void composer.stopAndTranscribe()}
+          onCancelRecording={() => void composer.cancelRecording()}
+          attachedAudioName={composer.attachedAudioFile?.name ?? null}
+          attachmentTranscribing={composer.attachmentTranscribing}
+          attachmentError={composer.attachmentError}
+          onAttachAudio={(file) => {
+            composer.setAttachedAudioFile(file);
+            composer.setAttachmentError(null);
+          }}
+          onRemoveAttachedAudio={() => {
+            composer.setAttachedAudioFile(null);
+            composer.setAttachmentError(null);
+          }}
+          inputRef={composer.inputRef}
+        />
       </div>
 
       <Modal
@@ -480,49 +466,57 @@ export function TasksView() {
           </>
         }
       >
-        <label htmlFor="tasks-modal-title-input">Title</label>
-        <textarea
-          id="tasks-modal-title-input"
-          className="tasks-textarea tasks-textarea--modal"
-          rows={5}
-          value={modalTitle}
-          onChange={(e) => setModalTitle(e.target.value)}
-        />
-        <label htmlFor="tasks-modal-tags-input">Tags</label>
-        <p className="tasks-modal-hint">Press Enter to add. Underscores show as spaces in the list.</p>
-        <div className="tasks-tag-field">
-          <div className="tasks-tag-editor">
-            {modalTags.map((tag) => (
-              <span key={tag} className="tasks-tag tasks-tag--editable">
-                {tag.replace(/_/g, " ")}
-                <button
-                  type="button"
-                  className="tasks-tag-remove"
-                  onClick={() => removeModalTag(tag)}
-                  disabled={modalSaving}
-                  aria-label={`Remove tag ${tag}`}
-                >
-                  <X size={12} strokeWidth={2.5} />
-                </button>
-              </span>
-            ))}
+        <div className="app-modal-stack">
+          <label className="app-modal-field" htmlFor="tasks-modal-title-input">
+            <span className="app-modal-field__label">Title</span>
+            <textarea
+              id="tasks-modal-title-input"
+              className="app-modal-input app-modal-input--multiline tasks-modal-title-input"
+              rows={5}
+              value={modalTitle}
+              onChange={(e) => setModalTitle(e.target.value)}
+            />
+          </label>
+          <div className="app-modal-field">
+            <label className="app-modal-field__label" htmlFor="tasks-modal-tags-input">
+              Tags
+            </label>
+            <p className="app-modal-field__hint">Press Enter to add. Underscores show as spaces in the list.</p>
+            <div className="tasks-tag-field">
+              <div className="tasks-tag-editor">
+                {modalTags.map((tag) => (
+                  <span key={tag} className="tasks-tag tasks-tag--editable">
+                    {tag.replace(/_/g, " ")}
+                    <button
+                      type="button"
+                      className="tasks-tag-remove"
+                      onClick={() => removeModalTag(tag)}
+                      disabled={modalSaving}
+                      aria-label={`Remove tag ${tag}`}
+                    >
+                      <X size={12} strokeWidth={2.5} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <input
+                ref={tagFieldRef}
+                id="tasks-modal-tags-input"
+                type="text"
+                className="tasks-tags-input"
+                value={tagInput}
+                placeholder="e.g. in progress, urgent"
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addModalTagFromInput();
+                  }
+                }}
+                disabled={modalSaving}
+              />
+            </div>
           </div>
-          <input
-            ref={tagFieldRef}
-            id="tasks-modal-tags-input"
-            type="text"
-            className="tasks-tags-input"
-            value={tagInput}
-            placeholder="e.g. in progress, urgent"
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addModalTagFromInput();
-              }
-            }}
-            disabled={modalSaving}
-          />
         </div>
       </Modal>
     </div>

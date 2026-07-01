@@ -1,54 +1,100 @@
-/* Default: dark mode; system font for app typography (--font-family).
-   User theme overrides live in #custom-theme (moved after bundled CSS in main.tsx). */
+/**
+ * Global design tokens — fixed dark palette and 14px type scale.
+ */
 :root {
   color-scheme: dark;
-  --bg: #0b0d10;
-  --bg-secondary: #14161a;
-  --bg-elevated: #1c1f24;
-  --fg: #eceef2;
-  --fg-muted: #a8adb8;
-  --border-dark: #1c1f26;
-  --border-light: #171920;
-  /** @deprecated Use --border-dark or --border-light; aliases dark for legacy rules. */
-  --border: var(--border-dark);
+
+  /* --- Surfaces (role, not brightness order) --- */
+  --bg: #000; /* page shell: sidebar, main, workspace canvas */
+  --bg-secondary: #111; /* fields, cards, panels */
+  --bg-elevated: #222; /* modals, popovers, raised controls */
+
+  /* --- Text --- */
+  --fg: #fff;
+  --fg-muted: #999;
+
+  /* --- Accent --- */
   --accent: #5b9cf5;
-  /**
-   * Readable variant of --accent for use as *text color* on app backgrounds
-   * (--bg / --bg-secondary / --bg-elevated). Pulled 30% toward --fg in oklab so
-   * that dark or low-chroma accents still clear the WCAG AA threshold on dark
-   * surfaces, while vivid accents (like the default yellow) are effectively
-   * unchanged. Use this for links / hover text / accent spans. For borders,
-   * outlines, and backgrounds, keep using --accent.
-   */
-  --accent-readable: color-mix(in oklab, var(--accent) 70%, var(--fg));
-  /**
-   * Selection highlight pair — accent-tinted fill with foreground pulled toward --bg
-   * so selected text stays readable on vivid accents (default yellow on dark UI).
-   */
-  --selection-bg: color-mix(in oklab, var(--accent) 68%, var(--bg));
-  --selection-fg: color-mix(in oklab, var(--bg) 75%, var(--fg));
-  --danger: #c0392b;
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --accent-readable: #87b5f4;
+  --accent-muted: #222d3c;
+  --accent-tint: #151e2b;
+  --accent-border: #33527b;
+
+  /* --- Borders --- */
+  --border-light: #777;
+  --border-edge: #333;
+  --border-input: #333;
+  --border-input-focus: blue;
+
+  /* --- Buttons --- */
+  --btn-bg: #2e3033;
+  --btn-bg-hover: #3b3d40;
+  --btn-primary-bg: #2e4463;
+  --btn-primary-fg: #87b5f4;
+  --btn-primary-bg-hover: #355178;
   --btn-shadow: none;
   --btn-shadow-hover: none;
+
+  /* --- Overlays & hover surfaces --- */
+  --overlay-subtle: #1f2124;
+  --overlay: #2a2c2f;
+  --overlay-strong: #393b3e;
+  --hover-bg: #26282b;
+  --hover-bg-strong: #323437;
+
+  /* --- Selection --- */
+  --selection-bg: #416eac;
+  --selection-fg: var(--fg);
+
+  /* --- Scrollbars --- */
+  --scrollbar-thumb: #6a6c6f;
+  --scrollbar-track: #26282b;
+
+  /* --- Semantic status (shared across themes) --- */
+  --danger: #c0392b;
+  --danger-fg: #e05353;
+  --danger-hover: #a33226;
+  --danger-muted: #913127;
+  --warning: #d99024;
+  --warning-fg: #d99024;
+  --success: #238636;
+  --success-fg: #4caf6a;
+  --success-hover: #1c6e2c;
+
+  /* --- Shadows & focus (shared across themes) --- */
+  --scrim: rgba(0, 0, 0, 0.5);
+  --shadow-color: rgba(0, 0, 0, 0.3);
+  --shadow-drop: rgba(0, 0, 0, 0.2);
+  --shadow: 0 4px 12px var(--shadow-color);
+  --focus-ring: 2px solid var(--accent);
+
+  /* --- Typography --- */
   --font-family: system-ui, sans-serif;
-  --font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
-    monospace;
+  --font-family-mono: ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Code", monospace;
   --font-size: var(--font-size-body);
-  /** Semantic type scale — overridden by theme CSS when a custom theme is active. */
   --font-size-caption: 12px;
   --font-size-body: 14px;
   --font-size-ui: 12px;
   --font-size-title: 16px;
-  /** Lucide / toolbar icons on the 4px grid (defaults match 14px base). */
-  --icon-size-md: 16px;
-  --icon-size-compact: var(--font-size-body);
   --icon-size-xs: 12px;
   --icon-size-sm: 12px;
+  --icon-size-md: 16px;
   --icon-size-lg: 16px;
   --icon-size-xl: 20px;
+  --icon-size-compact: var(--font-size-body);
+  --line-height-tight: 16px;
+  --line-height-caption: 16px;
+  --line-height-ui: 16px;
+  --line-height-body: 20px;
+  --line-height-title: 24px;
+  --line-height-message: 24px;
+  --line-height-prose: 28px;
+  --line-height-compact: 16px;
+  --line-height-snug: 20px;
+  --line-height-normal: 20px;
+  --line-height: var(--line-height-body);
 
-  /* 4px layout grid */
+  /* --- Layout (4px grid; shared across themes) --- */
   --grid: 4px;
   --space-1: calc(var(--grid) * 1);
   --space-2: calc(var(--grid) * 2);
@@ -65,73 +111,19 @@
   --radius-md: var(--space-2);
   --radius-lg: var(--space-3);
   --radius-pill: 999px;
-  --sidebar-control-hover-bg: color-mix(in srgb, var(--fg) 10%, var(--bg-secondary));
-  --sidebar-control-active-hover-bg: color-mix(in srgb, var(--accent) 72%, var(--bg-secondary));
-  /** Universal list-row hover (sidebar nav, notes rows, search results). */
-  --list-row-hover-bg: color-mix(in srgb, var(--fg) 6%, transparent);
-  --list-row-hover-border: color-mix(in oklab, var(--border-light) 48%, transparent);
-  /**
-   * Divider hairlines — soft edges for panels, list rows, modal chrome, and separators.
-   * Form controls use --hairline-inset-input* instead.
-   */
-  --border-edge: color-mix(in oklab, var(--border-light) 42%, transparent);
-  --border-edge-dark: color-mix(in oklab, var(--border-dark) 42%, transparent);
-  --hairline-glass: color-mix(in oklab, var(--border-light) 48%, transparent);
-  --hairline-inset: inset 0 0 0 1px var(--border-edge);
-  --hairline-inset-dark: inset 0 0 0 1px var(--border-edge-dark);
-  --hairline-inset-accent: inset 0 0 0 1px var(--accent);
-  --hairline-inset-transparent: inset 0 0 0 1px transparent;
-  --hairline-inset-glass: inset 0 0 0 1px var(--hairline-glass);
-  --hairline-top: inset 0 1px 0 0 var(--border-edge);
-  --hairline-top-transparent: inset 0 1px 0 0 transparent;
-  --hairline-bottom: inset 0 -1px 0 0 var(--border-edge);
-  --hairline-bottom-transparent: inset 0 -1px 0 0 transparent;
-  --hairline-left: inset 1px 0 0 0 var(--border-edge);
-  --hairline-right: inset -1px 0 0 0 var(--border-edge);
-  --hairline-left-2-transparent: inset 2px 0 0 0 transparent;
-  --hairline-left-2-accent: inset 2px 0 0 0 var(--accent);
-  --hairline-surface-highlight: inset 0 1px 0 color-mix(in oklab, var(--fg) 9%, transparent);
-  /**
-   * Form control edges — stronger than divider hairlines so inputs read as interactive.
-   */
-  --border-input: color-mix(in oklab, var(--border-dark) 74%, transparent);
-  --border-input-focus: color-mix(in oklab, var(--accent) 52%, var(--border-input));
-  --hairline-inset-input: inset 0 0 0 1px var(--border-input);
-  --hairline-inset-input-focus: inset 0 0 0 1px var(--border-input-focus);
-  --hairline-inset-input-glass: inset 0 0 0 1px color-mix(in oklab, var(--border-input) 82%, transparent);
-  --scrollbar-thumb: color-mix(in oklab, var(--fg) 42%, var(--bg));
-  --scrollbar-thumb-hover: color-mix(in oklab, var(--accent) 40%, var(--fg) 35%, var(--bg));
-  --scrollbar-track: color-mix(in oklab, var(--bg) 88%, var(--fg));
   --input-height: calc(var(--grid) * 9);
-  /** Compact shell bar — sidebar button row, scrolled workspace headers, notes toolbar. */
   --shell-bar-height: calc(var(--grid) * 13);
-  /** Line heights as px on the 4px grid — overridden by theme CSS when a custom theme is active. */
-  --line-height-tight: 16px;
-  --line-height-caption: 16px;
-  --line-height-ui: 16px;
-  --line-height-body: 20px;
-  --line-height-title: 24px;
-  --line-height-message: 24px;
-  --line-height-prose: 28px;
-  --line-height-compact: 16px;
-  --line-height-snug: 20px;
-  --line-height-normal: 20px;
-  --line-height: var(--line-height-body);
-  /** Sidebar column; keep in sync with `.sidebar` rules. */
   --sidebar-width: calc(var(--grid) * 70);
-  /** Primary reading column (chat messages, config page, tasks body). Overridden on `.app`. */
   --content-width: calc(var(--grid) * 150);
-  /** Sidebar + content (viewport width when main column ≈ `--content-width` with sidebar open). Not usable in `@media` — CSS does not resolve `var()` there. */
   --layout-viewport-max: calc(var(--sidebar-width) + var(--content-width));
 
-  /* Motion — shared durations and easings (renderer UI transitions). */
+  /* --- Motion (shared across themes) --- */
   --motion-duration-fast: 120ms;
   --motion-duration-ui: 150ms;
   --motion-duration-normal: 200ms;
   --motion-duration-switch: 220ms;
   --motion-duration-expressive: 420ms;
   --motion-duration-emphasis: 360ms;
-  --motion-duration-theme: 1s;
   --motion-duration-loading: 900ms;
   --motion-duration-skeleton: 1150ms;
   --motion-ease-standard: ease;
@@ -161,17 +153,6 @@ html {
   overflow: hidden;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  html.theme-animate,
-  html.theme-animate *,
-  html.theme-animate *::before,
-  html.theme-animate *::after {
-    transition-property: background-color, color, border-color, fill, stroke, outline-color, box-shadow;
-    transition-duration: var(--motion-duration-theme);
-    transition-timing-function: var(--motion-ease-in-out);
-  }
-}
-
 body {
   -webkit-font-smoothing: antialiased;
 }
@@ -196,7 +177,7 @@ body {
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
+  background: var(--scrollbar-thumb);
 }
 
 *::-webkit-scrollbar-corner {
@@ -229,8 +210,8 @@ body {
 hr {
   margin: var(--space-5) 0;
   border: 0;
+  border-top: 1px solid var(--border-edge);
   height: 0;
-  box-shadow: var(--hairline-top);
 }
 
 /* Buttons – single source of truth for all app buttons */
@@ -238,9 +219,9 @@ hr {
   font-family: var(--font-family);
   font-size: var(--font-size-ui);
   height: var(--input-height);
-  background: color-mix(in srgb, var(--fg) 12%, var(--bg));
+  background: var(--btn-bg);
   color: var(--fg);
-  border: none;
+  border: 1px solid var(--border-input);
   border-radius: var(--radius-sm);
   padding: 0 var(--space-3);
   display: inline-flex;
@@ -248,25 +229,15 @@ hr {
   justify-content: center;
   gap: var(--space-2);
   cursor: pointer;
-  box-shadow: var(--btn-shadow);
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
     background var(--motion-duration-ui) var(--motion-ease-standard),
-    box-shadow var(--motion-duration-ui) var(--motion-ease-standard);
-}
-
-.sidebar .btn {
-  background: color-mix(in srgb, var(--fg) 6%, var(--bg-secondary));
+    border-color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .btn:hover:not(:disabled) {
   color: var(--fg);
-  background: color-mix(in srgb, var(--fg) 10%, var(--bg));
-  box-shadow: var(--btn-shadow-hover);
-}
-
-.sidebar .btn:hover:not(:disabled) {
-  background: var(--sidebar-control-hover-bg);
+  background: var(--btn-bg-hover);
 }
 
 .btn:disabled {
@@ -275,13 +246,20 @@ hr {
 }
 
 .btn:focus-visible {
-  outline: var(--space-1) solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: var(--space-1);
 }
 
 .btn-primary {
   padding: 0 var(--space-4);
   font-size: var(--font-size-body);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  color: var(--btn-primary-fg);
 }
 
 .btn-cancel {
@@ -289,13 +267,22 @@ hr {
   font-size: var(--font-size-body);
   background: var(--danger);
   color: #fff;
-  box-shadow: var(--btn-shadow);
 }
 
-.btn-cancel:hover {
-  background: color-mix(in srgb, var(--danger) 85%, #000);
+.btn-cancel:hover:not(:disabled) {
+  background: var(--danger-hover);
   color: #fff;
-  box-shadow: var(--btn-shadow-hover);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--fg-muted);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: transparent;
+  border-color: var(--border-light);
+  color: var(--fg);
 }
 
 /* Single icon-only button: 36×36 */
@@ -317,10 +304,9 @@ hr {
   font-size: var(--font-size-ui);
   height: var(--input-height);
   padding: 0 var(--space-3);
-  background: var(--bg);
+  background: var(--bg-secondary);
   color: var(--fg);
-  border: none;
-  box-shadow: var(--hairline-inset-input);
+  border: 1px solid var(--border-input);
 }
 
 .input-base::placeholder,
@@ -332,7 +318,7 @@ hr {
 .sidebar-search-input:focus,
 .settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input):focus {
   outline: none;
-  box-shadow: var(--hairline-inset-input-focus);
+  border-color: var(--border-input-focus);
 }
 
 /* Shared translucent surface used by composer and edit assistant modal. */
@@ -342,8 +328,7 @@ hr {
   background: transparent;
   -webkit-backdrop-filter: blur(16px) saturate(.80);
   backdrop-filter: blur(8px) saturate(.80);
-  border: none;
-  box-shadow: var(--hairline-inset-input-glass), var(--hairline-surface-highlight);
+  border: 1px solid var(--border-input);
 }
 
 /* Shared list-item base */
@@ -351,8 +336,7 @@ hr {
 .sidebar-item,
 .search-result-item {
   padding: var(--space-2) var(--space-3);
-  border: none;
-  box-shadow: var(--hairline-left-2-transparent);
+  border-left: 2px solid transparent;
   cursor: pointer;
   overflow: hidden;
 }
@@ -360,14 +344,14 @@ hr {
 .list-item-base:hover,
 .sidebar-item:hover,
 .search-result-item:hover {
-  background: var(--list-row-hover-bg);
+  background: var(--overlay-subtle);
 }
 
 .list-item-base.active,
 .sidebar-item.active,
 .search-result-item.active {
-  box-shadow: var(--hairline-left-2-accent);
-  background: var(--bg);
+  border-left-color: var(--accent);
+  background: var(--overlay-subtle);
 }
 
 /* Layout */
@@ -376,9 +360,6 @@ hr {
   display: flex;
   height: 100%;
   width: 100%;
-  /* Fluid type and reading width: scale up on large viewports, tighten when compact. */
-  /* font-size: clamp(13px, 0.3vw + 12px, 16px); */
-  /* --content-width: min(72ch, min(960px, 94vw)); */
 }
 
 .app-grid-overlay {
@@ -387,45 +368,35 @@ hr {
   pointer-events: none;
   z-index: 2147483000;
   opacity: 0.2;
+  --grid-overlay-cell: 16px;
+  --grid-overlay-major: calc(var(--grid-overlay-cell) * 4);
+  background-image:
+    linear-gradient(to right, var(--accent-tint) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--accent-tint) 1px, transparent 1px),
+    linear-gradient(to right, var(--accent-tint) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--accent-tint) 1px, transparent 1px);
+  background-size:
+    var(--grid-overlay-cell) var(--grid-overlay-cell),
+    var(--grid-overlay-cell) var(--grid-overlay-cell),
+    var(--grid-overlay-major) var(--grid-overlay-major),
+    var(--grid-overlay-major) var(--grid-overlay-major);
+  background-position: 0 0, 0 0, 0 0, 0 0;
 }
 
 .app-grid-overlay[data-grid-overlay="4"] {
-  background-image:
-    linear-gradient(to right, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
-    linear-gradient(to right, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px);
-  background-size: 4px 4px, 4px 4px, 16px 16px, 16px 16px;
-  background-position: 0 0, 0 0, 0 0, 0 0;
+  --grid-overlay-cell: 4px;
 }
 
 .app-grid-overlay[data-grid-overlay="8"] {
-  background-image:
-    linear-gradient(to right, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
-    linear-gradient(to right, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px);
-  background-size: 8px 8px, 8px 8px, 32px 32px, 32px 32px;
-  background-position: 0 0, 0 0, 0 0, 0 0;
+  --grid-overlay-cell: 8px;
 }
 
 .app-grid-overlay[data-grid-overlay="16"] {
-  background-image:
-    linear-gradient(to right, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
-    linear-gradient(to right, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 28%, transparent) 1px, transparent 1px);
-  background-size: 16px 16px, 16px 16px, 64px 64px, 64px 64px;
-  background-position: 0 0, 0 0, 0 0, 0 0;
+  --grid-overlay-cell: 16px;
 }
 
 /* Narrow viewport (768px): sidebar hidden; type and column width tighten. */
 @media (max-width: 768px) {
-  .app {
-    /* font-size: clamp(12px, 2.6vw, 14px); */
-    /* --content-width: min(72ch, calc(100vw - 16px)); */
-  }
-
   .sidebar-dock {
     flex: 0 0 0;
     width: 0;
@@ -455,15 +426,15 @@ hr {
   position: relative;
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
-  border: none;
-  box-shadow: var(--hairline-right);
-  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-edge);
+  background: var(--bg);
   display: flex;
   flex-direction: column;
 }
 
 .app[data-sidebar="right"] .sidebar {
-  box-shadow: var(--hairline-left);
+  border-right: none;
+  border-left: 1px solid var(--border-edge);
 }
 
 .main {
@@ -471,7 +442,7 @@ hr {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--bg-secondary);
+  background: var(--bg);
   container-type: inline-size;
   container-name: main;
 }
@@ -487,10 +458,6 @@ hr {
 
 .main-chat-host[hidden] {
   display: none !important;
-}
-
-.message-block {
-  /* padding: calc(var(--space-2) * 2) 16px; */
 }
 
 @keyframes title-skeleton-pulse {

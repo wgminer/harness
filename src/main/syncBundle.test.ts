@@ -51,6 +51,16 @@ describe("computeRevision", () => {
     expect(await computeRevision(a)).toBe(await computeRevision(b));
   });
 
+  it("matches iOS BundleCodec revision fixture", async () => {
+    const a = await makeLocalData({
+      "app-state/conversations.json": '{"a":1}',
+      "settings/settings.json": '{"version":1}',
+    });
+    expect(await computeRevision(a)).toBe(
+      "871a3ac43c56aec72a9a93a9ab2122e31bcb3e431e34d6339a7bf4db72425387",
+    );
+  });
+
   it("changes when content changes", async () => {
     const a = await makeLocalData({
       "app-state/conversations.json": '{"a":1}',
@@ -76,7 +86,6 @@ describe("buildBundle / parseBundle / extractBundle", () => {
     const src = await makeLocalData({
       "app-state/conversations.json": '{"keep":"me"}',
       "settings/settings.json": '{"version":1}',
-      "themes/theme.json": '{"accent":"#000"}',
     });
     const { bytes, bundleHash } = await buildBundle(src);
     expect(hashBundleBytes(bytes)).toBe(bundleHash);
@@ -86,14 +95,14 @@ describe("buildBundle / parseBundle / extractBundle", () => {
     });
     const doc = parseBundle(bytes);
     const result = await extractBundle(dst, doc);
-    expect(result.filesWritten).toBe(3);
+    expect(result.filesWritten).toBe(2);
 
     expect(await readFile(join(dst, "app-state", "conversations.json"), "utf-8")).toBe(
       '{"keep":"me"}',
     );
-    expect(await readFile(join(dst, "themes", "theme.json"), "utf-8")).toBe(
-      '{"accent":"#000"}',
-    );
+    expect(JSON.parse(await readFile(join(dst, "settings", "settings.json"), "utf-8"))).toEqual({
+      version: 1,
+    });
   });
 
   it("removes in-scope files that the bundle does not contain", async () => {
@@ -137,7 +146,7 @@ describe("backupScopedFiles", () => {
   it("copies all in-scope files into the snapshot directory", async () => {
     const src = await makeLocalData({
       "app-state/conversations.json": '{"a":1}',
-      "themes/theme.json": '{"accent":"#fff"}',
+      "settings/settings.json": '{"version":1}',
     });
     const tempDest = await createTempDir("bundle-snap-");
     cleanups.push(tempDest.cleanup);

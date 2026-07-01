@@ -3,35 +3,36 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 import {
   CSS_DIR,
-  auditLayoutBorders,
+  auditColorMix,
   auditPxValues,
+  auditLineHeights,
+  buildKnownCssVarDefs,
   runGridAudit,
 } from "../../scripts/grid-audit.js";
 
 describe("grid-audit", () => {
-  it("renderer CSS has no layout-affecting borders (use --hairline-* shadows)", () => {
-    const { borderIssues } = runGridAudit();
-    expect(borderIssues, formatIssues(borderIssues)).toEqual([]);
+  it("renderer CSS has no color-mix() calls", () => {
+    const { colorMixIssues } = runGridAudit();
+    expect(colorMixIssues, formatIssues(colorMixIssues)).toEqual([]);
   });
 
-  it("base.css defines hairline shadow tokens", () => {
+  it("renderer CSS has no off-grid px or unitless line-heights", () => {
+    const { pxIssues, lhIssues } = runGridAudit();
+    expect(pxIssues, formatIssues(pxIssues)).toEqual([]);
+    expect(lhIssues, formatIssues(lhIssues)).toEqual([]);
+  });
+
+  it("renderer CSS var() references are defined in bundled stylesheets", () => {
+    const knownDefs = buildKnownCssVarDefs(CSS_DIR);
+    const { undefinedVarIssues } = runGridAudit(CSS_DIR, knownDefs);
+    expect(undefinedVarIssues, formatIssues(undefinedVarIssues)).toEqual([]);
+  });
+
+  it("base.css defines border color tokens", () => {
     const base = readFileSync(join(CSS_DIR, "base.css"), "utf8");
-    expect(base).toContain("--hairline-inset:");
-    expect(base).toContain("--hairline-inset-input:");
-    expect(base).toContain("--hairline-top:");
-    expect(base).toContain("--hairline-bottom:");
-    expect(base).toContain("--hairline-left-2-accent:");
-  });
-
-  it("auditLayoutBorders flags border shorthand but not border-radius", () => {
-    const sample = `
-      .a { border: 1px solid red; }
-      .b { border-radius: 4px; }
-      .c { border: none; }
-    `;
-    const issues = auditLayoutBorders(sample, "sample.css");
-    expect(issues).toHaveLength(1);
-    expect(issues[0].line).toBe(2);
+    expect(base).toContain("--border-edge:");
+    expect(base).toContain("--border-input:");
+    expect(base).toContain("--border-input-focus:");
   });
 
   it("auditPxValues skips box-shadow lines", () => {
@@ -39,13 +40,19 @@ describe("grid-audit", () => {
     expect(auditPxValues(sample, "sample.css")).toEqual([]);
   });
 
-  it("scans every renderer stylesheet for layout borders", () => {
+  it("auditColorMix flags color-mix usage", () => {
+    const sample = `.x { color: color-mix(in srgb, red, blue); }`;
+    expect(auditColorMix(sample, "sample.css")).toHaveLength(1);
+  });
+
+  it("auditLineHeights flags unitless ratios", () => {
+    const sample = `.x { line-height: 1.5; }`;
+    expect(auditLineHeights(sample, "sample.css")).toHaveLength(1);
+  });
+
+  it("scans every renderer stylesheet", () => {
     const cssFiles = readdirSync(CSS_DIR).filter((f) => f.endsWith(".css"));
     expect(cssFiles.length).toBeGreaterThanOrEqual(8);
-    for (const file of cssFiles) {
-      const content = readFileSync(join(CSS_DIR, file), "utf8");
-      expect(auditLayoutBorders(content, file)).toEqual([]);
-    }
   });
 });
 

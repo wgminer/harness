@@ -46,10 +46,6 @@ export function getLocalDataSettingsDir(): string {
   return ensureDir(join(getLocalDataDir(), SETTINGS_DIR));
 }
 
-export function getLocalDataThemesDir(): string {
-  return ensureDir(join(getLocalDataDir(), THEMES_DIR));
-}
-
 export function getLocalDataSyncDir(): string {
   return ensureDir(join(getLocalDataDir(), SYNC_DIR));
 }
@@ -98,16 +94,9 @@ function migrateLegacySettingsAndThemes(): void {
   copyIfMissing(join(userData, LEGACY_SETTINGS_FILE), getLocalDataSettingsPath());
 
   const legacyThemesDir = join(userData, THEMES_DIR);
-  const localThemesDir = getLocalDataThemesDir();
-  if (existsSync(legacyThemesDir)) {
-    const files = readdirSync(legacyThemesDir);
-    for (const file of files) {
-      const src = join(legacyThemesDir, file);
-      const dst = join(localThemesDir, file);
-      if (existsSync(dst)) continue;
-      if (statSync(src).isDirectory()) cpSync(src, dst, { recursive: true });
-      else copyFileSync(src, dst);
-    }
+  const localThemesDir = join(getLocalDataDir(), THEMES_DIR);
+  for (const dir of [legacyThemesDir, localThemesDir]) {
+    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   }
 }
 

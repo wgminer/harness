@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Flags hardcoded px values in renderer CSS that fall off the 4px grid,
- * unitless line-height ratios, and layout-affecting CSS borders (use --hairline-* shadows).
+ * Flags hardcoded px values in renderer CSS that fall off the 4px grid
+ * and unitless line-height ratios.
  */
 import { readFileSync, readdirSync } from "fs";
 import { join, dirname } from "path";
@@ -12,12 +12,61 @@ export const CSS_DIR = join(__dirname, "..", "src", "renderer");
 const ALLOWED = new Set([1, 2, 3, 6, 12, 13, 14, 16, 999, 9999]);
 const SHADOW_OR_BLUR = /box-shadow|blur\(/;
 const COMMENT = /^\s*\/\*/;
-const BORDER_RADIUS = /border-radius/;
-/** Match layout border declarations on a single line (not border-radius / border-box). */
-const LAYOUT_BORDER_LINE =
-  /\bborder(?:-(?:top|right|bottom|left))?\s*:\s*(?!none\b|0\b)[^;]*\b\d+px/i;
-const BORDER_COLOR_LINE = /\bborder(?:-(?:top|right|bottom|left))?-color\s*:/i;
-const BORDER_WIDTH_LINE = /\bborder-(?:top|right|bottom|left)-width\s*:\s*(?!0\b)\d/i;
+const COLOR_MIX = /color-mix\s*\(/i;
+const VAR_USE = /var\(\s*(--[\w-]+)/g;
+const VAR_DEF = /^\s*(--[\w-]+)\s*:/;
+
+/** Renderer CSS must not use runtime color-mix (flat token model). */
+export function auditColorMix(content, file) {
+  const issues = [];
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (COMMENT.test(lines[i])) continue;
+    if (COLOR_MIX.test(lines[i])) {
+      issues.push({ file, line: i + 1, value: "color-mix()" });
+    }
+  }
+  return issues;
+}
+
+/** Collect --token definitions from any rule block in a stylesheet. */
+export function parseCssVarDefinitions(content) {
+  const defs = new Set();
+  for (const line of content.split("\n")) {
+    const m = line.match(VAR_DEF);
+    if (m) defs.add(m[1]);
+  }
+  return defs;
+}
+
+export function buildKnownCssVarDefs(cssDir = CSS_DIR, extraTokens = []) {
+  const defs = new Set();
+  for (const file of readdirSync(cssDir).filter((f) => f.endsWith(".css"))) {
+    const content = readFileSync(join(cssDir, file), "utf8");
+    for (const name of parseCssVarDefinitions(content)) defs.add(name);
+  }
+  for (const t of extraTokens) defs.add(t);
+  return defs;
+}
+
+/** Flag var(--token) uses with no definition in base.css :root or known theme token lists. */
+export function auditUndefinedCssVars(content, file, knownDefs) {
+  const issues = [];
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const lineText = lines[i];
+    if (COMMENT.test(lineText)) continue;
+    let m;
+    VAR_USE.lastIndex = 0;
+    while ((m = VAR_USE.exec(lineText))) {
+      const name = m[1];
+      if (!knownDefs.has(name)) {
+        issues.push({ file, line: i + 1, value: `undefined var(${name})` });
+      }
+    }
+  }
+  return issues;
+}
 
 function lineAt(content, index) {
   const lineStart = content.lastIndexOf("\n", index) + 1;
@@ -58,55 +107,54 @@ export function auditLineHeights(content, file) {
   return issues;
 }
 
-/** Layout borders steal px under border-box; renderer uses --hairline-* box-shadow instead. */
-export function auditLayoutBorders(content, file) {
-  const issues = [];
-  const lines = content.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const lineText = lines[i];
-    if (COMMENT.test(lineText) || BORDER_RADIUS.test(lineText)) continue;
-    if (LAYOUT_BORDER_LINE.test(lineText)) {
-      issues.push({ file, line: i + 1, value: `layout border: ${lineText.trim()}` });
-      continue;
-    }
-    if (BORDER_COLOR_LINE.test(lineText)) {
-      issues.push({ file, line: i + 1, value: `border-color: ${lineText.trim()}` });
-      continue;
-    }
-    if (BORDER_WIDTH_LINE.test(lineText)) {
-      issues.push({ file, line: i + 1, value: `border-width: ${lineText.trim()}` });
-    }
-  }
-  return issues;
+/** @deprecated Borders are allowed; kept for API compatibility with older audit callers. */
+export function auditLayoutBorders() {
+  return [];
 }
 
-export function auditCssFile(content, file) {
+export function auditCssFile(content, file, knownDefs) {
   return [
     ...auditPxValues(content, file),
     ...auditLineHeights(content, file),
     ...auditLayoutBorders(content, file),
+    ...auditColorMix(content, file),
+    ...(knownDefs ? auditUndefinedCssVars(content, file, knownDefs) : []),
   ];
 }
 
-export function runGridAudit(cssDir = CSS_DIR) {
+
+export function runGridAudit(cssDir = CSS_DIR, knownDefs = null) {
   const files = readdirSync(cssDir).filter((f) => f.endsWith(".css"));
   const pxIssues = [];
   const lhIssues = [];
   const borderIssues = [];
+  const colorMixIssues = [];
+  const undefinedVarIssues = [];
 
   for (const file of files) {
     const content = readFileSync(join(cssDir, file), "utf8");
     pxIssues.push(...auditPxValues(content, file));
     lhIssues.push(...auditLineHeights(content, file));
     borderIssues.push(...auditLayoutBorders(content, file));
+    colorMixIssues.push(...auditColorMix(content, file));
+    if (knownDefs) {
+      undefinedVarIssues.push(...auditUndefinedCssVars(content, file, knownDefs));
+    }
   }
 
-  return { files, pxIssues, lhIssues, borderIssues };
+  return { files, pxIssues, lhIssues, borderIssues, colorMixIssues, undefinedVarIssues };
 }
 
 function main() {
-  const { files, pxIssues, lhIssues, borderIssues } = runGridAudit();
-  const totalIssues = pxIssues.length + lhIssues.length + borderIssues.length;
+  const knownDefs = buildKnownCssVarDefs(CSS_DIR);
+  const { files, pxIssues, lhIssues, borderIssues, colorMixIssues, undefinedVarIssues } =
+    runGridAudit(CSS_DIR, knownDefs);
+  const totalIssues =
+    pxIssues.length +
+    lhIssues.length +
+    borderIssues.length +
+    colorMixIssues.length +
+    undefinedVarIssues.length;
 
   if (totalIssues === 0) {
     console.log(`grid-audit: OK (${files.length} CSS files)`);
@@ -128,8 +176,22 @@ function main() {
   }
 
   if (borderIssues.length > 0) {
-    console.error(`\ngrid-audit: ${borderIssues.length} layout border(s) (use --hairline-* box-shadow):\n`);
+    console.error(`\ngrid-audit: ${borderIssues.length} unexpected border audit issue(s):\n`);
     for (const i of borderIssues) {
+      console.error(`  ${i.file}:${i.line}  ${i.value}`);
+    }
+  }
+
+  if (colorMixIssues.length > 0) {
+    console.error(`\ngrid-audit: ${colorMixIssues.length} color-mix() call(s):\n`);
+    for (const i of colorMixIssues) {
+      console.error(`  ${i.file}:${i.line}  ${i.value}`);
+    }
+  }
+
+  if (undefinedVarIssues.length > 0) {
+    console.error(`\ngrid-audit: ${undefinedVarIssues.length} undefined CSS var(s):\n`);
+    for (const i of undefinedVarIssues) {
       console.error(`  ${i.file}:${i.line}  ${i.value}`);
     }
   }
