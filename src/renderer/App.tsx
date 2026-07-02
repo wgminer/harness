@@ -5,7 +5,6 @@ import { TasksView } from "./TasksView";
 import { NotesView } from "./WritingSurfaceView";
 import { Sidebar } from "./Sidebar";
 import { SetupNoticeModal } from "./SetupNoticeModal";
-import { ParakeetDownloadModal } from "./ParakeetDownloadModal";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan, type Settings } from "../shared/types";
@@ -53,9 +52,8 @@ export default function App() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTabId | undefined>();
   const [openAIConfigured, setOpenAIConfigured] = useState(false);
   const [setupStateLoaded, setSetupStateLoaded] = useState(false);
-  const [parakeetDownloadOpen, setParakeetDownloadOpen] = useState(false);
 
-  // Hotkey recorder — owns the background mic capture for the global shortcut path
+  // Hotkey recorder
   const hotkeyRecorder = useRecorder();
 
   // Text from the hotkey — injected into the open chat (send vs pre-fill follows recording.autoSend unless draft-only)
@@ -77,19 +75,14 @@ export default function App() {
       window.electron.system.getPlatform(),
     ]);
     let accessibilityTrusted: boolean | null = null;
-    let parakeetModelInstalled: boolean | undefined;
     if (platform === "darwin") {
       accessibilityTrusted = await window.electron.system.macosAccessibilityTrusted();
-      if (window.electron.parakeet) {
-        parakeetModelInstalled = await window.electron.parakeet.isModelInstalled();
-      }
     }
     const gaps = collectSetupGaps({
       hasOpenAIApiKey: credentialStatus.hasOpenAIApiKey,
       syncConfigured: syncStatus.configured,
       platform,
       accessibilityTrusted,
-      parakeetModelInstalled,
     });
     setSetupGaps(gaps);
     setOpenAIConfigured(credentialStatus.hasOpenAIApiKey);
@@ -114,18 +107,6 @@ export default function App() {
     setSettingsInitialTab("general");
     setView("settings");
   }, []);
-
-  const handleParakeetModelRequired = useCallback(() => {
-    setParakeetDownloadOpen(true);
-  }, []);
-
-  useEffect(() => {
-    if (!window.electron.parakeet) return;
-    const unsub = window.electron.parakeet.onStatus((s) => {
-      if (s.status === "ready") void refreshSetupState();
-    });
-    return unsub;
-  }, [refreshSetupState]);
 
   const resolveConversationId = useCallback(
     (list: Conversation[], preferredId: string | null): string | null => {
@@ -378,9 +359,6 @@ export default function App() {
         const result = await window.electron.recording.transcribe(wav);
         if (hotkeyCancelledRef.current) return;
         if ("error" in result) {
-          if ("code" in result && result.code === "parakeet_model_required") {
-            handleParakeetModelRequired();
-          }
           return;
         }
         const text = result.text.trim();
@@ -512,7 +490,6 @@ export default function App() {
               }}
               openAIConfigured={!setupStateLoaded || openAIConfigured}
               onOpenSetup={openSetupSettings}
-              onParakeetModelRequired={handleParakeetModelRequired}
             />
           </div>
         )}
@@ -551,11 +528,6 @@ export default function App() {
         gaps={setupGaps}
         onConfigure={openSettingsForGap}
         onDismiss={dismissSetupNotice}
-      />
-      <ParakeetDownloadModal
-        open={parakeetDownloadOpen}
-        onClose={() => setParakeetDownloadOpen(false)}
-        onReady={() => void refreshSetupState()}
       />
     </div>
   );

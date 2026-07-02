@@ -1,11 +1,9 @@
 import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult, Settings } from "./types";
-import type { UsageStatsSnapshot } from "./usageStats";
 import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput, NoteSummary } from "./writing";
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
 import type { UpdateStatus } from "./updateStatus";
-import type { ParakeetStatus } from "./parakeetStatus";
 
 export interface TaskItem {
   id: string;
@@ -61,11 +59,6 @@ export interface ElectronAPI {
     setOpenAIApiKey: (value: string) => Promise<void>;
     setTavilyApiKey: (value: string) => Promise<void>;
     setR2SecretAccessKey: (value: string) => Promise<void>;
-  };
-  /** Locally accumulated transcription usage. */
-  usage: {
-    getStats: () => Promise<UsageStatsSnapshot>;
-    reset: () => Promise<UsageStatsSnapshot>;
   };
   memory: {
     createConversation: () => Promise<string>;
@@ -202,10 +195,7 @@ export interface ElectronAPI {
     transcribe: (
       data: ArrayBuffer,
       options?: { requestId?: string }
-    ) => Promise<
-      | { text: string; cleanupSkipped?: "no_api_key" }
-      | { error: string; code?: "parakeet_model_required" }
-    >;
+    ) => Promise<{ text: string; cleanupSkipped?: "no_api_key" } | { error: string }>;
     cancelTranscription: (requestId: string) => Promise<void>;
     pasteText: (text: string) => Promise<void>;
     done: () => Promise<void>;
@@ -231,14 +221,6 @@ export interface ElectronAPI {
     getStatus: () => Promise<UpdateStatus>;
     downloadAndInstall: () => Promise<void>;
     onStatus: (cb: (status: UpdateStatus) => void) => () => void;
-  };
-  parakeet?: {
-    getStatus: () => Promise<ParakeetStatus>;
-    isModelInstalled: () => Promise<boolean>;
-    ensureModel: () => Promise<void>;
-    cancelDownload: () => Promise<void>;
-    removeModel: () => Promise<void>;
-    onStatus: (cb: (status: ParakeetStatus) => void) => () => void;
   };
   /** Present when the app is launched with `HARNESS_E2E=1`. */
   e2e?: {

@@ -8,7 +8,7 @@
  *        which is treated as an implicit opt-out so release builds keep the existing version).
  *      - Only edits package.json / package-lock.json; never runs git commit or git tag.
  *   2. Run the full dist pipeline as discrete, timed steps so you get progress feedback:
- *      icon -> parakeet -> fn-monitor -> electron-vite build -> electron-builder (+ optional /Applications install)
+ *      icon -> speech-helper -> fn-monitor -> electron-vite build -> electron-builder (+ optional /Applications install)
  *   3. Print a step counter, a simple ASCII progress bar, a per-step duration, and a running
  *      total elapsed time. Long-running steps emit a periodic "still running" heartbeat so it
  *      never looks frozen.
@@ -216,14 +216,8 @@ async function main() {
       run: () => runChild(process.execPath, [path.join(root, "build", "make-icns.js")]),
     },
     {
-      label: "parakeet:setup",
-      run: () =>
-        runChild(process.execPath, [path.join(root, "scripts", "setup-parakeet.js")], {
-          env: {
-            ...process.env,
-            PARAKEET_RUNTIME_ONLY: isMac ? "1" : process.env.PARAKEET_RUNTIME_ONLY,
-          },
-        }),
+      label: "build:speech-helper",
+      run: () => runChild("bash", [path.join(root, "scripts", "build-speech-helper.sh")]),
     },
     {
       label: "build:fn-monitor",

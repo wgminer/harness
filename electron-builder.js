@@ -4,13 +4,11 @@ const path = require("path");
 // Load repo-root .env so APPLE_* (notarization) and other build-time vars are set.
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
-const extraResources = [
-  {
-    from: "resources/parakeet",
-    to: "parakeet",
-    filter: ["parakeet", "libaxiom.0.dylib"],
-  },
-];
+const extraResources = [];
+const speechHelperPath = path.join(__dirname, "resources", "HarnessSpeech");
+if (fs.existsSync(speechHelperPath)) {
+  extraResources.push({ from: "resources/HarnessSpeech", to: "HarnessSpeech" });
+}
 const fnMonitorPath = path.join(__dirname, "resources", "HarnessFnMonitor");
 if (fs.existsSync(fnMonitorPath)) {
   extraResources.push({ from: "resources/HarnessFnMonitor", to: "HarnessFnMonitor" });
@@ -27,7 +25,7 @@ module.exports = {
   files: [
     "out",
     "resources",
-    "!resources/parakeet/**",
+    "!resources/HarnessSpeech",
     "!resources/HarnessFnMonitor",
     "package.json",
   ],
@@ -48,6 +46,8 @@ module.exports = {
     gatekeeperAssess: false,
     extendInfo: {
       NSMicrophoneUsageDescription: "Harness uses your microphone to record voice messages for transcription.",
+      NSSpeechRecognitionUsageDescription:
+        "Harness uses speech recognition to transcribe your voice recordings on this Mac.",
     },
   },
   dmg: {

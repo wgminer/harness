@@ -8,8 +8,6 @@ import {
 } from "../shared/memoryInjection";
 import { DEFAULT_LAYOUT, DEFAULT_SETTINGS } from "../shared/types";
 import type { LayoutOptions, Settings, TranscriptDictionaryEntry } from "../shared/types";
-import type { UsageStatsSnapshot } from "../shared/usageStats";
-import { EMPTY_USAGE_STATS } from "../shared/usageStats";
 import { appDataFolderButtonLabel } from "../shared/dataStorageLayout";
 import type { SyncStatus } from "../shared/sync";
 import { syncResultChangedLocalData } from "../shared/sync";
@@ -35,7 +33,6 @@ import {
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
-import { ParakeetModelSettingsGroup } from "./ParakeetModelSettingsGroup";
 
 interface SettingsViewProps {
   /** After ChatGPT import (new conversations in sidebar). */
@@ -86,7 +83,6 @@ export function SettingsView({
   const [showApiKey, setShowApiKey] = useState(false);
   const [showTavilyKey, setShowTavilyKey] = useState(false);
   const [showR2Secret, setShowR2Secret] = useState(false);
-  const [usageStats, setUsageStats] = useState<UsageStatsSnapshot>(EMPTY_USAGE_STATS);
   const [switchAnimationsReady, setSwitchAnimationsReady] = useState(false);
 
   const [cleanupEnabled, setCleanupEnabled] = useState(D.transcription?.cleanup?.enabled ?? false);
@@ -253,7 +249,6 @@ export function SettingsView({
         if (!cancelled) settingsHydratedRef.current = true;
         enableSwitchAnimations();
       });
-    void window.electron.usage.getStats().then(setUsageStats);
     window.electron.memory.getUserMemory().then(setUserMemory);
     window.electron.customization.getLayoutOptions().then(setLayoutOptions);
     return () => {
@@ -381,6 +376,13 @@ export function SettingsView({
         if (next.r2SecretAccessKey !== (prev.r2SecretAccessKey ?? "")) {
           await window.electron.sync.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
         }
+        const r2Changed =
+          next.r2AccountId !== prev.r2AccountId ||
+          next.r2Bucket !== prev.r2Bucket ||
+          next.r2Prefix !== prev.r2Prefix ||
+          next.r2AccessKeyId !== prev.r2AccessKeyId ||
+          next.r2SecretAccessKey !== prev.r2SecretAccessKey;
+        if (r2Changed) void refreshDataStatus();
         lastPersistedRef.current = latest;
         setSaveStatus("saved");
         onSettingsChanged?.();
@@ -579,7 +581,8 @@ export function SettingsView({
     setSyncMessage(null);
     try {
       const result = await window.electron.sync.testConnection();
-      setSyncMessage(result.ok ? "R2 connection OK." : (result.error ?? "Connection failed."));
+      setSyncMessage(result.ok ? "R2 connected." : (result.error ?? "Connection failed."));
+      if (result.ok) void refreshDataStatus();
     } finally {
       setSyncTestBusy(false);
     }
@@ -960,7 +963,17 @@ export function SettingsView({
             role="tabpanel"
             aria-labelledby="settings-tab-voice"
           >
-            {isMac ? <ParakeetModelSettingsGroup /> : null}
+            {isMac ? (
+              <SettingsGroup
+                title="On-device transcription"
+                description="Voice dictation uses Apple's Speech framework on this Mac. No model download is required."
+              >
+                <SettingsHint>
+                  Enable Speech Recognition for Harness in System Settings if prompted. On macOS versions before 26,
+                  also install the dictation language under Keyboard → Dictation.
+                </SettingsHint>
+              </SettingsGroup>
+            ) : null}
 
             <SettingsGroup
               title="Voice & transcription"
@@ -985,7 +998,7 @@ export function SettingsView({
               ) : null}
               {cleanupEnabled && !apiKey.trim() ? (
                 <SettingsHint>
-                  Cleanup needs an OpenAI API key in General. Parakeet transcription still works without one.
+                  Cleanup needs an OpenAI API key in General. On-device transcription still works without one.
                 </SettingsHint>
               ) : null}
             </SettingsGroup>
@@ -1015,19 +1028,9 @@ export function SettingsView({
             </SettingsGroup>
 
             <SettingsGroup
-              title="Usage & recordings"
-              description="Local transcription usage on this device."
+              title="Recordings"
+              description="Saved WAV files from voice dictation on this device."
             >
-              <dl className="usage-stats">
-                <div className="usage-stats__row">
-                  <dt>Parakeet words transcribed</dt>
-                  <dd>{usageStats.parakeet.words.toLocaleString()}</dd>
-                </div>
-                <div className="usage-stats__row">
-                  <dt>Dictation sessions</dt>
-                  <dd>{usageStats.parakeet.transcriptions.toLocaleString()}</dd>
-                </div>
-              </dl>
               <SettingsActions>
                 <button
                   type="button"

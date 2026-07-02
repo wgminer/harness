@@ -41,22 +41,11 @@ Screens covered: new-chat compose, chat thread, tasks, settings appearance.
 
 ## Real microphone and transcription
 
-- Playwright does not assert audio quality or real Whisper/Parakeet output. Spot-check recording from the in-chat mic button and from the global Fn path.
+- Playwright does not assert audio quality or real Apple Speech output. Spot-check recording from the in-chat mic button and from the global Fn path.
 
-### Parakeet model download (slim release builds)
+### Speech recognition permission (macOS)
 
-Packaged apps bundle only the Parakeet CLI + dylib; the ~2.3 GB model downloads on first use.
-
-**Automated (fixture server, no HF):** `npm run test:e2e:parakeet` builds a slim `.app` and runs `e2e/parakeet-download.spec.ts`.
-
-**Manual QA (once per release, full Hugging Face download):**
-
-1. `npm run dist:mac` (slim bundle via `dist-runner`)
-2. `npm run verify:parakeet-install`
-3. Install from DMG; quit app; `rm -rf ~/Library/Application\ Support/Harness/parakeet-model`
-4. Settings → Voice → **Download model**; wait for Ready
-5. Dictate (mic or Fn); relaunch — status stays Ready
-6. **Remove model** → download again → still works
+On first dictation, macOS may prompt for **Speech Recognition** access. If transcription fails, check System Settings → Privacy & Security → Speech Recognition and ensure Harness is allowed. On macOS versions before 26, also confirm the dictation language is downloaded under Keyboard → Dictation.
 
 ## Clipboard / OS paste
 

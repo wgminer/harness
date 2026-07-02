@@ -1,6 +1,6 @@
 import { rigSection } from "./rigPage";
 
-export type SetupGapKind = "openai_api_key" | "sync_r2" | "macos_accessibility" | "parakeet_model";
+export type SetupGapKind = "openai_api_key" | "sync_r2" | "macos_accessibility";
 
 export interface SetupGap {
   kind: SetupGapKind;
@@ -20,7 +20,6 @@ export function collectSetupGaps(input: {
   syncConfigured: boolean;
   platform: NodeJS.Platform;
   accessibilityTrusted?: boolean | null;
-  parakeetModelInstalled?: boolean;
 }): SetupGap[] {
   const gaps: SetupGap[] = [];
 
@@ -32,17 +31,6 @@ export function collectSetupGaps(input: {
         "Chat, polish, and optional transcript cleanup need an API key. Voice transcription runs locally on your Mac without one.",
       settingsTab: "general",
       severity: "required",
-    });
-  }
-
-  if (input.platform === "darwin" && input.parakeetModelInstalled === false) {
-    gaps.push({
-      kind: "parakeet_model",
-      title: "Voice transcription model",
-      detail:
-        "Voice dictation needs a one-time ~2.3 GB model download. Chat works without it.",
-      settingsTab: "voice",
-      severity: "recommended",
     });
   }
 

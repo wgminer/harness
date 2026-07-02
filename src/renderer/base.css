@@ -5,12 +5,12 @@
   color-scheme: dark;
 
   /* --- Surfaces (role, not brightness order) --- */
-  --bg: #000; /* page shell: sidebar, main, workspace canvas */
-  --bg-secondary: #111; /* fields, cards, panels */
+  --bg: #111; /* page shell: sidebar, main, workspace canvas */
+  --bg-secondary: #222; /* fields, cards, panels */
   --bg-elevated: #222; /* modals, popovers, raised controls */
 
   /* --- Text --- */
-  --fg: #fff;
+  --fg: #ccc;
   --fg-muted: #999;
 
   /* --- Accent --- */
@@ -18,13 +18,13 @@
   --accent-readable: #87b5f4;
   --accent-muted: #222d3c;
   --accent-tint: #151e2b;
-  --accent-border: #33527b;
+  --accent-border: #5b9cf5;
 
   /* --- Borders --- */
   --border-light: #777;
-  --border-edge: #333;
+  --border-edge: #222;
   --border-input: #333;
-  --border-input-focus: blue;
+  --border-input-focus: var(--accent);
 
   /* --- Buttons --- */
   --btn-bg: #2e3033;

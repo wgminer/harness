@@ -38,7 +38,6 @@ interface ChatViewProps {
   /** When false, chat/polish/reply are blocked with a setup message. */
   openAIConfigured?: boolean;
   onOpenSetup?: () => void;
-  onParakeetModelRequired?: () => void;
 }
 
 export function ChatView({
@@ -56,7 +55,6 @@ export function ChatView({
   onOpenNotesView,
   openAIConfigured = true,
   onOpenSetup,
-  onParakeetModelRequired,
 }: ChatViewProps) {
   /** Set synchronously on first send so thread UI mounts before parent re-renders. */
   const [draftConversationId, setDraftConversationId] = useState<string | null>(null);
@@ -579,7 +577,6 @@ export function ChatView({
     submitDisabled: sending,
     allowHotkeyWithoutConversation: true,
     hasConversation: effectiveConversationId != null,
-    onParakeetModelRequired,
   });
 
   resetComposerInputRef.current = composer.resetComposerInput;

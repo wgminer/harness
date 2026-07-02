@@ -9,35 +9,8 @@ describe("collectSetupGaps", () => {
       syncConfigured: false,
       platform: "darwin",
       accessibilityTrusted: false,
-      parakeetModelInstalled: false,
     });
-    expect(gaps.map((g) => g.kind)).toEqual([
-      "openai_api_key",
-      "parakeet_model",
-      "sync_r2",
-      "macos_accessibility",
-    ]);
-  });
-
-  it("omits parakeet gap when model is installed", () => {
-    const gaps = collectSetupGaps({
-      hasOpenAIApiKey: true,
-      syncConfigured: true,
-      platform: "darwin",
-      accessibilityTrusted: true,
-      parakeetModelInstalled: true,
-    });
-    expect(gaps.map((g) => g.kind)).not.toContain("parakeet_model");
-  });
-
-  it("omits parakeet gap on non-darwin", () => {
-    const gaps = collectSetupGaps({
-      hasOpenAIApiKey: true,
-      syncConfigured: true,
-      platform: "win32",
-      parakeetModelInstalled: false,
-    });
-    expect(gaps.map((g) => g.kind)).not.toContain("parakeet_model");
+    expect(gaps.map((g) => g.kind)).toEqual(["openai_api_key", "sync_r2", "macos_accessibility"]);
   });
 
   it("returns no gaps when everything is configured", () => {
@@ -46,7 +19,6 @@ describe("collectSetupGaps", () => {
       syncConfigured: true,
       platform: "darwin",
       accessibilityTrusted: true,
-      parakeetModelInstalled: true,
     });
     expect(gaps).toEqual([]);
   });

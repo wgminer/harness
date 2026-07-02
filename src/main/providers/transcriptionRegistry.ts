@@ -1,6 +1,6 @@
-import { createParakeetTranscriptionProvider } from "./parakeetTranscription";
+import { createAppleSpeechTranscriptionProvider } from "./appleSpeechTranscription";
 import type { TranscriptionProvider } from "./types";
 
 export function getTranscriptionProvider(): TranscriptionProvider {
-  return createParakeetTranscriptionProvider();
+  return createAppleSpeechTranscriptionProvider();
 }

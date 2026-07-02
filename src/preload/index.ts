@@ -1,10 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AppendMessageMeta } from "../shared/types";
-import type { UsageStatsSnapshot } from "../shared/usageStats";
 import type { NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput } from "../shared/writing";
 import type { SyncResult, SyncStatus } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
-import type { ParakeetStatus } from "../shared/parakeetStatus";
 
 const e2eBridge =
   process.env.HARNESS_E2E === "1"
@@ -58,10 +56,6 @@ contextBridge.exposeInMainWorld("electron", {
     setTavilyApiKey: (value: string) => ipcRenderer.invoke("credentials:setTavilyApiKey", value),
     setR2SecretAccessKey: (value: string) =>
       ipcRenderer.invoke("credentials:setR2SecretAccessKey", value),
-  },
-  usage: {
-    getStats: () => ipcRenderer.invoke("usage:getStats") as Promise<UsageStatsSnapshot>,
-    reset: () => ipcRenderer.invoke("usage:reset") as Promise<UsageStatsSnapshot>,
   },
   memory: {
     createConversation: () => ipcRenderer.invoke("memory:createConversation"),
@@ -265,8 +259,7 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("recording:openFolder") as Promise<void>,
     transcribe: (data: ArrayBuffer, options?: { requestId?: string }) =>
       ipcRenderer.invoke("recording:transcribe", data, options?.requestId) as Promise<
-        | { text: string; cleanupSkipped?: "no_api_key" }
-        | { error: string; code?: "parakeet_model_required" }
+        { text: string; cleanupSkipped?: "no_api_key" } | { error: string }
       >,
     cancelTranscription: (requestId: string) =>
       ipcRenderer.invoke("recording:cancelTranscription", requestId) as Promise<void>,
@@ -317,18 +310,6 @@ contextBridge.exposeInMainWorld("electron", {
       const sub = (_: unknown, status: UpdateStatus) => cb(status);
       ipcRenderer.on("updater:status", sub);
       return () => ipcRenderer.removeListener("updater:status", sub);
-    },
-  },
-  parakeet: {
-    getStatus: () => ipcRenderer.invoke("parakeet:getStatus") as Promise<ParakeetStatus>,
-    isModelInstalled: () => ipcRenderer.invoke("parakeet:isModelInstalled") as Promise<boolean>,
-    ensureModel: () => ipcRenderer.invoke("parakeet:ensureModel") as Promise<void>,
-    cancelDownload: () => ipcRenderer.invoke("parakeet:cancelDownload") as Promise<void>,
-    removeModel: () => ipcRenderer.invoke("parakeet:removeModel") as Promise<void>,
-    onStatus: (cb: (status: ParakeetStatus) => void) => {
-      const sub = (_: unknown, status: ParakeetStatus) => cb(status);
-      ipcRenderer.on("parakeet:status", sub);
-      return () => ipcRenderer.removeListener("parakeet:status", sub);
     },
   },
   ...(e2eBridge ? { e2e: e2eBridge } : {}),
