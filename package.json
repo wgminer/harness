@@ -22,6 +22,8 @@
     "verify:mac-trust": "node scripts/verify-mac-trust.js",
     "icon:icns": "node build/make-icns.js",
     "parakeet:setup": "node scripts/setup-parakeet.js",
+    "parakeet:publish-model": "node scripts/publish-parakeet-model.js",
+    "verify:parakeet-install": "node scripts/verify-parakeet-install.js",
     "build:fn-monitor": "bash scripts/build-fn-monitor.sh",
     "release": "node scripts/release.js",
     "site": "npx --yes serve site -l 8080",
@@ -34,7 +36,8 @@
     "test:e2e": "electron-vite build && playwright test",
     "test:e2e:ui": "electron-vite build && playwright test --ui",
     "test:e2e:visual": "electron-vite build && playwright test e2e/visual-grid.spec.ts",
-    "test:e2e:visual:update": "electron-vite build && playwright test e2e/visual-grid.spec.ts --update-snapshots"
+    "test:e2e:visual:update": "electron-vite build && playwright test e2e/visual-grid.spec.ts --update-snapshots",
+    "test:e2e:parakeet": "PARAKEET_RUNTIME_ONLY=1 node scripts/dist-runner.js --mac --quick && playwright test e2e/parakeet-download.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

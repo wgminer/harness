@@ -25,9 +25,9 @@ export function SetupNoticeModal({ open, gaps, onConfigure, onDismiss }: SetupNo
       }
     >
       <p className="setup-notice-lead">
-        Harness works locally on your Mac. Voice dictation works right away; chat and other AI
-        features need an OpenAI API key. Cloud sync is optional — set up R2 when you want to pull
-        data from another device.
+        Harness works locally on your Mac. Chat needs an OpenAI API key; voice dictation needs a
+        one-time model download in Settings → Voice. Cloud sync is optional — set up R2 when you
+        want to pull data from another device.
       </p>
       {required.length > 0 && (
         <section className="setup-notice-section">

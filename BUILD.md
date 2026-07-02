@@ -12,7 +12,9 @@
 | `npm run dist:mac`         | Build and sign the Mac app (`electron-builder --mac`). Use for the main Mac build and with `--replace`.                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:replace` | `dist:mac` with `--replace`: copy the built `.app` into `/Applications`.                                                                                                                                                                                                                                                                                              |
 | `npm run icon:icns`        | Generate `build/icon.icns` from the project icon assets.                                                                                                                                                                                                                                                                                                              |
-| `npm run parakeet:setup`   | **(macOS)** Clone/build [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp), download NVIDIA Parakeet TDT 0.6B v3 (`.nemo`), convert to `model.safetensors` + `vocab.txt`, and copy the CLI + runtime dylib + weights into `resources/parakeet/`. Needs **CMake**, **Python 3.12+** (e.g. `brew install python@3.12`), Xcode CLT, `git`, `curl`. Large download. |
+| `npm run parakeet:setup`   | **(macOS)** Clone/build [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp), download NVIDIA Parakeet TDT 0.6B v3 (`.nemo`), convert to `model.safetensors` + `vocab.txt`, and copy into `resources/parakeet/`. Needs **CMake**, **Python 3.12+** (e.g. `brew install python@3.12`), Xcode CLT, `git`, `curl`. Large download. |
+| `npm run parakeet:publish-model` | **(macOS)** After `parakeet:setup`, build `manifest.json` and stage files under `build/parakeet-publish/` for Hugging Face upload. |
+| `npm run verify:parakeet-install` | **(macOS)** After `dist:mac`, verify the `.app` bundles Parakeet CLI + dylib only (no `model.safetensors`). |
 
 
 This guide walks you through creating a double-clickable, signed (and optionally notarized) Mac app using your Apple Developer account.
@@ -31,15 +33,29 @@ NeMo conversion scripts require **Python 3.12+** (they use `tarfile.extract(...,
 
 `npm run build` (and anything that runs it, e.g. `dist:mac`) automatically runs `**prebuild`**: icon generation, then Parakeet setup on macOS. The first Parakeet run can take a long time and needs several GB free; later builds skip when `resources/parakeet/` already has `parakeet`, `libaxiom.0.dylib`, `model.safetensors`, and `vocab.txt`. Set `PARAKEET_FORCE=1` to redo Parakeet. `resources/parakeet/*` is gitignored except `.gitkeep`.
 
-### Parakeet transcription (bundled)
+### Parakeet transcription (local + on-demand model)
 
-Voice is transcribed locally with **NVIDIA Parakeet TDT 0.6B** via [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp) (no separate transcription API). `**parakeet:setup`** runs as part of `**prebuild`**; you can also run it alone:
+Voice is transcribed locally with **NVIDIA Parakeet TDT 0.6B** via [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp) (no separate transcription API).
+
+**Development:** `parakeet:setup` runs as part of `prebuild` and copies the full stack (CLI, dylib, weights, vocab) into `resources/parakeet/` for local dev.
+
+**Packaged apps:** `npm run dist:mac` (via `dist-runner`) sets `PARAKEET_RUNTIME_ONLY=1` so only the **CLI + `libaxiom.0.dylib`** are bundled (~9 MB). The **~2.3 GB** `model.safetensors` + `vocab.txt` are downloaded on first use from Hugging Face into `~/Library/Application Support/Harness/parakeet-model/` (Settings → Voice, or the first-run setup notice).
 
 ```bash
 npm run parakeet:setup
 ```
 
-It clones `parakeet.cpp` under `build/parakeet-cpp`, runs `make build`, downloads the Hugging Face `parakeet-tdt-0.6b-v3.nemo` into `build/parakeet-cache`, creates `build/parakeet-venv` and installs `torch` + `safetensors`, runs `convert_nemo.py` and `extract_vocab.py`, then copies `parakeet`, `libaxiom.0.dylib`, `model.safetensors`, and `vocab.txt` into `resources/parakeet/`.
+It clones `parakeet.cpp` under `build/parakeet-cpp`, runs `make build`, downloads the Hugging Face `parakeet-tdt-0.6b-v3.nemo` into `build/parakeet-cache`, creates `build/parakeet-venv` and installs `torch` + `safetensors`, runs `convert_nemo.py` and `extract_vocab.py`, then copies artifacts into `resources/parakeet/`.
+
+**Publishing the model to Hugging Face** (maintainer, one-time per model version):
+
+```bash
+npm run parakeet:setup          # full local tree with converted weights
+npm run parakeet:publish-model  # writes build/parakeet-publish/manifest.json
+npm run parakeet:publish-model -- --upload   # requires huggingface-cli
+```
+
+Default HF repo: `wgminer/harness-parakeet-tdt-0.6b` (see `src/shared/parakeetModel.ts`).
 
 **Manual copy** (skip download/build): put `parakeet`, `libaxiom.0.dylib`, `model.safetensors`, and `vocab.txt` in a folder and run:
 
@@ -47,7 +63,7 @@ It clones `parakeet.cpp` under `build/parakeet-cpp`, runs `make build`, download
 PARAKEET_SOURCE_DIR=/path/to/folder npm run parakeet:setup
 ```
 
-Or set `PARAKEET_BIN`, `PARAKEET_WEIGHTS`, and `PARAKEET_VOCAB`. Packaged apps load assets from `Contents/Resources/parakeet/` (`electron-builder.js` `extraResources`).
+Or set `PARAKEET_BIN`, `PARAKEET_WEIGHTS`, and `PARAKEET_VOCAB`. Packaged apps load the CLI from `Contents/Resources/parakeet/`; model files load from userData after download.
 
 ---
 

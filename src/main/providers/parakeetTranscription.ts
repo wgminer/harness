@@ -5,7 +5,8 @@ import { tmpdir } from "os";
 import { randomUUID } from "crypto";
 import { access } from "fs/promises";
 import type { TranscriptionProvider, TranscriptionResult } from "./types";
-import { getParakeetBundleDir, PARAKEET_FILENAMES } from "../parakeetPaths";
+import { getParakeetRuntimeDir, PARAKEET_FILENAMES } from "../parakeetPaths";
+import { resolveParakeetModelDirWithBundledFallback } from "../parakeetModelInstall";
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -100,17 +101,18 @@ export function createParakeetTranscriptionProvider(): TranscriptionProvider {
     id: "parakeet-local",
 
     async transcribe(audioBuffer: ArrayBuffer, signal?: AbortSignal): Promise<TranscriptionResult> {
-      const base = getParakeetBundleDir();
-      const exe = join(base, PARAKEET_FILENAMES.cli);
-      const weights = join(base, PARAKEET_FILENAMES.weights);
-      const vocab = join(base, PARAKEET_FILENAMES.vocab);
+      const runtimeBase = getParakeetRuntimeDir();
+      const modelBase = resolveParakeetModelDirWithBundledFallback();
+      const exe = join(runtimeBase, PARAKEET_FILENAMES.cli);
+      const weights = join(modelBase, PARAKEET_FILENAMES.weights);
+      const vocab = join(modelBase, PARAKEET_FILENAMES.vocab);
 
       if (!(await pathExists(exe))) {
         throw new Error(`Parakeet CLI not found at ${exe}. Run npm run parakeet:setup (see BUILD.md).`);
       }
       if (!(await pathExists(weights)) || !(await pathExists(vocab))) {
         throw new Error(
-          `Parakeet model files missing under ${base}. Expected ${PARAKEET_FILENAMES.weights} and ${PARAKEET_FILENAMES.vocab}.`
+          `Parakeet model files missing. Expected ${PARAKEET_FILENAMES.weights} and ${PARAKEET_FILENAMES.vocab}.`
         );
       }
 

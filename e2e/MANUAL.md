@@ -43,6 +43,21 @@ Screens covered: new-chat compose, chat thread, tasks, settings appearance.
 
 - Playwright does not assert audio quality or real Whisper/Parakeet output. Spot-check recording from the in-chat mic button and from the global Fn path.
 
+### Parakeet model download (slim release builds)
+
+Packaged apps bundle only the Parakeet CLI + dylib; the ~2.3 GB model downloads on first use.
+
+**Automated (fixture server, no HF):** `npm run test:e2e:parakeet` builds a slim `.app` and runs `e2e/parakeet-download.spec.ts`.
+
+**Manual QA (once per release, full Hugging Face download):**
+
+1. `npm run dist:mac` (slim bundle via `dist-runner`)
+2. `npm run verify:parakeet-install`
+3. Install from DMG; quit app; `rm -rf ~/Library/Application\ Support/Harness/parakeet-model`
+4. Settings → Voice → **Download model**; wait for Ready
+5. Dictate (mic or Fn); relaunch — status stays Ready
+6. **Remove model** → download again → still works
+
 ## Clipboard / OS paste
 
 - The `recording:pasteText` path uses platform paste behavior (e.g. AppleScript on macOS). Verify on your OS if you rely on paste-to-foreground-app behavior.

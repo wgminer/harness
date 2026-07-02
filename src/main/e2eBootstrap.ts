@@ -22,4 +22,9 @@ if (isHarnessE2E()) {
   const dir = process.env.HARNESS_E2E_USER_DATA ?? join(process.cwd(), ".e2e-user-data");
   app.setPath("userData", dir);
   seedE2ELayout(dir);
+} else {
+  const userDataOverride = process.env.HARNESS_USER_DATA_DIR?.trim();
+  if (userDataOverride) {
+    app.setPath("userData", userDataOverride);
+  }
 }
