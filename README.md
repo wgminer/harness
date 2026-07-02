@@ -20,7 +20,7 @@ Use it as your daily driver when you want API flexibility (model choice, keys in
 - **File tools**: The assistant can list, read, write, and delete files and create directories within allowed roots (e.g. app user data, home, desktop—see main process configuration).
 - **Self-improvement**: Ask for layout changes; the assistant uses `set_layout` (sidebar position and optional design grid overlay). The app uses a fixed dark theme baked into CSS.
 - **Import**: Bring in exported ChatGPT conversation folders when you need to migrate context.
-- **Recording & transcription**: Capture audio in-app, save or export WAV, transcribe via OpenAI or a local Whisper-compatible server; the menu bar icon can reflect recording state.
+- **Recording & transcription**: Capture audio in-app, save or export WAV, transcribe on-device via Apple's Speech framework on macOS; the menu bar icon can reflect recording state.
 - **Settings**: API key and model (OpenAI), or base URL and model for Ollama; transcription provider and recording options; memory editor.
 
 Data stays on your machine (no Harness backend). For OpenAI models you supply your own API key; local providers use your machine only.

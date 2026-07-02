@@ -16,8 +16,6 @@ export interface LLMProvider {
 
 export interface TranscriptionResult {
   text: string;
-  /** Subword token count from Parakeet CLI output when parseable. */
-  parakeetTokens?: number | null;
 }
 
 export interface TranscriptionProvider {

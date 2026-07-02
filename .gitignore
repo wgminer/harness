@@ -45,15 +45,15 @@ e2e/videos/
 e2e/traces/
 coverage/
 
-# Parakeet setup (prebuild / npm run parakeet:setup)
+# macOS native helpers (built by prebuild)
+resources/HarnessSpeech
+resources/HarnessFnMonitor
+
+# Legacy Parakeet (removed); ignore local build outputs and old bundled runtime
+resources/parakeet/
 build/parakeet-cpp/
 build/parakeet-cache/
 build/parakeet-venv/
-resources/parakeet/*
-!resources/parakeet/.gitkeep
-
-# Built on macOS via npm run build:fn-monitor
-resources/HarnessFnMonitor
 
 # Swift Package build artifacts
 native/**/.build/

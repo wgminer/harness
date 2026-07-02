@@ -9,8 +9,6 @@ import { getTranscriptionProvider } from "./providers/transcriptionRegistry";
 import { HARNESS_E2E_TRANSCRIBE_TEXT, isHarnessE2E } from "./e2eStub";
 import { OPENAI_TRANSCRIPT_CLEANUP_MODEL } from "../shared/openaiModels";
 import { DEFAULT_SETTINGS } from "../shared/types";
-import { recordParakeetTranscription } from "./usageStats";
-import { isParakeetModelInstalled } from "./parakeetModelInstall";
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -139,16 +137,8 @@ export function registerRecordingHandlers(): void {
     }
     const signal = abortController?.signal;
     try {
-      if (process.platform === "darwin" && !(await isParakeetModelInstalled())) {
-        return {
-          error:
-            "Voice dictation needs a one-time ~2.3 GB model download. Open Settings → Voice to download, or use Download when prompted.",
-          code: "parakeet_model_required" as const,
-        };
-      }
       const provider = getTranscriptionProvider();
-      const { text, parakeetTokens } = await provider.transcribe(data, signal);
-      recordParakeetTranscription(text, parakeetTokens ?? undefined);
+      const { text } = await provider.transcribe(data, signal);
       const dictionary = settings.transcription?.dictionary ?? [];
       const shouldCleanup = settings.transcription?.cleanup?.enabled ?? false;
       if (!shouldCleanup || !text.trim()) {

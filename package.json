@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "main": "out/main/index.js",
   "author": "Your Name",
@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "node scripts/make-dev-icons.js && electron-vite dev",
-    "prebuild": "npm run icon:icns && npm run parakeet:setup && npm run build:fn-monitor",
+    "prebuild": "npm run icon:icns && npm run build:speech-helper && npm run build:fn-monitor",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "node scripts/dist-runner.js",
@@ -21,9 +21,7 @@
     "dist:mac:replace": "node scripts/dist-runner.js --mac --replace",
     "verify:mac-trust": "node scripts/verify-mac-trust.js",
     "icon:icns": "node build/make-icns.js",
-    "parakeet:setup": "node scripts/setup-parakeet.js",
-    "parakeet:publish-model": "node scripts/publish-parakeet-model.js",
-    "verify:parakeet-install": "node scripts/verify-parakeet-install.js",
+    "build:speech-helper": "bash scripts/build-speech-helper.sh",
     "build:fn-monitor": "bash scripts/build-fn-monitor.sh",
     "release": "node scripts/release.js",
     "site": "npx --yes serve site -l 8080",
@@ -36,8 +34,7 @@
     "test:e2e": "electron-vite build && playwright test",
     "test:e2e:ui": "electron-vite build && playwright test --ui",
     "test:e2e:visual": "electron-vite build && playwright test e2e/visual-grid.spec.ts",
-    "test:e2e:visual:update": "electron-vite build && playwright test e2e/visual-grid.spec.ts --update-snapshots",
-    "test:e2e:parakeet": "PARAKEET_RUNTIME_ONLY=1 node scripts/dist-runner.js --mac --quick && playwright test e2e/parakeet-download.spec.ts"
+    "test:e2e:visual:update": "electron-vite build && playwright test e2e/visual-grid.spec.ts --update-snapshots"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

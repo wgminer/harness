@@ -6,7 +6,7 @@ import { HARNESS_DEV_APP_NAME } from "./devBootstrap";
 import { join } from "path";
 import { registerCredentialHandlers } from "./credentials";
 import { registerSettingsHandlers, getSettings } from "./settings";
-import { registerUsageStatsHandlers } from "./usageStats";
+import { cleanupLegacyParakeetModel } from "./legacyParakeetCleanup";
 import { pruneEmptyConversations, registerMemoryHandlers } from "./memory";
 import { registerChatHandlers } from "./chat";
 import { registerCustomizationHandlers } from "./customization";
@@ -24,7 +24,6 @@ import { registerMemoryImportHandlers } from "./memoryImport";
 import { registerSyncHandlers } from "./sync";
 import { registerUiSessionHandlers } from "./uiSession";
 import { registerUpdaterHandlers, startUpdateCheck } from "./updater";
-import { registerParakeetHandlers } from "./parakeetDownload";
 import {
   WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
 } from "../shared/windowLayout";
@@ -162,6 +161,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = "dark";
   registerCredentialHandlers();
   registerSettingsHandlers();
+  void cleanupLegacyParakeetModel();
   const settings = await getSettings();
   const globalFnHotkeyEnabled = settings.recording?.globalFnHotkey ?? DEFAULT_SETTINGS.recording!.globalFnHotkey;
   if (
@@ -172,7 +172,6 @@ app.whenReady().then(async () => {
   ) {
     systemPreferences.isTrustedAccessibilityClient(true);
   }
-  registerUsageStatsHandlers();
   registerMemoryHandlers();
   await pruneEmptyConversations();
   registerMemoryCompileHandlers();
@@ -190,7 +189,6 @@ app.whenReady().then(async () => {
   registerSyncHandlers();
   registerUiSessionHandlers();
   registerUpdaterHandlers();
-  registerParakeetHandlers();
 
   if (process.platform === "darwin") {
     app.dock.setIcon(nativeImage.createFromPath(iconPath));

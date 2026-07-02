@@ -146,7 +146,7 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 
 - **Multi-provider architecture** — `LLMProvider` registry; streaming + tools + titles through one interface.
 - **Ollama / local model support** — OpenAI-compatible local servers.
-- **Recording & transcription** — In-app capture; Whisper + local transcription registry; tray recording state.
+- **Recording & transcription** — In-app capture; on-device Apple Speech on macOS; tray recording state.
 - **Conversation search** — Full-text search + `memory_search_conversations` tool.
 - **Settings v2** — Provider and transcription pickers, recording auto-send.
 

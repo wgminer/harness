@@ -20,7 +20,6 @@ export interface UseChatComposerOptions {
   /** Allow hotkey injection when no conversation is open (compose splash). */
   allowHotkeyWithoutConversation?: boolean;
   hasConversation?: boolean;
-  onParakeetModelRequired?: () => void;
 }
 
 export function useChatComposer({
@@ -33,7 +32,6 @@ export function useChatComposer({
   submitDisabled = false,
   allowHotkeyWithoutConversation = false,
   hasConversation = true,
-  onParakeetModelRequired,
 }: UseChatComposerOptions) {
   const [input, setInput] = useState("");
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -92,10 +90,6 @@ export function useChatComposer({
         const wav = await audioFileToWav(attached);
         const result = await window.electron.recording.transcribe(wav);
         if ("error" in result) {
-          if ("code" in result && result.code === "parakeet_model_required") {
-            onParakeetModelRequired?.();
-            return;
-          }
           setAttachmentError(result.error);
           return;
         }
@@ -118,7 +112,7 @@ export function useChatComposer({
     setInput("");
     setAttachedAudioFile(null);
     await submitMessage(messageText);
-  }, [attachedAudioFile, attachmentTranscribing, input, onParakeetModelRequired, submitDisabled, submitMessage, submitting]);
+  }, [attachedAudioFile, attachmentTranscribing, input, submitDisabled, submitMessage, submitting]);
 
   const submitMessageRef = useRef(submitMessage);
   useEffect(() => {
@@ -178,11 +172,7 @@ export function useChatComposer({
         return;
       }
       if ("error" in result) {
-        if ("code" in result && result.code === "parakeet_model_required") {
-          onParakeetModelRequired?.();
-        } else {
-          setVoiceError(result.error);
-        }
+        setVoiceError(result.error);
       } else {
         await applyTranscriptToComposer(result.text, result);
       }
@@ -192,7 +182,7 @@ export function useChatComposer({
       transcriptionRequestIdRef.current = null;
       setVoiceState("idle");
     }
-  }, [applyTranscriptToComposer, onParakeetModelRequired, recorder]);
+  }, [applyTranscriptToComposer, recorder]);
 
   const startRecording = useCallback(async () => {
     setVoiceError(null);
