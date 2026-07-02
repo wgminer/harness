@@ -24,6 +24,7 @@ import { registerMemoryImportHandlers } from "./memoryImport";
 import { registerSyncHandlers } from "./sync";
 import { registerUiSessionHandlers } from "./uiSession";
 import { registerUpdaterHandlers, startUpdateCheck } from "./updater";
+import { registerParakeetHandlers } from "./parakeetDownload";
 import {
   WINDOW_SMALL_PRESET_MAX_WIDTH_PX,
 } from "../shared/windowLayout";
@@ -189,6 +190,7 @@ app.whenReady().then(async () => {
   registerSyncHandlers();
   registerUiSessionHandlers();
   registerUpdaterHandlers();
+  registerParakeetHandlers();
 
   if (process.platform === "darwin") {
     app.dock.setIcon(nativeImage.createFromPath(iconPath));

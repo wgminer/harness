@@ -39,10 +39,15 @@ const MIN_PYTHON = { major: 3, minor: 12 };
 /** Set by assertPrerequisites — Python executable used to create the venv */
 let resolvedPython = "python3";
 
+const runtimeOnly =
+  process.env.PARAKEET_RUNTIME_ONLY === "1" || process.env.PARAKEET_RUNTIME_ONLY === "true";
+
 function existsAll(dir) {
+  const hasRuntime =
+    fs.existsSync(path.join(dir, NAMES.bin)) && fs.existsSync(path.join(dir, NAMES.axiom));
+  if (runtimeOnly) return hasRuntime;
   return (
-    fs.existsSync(path.join(dir, NAMES.bin)) &&
-    fs.existsSync(path.join(dir, NAMES.axiom)) &&
+    hasRuntime &&
     fs.existsSync(path.join(dir, NAMES.weights)) &&
     fs.existsSync(path.join(dir, NAMES.vocab))
   );
@@ -205,8 +210,10 @@ function manualCopyFromEnv() {
   fs.mkdirSync(destDir, { recursive: true });
   copyFile(binPath, NAMES.bin);
   const copiedAxiom = maybeCopyAxiom(path.dirname(binPath));
-  copyFile(weightsPath, NAMES.weights);
-  copyFile(vocabPath, NAMES.vocab);
+  if (!runtimeOnly) {
+    copyFile(weightsPath, NAMES.weights);
+    copyFile(vocabPath, NAMES.vocab);
+  }
   if (!copiedAxiom) {
     console.warn(
       `parakeet:setup: ${NAMES.axiom} not found next to ${NAMES.bin}; trying fallback from local build output`
@@ -348,10 +355,24 @@ function copyArtifacts(weightsOut, vocabOut) {
     console.error("parakeet:setup: expected axiom dylib under", axiomSrcDir);
     process.exit(1);
   }
-  copyFile(weightsOut, NAMES.weights);
-  copyFile(vocabOut, NAMES.vocab);
+  if (!runtimeOnly) {
+    copyFile(weightsOut, NAMES.weights);
+    copyFile(vocabOut, NAMES.vocab);
+  } else {
+    for (const n of [NAMES.weights, NAMES.vocab]) {
+      try {
+        fs.rmSync(path.join(destDir, n));
+      } catch {
+        /* ignore */
+      }
+    }
+  }
   patchParakeetRpaths(path.join(destDir, NAMES.bin));
-  console.log("parakeet:setup: done →", destDir);
+  console.log(
+    runtimeOnly
+      ? `parakeet:setup: runtime only → ${destDir} (model downloads on first use)`
+      : `parakeet:setup: done → ${destDir}`
+  );
 }
 
 // --- main ---
@@ -388,10 +409,14 @@ try {
   assertPrerequisites();
   ensureRepo();
   buildCli();
-  ensureVenv();
-  const nemoPath = ensureNemo();
-  const { weightsOut, vocabOut } = convertWeights(nemoPath);
-  copyArtifacts(weightsOut, vocabOut);
+  if (runtimeOnly) {
+    copyArtifacts(null, null);
+  } else {
+    ensureVenv();
+    const nemoPath = ensureNemo();
+    const { weightsOut, vocabOut } = convertWeights(nemoPath);
+    copyArtifacts(weightsOut, vocabOut);
+  }
 } catch (e) {
   console.error("parakeet:setup failed:", e?.message ?? e);
   process.exit(1);

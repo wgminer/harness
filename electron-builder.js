@@ -4,7 +4,13 @@ const path = require("path");
 // Load repo-root .env so APPLE_* (notarization) and other build-time vars are set.
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
-const extraResources = [{ from: "resources/parakeet", to: "parakeet" }];
+const extraResources = [
+  {
+    from: "resources/parakeet",
+    to: "parakeet",
+    filter: ["parakeet", "libaxiom.0.dylib"],
+  },
+];
 const fnMonitorPath = path.join(__dirname, "resources", "HarnessFnMonitor");
 if (fs.existsSync(fnMonitorPath)) {
   extraResources.push({ from: "resources/HarnessFnMonitor", to: "HarnessFnMonitor" });

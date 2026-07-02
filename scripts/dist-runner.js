@@ -217,7 +217,13 @@ async function main() {
     },
     {
       label: "parakeet:setup",
-      run: () => runChild(process.execPath, [path.join(root, "scripts", "setup-parakeet.js")]),
+      run: () =>
+        runChild(process.execPath, [path.join(root, "scripts", "setup-parakeet.js")], {
+          env: {
+            ...process.env,
+            PARAKEET_RUNTIME_ONLY: isMac ? "1" : process.env.PARAKEET_RUNTIME_ONLY,
+          },
+        }),
     },
     {
       label: "build:fn-monitor",

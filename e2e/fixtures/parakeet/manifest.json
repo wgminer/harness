@@ -1,0 +1,16 @@
+{
+  "version": "test-1",
+  "model": "fixture",
+  "files": {
+    "weights": {
+      "sha256": "8166470a6833d390ca63c4171241090ea15de8a28fd47551b01af9602d136934",
+      "bytes": 4096,
+      "url": "http://127.0.0.1:PORT/model.safetensors"
+    },
+    "vocab": {
+      "sha256": "e078cb80a315c1545d5396567810bf94dc360f30bfdaae14ca6aad6cf9fe768d",
+      "bytes": 6,
+      "url": "http://127.0.0.1:PORT/vocab.txt"
+    }
+  }
+}

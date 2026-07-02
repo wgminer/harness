@@ -35,6 +35,7 @@ import {
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
+import { ParakeetModelSettingsGroup } from "./ParakeetModelSettingsGroup";
 
 interface SettingsViewProps {
   /** After ChatGPT import (new conversations in sidebar). */
@@ -959,6 +960,8 @@ export function SettingsView({
             role="tabpanel"
             aria-labelledby="settings-tab-voice"
           >
+            {isMac ? <ParakeetModelSettingsGroup /> : null}
+
             <SettingsGroup
               title="Voice & transcription"
               description="Spoken audio is turned into text on this device. Optional cleanup uses your API key."
