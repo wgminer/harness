@@ -141,6 +141,7 @@ describe("markdown directives", () => {
 
   it("leaves non-mermaid fenced code blocks alone", () => {
     const html = render("```ts\nconst x = 1;\n```");
+    expect(html).toContain("md-code-block");
     expect(html).toContain("<pre");
     expect(html).toContain("language-ts");
     expect(html).not.toContain("md-mermaid");

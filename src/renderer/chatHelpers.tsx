@@ -1,4 +1,4 @@
-import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { Children, isValidElement, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Check, Copy, Loader2, SquarePen } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -60,6 +60,86 @@ function extractCodeText(node: ReactNode): string {
   return "";
 }
 
+export interface MarkdownContentProps {
+  content: string;
+  /** Used to build stable keys for per-block copy / save actions. */
+  messageId?: string;
+  messageTimestamp?: number;
+  copiedId?: string | null;
+  savedToNotesId?: string | null;
+  onCopied?: (id: string | null) => void;
+  onSaveToNotes?: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
+}
+
+function CodeBlock({
+  blockKey,
+  codeText,
+  copiedId,
+  savedToNotesId,
+  onCopied,
+  onSaveToNotes,
+  messageTimestamp,
+  children,
+  ...rest
+}: {
+  blockKey: string;
+  codeText: string;
+  copiedId?: string | null;
+  savedToNotesId?: string | null;
+  onCopied?: (id: string | null) => void;
+  onSaveToNotes?: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
+  messageTimestamp?: number;
+  children?: ReactNode;
+}) {
+  const [localCopied, setLocalCopied] = useState(false);
+  const justCopied = onCopied ? copiedId === blockKey : localCopied;
+  const justSaved = savedToNotesId === blockKey;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(codeText);
+      if (onCopied) {
+        onCopied(blockKey);
+        setTimeout(() => onCopied(null), 2000);
+      } else {
+        setLocalCopied(true);
+        setTimeout(() => setLocalCopied(false), 2000);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <div className="md-code-block">
+      <div className="md-code-block__toolbar">
+        {onSaveToNotes ? (
+          <button
+            type="button"
+            className="md-code-block__btn"
+            onClick={() => void onSaveToNotes(blockKey, codeText, messageTimestamp)}
+            disabled={!codeText.trim()}
+            title={justSaved ? "Added to editor" : "Add to editor"}
+            aria-label={justSaved ? "Added to editor" : "Add code to editor"}
+          >
+            {justSaved ? <Check size={12} /> : <SquarePen size={12} />}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="md-code-block__btn"
+          onClick={() => void handleCopy()}
+          title={justCopied ? "Copied!" : "Copy"}
+          aria-label={justCopied ? "Copied!" : "Copy code"}
+        >
+          {justCopied ? <Check size={12} /> : <Copy size={12} />}
+        </button>
+      </div>
+      <pre {...rest}>{children}</pre>
+    </div>
+  );
+}
+
 /**
  * Renders assistant/user markdown.
  *
@@ -70,7 +150,18 @@ function extractCodeText(node: ReactNode): string {
  * We also intercept ```mermaid fenced blocks at the `<pre>` level and route them
  * to a lazy-loaded mermaid renderer; everything else flows through highlight.js.
  */
-export function MarkdownContent({ content }: { content: string }) {
+export function MarkdownContent({
+  content,
+  messageId,
+  messageTimestamp,
+  copiedId,
+  savedToNotesId,
+  onCopied,
+  onSaveToNotes,
+}: MarkdownContentProps) {
+  const codeBlockIndexRef = useRef(0);
+  codeBlockIndexRef.current = 0;
+
   const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
     <p {...props}>{children}</p>
   );
@@ -84,7 +175,24 @@ export function MarkdownContent({ content }: { content: string }) {
         return <MermaidBlock source={extractCodeText(codeEl.props.children)} />;
       }
     }
-    return <pre {...rest}>{children}</pre>;
+    const blockIndex = codeBlockIndexRef.current;
+    codeBlockIndexRef.current += 1;
+    const blockKey = messageId != null ? `${messageId}:code:${blockIndex}` : `code:${blockIndex}`;
+    const codeText = extractCodeText(children);
+    return (
+      <CodeBlock
+        blockKey={blockKey}
+        codeText={codeText}
+        copiedId={copiedId}
+        savedToNotesId={savedToNotesId}
+        onCopied={onCopied}
+        onSaveToNotes={onSaveToNotes}
+        messageTimestamp={messageTimestamp}
+        {...rest}
+      >
+        {children}
+      </CodeBlock>
+    );
   };
 
   const components = {
