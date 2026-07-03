@@ -9,6 +9,33 @@
     "type": "git",
     "url": "https://github.com/wgminer/harness.git"
   },
+  "scripts": {
+    "dev": "node scripts/make-dev-icons.js && electron-vite dev",
+    "prebuild": "npm run icon:icns && npm run build:speech-helper && npm run build:fn-monitor",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "dist": "node scripts/dist-runner.js",
+    "dist:quick": "node scripts/dist-runner.js --mac --quick",
+    "dist:mac": "node scripts/dist-runner.js --mac",
+    "dist:mac:quick": "node scripts/dist-runner.js --mac --quick",
+    "dist:mac:replace": "node scripts/dist-runner.js --mac --replace",
+    "verify:mac-trust": "node scripts/verify-mac-trust.js",
+    "icon:icns": "node build/make-icns.js",
+    "build:speech-helper": "bash scripts/build-speech-helper.sh",
+    "build:fn-monitor": "bash scripts/build-fn-monitor.sh",
+    "release": "node scripts/release.js",
+    "site": "npx --yes serve site -l 8080",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "grid:audit": "node scripts/grid-audit.js",
+    "test:all": "npm run test && npm run test:e2e",
+    "test:e2e": "electron-vite build && playwright test",
+    "test:e2e:ui": "electron-vite build && playwright test --ui",
+    "test:e2e:visual": "electron-vite build && playwright test e2e/visual-grid.spec.ts",
+    "test:e2e:visual:update": "electron-vite build && playwright test e2e/visual-grid.spec.ts --update-snapshots"
+  },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
     "@codemirror/commands": "^6.10.3",
@@ -25,5 +52,22 @@
     "remark-gfm": "^4.0.1",
     "unist-util-visit": "^5.1.0",
     "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "@electron/notarize": "^2.2.2",
+    "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.58.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "dotenv": "^16.6.1",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "eslint": "^9.39.4",
+    "globals": "^16.5.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.0",
+    "vitest": "^3.0.5"
   }
 }
