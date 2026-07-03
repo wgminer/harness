@@ -55,6 +55,7 @@
   --danger-fg: #e05353;
   --danger-hover: #a33226;
   --danger-muted: #913127;
+  --danger-surface: color-mix(in srgb, var(--danger) 30%, var(--bg-secondary));
   --warning: #d99024;
   --warning-fg: #d99024;
   --success: #238636;
@@ -252,7 +253,6 @@ hr {
 
 .btn-primary {
   padding: 0 var(--space-4);
-  font-size: var(--font-size-body);
   background: var(--btn-primary-bg);
   color: var(--btn-primary-fg);
 }
@@ -298,7 +298,7 @@ hr {
 /* Shared input base */
 .input-base,
 .sidebar-search-input,
-.settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input),
+.settings-section input:not([type="checkbox"]):not([type="radio"]),
 .settings-section select {
   font-family: var(--font-family);
   font-size: var(--font-size-ui);
@@ -316,7 +316,7 @@ hr {
 
 .input-base:focus,
 .sidebar-search-input:focus,
-.settings-section input:not([type="checkbox"]):not([type="radio"]):not(.settings-font-size-stepper__input):focus {
+.settings-section input:not([type="checkbox"]):not([type="radio"]):focus {
   outline: none;
   border-color: var(--border-input-focus);
 }
@@ -458,6 +458,55 @@ hr {
 
 .main-chat-host[hidden] {
   display: none !important;
+}
+
+.hotkey-recording-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+  -webkit-backdrop-filter: blur(6px) saturate(0.92);
+  backdrop-filter: blur(6px) saturate(0.92);
+  pointer-events: none;
+}
+
+.hotkey-recording-overlay__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-edge);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow);
+}
+
+.hotkey-recording-overlay__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger-fg);
+  animation: hotkey-recording-dot-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
+}
+
+@keyframes hotkey-recording-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.88);
+  }
 }
 
 @keyframes title-skeleton-pulse {

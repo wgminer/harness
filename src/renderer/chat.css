@@ -320,10 +320,12 @@
 .message-block .content pre {
   margin: var(--space-3) 0;
   padding: var(--space-3);
-  overflow-x: auto;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-edge);
-  border-radius: 2px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  background: #000;
+  border: none;
+  border-radius: var(--radius-md);
 }
 
 .message-block .content pre code {
@@ -338,6 +340,10 @@
   background: transparent;
   padding: 0;
   color: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow-x: visible;
 }
 
 .tool-card {

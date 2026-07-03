@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
-import { ExternalLink, Eye, EyeOff, Settings as SettingsIcon } from "lucide-react";
+import { useState, useEffect, useMemo, useRef, useCallback, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
+import { ExternalLink, Settings as SettingsIcon } from "lucide-react";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import { LLM_CONTEXT_EXPORT_PROMPT } from "../shared/memoryImport";
 import {
@@ -28,8 +29,10 @@ import {
   SettingsField,
   SettingsGroup,
   SettingsHint,
+  SecretField,
   SettingsSwitch,
   SettingsSwitchProvider,
+  SettingsTabPanel,
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
@@ -46,8 +49,7 @@ interface SettingsViewProps {
 }
 
 const SAVE_DEBOUNCE_MS = 500;
-const SAVED_TOAST_VISIBLE_MS = 1200;
-const SAVED_TOAST_FADE_MS = 280;
+const SAVED_TOAST_VISIBLE_MS = 3000;
 
 type PersistedFormState = {
   apiKey: string;
@@ -73,6 +75,29 @@ function serializeFormState(state: PersistedFormState): string {
 
 const D = DEFAULT_SETTINGS;
 
+type SaveStatus = "idle" | "saving" | "saved";
+
+function SettingsSaveToast({
+  status,
+}: {
+  status: SaveStatus;
+}) {
+  const open = status !== "idle";
+  return createPortal(
+    <div
+      className="settings-toast"
+      data-testid="settings-toast"
+      role="status"
+      aria-live="polite"
+      aria-hidden={!open}
+      style={{ display: open ? "block" : "none" }}
+    >
+      {status === "saving" ? "Saving…" : "Saved"}
+    </div>,
+    document.body,
+  );
+}
+
 export function SettingsView({
   onImportComplete,
   onSyncComplete,
@@ -80,9 +105,6 @@ export function SettingsView({
   onSettingsChanged,
 }: SettingsViewProps) {
   const [apiKey, setApiKey] = useState(D.openai?.apiKey ?? "");
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [showTavilyKey, setShowTavilyKey] = useState(false);
-  const [showR2Secret, setShowR2Secret] = useState(false);
   const [switchAnimationsReady, setSwitchAnimationsReady] = useState(false);
 
   const [cleanupEnabled, setCleanupEnabled] = useState(D.transcription?.cleanup?.enabled ?? false);
@@ -110,8 +132,7 @@ export function SettingsView({
   const [openToComposeOnLaunch, setOpenToComposeOnLaunch] = useState(D.chat!.openToComposeOnLaunch);
   const [weatherZip, setWeatherZip] = useState(D.weather!.defaultZip);
   const [tavilyApiKey, setTavilyApiKey] = useState(D.search?.tavilyApiKey ?? "");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [toastFading, setToastFading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [memoryInjectionStrategy, setMemoryInjectionStrategy] = useState<MemoryInjectionStrategy>(
     D.memory!.injectionStrategy
   );
@@ -294,6 +315,107 @@ export function SettingsView({
     };
   }, []);
 
+  const persistSettings = useCallback(async (): Promise<boolean> => {
+    const latest = serializeFormState({
+      apiKey,
+      tavilyApiKey,
+      r2SecretAccessKey,
+      autoSend,
+      globalFnHotkey,
+      openToComposeOnLaunch,
+      cleanupEnabled,
+      cleanupPrompt,
+      transcriptDictionary,
+      weatherZip,
+      memoryInjectionStrategy,
+      r2AccountId,
+      r2Bucket,
+      r2Prefix,
+      r2AccessKeyId,
+    });
+    if (latest === lastPersistedRef.current) {
+      if (hideToastRef.current) clearTimeout(hideToastRef.current);
+      setSaveStatus("saved");
+      hideToastRef.current = setTimeout(() => {
+        setSaveStatus("idle");
+        hideToastRef.current = null;
+      }, SAVED_TOAST_VISIBLE_MS);
+      return true;
+    }
+
+    const prev = JSON.parse(lastPersistedRef.current || "{}") as Partial<PersistedFormState>;
+    const next = JSON.parse(latest) as PersistedFormState;
+
+    if (hideToastRef.current) clearTimeout(hideToastRef.current);
+    setSaveStatus("saving");
+
+    try {
+      await window.electron.settings.set({
+        openai: next.apiKey.trim() ? { apiKey: next.apiKey } : undefined,
+        recording: { autoSend: next.autoSend, globalFnHotkey: next.globalFnHotkey },
+        chat: { openToComposeOnLaunch: next.openToComposeOnLaunch },
+        transcription: {
+          cleanup: {
+            enabled: next.cleanupEnabled,
+            prompt: next.cleanupPrompt,
+          },
+          dictionary: next.transcriptDictionary,
+        },
+        weather: {
+          defaultZip: next.weatherZip.trim(),
+        },
+        search: next.tavilyApiKey.trim() ? { tavilyApiKey: next.tavilyApiKey.trim() } : undefined,
+        memory: {
+          injectionStrategy: next.memoryInjectionStrategy,
+        },
+        sync: {
+          accountId: next.r2AccountId.trim(),
+          bucket: next.r2Bucket.trim(),
+          prefix: next.r2Prefix.trim() || D.sync!.prefix,
+          accessKeyId: next.r2AccessKeyId.trim(),
+        },
+      });
+      if (next.r2SecretAccessKey !== (prev.r2SecretAccessKey ?? "")) {
+        await window.electron.sync.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
+      }
+      const r2Changed =
+        next.r2AccountId !== prev.r2AccountId ||
+        next.r2Bucket !== prev.r2Bucket ||
+        next.r2Prefix !== prev.r2Prefix ||
+        next.r2AccessKeyId !== prev.r2AccessKeyId ||
+        next.r2SecretAccessKey !== prev.r2SecretAccessKey;
+      if (r2Changed) setDataStatus(await window.electron.memory.getDataStatus());
+      lastPersistedRef.current = latest;
+      setSaveStatus("saved");
+      onSettingsChanged?.();
+      hideToastRef.current = setTimeout(() => {
+        setSaveStatus("idle");
+        hideToastRef.current = null;
+      }, SAVED_TOAST_VISIBLE_MS);
+      return true;
+    } catch {
+      setSaveStatus("idle");
+      return false;
+    }
+  }, [
+    apiKey,
+    autoSend,
+    globalFnHotkey,
+    openToComposeOnLaunch,
+    cleanupEnabled,
+    cleanupPrompt,
+    transcriptDictionary,
+    weatherZip,
+    tavilyApiKey,
+    memoryInjectionStrategy,
+    r2AccountId,
+    r2Bucket,
+    r2Prefix,
+    r2AccessKeyId,
+    r2SecretAccessKey,
+    onSettingsChanged,
+  ]);
+
   useEffect(() => {
     if (!settingsHydratedRef.current) return;
     if (skipAutosaveRef.current) {
@@ -320,88 +442,29 @@ export function SettingsView({
     });
     if (current === lastPersistedRef.current) return;
 
-    const timer = setTimeout(async () => {
-      const latest = serializeFormState({
-        apiKey,
-        tavilyApiKey,
-        r2SecretAccessKey,
-        autoSend,
-        globalFnHotkey,
-        openToComposeOnLaunch,
-        cleanupEnabled,
-        cleanupPrompt,
-        transcriptDictionary,
-        weatherZip,
-        memoryInjectionStrategy,
-        r2AccountId,
-        r2Bucket,
-        r2Prefix,
-        r2AccessKeyId,
-      });
-      if (latest === lastPersistedRef.current) return;
-
-      const prev = JSON.parse(lastPersistedRef.current || "{}") as Partial<PersistedFormState>;
-      const next = JSON.parse(latest) as PersistedFormState;
-
-      if (hideToastRef.current) clearTimeout(hideToastRef.current);
-      setToastFading(false);
-      setSaveStatus("saving");
-
-      try {
-        await window.electron.settings.set({
-          openai: next.apiKey.trim() ? { apiKey: next.apiKey } : undefined,
-          recording: { autoSend: next.autoSend, globalFnHotkey: next.globalFnHotkey },
-          chat: { openToComposeOnLaunch: next.openToComposeOnLaunch },
-          transcription: {
-            cleanup: {
-              enabled: next.cleanupEnabled,
-              prompt: next.cleanupPrompt,
-            },
-            dictionary: next.transcriptDictionary,
-          },
-          weather: {
-            defaultZip: next.weatherZip.trim(),
-          },
-          search: next.tavilyApiKey.trim() ? { tavilyApiKey: next.tavilyApiKey.trim() } : undefined,
-          memory: {
-            injectionStrategy: next.memoryInjectionStrategy,
-          },
-          sync: {
-            accountId: next.r2AccountId.trim(),
-            bucket: next.r2Bucket.trim(),
-            prefix: next.r2Prefix.trim() || D.sync!.prefix,
-            accessKeyId: next.r2AccessKeyId.trim(),
-          },
-        });
-        if (next.r2SecretAccessKey !== (prev.r2SecretAccessKey ?? "")) {
-          await window.electron.sync.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
-        }
-        const r2Changed =
-          next.r2AccountId !== prev.r2AccountId ||
-          next.r2Bucket !== prev.r2Bucket ||
-          next.r2Prefix !== prev.r2Prefix ||
-          next.r2AccessKeyId !== prev.r2AccessKeyId ||
-          next.r2SecretAccessKey !== prev.r2SecretAccessKey;
-        if (r2Changed) void refreshDataStatus();
-        lastPersistedRef.current = latest;
-        setSaveStatus("saved");
-        onSettingsChanged?.();
-        hideToastRef.current = setTimeout(() => {
-          setToastFading(true);
-          hideToastRef.current = setTimeout(() => {
-            setSaveStatus("idle");
-            setToastFading(false);
-            hideToastRef.current = null;
-          }, SAVED_TOAST_FADE_MS);
-        }, SAVED_TOAST_VISIBLE_MS);
-      } catch {
-        setSaveStatus("idle");
-        setToastFading(false);
-      }
+    const timer = setTimeout(() => {
+      void persistSettings();
     }, SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [apiKey, autoSend, globalFnHotkey, openToComposeOnLaunch, cleanupEnabled, cleanupPrompt, transcriptDictionary, weatherZip, tavilyApiKey, memoryInjectionStrategy, r2AccountId, r2Bucket, r2Prefix, r2AccessKeyId, r2SecretAccessKey, onSettingsChanged]);
+  }, [
+    apiKey,
+    autoSend,
+    globalFnHotkey,
+    openToComposeOnLaunch,
+    cleanupEnabled,
+    cleanupPrompt,
+    transcriptDictionary,
+    weatherZip,
+    tavilyApiKey,
+    memoryInjectionStrategy,
+    r2AccountId,
+    r2Bucket,
+    r2Prefix,
+    r2AccessKeyId,
+    r2SecretAccessKey,
+    persistSettings,
+  ]);
 
   const openCleanupPromptModal = () => {
     setCleanupPromptDraft(cleanupPrompt);
@@ -738,7 +801,7 @@ export function SettingsView({
         scrolled={headerScrolled}
         actions={
           <div
-            className={`settings-tabs settings-tabs--header${headerScrolled ? " settings-tabs--latched" : ""}`}
+            className="settings-tabs settings-tabs--header"
             role="tablist"
             aria-label={`${RIG_PAGE_TITLE} sections`}
           >
@@ -767,37 +830,15 @@ export function SettingsView({
       <div ref={scrollRef} className="workspace-scroll settings-scroll" onScroll={onScroll}>
         <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
-          {activeTab === "general" && <section
-            id="settings-panel-general"
-            className="settings-tab-panel"
-            role="tabpanel"
-            aria-labelledby="settings-tab-general"
-          >
+          {activeTab === "general" && <SettingsTabPanel id="general">
             <SettingsGroup title="OpenAI" description="API key for chat. Voice transcription runs on your Mac.">
-              <div className="settings-api-key-row">
-                <input
-                  id="settings-api-key"
-                  type={showApiKey ? "text" : "password"}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-…"
-                  autoComplete="off"
-                  spellCheck={false}
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  aria-label="OpenAI API key"
-                />
-                <button
-                  type="button"
-                  className="btn btn-icon"
-                  aria-pressed={showApiKey}
-                  aria-label={showApiKey ? "Hide API key" : "Show API key"}
-                  title={showApiKey ? "Hide key" : "Show key"}
-                  onClick={() => setShowApiKey((v) => !v)}
-                >
-                  {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
+              <SecretField
+                id="settings-api-key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-…"
+                ariaLabel="OpenAI API key"
+              />
             </SettingsGroup>
 
             <SettingsGroup
@@ -810,30 +851,14 @@ export function SettingsView({
               }
             >
               <SettingsField label="Tavily API key" htmlFor="settings-tavily-key">
-                <div className="settings-api-key-row">
-                  <input
-                    id="settings-tavily-key"
-                    data-testid="settings-tavily-key"
-                    type={showTavilyKey ? "text" : "password"}
-                    value={tavilyApiKey}
-                    onChange={(e) => setTavilyApiKey(e.target.value)}
-                    placeholder="tvly-…"
-                    autoComplete="off"
-                    spellCheck={false}
-                    data-lpignore="true"
-                    data-1p-ignore="true"
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-icon"
-                    aria-pressed={showTavilyKey}
-                    aria-label={showTavilyKey ? "Hide Tavily key" : "Show Tavily key"}
-                    title={showTavilyKey ? "Hide key" : "Show key"}
-                    onClick={() => setShowTavilyKey((v) => !v)}
-                  >
-                    {showTavilyKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
+                <SecretField
+                  id="settings-tavily-key"
+                  testId="settings-tavily-key"
+                  value={tavilyApiKey}
+                  onChange={(e) => setTavilyApiKey(e.target.value)}
+                  placeholder="tvly-…"
+                  ariaLabel="Tavily API key"
+                />
               </SettingsField>
             </SettingsGroup>
 
@@ -908,14 +933,9 @@ export function SettingsView({
                 onChange={(e) => setAutoSend(e.target.checked)}
               />
             </SettingsGroup>
-          </section>}
+          </SettingsTabPanel>}
 
-          {activeTab === "appearance" && <section
-            id="settings-panel-appearance"
-            className="settings-tab-panel"
-            role="tabpanel"
-            aria-labelledby="settings-tab-appearance"
-          >
+          {activeTab === "appearance" && <SettingsTabPanel id="appearance">
             <SettingsGroup
               title="Grid overlay"
               description="Optional visual grid for alignment checks while designing screens. Overlay is visual only and does not capture clicks."
@@ -955,14 +975,9 @@ export function SettingsView({
                 ))}
               </div>
             </SettingsGroup>
-          </section>}
+          </SettingsTabPanel>}
 
-          {activeTab === "voice" && <section
-            id="settings-panel-voice"
-            className="settings-tab-panel"
-            role="tabpanel"
-            aria-labelledby="settings-tab-voice"
-          >
+          {activeTab === "voice" && <SettingsTabPanel id="voice">
             {isMac ? (
               <SettingsGroup
                 title="On-device transcription"
@@ -992,7 +1007,7 @@ export function SettingsView({
               {cleanupEnabled ? (
                 <SettingsActions>
                   <button type="button" className="btn" onClick={openCleanupPromptModal}>
-                    Edit prompt
+                    Edit Prompt
                   </button>
                 </SettingsActions>
               ) : null}
@@ -1022,7 +1037,7 @@ export function SettingsView({
               </div>
               <SettingsActions>
                 <button type="button" className="btn" onClick={openAddDictionaryModal}>
-                  Add correction
+                  Add Correction
                 </button>
               </SettingsActions>
             </SettingsGroup>
@@ -1077,7 +1092,7 @@ export function SettingsView({
                             }, 800);
                           }}
                         >
-                          Ask for permission <ExternalLink size={14} aria-hidden />
+                          Ask For Permission <ExternalLink size={14} aria-hidden />
                         </button>
                       )}
                       <button
@@ -1091,7 +1106,7 @@ export function SettingsView({
                           }, 1500);
                         }}
                       >
-                        Open accessibility <ExternalLink size={14} aria-hidden />
+                        Open Accessibility <ExternalLink size={14} aria-hidden />
                       </button>
                     </SettingsActions>
                     <SettingsHint flush>
@@ -1105,14 +1120,9 @@ export function SettingsView({
                 )}
               </SettingsGroup>
             )}
-          </section>}
+          </SettingsTabPanel>}
 
-          {activeTab === "memory" && <section
-            id="settings-panel-memory"
-            className="settings-tab-panel"
-            role="tabpanel"
-            aria-labelledby="settings-tab-memory"
-          >
+          {activeTab === "memory" && <SettingsTabPanel id="memory">
             <SettingsGroup
               title="Your facts"
               description="Stable facts stored locally and synced with your backup. Pick a short label and a one-line value; the same label updates the existing entry."
@@ -1137,7 +1147,7 @@ export function SettingsView({
                   data-testid="settings-add-memory"
                   onClick={openAddMemoryModal}
                 >
-                  Add entry
+                  Add Entry
                 </button>
               </SettingsActions>
             </SettingsGroup>
@@ -1159,10 +1169,10 @@ export function SettingsView({
                   onClick={() => setExportPromptOpen((open) => !open)}
                   aria-expanded={exportPromptOpen}
                 >
-                  {exportPromptOpen ? "Hide export prompt" : "Show export prompt"}
+                  {exportPromptOpen ? "Hide Export Prompt" : "Show Export Prompt"}
                 </button>
                 <button type="button" className="btn" onClick={() => void copyExportPrompt()}>
-                  Copy export prompt
+                  Copy Export Prompt
                 </button>
               </SettingsActions>
               {exportPromptOpen && (
@@ -1196,7 +1206,7 @@ export function SettingsView({
                   onClick={() => void runLlmContextImport()}
                   disabled={llmImportBusy || !llmImportDraft.trim()}
                 >
-                  {llmImportBusy ? "Importing…" : "Import facts"}
+                  {llmImportBusy ? "Importing…" : "Import Facts"}
                 </button>
               </SettingsActions>
               {llmImportMessage && <SettingsHint flush>{llmImportMessage}</SettingsHint>}
@@ -1220,7 +1230,7 @@ export function SettingsView({
                   onClick={() => void runCompileNow()}
                   disabled={compileBusy}
                 >
-                  {compileBusy ? "Learning…" : "Learn now"}
+                  {compileBusy ? "Learning…" : "Learn Now"}
                 </button>
               </SettingsActions>
               {compileStatus && (
@@ -1251,7 +1261,7 @@ export function SettingsView({
                 <SettingsHint flush>{compileMessage}</SettingsHint>
               )}
             </SettingsGroup>
-          </section>}
+          </SettingsTabPanel>}
 
           <Modal
             open={cleanupPromptModalOpen}
@@ -1264,7 +1274,7 @@ export function SettingsView({
                   Cancel
                 </button>
                 <button type="button" className="btn" onClick={resetCleanupPromptDraft}>
-                  Reset to default
+                  Reset To Default
                 </button>
                 <button
                   type="button"
@@ -1442,12 +1452,7 @@ export function SettingsView({
             </div>
           </Modal>
 
-          {activeTab === "data" && <section
-            id="settings-panel-data"
-            className="settings-tab-panel"
-            role="tabpanel"
-            aria-labelledby="settings-tab-data"
-          >
+          {activeTab === "data" && <SettingsTabPanel id="data">
             <SettingsGroup
               title="Local data"
               description="Harness stores conversations, notes, and settings on this device. Backup syncs everything except local recordings."
@@ -1458,7 +1463,7 @@ export function SettingsView({
                 </button>
                 {dataStatus?.legacyMemoryExists && (
                   <button type="button" className="btn" onClick={() => void runCleanupLegacyMemory()} disabled={cleanupLegacyBusy}>
-                    {cleanupLegacyBusy ? "Cleaning…" : "Clean legacy memory folder"}
+                    {cleanupLegacyBusy ? "Cleaning…" : "Clean Legacy Memory Folder"}
                   </button>
                 )}
               </SettingsActions>
@@ -1521,30 +1526,13 @@ export function SettingsView({
                 />
               </SettingsField>
               <SettingsField label="Secret access key" htmlFor="settings-r2-secret">
-                <div className="settings-api-key-row">
-                  <input
-                    id="settings-r2-secret"
-                    type={showR2Secret ? "text" : "password"}
-                    value={r2SecretAccessKey}
-                    onChange={(e) => setR2SecretAccessKey(e.target.value)}
-                    placeholder="Secret access key"
-                    autoComplete="off"
-                    spellCheck={false}
-                    data-lpignore="true"
-                    data-1p-ignore="true"
-                    aria-label="R2 secret access key"
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-icon"
-                    aria-pressed={showR2Secret}
-                    aria-label={showR2Secret ? "Hide secret access key" : "Show secret access key"}
-                    title={showR2Secret ? "Hide key" : "Show key"}
-                    onClick={() => setShowR2Secret((v) => !v)}
-                  >
-                    {showR2Secret ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
+                <SecretField
+                  id="settings-r2-secret"
+                  value={r2SecretAccessKey}
+                  onChange={(e) => setR2SecretAccessKey(e.target.value)}
+                  placeholder="Secret access key"
+                  ariaLabel="R2 secret access key"
+                />
               </SettingsField>
               {dataStatus?.sync.statusLine && (
                 <p className="settings-data-status" role="status">
@@ -1561,7 +1549,7 @@ export function SettingsView({
                   onClick={() => void testR2Connection()}
                   disabled={syncTestBusy}
                 >
-                  {syncTestBusy ? "Testing…" : "Test connection"}
+                  {syncTestBusy ? "Testing…" : "Test Connection"}
                 </button>
                 <button
                   type="button"
@@ -1569,7 +1557,7 @@ export function SettingsView({
                   onClick={() => void runSyncNow()}
                   disabled={syncBusy || !dataStatus?.sync.configured}
                 >
-                  {syncBusy ? "Syncing…" : "Sync now"}
+                  {syncBusy ? "Syncing…" : "Sync Now"}
                 </button>
               </SettingsActions>
               {syncMessage && <SettingsHint flush>{syncMessage}</SettingsHint>}
@@ -1592,7 +1580,7 @@ export function SettingsView({
                       onClick={runImport}
                       disabled={importing}
                     >
-                      {importing ? "Importing…" : "Import from ChatGPT"}
+                      {importing ? "Importing…" : "Import From ChatGPT"}
                     </button>
                   </SettingsActions>
                   {importStatus != null && (
@@ -1629,7 +1617,7 @@ export function SettingsView({
                       onClick={runClaudeImport}
                       disabled={claudeImporting}
                     >
-                      {claudeImporting ? "Importing…" : "Import from Claude"}
+                      {claudeImporting ? "Importing…" : "Import From Claude"}
                     </button>
                   </SettingsActions>
                   {claudeImportStatus != null && (
@@ -1656,20 +1644,11 @@ export function SettingsView({
               </details>
             </SettingsGroup>
 
-          </section>}
+          </SettingsTabPanel>}
         </div>
         </SettingsSwitchProvider>
       </div>
-      <div
-        className={`settings-toast${
-          saveStatus !== "idle" ? " settings-toast--visible" : ""
-        }${toastFading ? " settings-toast--fading" : ""}`}
-        role="status"
-        aria-live="polite"
-        aria-hidden={saveStatus === "idle"}
-      >
-        {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : ""}
-      </div>
+      <SettingsSaveToast status={saveStatus} />
     </div>
   );
 }

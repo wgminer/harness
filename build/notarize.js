@@ -39,12 +39,27 @@ module.exports = async function afterSign(context) {
     return;
   }
 
-  await notarize({
-    appBundleId: context.packager.config.appId,
-    appPath,
-    appleId,
-    appleIdPassword,
-    teamId,
-    tool: "notarytool",
-  });
+  // The upload to Apple's notary service can fail transiently (e.g. connection
+  // reset mid-upload). Retry so a network blip doesn't kill a long build.
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await notarize({
+        appBundleId: context.packager.config.appId,
+        appPath,
+        appleId,
+        appleIdPassword,
+        teamId,
+        tool: "notarytool",
+      });
+      return;
+    } catch (err) {
+      if (attempt === maxAttempts) throw err;
+      const delaySeconds = 30 * attempt;
+      console.warn(
+        `Notarization attempt ${attempt}/${maxAttempts} failed: ${err.message}\nRetrying in ${delaySeconds}s...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delaySeconds * 1000));
+    }
+  }
 };
