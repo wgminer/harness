@@ -302,6 +302,7 @@ export function ChatView({
         setPolishHintAfterDictation(false);
         setTitleModalOpen(false);
         resetComposerInputRef.current();
+        focusComposer();
       }
       return;
     }
@@ -325,6 +326,7 @@ export function ChatView({
     setSavedToNotesId(null);
     setPolishHintAfterDictation(false);
     setTitleModalOpen(false);
+    focusComposer();
 
     let cancelled = false;
     window.electron.memory.getMessages(effectiveConversationId).then((list) => {
@@ -343,7 +345,7 @@ export function ChatView({
     return () => {
       cancelled = true;
     };
-  }, [effectiveConversationId]);
+  }, [effectiveConversationId, focusComposer]);
 
   useEffect(() => {
     const unsub = window.electron.chat.onToolPanelUpdate((cid, toolName, payload) => {

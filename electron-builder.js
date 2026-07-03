@@ -27,6 +27,9 @@ module.exports = {
     "resources",
     "!resources/HarnessSpeech",
     "!resources/HarnessFnMonitor",
+    // Legacy local Parakeet model weights (~2.3 GB); gitignored, unused at
+    // runtime, and must never be packed into the app.
+    "!resources/parakeet",
     "package.json",
   ],
   extraResources,

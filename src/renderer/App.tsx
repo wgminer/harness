@@ -5,6 +5,7 @@ import { TasksView } from "./TasksView";
 import { NotesView } from "./WritingSurfaceView";
 import { Sidebar } from "./Sidebar";
 import { SetupNoticeModal } from "./SetupNoticeModal";
+import { HotkeyRecordingOverlay } from "./HotkeyRecordingOverlay";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan, type Settings } from "../shared/types";
@@ -63,6 +64,7 @@ export default function App() {
 
   const hotkeyRecordingRef = useRef(false);
   const hotkeyCancelledRef = useRef(false);
+  const [globalHotkeyRecording, setGlobalHotkeyRecording] = useState(false);
 
   const conversationIdRef = useRef(conversationId);
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
@@ -333,6 +335,7 @@ export default function App() {
     const unsub = window.electron.recording.onStartSilent(async () => {
       hotkeyCancelledRef.current = false;
       hotkeyRecordingRef.current = true;
+      setGlobalHotkeyRecording(true);
       if (await window.electron.env.isHarnessE2E()) {
         return;
       }
@@ -340,6 +343,7 @@ export default function App() {
         await hotkeyRecorder.start();
       } catch (_) {
         hotkeyRecordingRef.current = false;
+        setGlobalHotkeyRecording(false);
       }
     });
     return unsub;
@@ -350,6 +354,7 @@ export default function App() {
   useEffect(() => {
     const unsub = window.electron.recording.onStopAndPaste(async (wasFocused: boolean) => {
       hotkeyRecordingRef.current = false;
+      setGlobalHotkeyRecording(false);
       try {
         const wav = (await window.electron.env.isHarnessE2E())
           ? new ArrayBuffer(0)
@@ -404,6 +409,7 @@ export default function App() {
   useEffect(() => {
     const unsub = window.electron.recording.onCancel(async () => {
       hotkeyCancelledRef.current = true;
+      setGlobalHotkeyRecording(false);
       if (hotkeyRecordingRef.current) {
         hotkeyRecordingRef.current = false;
         try { await hotkeyRecorder.stop(); } catch (_) { /* already stopped */ }
@@ -529,6 +535,7 @@ export default function App() {
         onConfigure={openSettingsForGap}
         onDismiss={dismissSetupNotice}
       />
+      <HotkeyRecordingOverlay active={globalHotkeyRecording} />
     </div>
   );
 }

@@ -1,6 +1,9 @@
-/* System page layout */
+/* System page layout — block shell (header + scroll region) avoids flex reflow on save */
 .settings-page {
-  position: relative;
+  display: block;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
   --settings-radius-sm: var(--space-2);
   --settings-radius-md: var(--space-3);
@@ -9,13 +12,6 @@
 
 .settings-page .btn {
   border-radius: var(--settings-radius-sm);
-}
-
-/* Inputs in .settings-section inherit base.css; tune surface + radius here. */
-.settings-page .settings-section input:not([type="checkbox"]):not([type="radio"]),
-.settings-page .settings-section select {
-  border-radius: var(--settings-radius-sm);
-  background: var(--bg-secondary);
 }
 
 /* Bare controls not wrapped in .settings-section */
@@ -61,8 +57,10 @@
 }
 
 .settings-scroll {
-  flex: 1;
-  min-height: 0;
+  display: block;
+  flex: none;
+  min-height: auto;
+  height: calc(100% - var(--shell-bar-height));
   overflow-y: auto;
 }
 
@@ -82,10 +80,6 @@
   margin-left: auto;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.settings-tabs--latched {
-  opacity: 1;
 }
 
 .settings-tab {
@@ -150,10 +144,8 @@
   line-height: var(--line-height-normal);
 }
 
-.settings-group__content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+.settings-group__content > * + * {
+  margin-top: var(--space-3);
 }
 
 .settings-group__lead code,
@@ -184,10 +176,6 @@
   margin-bottom: var(--space-4);
 }
 
-.settings-section .btn:not(.btn-icon) {
-  padding: 0 var(--space-3);
-}
-
 .settings-section label {
   display: block;
   color: var(--fg-muted);
@@ -195,11 +183,13 @@
   font-size: var(--font-size-caption);
 }
 
-
-.settings-section input:not([type="checkbox"]):not([type="radio"]) {
+.settings-section input:not([type="checkbox"]):not([type="radio"]),
+.settings-section select {
   font-size: var(--font-size);
   width: 100%;
   max-width: 400px;
+  border-radius: var(--settings-radius-sm);
+  background: var(--bg-secondary);
 }
 
 .settings-api-key-row {
@@ -209,58 +199,10 @@
   max-width: 400px;
 }
 
-.settings-api-key-row input:not([type="checkbox"]):not([type="radio"]) {
-  flex: 1;
-  min-width: 0;
-  max-width: none;
-}
-
 .settings-api-key-row .btn {
   flex-shrink: 0;
   align-self: stretch;
 }
-
-.settings-group__lead--tight {
-  margin-top: 8px;
-  margin-bottom: var(--space-3);
-}
-
-.settings-section--usage {
-  margin-top: 20px;
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border-edge);
-}
-
-.usage-stats {
-  margin: 0 0 12px;
-  font-size: var(--font-size-ui);
-  max-width: 400px;
-}
-
-.usage-stats__row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border-edge);
-}
-
-.usage-stats__row:last-child {
-  border-bottom: none;
-}
-
-.usage-stats__row dt {
-  margin: 0;
-  color: var(--fg-muted);
-  font-weight: normal;
-}
-
-.usage-stats__row dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--fg);
-}
-
 
 /* iOS-style settings switches */
 .settings-switch-row {
@@ -298,7 +240,7 @@
 .settings-switch-thumb {
   position: absolute;
   top: 50%;
-  left: var(--space-1);
+  left: 1px;
   width: var(--space-4);
   height: var(--space-4);
   border-radius: 50%;
@@ -321,7 +263,7 @@
 }
 
 .settings-switch-row:has(.settings-switch-input:checked) .settings-switch-thumb {
-  transform: translateX(var(--space-3)) translateY(-50%);
+  transform: translateX(calc(var(--grid) * 9 - var(--space-4) - 4px)) translateY(-50%);
 }
 
 .settings-switch-row:has(.settings-switch-input:focus-visible) .settings-switch-track {
@@ -353,7 +295,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin: 0;
+  margin: 1rem 0;
 }
 
 .settings-llm-import-prompt {
@@ -442,12 +384,13 @@
 
 .settings-entry-row__actions .btn-icon[data-action="edit"] {
   color: var(--fg-muted);
+  border-color: var(--accent-muted);
 }
 
 .settings-entry-row__actions .btn-icon[data-action="edit"]:hover:not(:disabled) {
   color: var(--btn-primary-fg);
   background: var(--btn-primary-bg);
-  border: 1px solid var(--border-input);
+  border-color: var(--btn-primary-fg);
 }
 
 .settings-entry-row__actions .btn-icon[data-action="delete"] {
@@ -456,42 +399,8 @@
 
 .settings-entry-row__actions .btn-icon[data-action="delete"]:hover:not(:disabled) {
   color: var(--danger);
-  background: var(--danger-muted);
-  box-shadow: var(--btn-shadow-hover);
-}
-
-.settings-entry-list {
-.settings-section--inline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.settings-section--inline input:not([type="checkbox"]):not([type="radio"]) {
-  font-family: var(--font-family);
-  font-size: var(--font-size);
-  height: var(--input-height);
-  padding: 0 var(--space-3);
-  background: var(--bg-secondary);
-  color: var(--fg);
-  border: 1px solid var(--border-input);
-}
-
-.settings-section--inline input:not([type="checkbox"]):not([type="radio"]):focus {
-  outline: none;
-  border-color: var(--border-input-focus);
-}
-
-.settings-input--key {
-  width: 120px;
-  max-width: 120px;
-  flex-shrink: 0;
-}
-
-.settings-input--value {
-  flex: 1;
-  min-width: var(--space-35);
+  background: var(--danger-surface);
+  border-color: var(--danger);
 }
 
 .settings-import-status {
@@ -571,115 +480,21 @@
   margin-bottom: 0;
 }
 
-.settings-data-status--error {
-  border: 1px solid var(--accent-border);
-  background: var(--accent-muted);
-}
-
-.settings-data-status__path-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2) 8px;
-}
-
-.settings-data-status__path-row code {
-  word-break: break-all;
-}
-
-.settings-data-status__change-btn {
-  flex-shrink: 0;
-  height: var(--space-6);
-  min-height: var(--space-6);
-  padding: 0 8px;
-  font-size: var(--font-size-caption);
-}
-
-.settings-suggestion-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.settings-suggestion-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.settings-suggestion-path {
-  font-size: var(--font-size-caption);
-  color: var(--fg-muted);
-  background: transparent;
-  padding: 0;
-  word-break: break-all;
-}
-
-.settings-section select {
-  font-size: var(--font-size);
-  width: 100%;
-  max-width: 400px;
-}
-
-.settings-section textarea {
-  font-family: var(--font-family);
-  font-size: var(--font-size-ui);
-  line-height: var(--line-height-normal);
-  width: 100%;
-  max-width: 400px;
-  min-height: calc(var(--grid) * 24);
-  padding: var(--space-2) var(--space-3);
-  resize: vertical;
-  background: var(--bg-secondary);
-  color: var(--fg);
-  border: 1px solid var(--border-input);
-  border-radius: var(--radius-sm);
-}
-
-.settings-page .settings-section textarea {
-  border-radius: var(--settings-radius-sm);
-  background: var(--bg-secondary);
-}
-
-.settings-section select:focus,
-.settings-section textarea:focus {
-  outline: none;
-  border-color: var(--border-input-focus);
-}
-
-/* Settings save indicator — pinned to bottom of pane, fades out after save */
+/* Settings save indicator — fixed to viewport bottom; display toggled inline */
 .settings-toast {
-  position: absolute;
+  position: fixed;
   bottom: var(--space-4);
-  left: 50%;
-  transform: translateX(-50%);
+  right: var(--space-4);
   padding: var(--space-1) var(--space-4);
   font-size: var(--font-size-caption);
-  background: var(--bg-elevated);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+  background: var(--bg-secondary);
   color: var(--fg-muted);
-  border: 1px solid var(--border-edge);
+  border: 1px solid var(--border-input);
   box-shadow: var(--shadow);
-  border-radius: var(--settings-radius-sm);
-  z-index: 10;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    opacity var(--motion-duration-normal) var(--motion-ease-out),
-    visibility var(--motion-duration-normal) var(--motion-ease-out);
-}
-
-.settings-toast--visible {
-  visibility: visible;
-  opacity: 1;
-}
-
-.settings-toast--fading {
-  opacity: 0;
+  border-radius: var(--space-2);
+  z-index: 3000;
 }
 
 .settings-page .workspace-header-title-row svg {

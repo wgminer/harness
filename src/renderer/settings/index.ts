@@ -6,3 +6,5 @@ export { SettingsSwitchProvider, useSettingsSwitchAnimationsReady } from "./Sett
 export { SettingsActions, type SettingsActionsProps } from "./SettingsActions";
 export { SettingsHint, type SettingsHintProps } from "./SettingsHint";
 export { SettingsEntryRow, type SettingsEntryRowProps } from "./SettingsEntryRow";
+export { SecretField, type SecretFieldProps } from "./SecretField";
+export { SettingsTabPanel, type SettingsTabPanelProps } from "./SettingsTabPanel";
