@@ -16,7 +16,7 @@ export default [
     ],
   },
   {
-    files: ['scripts/**/*.js', 'e2e/**/*.cjs', 'electron-builder.js'],
+    files: ['scripts/**/*.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       globals: globals.node,

@@ -40,35 +40,20 @@ jobs:
       - name: Grid audit
         run: npm run grid:audit
 
-  e2e:
-    name: Playwright (Electron)
-    runs-on: macos-latest
-    timeout-minutes: 30
+  rust:
+    name: Rust unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build and run Playwright
-        run: npm run test:e2e
-        env:
-          CI: true
-
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
+      - name: Run Rust tests
+        working-directory: src-tauri
+        run: cargo test --lib
 
   ios:
     name: iOS unit tests

@@ -7,6 +7,15 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 function findBuiltApp(root) {
+  const candidates = [
+    path.join(root, "src-tauri", "target", "release", "bundle", "macos", "Harness.app"),
+    path.join(root, "dist", "mac-universal", "Harness.app"),
+    path.join(root, "dist", "mac-arm64", "Harness.app"),
+    path.join(root, "dist", "mac", "Harness.app"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
   const dist = path.join(root, "dist");
   if (!fs.existsSync(dist)) return null;
   for (const sub of ["mac-universal", "mac-arm64", "mac"]) {

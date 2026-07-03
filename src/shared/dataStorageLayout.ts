@@ -1,4 +1,4 @@
-/** Label for the Settings → Data action that reveals the Electron userData folder. */
+/** Label for the Settings → Data action that reveals the app data folder. */
 export function appDataFolderButtonLabel(platform: NodeJS.Platform): string {
   if (platform === "darwin") return "Show In Finder";
   if (platform === "win32") return "Show In File Explorer";
@@ -6,7 +6,7 @@ export function appDataFolderButtonLabel(platform: NodeJS.Platform): string {
 }
 
 /** ASCII overview of Harness on-disk layout (shown on System → Data). */
-export const DATA_STORAGE_DIAGRAM = `Harness app data folder (Electron userData)
+export const DATA_STORAGE_DIAGRAM = `Harness app data folder
 │
 ├─ local-data/ ........................ primary storage
 │  ├─ app-state/

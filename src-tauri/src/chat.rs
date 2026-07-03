@@ -1,0 +1,796 @@
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::time::Duration;
+
+use regex::Regex;
+use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter};
+use tokio::sync::{Mutex, oneshot};
+use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
+
+use crate::assistant_tools::{execute_assistant_tool, is_assistant_tool_name};
+use crate::conversation_title::schedule_conversation_title_refinement;
+use crate::credentials::resolve_openai_api_key;
+use crate::customization::{execute_customization_tool, is_customization_tool_name};
+use crate::env_util::is_harness_e2e;
+use crate::file_tools::execute_file_tool;
+use crate::memory::{
+    append_message, get_messages, get_user_memory, pop_last_user_message, AppendMessageMeta,
+    AppState, ToolCallRecord,
+};
+use crate::openai::{map_http_cancel, ChatMessageParam, OpenAIChatClient, OpenAIError};
+use crate::settings;
+
+const DICTATION_POLISH_INSTRUCTION: &str =
+    "Polish and clarify the following dictation. Fix grammar and wording; keep the meaning. Reply with a clear, concise version.";
+
+const HARNESS_E2E_ASSISTANT_REPLY: &str = "Harness E2E assistant reply.";
+
+const MEMORY_STOPWORDS: &[&str] = &[
+    "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "how", "i", "if", "in",
+    "is", "it", "me", "my", "of", "on", "or", "that", "the", "this", "to", "was", "we", "with",
+    "you", "your",
+];
+
+const MEMORY_ALWAYS_RELEVANT_KEY_PARTS: &[&str] =
+    &["writing", "tone", "style", "voice", "goal", "audience", "constraint"];
+const RELEVANT_MAX_ENTRIES: usize = 6;
+const RELEVANT_MAX_CHARS: usize = 900;
+const RELEVANT_MIN_SCORE: f64 = 0.65;
+const BUDGET_MAX_CHARS: usize = 900;
+const RELEVANT_FALLBACK_COUNT: usize = 3;
+
+struct PendingGatedTool {
+    tool: String,
+    args: Value,
+    respond_to: oneshot::Sender<String>,
+}
+
+#[derive(Clone)]
+pub struct ChatController {
+    app: AppHandle,
+    state: AppState,
+    cancel_token: Arc<Mutex<Option<CancellationToken>>>,
+    pending_gated: Arc<Mutex<HashMap<String, PendingGatedTool>>>,
+}
+
+impl ChatController {
+    pub fn new(app: AppHandle, state: AppState) -> Self {
+        Self {
+            app,
+            state,
+            cancel_token: Arc::new(Mutex::new(None)),
+            pending_gated: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    fn active_chat_model_label() -> String {
+        crate::openai::openai_chat_model()
+    }
+
+    fn harness_e2e_stream_delay_ms() -> u64 {
+        std::env::var("HARNESS_E2E_STREAM_MS")
+            .ok()
+            .and_then(|raw| raw.parse::<u64>().ok())
+            .filter(|ms| *ms > 0)
+            .unwrap_or(0)
+    }
+
+    fn emit_stream_chunk(&self, conversation_id: &str, chunk: &str) {
+        let _ = self.app.emit(
+            "chat-stream-chunk",
+            json!({ "conversationId": conversation_id, "chunk": chunk }),
+        );
+    }
+
+    fn emit_stream_end(&self, conversation_id: &str) {
+        let _ = self.app.emit(
+            "chat-stream-end",
+            json!({ "conversationId": conversation_id }),
+        );
+    }
+
+    fn emit_tool_panel_update(&self, conversation_id: &str, tool_name: &str, payload: Value) {
+        let _ = self.app.emit(
+            "chat-tool-panel-update",
+            json!({
+                "conversationId": conversation_id,
+                "toolName": tool_name,
+                "payload": payload
+            }),
+        );
+    }
+
+    pub async fn stop(&self) {
+        let guard = self.cancel_token.lock().await;
+        if let Some(token) = guard.as_ref() {
+            token.cancel();
+        }
+    }
+
+    pub async fn resolve_gated_tool(&self, pending_id: &str, action: &str) {
+        let pending = {
+            let mut map = self.pending_gated.lock().await;
+            map.remove(pending_id)
+        };
+        let Some(pending) = pending else {
+            return;
+        };
+        let result = if action == "proceed" {
+            execute_assistant_tool(&self.state, &pending.tool, pending.args)
+                .await
+                .unwrap_or_else(|e| json!({ "error": e.to_string() }).to_string())
+        } else {
+            json!({ "cancelled": true, "message": "User cancelled the action." }).to_string()
+        };
+        let _ = pending.respond_to.send(result);
+    }
+
+    pub async fn send(&self, conversation_id: &str, user_content: &str) -> Result<(), String> {
+        let messages = self
+            .build_message_list(conversation_id, Some(user_content), None)
+            .await?;
+        append_message(
+            &self.state,
+            conversation_id,
+            "user",
+            user_content,
+            Some(AppendMessageMeta {
+                timestamp: Some(chrono::Utc::now().timestamp_millis()),
+                tool_calls: None,
+                model: None,
+            }),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        self.stream_assistant_reply(conversation_id, messages).await
+    }
+
+    pub async fn polish_last_user(&self, conversation_id: &str) -> Result<(), String> {
+        let transcript = pop_last_user_message(&self.state, conversation_id)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "No user message to polish.".to_string())?;
+        let instruction = DICTATION_POLISH_INSTRUCTION;
+        let t1 = chrono::Utc::now().timestamp_millis();
+        let t2 = t1 + 1;
+        let messages = self
+            .build_message_list(conversation_id, Some(instruction), Some(&transcript))
+            .await?;
+        append_message(
+            &self.state,
+            conversation_id,
+            "user",
+            instruction,
+            Some(AppendMessageMeta {
+                timestamp: Some(t1),
+                tool_calls: None,
+                model: None,
+            }),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        append_message(
+            &self.state,
+            conversation_id,
+            "user",
+            &transcript,
+            Some(AppendMessageMeta {
+                timestamp: Some(t2),
+                tool_calls: None,
+                model: None,
+            }),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        self.stream_assistant_reply(conversation_id, messages).await
+    }
+
+    pub async fn generate_reply(&self, conversation_id: &str) -> Result<(), String> {
+        let messages = self.build_message_list(conversation_id, None, None).await?;
+        self.stream_assistant_reply(conversation_id, messages).await
+    }
+
+    async fn build_message_list(
+        &self,
+        conversation_id: &str,
+        user_content: Option<&str>,
+        second_user_content: Option<&str>,
+    ) -> Result<Vec<ChatMessageParam>, String> {
+        let settings = settings::get_settings(&self.state.write_chains).await;
+        let strategy = parse_memory_injection_strategy(
+            settings
+                .get("memory")
+                .and_then(|v| v.get("injectionStrategy")),
+        );
+        let user_memory = get_user_memory(&self.state)
+            .await
+            .map_err(|e| e.to_string())?;
+        let scoring_content = user_content.or(second_user_content);
+        let selected_memory =
+            select_memory_entries_for_prompt(strategy, &user_memory, scoring_content);
+        let memory_block = format_memory_context_block(&selected_memory);
+        let system_prompt = build_system_prompt(&memory_block);
+
+        let history = get_messages(&self.state, conversation_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut messages = vec![ChatMessageParam {
+            role: "system".into(),
+            content: Some(system_prompt),
+            tool_calls: None,
+            tool_call_id: None,
+        }];
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        for m in history {
+            if m.role == "system" {
+                messages.push(ChatMessageParam {
+                    role: m.role,
+                    content: Some(m.content),
+                    tool_calls: None,
+                    tool_call_id: None,
+                });
+                continue;
+            }
+            messages.push(ChatMessageParam {
+                role: m.role.clone(),
+                content: Some(annotate_message_content_for_model(
+                    &m.content,
+                    m.timestamp,
+                )),
+                tool_calls: None,
+                tool_call_id: None,
+            });
+        }
+        if let Some(content) = user_content {
+            messages.push(ChatMessageParam {
+                role: "user".into(),
+                content: Some(annotate_message_content_for_model(content, Some(now_ms))),
+                tool_calls: None,
+                tool_call_id: None,
+            });
+        }
+        if let Some(content) = second_user_content {
+            messages.push(ChatMessageParam {
+                role: "user".into(),
+                content: Some(annotate_message_content_for_model(content, Some(now_ms + 1))),
+                tool_calls: None,
+                tool_call_id: None,
+            });
+        }
+        Ok(messages)
+    }
+
+    async fn execute_tool(
+        &self,
+        name: &str,
+        args: Value,
+        conversation_id: &str,
+    ) -> Result<String, String> {
+        let gated = matches!(name, "task_delete" | "task_clear_completed" | "task_update");
+        let mut skip_tool_panel_update = false;
+
+        let result = if is_customization_tool_name(name) {
+            execute_customization_tool(name, &args)
+        } else if is_assistant_tool_name(name) {
+            if gated {
+                let pending_id = Uuid::new_v4().to_string();
+                let pending_payload = json!({
+                    "pending": true,
+                    "tool": name,
+                    "args": args,
+                    "pendingId": pending_id
+                });
+                self.emit_tool_panel_update(conversation_id, name, pending_payload);
+
+                let (tx, rx) = oneshot::channel();
+                self.pending_gated.lock().await.insert(
+                    pending_id,
+                    PendingGatedTool {
+                        tool: name.to_string(),
+                        args,
+                        respond_to: tx,
+                    },
+                );
+                skip_tool_panel_update = true;
+                rx.await.unwrap_or_else(|_| {
+                    json!({ "error": "Gated tool request was cancelled." }).to_string()
+                })
+            } else {
+                execute_assistant_tool(&self.state, name, args)
+                    .await
+                    .map_err(|e| e.to_string())?
+            }
+        } else {
+            execute_file_tool(name, &args)
+        };
+
+        if is_assistant_tool_name(name) && !skip_tool_panel_update {
+            let payload = serde_json::from_str::<Value>(&result).unwrap_or_else(|_| json!(result));
+            self.emit_tool_panel_update(conversation_id, name, payload);
+        }
+
+        Ok(result)
+    }
+
+    async fn stream_e2e_reply(&self, conversation_id: &str) -> Result<(), String> {
+        let model_label = Self::active_chat_model_label();
+        let synthetic = HARNESS_E2E_ASSISTANT_REPLY;
+        let stream_delay_ms = Self::harness_e2e_stream_delay_ms();
+        let cancel = CancellationToken::new();
+        {
+            let mut guard = self.cancel_token.lock().await;
+            *guard = Some(cancel.clone());
+        }
+
+        let mut emitted = String::new();
+        if stream_delay_ms == 0 {
+            emitted = synthetic.to_string();
+            self.emit_stream_chunk(conversation_id, synthetic);
+        } else {
+            for chunk in split_into_word_chunks(synthetic) {
+                if cancel.is_cancelled() {
+                    break;
+                }
+                emitted.push_str(&chunk);
+                self.emit_stream_chunk(conversation_id, &chunk);
+                tokio::time::sleep(Duration::from_millis(stream_delay_ms)).await;
+            }
+        }
+        self.emit_stream_end(conversation_id);
+
+        if !emitted.is_empty() {
+            append_message(
+                &self.state,
+                conversation_id,
+                "assistant",
+                &emitted,
+                Some(AppendMessageMeta {
+                    timestamp: Some(chrono::Utc::now().timestamp_millis()),
+                    model: Some(model_label),
+                    tool_calls: None,
+                }),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+            schedule_conversation_title_refinement(
+                self.app.clone(),
+                self.state.clone(),
+                conversation_id.to_string(),
+            );
+        }
+
+        {
+            let mut guard = self.cancel_token.lock().await;
+            *guard = None;
+        }
+        Ok(())
+    }
+
+    async fn stream_assistant_reply(
+        &self,
+        conversation_id: &str,
+        messages: Vec<ChatMessageParam>,
+    ) -> Result<(), String> {
+        if is_harness_e2e() {
+            return self.stream_e2e_reply(conversation_id).await;
+        }
+
+        let api_key = resolve_openai_api_key().await.trim().to_string();
+        if api_key.is_empty() {
+            return Err("OpenAI API key required.".into());
+        }
+
+        let cancel = CancellationToken::new();
+        {
+            let mut guard = self.cancel_token.lock().await;
+            *guard = Some(cancel.clone());
+        }
+
+        let model_label = Self::active_chat_model_label();
+        let tool_calls_this_turn = Arc::new(Mutex::new(Vec::<ToolCallRecord>::new()));
+        let mut did_append_assistant = false;
+
+        let client = OpenAIChatClient::new(api_key).map_err(|e| e.to_string())?;
+        let conversation_id_owned = conversation_id.to_string();
+        let controller = self.clone();
+        let tool_calls_cb = tool_calls_this_turn.clone();
+
+        let stream_result = client
+            .send_message_with_tools(
+                messages,
+                |chunk| {
+                    controller.emit_stream_chunk(&conversation_id_owned, chunk);
+                },
+                {
+                    let controller = controller.clone();
+                    let conversation_id = conversation_id_owned.clone();
+                    let tool_calls_cb = tool_calls_cb.clone();
+                    move |name, args| {
+                        let controller = controller.clone();
+                        let conversation_id = conversation_id.clone();
+                        let tool_calls_cb = tool_calls_cb.clone();
+                        async move {
+                            let result = controller
+                                .execute_tool(&name, args, &conversation_id)
+                                .await
+                                .map_err(OpenAIError::Api)?;
+                            if is_assistant_tool_name(&name) {
+                                let payload = serde_json::from_str::<Value>(&result)
+                                    .unwrap_or_else(|_| json!(result));
+                                tool_calls_cb.lock().await.push(ToolCallRecord {
+                                    tool_name: name,
+                                    payload: Some(payload),
+                                });
+                            }
+                            Ok(result)
+                        }
+                    }
+                },
+                &cancel,
+            )
+            .await;
+
+        self.emit_stream_end(conversation_id);
+
+        let captured_content = stream_result.as_ref().ok().cloned().unwrap_or_default();
+        let tool_calls_this_turn = tool_calls_this_turn.lock().await.clone();
+
+        match stream_result {
+            Ok(content) => {
+                if !content.is_empty() || !tool_calls_this_turn.is_empty() {
+                    append_message(
+                        &self.state,
+                        conversation_id,
+                        "assistant",
+                        &strip_sent_at_prefix(&content),
+                        Some(AppendMessageMeta {
+                            timestamp: Some(chrono::Utc::now().timestamp_millis()),
+                            model: Some(model_label.clone()),
+                            tool_calls: if tool_calls_this_turn.is_empty() {
+                                None
+                            } else {
+                                Some(tool_calls_this_turn)
+                            },
+                        }),
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+                    did_append_assistant = true;
+                }
+            }
+            Err(err) => {
+                let is_abort = map_http_cancel(&err);
+                if !captured_content.is_empty() || !tool_calls_this_turn.is_empty() {
+                    let content = if captured_content.is_empty() {
+                        "[Error]".to_string()
+                    } else {
+                        strip_sent_at_prefix(&captured_content)
+                    };
+                    append_message(
+                        &self.state,
+                        conversation_id,
+                        "assistant",
+                        &content,
+                        Some(AppendMessageMeta {
+                            timestamp: Some(chrono::Utc::now().timestamp_millis()),
+                            model: Some(model_label.clone()),
+                            tool_calls: if tool_calls_this_turn.is_empty() {
+                                None
+                            } else {
+                                Some(tool_calls_this_turn)
+                            },
+                        }),
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+                    did_append_assistant = true;
+                } else if !is_abort {
+                    append_message(
+                        &self.state,
+                        conversation_id,
+                        "assistant",
+                        &format!("[Error: {}]", err),
+                        Some(AppendMessageMeta {
+                            timestamp: Some(chrono::Utc::now().timestamp_millis()),
+                            model: Some(model_label.clone()),
+                            tool_calls: None,
+                        }),
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+                    did_append_assistant = true;
+                }
+                if !is_abort {
+                    {
+                        let mut guard = self.cancel_token.lock().await;
+                        *guard = None;
+                    }
+                    return Err(err.to_string());
+                }
+            }
+        }
+
+        {
+            let mut guard = self.cancel_token.lock().await;
+            *guard = None;
+        }
+
+        if did_append_assistant {
+            schedule_conversation_title_refinement(
+                self.app.clone(),
+                self.state.clone(),
+                conversation_id.to_string(),
+            );
+        }
+
+        Ok(())
+    }
+}
+
+fn split_into_word_chunks(content: &str) -> Vec<String> {
+    let parts: Vec<&str> = content.split_whitespace().collect();
+    let len = parts.len();
+    if len <= 1 {
+        return vec![content.to_string()];
+    }
+    parts
+        .into_iter()
+        .enumerate()
+        .map(|(idx, word)| {
+            if idx + 1 < len {
+                format!("{word} ")
+            } else {
+                word.to_string()
+            }
+        })
+        .collect()
+}
+
+fn build_system_prompt(memory_block: &str) -> String {
+    let core = r#"[CORE_INSTRUCTIONS]
+You are a helpful assistant running in a local desktop app.
+Prefer concise, practical, high-signal responses.
+For complex writing/thinking tasks, start with structure (questions, outline, tradeoffs) unless the user explicitly asks for a full draft immediately.
+Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); set_layout (sidebar position and optional design grid overlay); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat; short saved snippets belong in a note titled "Clippings" as a numbered markdown list, optionally with inline #tags). Call them when appropriate.
+
+[FORMATTING_CAPABILITIES]
+Standard markdown (bold, italic, lists, tables, fenced code, blockquotes) is supported. Use plain prose by default. Only reach for the layout blocks below when they add genuine clarity over a paragraph or list. Never wrap an entire reply in a single block.
+
+Callouts — one sentence of emphasis, not a heading replacement:
+  :::tip
+  Short suggestion.
+  :::
+  (variants: :::tip, :::note, :::warning, :::danger)
+
+Collapsible — fold away long context or sources the user may not need:
+  :::details{summary="Sources"}
+  Long content.
+  :::
+
+Inline chip — a short status tag inside a sentence:
+  Build is :chip[failing]{tone=danger}.
+  (tones: info, warn, danger, success, neutral)
+
+Link card — only when surfacing a single primary URL the user should open:
+  :::link{url="https://example.com" title="Example" desc="One-line summary." site="example.com"}
+  :::
+
+Mermaid diagrams — for flows, sequences, small state diagrams:
+  ```mermaid
+  flowchart LR
+    A --> B
+  ```
+
+Options compare — exactly 2-5 alternatives the user must choose between. Outer fence uses FOUR colons so the inner :::option fences nest cleanly:
+  ::::options{title="Pick an approach"}
+  :::option{title="Redis" recommended}
+  Fast and proven. Adds an ops dependency.
+  :::
+  :::option{title="In-memory"}
+  Zero ops. Cache is lost on restart.
+  :::
+  ::::
+
+Slide deck — a small inline deck (max ~6 slides). Outer fence uses FOUR colons. Layouts: title, bullets, quote, blank.
+  ::::slides
+  :::slide{layout=title title="Q3 Review" subtitle="Highlights"}
+  :::
+  :::slide{layout=bullets title="Wins"}
+  - Shipped feature X
+  - Closed deal Y
+  :::
+  :::slide{layout=quote attribution="— Lee"}
+  Make it work, then make it fast.
+  :::
+  :::slide{layout=blank title="Notes"}
+  Free-form markdown body.
+  :::
+  ::::
+
+Rules of thumb: prefer plain prose first; use at most one layout block per reply unless the user is explicitly asking for a comparison or a deck; never nest :::slides inside another directive; do not use callouts as section headers."#;
+
+    let mut out = core.to_string();
+    if !memory_block.is_empty() {
+        out.push_str("\n\n");
+        out.push_str(memory_block);
+    }
+    out.push_str("\n\n");
+    out.push_str(&format_temporal_context_block());
+    out
+}
+
+fn format_temporal_context_block() -> String {
+    let tz = iana_time_zone::get_timezone().unwrap_or_else(|_| "UTC".into());
+    let now = chrono::Local::now();
+    let formatted = now.format("%A, %B %d, %Y at %I:%M:%S %p %Z").to_string();
+    format!(
+        "[TEMPORAL_CONTEXT]\nCurrent local date and time ({tz}): {formatted}\nWhen present, a user message begins with [sent_at=...] (ISO 8601 UTC) for when it was sent.\nUse sent_at together with the current time above to interpret relative dates and whether discussed future plans, events, or deadlines have already passed.\nNever include [sent_at=...] in your replies; it is metadata on user messages only."
+    )
+}
+
+fn annotate_message_content_for_model(content: &str, timestamp_ms: Option<i64>) -> String {
+    let Some(ts) = timestamp_ms else {
+        return content.to_string();
+    };
+    let re = Regex::new(r"^\[sent_at=[^\]]+\]\n").unwrap();
+    if re.is_match(content) {
+        return content.to_string();
+    }
+    let sent_at = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(ts)
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_default();
+    format!("[sent_at={sent_at}]\n{content}")
+}
+
+fn strip_sent_at_prefix(content: &str) -> String {
+    let re = Regex::new(r"\[sent_at=[^\]]+\]\n?").unwrap();
+    re.replace_all(content, "").into_owned()
+}
+
+type MemoryStrategy = &'static str;
+
+fn parse_memory_injection_strategy(raw: Option<&Value>) -> MemoryStrategy {
+    match raw.and_then(|v| v.as_str()) {
+        Some("all") => "all",
+        Some("relevant") => "relevant",
+        Some("budget") => "budget",
+        Some("none") => "none",
+        _ => "all",
+    }
+}
+
+fn to_tokens(text: &str) -> Vec<String> {
+    text.to_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .filter(|t| t.len() >= 3 && !MEMORY_STOPWORDS.contains(&t))
+        .map(str::to_string)
+        .collect()
+}
+
+fn count_overlap(base: &HashSet<String>, candidates: &[String]) -> usize {
+    candidates.iter().filter(|t| base.contains(*t)).count()
+}
+
+fn score_memory_entry(key: &str, value: &str, user_content: &str) -> f64 {
+    let user_tokens: HashSet<String> = to_tokens(user_content).into_iter().collect();
+    if user_tokens.is_empty() {
+        return 0.0;
+    }
+    let key_tokens = to_tokens(key);
+    let value_tokens = to_tokens(value);
+    let key_matches = count_overlap(&user_tokens, &key_tokens);
+    let value_matches = count_overlap(&user_tokens, &value_tokens);
+    let token_norm = ((key_tokens.len() + value_tokens.len()) as f64).sqrt().max(1.0);
+    let mut score = (key_matches as f64 * 2.0 + value_matches as f64) / token_norm;
+    let key_lower = key.to_lowercase();
+    if MEMORY_ALWAYS_RELEVANT_KEY_PARTS
+        .iter()
+        .any(|part| key_lower.contains(part))
+    {
+        score += 1.0;
+    }
+    let extra_chars = value.len().saturating_sub(260);
+    score -= (extra_chars as f64 / 200.0) * 0.2;
+    score
+}
+
+fn sorted_memory_entries(user_memory: &HashMap<String, String>) -> Vec<(String, String)> {
+    let mut entries: Vec<(String, String)> = user_memory
+        .iter()
+        .filter(|(k, _)| !k.trim().is_empty())
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    entries
+}
+
+fn apply_char_budget(rows: &[(String, String)], max_chars: usize) -> Vec<(String, String)> {
+    let mut used_chars = 0usize;
+    let mut selected = Vec::new();
+    for (key, value) in rows {
+        let next_line = format!("- {key}: {value}");
+        if !selected.is_empty() && used_chars + next_line.len() > max_chars {
+            break;
+        }
+        selected.push((key.clone(), value.clone()));
+        used_chars += next_line.len();
+    }
+    selected
+}
+
+fn select_relevant_entries(
+    entries: &[(String, String)],
+    user_content: Option<&str>,
+) -> Vec<(String, String)> {
+    let Some(content) = user_content.map(str::trim).filter(|s| !s.is_empty()) else {
+        return entries
+            .iter()
+            .take(RELEVANT_FALLBACK_COUNT)
+            .cloned()
+            .collect();
+    };
+
+    let mut scored: Vec<(String, String, f64)> = entries
+        .iter()
+        .map(|(key, value)| {
+            (
+                key.clone(),
+                value.clone(),
+                score_memory_entry(key, value, content),
+            )
+        })
+        .filter(|(_, _, score)| *score >= RELEVANT_MIN_SCORE)
+        .collect();
+    scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+    scored.truncate(RELEVANT_MAX_ENTRIES);
+    let rows: Vec<(String, String)> = scored
+        .into_iter()
+        .map(|(k, v, _)| (k, v))
+        .collect();
+    apply_char_budget(&rows, RELEVANT_MAX_CHARS)
+}
+
+fn select_budget_entries(entries: &[(String, String)]) -> Vec<(String, String)> {
+    apply_char_budget(entries, BUDGET_MAX_CHARS)
+}
+
+fn select_memory_entries_for_prompt(
+    strategy: MemoryStrategy,
+    user_memory: &HashMap<String, String>,
+    user_content: Option<&str>,
+) -> Vec<(String, String)> {
+    if strategy == "none" {
+        return Vec::new();
+    }
+    let entries = sorted_memory_entries(user_memory);
+    if entries.is_empty() {
+        return Vec::new();
+    }
+    match strategy {
+        "all" => entries,
+        "relevant" => select_relevant_entries(&entries, user_content),
+        "budget" => select_budget_entries(&entries),
+        _ => entries,
+    }
+}
+
+fn format_memory_context_block(selected: &[(String, String)]) -> String {
+    if selected.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec![
+        "[USER_MEMORY_CONTEXT]".to_string(),
+        "Use only if relevant to the current request.".to_string(),
+    ];
+    for (k, v) in selected {
+        lines.push(format!("- {k}: {v}"));
+    }
+    lines.push(String::new());
+    lines.push("[MEMORY_RULES]".into());
+    lines.push("- Treat memory as hints, not absolute truth.".into());
+    lines.push("- If memory conflicts with the user's current message, follow the current message.".into());
+    lines.push("- If uncertain whether memory still applies, ask one brief clarifying question.".into());
+    lines.join("\n")
+}

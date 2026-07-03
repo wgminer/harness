@@ -9,7 +9,7 @@ import { HotkeyRecordingOverlay } from "./HotkeyRecordingOverlay";
 import { useRecorder } from "./useRecorder";
 import { playCancelChime } from "./recordingUtils";
 import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan, type Settings } from "../shared/types";
-import type {} from "../shared/electronAPI";
+import type {} from "../shared/desktopAPI";
 import { isSidebarVisibleConversation } from "../shared/conversationSession";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
 import type { Conversation, View } from "./sidebarUtils";
@@ -71,14 +71,14 @@ export default function App() {
 
   const refreshSetupState = useCallback(async () => {
     const [settings, syncStatus, credentialStatus, platform] = await Promise.all([
-      window.electron.settings.get() as Promise<Settings>,
-      window.electron.sync.getStatus(),
-      window.electron.credentials.getStatus(),
-      window.electron.system.getPlatform(),
+      window.harness.settings.get() as Promise<Settings>,
+      window.harness.sync.getStatus(),
+      window.harness.credentials.getStatus(),
+      window.harness.system.getPlatform(),
     ]);
     let accessibilityTrusted: boolean | null = null;
     if (platform === "darwin") {
-      accessibilityTrusted = await window.electron.system.macosAccessibilityTrusted();
+      accessibilityTrusted = await window.harness.system.macosAccessibilityTrusted();
     }
     const gaps = collectSetupGaps({
       hasOpenAIApiKey: credentialStatus.hasOpenAIApiKey,
@@ -101,7 +101,7 @@ export default function App() {
   const dismissSetupNotice = useCallback(() => {
     setSetupNoticeOpen(false);
     if (!setupGaps.some((gap) => gap.severity === "required")) {
-      void window.electron.uiSession.set({ setupNoticeDismissed: true });
+      void window.harness.uiSession.set({ setupNoticeDismissed: true });
     }
   }, [setupGaps]);
 
@@ -123,15 +123,15 @@ export default function App() {
   );
 
   const loadPlans = useCallback(async () => {
-    const list = await window.electron.plans.list();
+    const list = await window.harness.plans.list();
     setPlans(list);
   }, []);
 
   const loadConversations = useCallback(async () => {
     const [list, session, settings] = await Promise.all([
-      window.electron.memory.listConversations(),
-      window.electron.uiSession.get(),
-      window.electron.settings.get(),
+      window.harness.memory.listConversations(),
+      window.harness.uiSession.get(),
+      window.harness.settings.get(),
     ]);
     const openToCompose =
       settings.chat?.openToComposeOnLaunch ?? DEFAULT_SETTINGS.chat!.openToComposeOnLaunch;
@@ -151,7 +151,7 @@ export default function App() {
 
   /** Reload sidebar list after sync/import without resetting view from session. */
   const refreshConversations = useCallback(async () => {
-    const list = await window.electron.memory.listConversations();
+    const list = await window.harness.memory.listConversations();
     setConversations(list);
     setConversationId((current) => resolveConversationId(list, current));
   }, [resolveConversationId]);
@@ -166,7 +166,7 @@ export default function App() {
     void (async () => {
       const [gaps, session] = await Promise.all([
         refreshSetupState(),
-        window.electron.uiSession.get(),
+        window.harness.uiSession.get(),
       ]);
       if (cancelled) return;
       if (shouldShowSetupNotice(gaps, session.setupNoticeDismissed === true)) {
@@ -179,9 +179,9 @@ export default function App() {
   }, [uiSessionReady, refreshSetupState]);
 
   const runBackgroundSync = useCallback(async () => {
-    const status = await window.electron.sync.getStatus();
+    const status = await window.harness.sync.getStatus();
     if (!status.configured) return;
-    await window.electron.sync.runNow();
+    await window.harness.sync.runNow();
   }, []);
 
   useEffect(() => {
@@ -197,7 +197,7 @@ export default function App() {
   }, [runBackgroundSync]);
 
   useEffect(() => {
-    const unsub = window.electron.sync.onChanged(() => {
+    const unsub = window.harness.sync.onChanged(() => {
       void refreshConversations();
     });
     return unsub;
@@ -206,7 +206,7 @@ export default function App() {
   useEffect(() => {
     if (!uiSessionReady) return;
     const timer = window.setTimeout(() => {
-      void window.electron.uiSession.set({
+      void window.harness.uiSession.set({
         view,
         conversationId,
         notesOpenNoteId: view === "notes" && notesScreen === "detail" ? activeNoteId : null,
@@ -216,7 +216,7 @@ export default function App() {
   }, [uiSessionReady, view, conversationId, notesScreen, activeNoteId]);
 
   useEffect(() => {
-    const unsub = window.electron.chat.onConversationTitleUpdated(() => {
+    const unsub = window.harness.chat.onConversationTitleUpdated(() => {
       void refreshConversations();
     });
     return unsub;
@@ -233,8 +233,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubStart = window.electron.chat.onTitleGenerationStarted((id) => bumpTitleGen(id, 1));
-    const unsubEnd = window.electron.chat.onTitleGenerationEnded((id) => bumpTitleGen(id, -1));
+    const unsubStart = window.harness.chat.onTitleGenerationStarted((id) => bumpTitleGen(id, 1));
+    const unsubEnd = window.harness.chat.onTitleGenerationEnded((id) => bumpTitleGen(id, -1));
     return () => {
       unsubStart();
       unsubEnd();
@@ -251,27 +251,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    window.electron.app.getVersion().then(setAppVersion).catch(() => setAppVersion(null));
+    window.harness.app.getVersion().then(setAppVersion).catch(() => setAppVersion(null));
   }, []);
 
   useEffect(() => {
-    void window.electron.updater.getStatus().then(setUpdateStatus).catch(() => {});
-    const unsub = window.electron.updater.onStatus(setUpdateStatus);
-    void window.electron.updater.check();
+    void window.harness.updater.getStatus().then(setUpdateStatus).catch(() => {});
+    const unsub = window.harness.updater.onStatus(setUpdateStatus);
+    void window.harness.updater.check();
     return unsub;
   }, []);
 
   const handleUpdateClick = useCallback(() => {
     if (updateStatus.status === "available") {
-      void window.electron.updater.downloadAndInstall();
+      void window.harness.updater.downloadAndInstall();
     }
   }, [updateStatus.status]);
 
   useEffect(() => {
-    window.electron.customization.getLayoutOptions().then(setLayout);
-    const unsub = window.electron.customization.onUpdated((p) => {
+    window.harness.customization.getLayoutOptions().then(setLayout);
+    const unsub = window.harness.customization.onUpdated((p) => {
       if (p.type === "layout") {
-        window.electron.customization.getLayoutOptions().then(setLayout);
+        window.harness.customization.getLayoutOptions().then(setLayout);
       }
     });
     return unsub;
@@ -308,11 +308,11 @@ export default function App() {
   }, [createNew]);
 
   const handleWindowSizeToggle = useCallback(async () => {
-    await window.electron.windowSize.toggle();
+    await window.harness.windowSize.toggle();
   }, []);
 
   const handleConversationDelete = useCallback(async (id: string) => {
-    await window.electron.memory.deleteConversation(id);
+    await window.harness.memory.deleteConversation(id);
     const remaining = conversations.filter((c) => c.id !== id);
     setConversations(remaining);
     if (conversationId === id) {
@@ -328,15 +328,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void window.electron.recording.setGlobalEnabled(isGlobalFnRecordingEnabledForView(view));
+    void window.harness.recording.setGlobalEnabled(isGlobalFnRecordingEnabledForView(view));
   }, [view]);
 
   useEffect(() => {
-    const unsub = window.electron.recording.onStartSilent(async () => {
+    const unsub = window.harness.recording.onStartSilent(async () => {
       hotkeyCancelledRef.current = false;
       hotkeyRecordingRef.current = true;
       setGlobalHotkeyRecording(true);
-      if (await window.electron.env.isHarnessE2E()) {
+      if (await window.harness.env.isHarnessE2E()) {
         return;
       }
       try {
@@ -352,16 +352,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsub = window.electron.recording.onStopAndPaste(async (wasFocused: boolean) => {
+    const unsub = window.harness.recording.onStopAndPaste(async (wasFocused: boolean) => {
       hotkeyRecordingRef.current = false;
       setGlobalHotkeyRecording(false);
       try {
-        const wav = (await window.electron.env.isHarnessE2E())
+        const wav = (await window.harness.env.isHarnessE2E())
           ? new ArrayBuffer(0)
           : await hotkeyRecorder.stop();
         if (hotkeyCancelledRef.current) return;
-        window.electron.recording.saveWav(wav).catch(() => {});
-        const result = await window.electron.recording.transcribe(wav);
+        window.harness.recording.saveWav(wav).catch(() => {});
+        const result = await window.harness.recording.transcribe(wav);
         if (hotkeyCancelledRef.current) return;
         if ("error" in result) {
           return;
@@ -377,10 +377,10 @@ export default function App() {
           setPendingHotkeyDraftOnly(false);
           setPendingHotkeyText(text);
         } else {
-          await window.electron.recording.pasteText(text);
-          const newId = await window.electron.memory.createConversation();
-          await window.electron.memory.appendMessage(newId, "user", text, { timestamp: Date.now() });
-          const voiceTitle = await window.electron.memory.markVoiceDictationSession(newId);
+          await window.harness.recording.pasteText(text);
+          const newId = await window.harness.memory.createConversation();
+          await window.harness.memory.appendMessage(newId, "user", text, { timestamp: Date.now() });
+          const voiceTitle = await window.harness.memory.markVoiceDictationSession(newId);
           setConversations((prev) => [
             {
               id: newId,
@@ -398,7 +398,7 @@ export default function App() {
         }
       } finally {
         if (!hotkeyCancelledRef.current) {
-          await window.electron.recording.done();
+          await window.harness.recording.done();
         }
       }
     });
@@ -407,7 +407,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsub = window.electron.recording.onCancel(async () => {
+    const unsub = window.harness.recording.onCancel(async () => {
       hotkeyCancelledRef.current = true;
       setGlobalHotkeyRecording(false);
       if (hotkeyRecordingRef.current) {
@@ -415,7 +415,7 @@ export default function App() {
         try { await hotkeyRecorder.stop(); } catch (_) { /* already stopped */ }
       }
       playCancelChime();
-      await window.electron.recording.done();
+      await window.harness.recording.done();
     });
     return unsub;
   // eslint-disable-next-line react-hooks/exhaustive-deps

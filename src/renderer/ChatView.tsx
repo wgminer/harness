@@ -151,7 +151,7 @@ export function ChatView({
   }, [focusComposer]);
 
   const syncAssistantFromStorage = useCallback(async (convId: string, assistantId: string | null) => {
-    const list = await window.electron.memory.getMessages(convId);
+    const list = await window.harness.memory.getMessages(convId);
     const lastAssistant = [...list].reverse().find((m) => m.role === "assistant");
     if (!lastAssistant?.content?.trim()) return;
     setMessages((prev) => {
@@ -190,7 +190,7 @@ export function ChatView({
       priorAbort.abort();
     }
     if (sendingRef.current) {
-      void window.electron.chat.stop().catch(() => {});
+      void window.harness.chat.stop().catch(() => {});
     }
     const nextTurnId = turnIdRef.current + 1;
     turnIdRef.current = nextTurnId;
@@ -290,7 +290,7 @@ export function ChatView({
         streamAbortRef.current?.abort();
         streamAbortRef.current = null;
         activeTurnIdRef.current = null;
-        void window.electron.chat.stop().catch(() => {});
+        void window.harness.chat.stop().catch(() => {});
         setMessages([]);
         activeAssistantMessageIdRef.current = null;
         isStreamingRef.current = false;
@@ -315,7 +315,7 @@ export function ChatView({
     streamAbortRef.current?.abort();
     streamAbortRef.current = null;
     activeTurnIdRef.current = null;
-    void window.electron.chat.stop().catch(() => {});
+    void window.harness.chat.stop().catch(() => {});
     setMessages([]);
     activeAssistantMessageIdRef.current = null;
     isStreamingRef.current = false;
@@ -329,7 +329,7 @@ export function ChatView({
     focusComposer();
 
     let cancelled = false;
-    window.electron.memory.getMessages(effectiveConversationId).then((list) => {
+    window.harness.memory.getMessages(effectiveConversationId).then((list) => {
       if (cancelled) return;
       setMessages(
         list.map((m, i) => ({
@@ -348,7 +348,7 @@ export function ChatView({
   }, [effectiveConversationId, focusComposer]);
 
   useEffect(() => {
-    const unsub = window.electron.chat.onToolPanelUpdate((cid, toolName, payload) => {
+    const unsub = window.harness.chat.onToolPanelUpdate((cid, toolName, payload) => {
       if (cid !== conversationIdRef.current) return;
       const assistantId = activeAssistantMessageId;
       const turnId = activeTurnIdRef.current;
@@ -362,7 +362,7 @@ export function ChatView({
   }, [activeAssistantMessageId, isTurnCurrent, setAssistantToolCall]);
 
   useEffect(() => {
-    const unsubChunk = window.electron.chat.onStreamChunk((cid, chunk) => {
+    const unsubChunk = window.harness.chat.onStreamChunk((cid, chunk) => {
       if (cid !== conversationIdRef.current) return;
       if (!isStreamingRef.current) return;
       const assistantId = activeAssistantMessageIdRef.current;
@@ -371,7 +371,7 @@ export function ChatView({
       if (!assistantId || turnId == null || !isTurnCurrent(turnId, signal)) return;
       applyAssistantChunk(assistantId, (prev) => stripSentAtPrefix(prev + chunk));
     });
-    const unsubEnd = window.electron.chat.onStreamEnd((cid) => {
+    const unsubEnd = window.harness.chat.onStreamEnd((cid) => {
       if (cid !== conversationIdRef.current) return;
       const turnId = activeTurnIdRef.current;
       if (turnId == null) return;
@@ -393,7 +393,7 @@ export function ChatView({
       streamAbortRef.current?.abort();
       streamAbortRef.current = null;
       activeTurnIdRef.current = null;
-      void window.electron.chat.stop().catch(() => {});
+      void window.harness.chat.stop().catch(() => {});
     };
   }, []);
 
@@ -414,7 +414,7 @@ export function ChatView({
       const pendingId = payload.pendingId;
       if (pendingId) {
         try {
-          await window.electron.chat.resolveGatedTool(pendingId, action);
+          await window.harness.chat.resolveGatedTool(pendingId, action);
         } catch {
           // ignore; stream may have been stopped
         }
@@ -484,7 +484,7 @@ export function ChatView({
         turnId,
         signal,
         assistantId: assistantMessageId,
-        backend: () => window.electron.chat.send(convId, text),
+        backend: () => window.harness.chat.send(convId, text),
       });
     },
     [
@@ -508,7 +508,7 @@ export function ChatView({
       }
       let convId = effectiveConversationId;
       if (!convId) {
-        convId = await window.electron.memory.createConversation();
+        convId = await window.harness.memory.createConversation();
         firstSendInProgressRef.current = true;
         setDraftConversationId(convId);
         conversationIdRef.current = convId;
@@ -556,7 +556,7 @@ export function ChatView({
       turnId,
       signal,
       assistantId: assistantMessageId,
-      backend: () => window.electron.chat.polishLastUser(effectiveConversationId),
+      backend: () => window.harness.chat.polishLastUser(effectiveConversationId),
     });
   }, [
     appendAssistantPlaceholder,
@@ -602,7 +602,7 @@ export function ChatView({
       turnId,
       signal,
       assistantId: assistantMessageId,
-      backend: () => window.electron.chat.generateReply(effectiveConversationId),
+      backend: () => window.harness.chat.generateReply(effectiveConversationId),
     });
   }, [
     appendAssistantPlaceholder,
@@ -621,7 +621,7 @@ export function ChatView({
       try {
         const title =
           messageTimestamp != null ? formatMessageNoteTitle(messageTimestamp) : undefined;
-        const note = await window.electron.notes.create(title, trimmed);
+        const note = await window.harness.notes.create(title, trimmed);
         setSavedToNotesId(messageId);
         window.setTimeout(() => {
           setSavedToNotesId((current) => (current === messageId ? null : current));
@@ -644,7 +644,7 @@ export function ChatView({
     if (!trimmed || !effectiveConversationId) return;
     setTitleSaving(true);
     try {
-      await window.electron.memory.setConversationTitle(effectiveConversationId, trimmed);
+      await window.harness.memory.setConversationTitle(effectiveConversationId, trimmed);
       onConversationCreated();
       setTitleModalOpen(false);
     } finally {
@@ -659,7 +659,7 @@ export function ChatView({
     onStop: () => {
       const turnId = activeTurnIdRef.current;
       streamAbortRef.current?.abort();
-      void window.electron.chat.stop().catch(() => {});
+      void window.harness.chat.stop().catch(() => {});
       if (turnId != null) completeTurn(turnId);
     },
     sending: sending || composer.composerBusy,

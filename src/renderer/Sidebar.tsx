@@ -134,7 +134,7 @@ export function Sidebar({
     useScrollFadeEdges();
 
   const refreshSyncConfigured = useCallback(() => {
-    void window.electron.sync.getStatus().then((status) => {
+    void window.harness.sync.getStatus().then((status) => {
       setSyncConfigured(status.configured);
     });
   }, []);
@@ -152,7 +152,7 @@ export function Sidebar({
     if (syncBusy || !syncConfigured) return;
     setSyncBusy(true);
     try {
-      const result = await window.electron.sync.runNow();
+      const result = await window.harness.sync.runNow();
       setSyncConfigured(result.status.configured);
       if (syncResultChangedLocalData(result)) {
         onSyncComplete?.();
@@ -172,7 +172,7 @@ export function Sidebar({
     }
     setSearchLoading(true);
     const t = setTimeout(() => {
-      window.electron.memory.searchConversations(trimmed, true).then((results) => {
+      window.harness.memory.searchConversations(trimmed, true).then((results) => {
         setSearchResults(results);
         setSearchLoading(false);
       });

@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { createHarnessAdapter } from "./desktopAdapter";
 import "./base.css";
 import "./modal.css";
 import "./sidebar.css";
@@ -11,7 +12,9 @@ import "./tasks.css";
 import "./notes.css";
 import "highlight.js/styles/github-dark.css";
 
-void window.electron.env.isHarnessDev().then((dev) => {
+window.harness = createHarnessAdapter();
+
+void window.harness.env.isHarnessDev().then((dev) => {
   if (dev) document.title = "Harness Dev";
 });
 

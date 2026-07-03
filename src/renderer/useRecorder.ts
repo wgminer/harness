@@ -9,8 +9,8 @@ export function useRecorder() {
 
   async function start(): Promise<void> {
     await playStartChime();
-    if (typeof window !== "undefined" && window.electron?.recording?.requestMicrophoneAccess) {
-      const ok = await window.electron.recording.requestMicrophoneAccess();
+    if (typeof window !== "undefined" && window.harness?.recording?.requestMicrophoneAccess) {
+      const ok = await window.harness.recording.requestMicrophoneAccess();
       if (!ok) {
         throw new Error("Microphone access denied.");
       }
@@ -18,7 +18,7 @@ export function useRecorder() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const ctx = new AudioContext();
     const source = ctx.createMediaStreamSource(stream);
-    // createScriptProcessor is deprecated but reliable in Electron's pinned Chromium
+    // createScriptProcessor is deprecated but reliable in WKWebView
     // eslint-disable-next-line @typescript-eslint/no-deprecated
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     const buffers: Float32Array[] = [];

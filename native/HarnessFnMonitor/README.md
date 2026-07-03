@@ -7,7 +7,7 @@ Small macOS helper that watches the **Fn** key (`flagsChanged`, key code 63) and
 {"t":"fn","phase":"up","ms":1700000000050}
 ```
 
-Requires **Accessibility** permission for the parent app (Harness). The binary is spawned by Electron and has no UI.
+Requires **Accessibility** permission for the parent app (Harness). The binary is spawned by the Tauri backend and has no UI.
 
 ## Build
 

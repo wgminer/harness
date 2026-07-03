@@ -53,7 +53,7 @@ Harness is where you practice the full stack: providers, tools, streaming, persi
 | | |
 |---|---|
 | **Success picture** | Each meaningful feature teaches something reusable: a new tool, IPC boundary, test pattern, or provider adapter you could lift into another project. |
-| **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; memory compile pipeline; import parsers; typed `window.electron`; unit + e2e coverage; iOS sync codec tests; `docs/4PX_GRID.md` + motion audit. |
+| **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; memory compile pipeline; import parsers; typed `window.harness`; unit tests; iOS sync codec tests; `docs/4PX_GRID.md` + motion audit. |
 | **Gaps** | CI on PRs (lint, tsc, Playwright, `grid:audit`) — **landed in 0.7**; plugin/tool registry; documented patterns for adding tools/providers. |
 | **Anti-goals** | Opaque magic (no tests, no boundaries); one giant file per feature; skipping the “why” in favor of copy-paste. |
 
@@ -120,7 +120,7 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 - **Nightly memory compile** — Once-per-day (plus manual “Compile now”) OpenAI distill of recent user messages into `user_memory.json`; char/conversation budgets; merge rules with case-insensitive key matching; `memory_compile_state.json` for last-run status; deferred run on app launch (skipped in E2E).
 - **Note printing** — `buildNotePrintHtml` + hidden-window system print dialog from the Notes toolbar menu.
 - **Theme studio refresh** `[O1]` — Color-only presets (night, paper, matcha, ik blue, bloomberg); typography (fonts, stepped font size) separate from palette; `applyThemeColors` / `themeMatchesColorPreset` helpers.
-- **Settings & data UX** `[O2]` — ASCII storage-layout diagram on Data tab; “Show app data folder” opens full Electron `userData`; backup-folder picker with iCloud default suggestion; removed “erase all stored data” from UI/API; note template descriptions normalized to first line.
+- **Settings & data UX** `[O2]` — ASCII storage-layout diagram on Data tab; “Show app data folder” opens full app userData; backup-folder picker with iCloud default suggestion; removed “erase all stored data” from UI/API; note template descriptions normalized to first line.
 
 ### 2026-05 — Writing surface, theme-linked shell scaling, weather & folder sync `[O1][O2][O4]`
 
@@ -134,13 +134,13 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 
 - **Unit coverage upgrade** — Broad Vitest coverage for persistence and data-loss-sensitive modules plus renderer/shared utility tests.
 - **E2E flow coverage upgrade** — Playwright: chat persistence, delete safety, settings/tasks, stream abort, notes, ChatGPT import dedupe.
-- **Testability refactors** — `*In(dir)` pure-storage entry points for temp-dir tests without Electron boot.
+- **Testability refactors** — `*In(dir)` pure-storage entry points for temp-dir tests without launching the desktop shell.
 
 ### 2026-03-22 — Tray assets, recorder UX & typed bridge `[O1][O4]`
 
 - **Tray & app icon** — Menu bar + Dock branding.
 - **Renderer recording stack** — `useRecorder`, PCM → WAV, chimes; shared save/export/transcribe flow.
-- **Typed `window.electron`** — Preload contract in `src/shared/electronAPI.ts`.
+- **Typed `window.harness`** — Desktop API contract in `src/shared/desktopAPI.ts`.
 
 ### 2026-03-21 — Providers, Recording & Search `[O2][O4]`
 

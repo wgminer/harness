@@ -5,11 +5,11 @@
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm install`              | Install project dependencies.                                                                                                                                                                                                                                                                                                                                         |
 | `npm run dev`              | Run the app in development mode with hot reload.                                                                                                                                                                                                                                                                                                                      |
-| `npm run build`            | Runs **prebuild** first: `icon:icns`, then `build:speech-helper` and `build:fn-monitor` on macOS, then compiles the renderer and main process. |
+| `npm run build`            | Runs **prebuild** first: `icon:icns`, then `build:speech-helper` and `build:fn-monitor` on macOS, then compiles the renderer to `dist-web/`. |
 | `npm run grid:audit`       | Fail if renderer CSS has off-grid `px` values or unitless `line-height` (see [docs/4PX_GRID.md](docs/4PX_GRID.md)).                                                                                                                                                                                                                                                    |
-| `npm run preview`          | Preview the production build locally.                                                                                                                                                                                                                                                                                                                                 |
-| `npm run dist`             | Build, then run electron-builder for the **current OS** (on macOS, Mac DMG/zip—similar output to `dist:mac` here).                                                                                                                                                                                                                                                    |
-| `npm run dist:mac`         | Build and sign the Mac app (`electron-builder --mac`). Use for the main Mac build and with `--replace`.                                                                                                                                                                                                                                                               |
+| `npm run dist`             | Full pipeline: native helpers → vite build → `tauri build` (DMG + `.app` on macOS). Auto-bumps patch version unless skipped.                                                                                                                                                                                                                                          |
+| `npm run dist:mac`         | Same as `dist` on macOS. Use for the main Mac build and with `--replace`.                                                                                                                                                                                                                                                               |
+| `npm run dist:mac:quick`   | Unsigned local build (`CSC_IDENTITY_AUTO_DISCOVERY=false`, no version bump).                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:replace` | `dist:mac` with `--replace`: copy the built `.app` into `/Applications`.                                                                                                                                                                                                                                                                                              |
 | `npm run icon:icns`        | Generate `build/icon.icns` from the project icon assets.                                                                                                                                                                                                                                                                                                              |
 | `npm run build:speech-helper` | **(macOS)** Build `native/HarnessSpeech` and copy the CLI into `resources/HarnessSpeech`. Needs Xcode Command Line Tools and Swift. |
@@ -60,7 +60,7 @@ You should now see “Developer ID Application: Your Name (TEAM_ID)” under **M
 
 ## 3. One-time: Export the certificate as a `.p12` file
 
-electron-builder can use a `.p12` so you (or CI) don’t rely on the keychain.
+Code signing can use a `.p12` so you (or CI) don’t rely on the keychain. Tauri uses the same `CSC_LINK` / `CSC_KEY_PASSWORD` env vars.
 
 1. In **Keychain Access**, select the **login** keychain and the **My Certificates** category.
 2. Find **Developer ID Application: Your Name (…)**. Expand it; you should see the certificate and its private key.
@@ -77,7 +77,7 @@ electron-builder can use a `.p12` so you (or CI) don’t rely on the keychain.
 Notarization makes Gatekeeper accept your app without “unidentified developer” warnings.
 
 1. Go to [appleid.apple.com](https://appleid.apple.com) → Sign In and Security → **App-Specific Passwords**.
-2. Generate a new app-specific password (e.g. name: “Electron notarization”).
+2. Generate a new app-specific password (e.g. name: “Harness notarization”).
 3. Copy the generated password; you’ll use it as `APPLE_APP_SPECIFIC_PASSWORD` (this is **not** your normal Apple ID password).
 
 ---
@@ -194,7 +194,7 @@ Optional flags:
 
 ### GitHub asset size limit
 
-GitHub Release assets reject individual files **>= 2 GiB**. If upload fails due to size, host artifacts on a public bucket (e.g. R2) and switch `publish.provider` in `electron-builder.js` to `generic`.
+GitHub Release assets reject individual files **>= 2 GiB**. If upload fails due to size, host artifacts on a public bucket (e.g. R2) and configure the Tauri updater plugin for a generic endpoint.
 
 ### GitHub Pages setup
 
@@ -206,9 +206,9 @@ GitHub Release assets reject individual files **>= 2 GiB**. If upload fails due 
 
 ## 9. Optional: Customize app id and name
 
-In `electron-builder.js`:
+In `src-tauri/tauri.conf.json`:
 
-- `appId`: e.g. `com.yourcompany.harness` (reverse-DNS bundle id).
+- `identifier`: e.g. `com.yourcompany.harness` (reverse-DNS bundle id).
 - `productName`: **Harness** (Dock/Finder name; version is shown inside the app, not in the title).
 
 Update `author` and `description` in `package.json` as needed.
@@ -225,9 +225,9 @@ Ensure `CSC_LINK` points to the `.p12` and `CSC_KEY_PASSWORD` is correct. If you
 Use an **app-specific password**, not your normal Apple ID password. Confirm `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` are correct.
 - **“The signature of the binary is invalid”**  
 Make sure you’re using a **Developer ID Application** certificate (not “Mac Development” or “Apple Distribution”). Re-export the `.p12` and try again.
-- **App crashes on launch (e.g. JIT)**  
-The included `build/entitlements.mac.plist` enables JIT and unsigned executable memory for Electron. If you change entitlements, ensure those are still present for your use case.
+- **App crashes on launch**  
+Check Console.app for Rust panics. Ensure native helpers (`HarnessSpeech`, `HarnessFnMonitor`) were built (`npm run prebuild`).
 - **Build without signing (local only)**  
 To build an unsigned app (not for distribution):  
-`CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac`
+`CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac:quick`
 

@@ -188,7 +188,7 @@ export function NotesView({
     return notes.filter((note) => getDisplayNoteTitle(note.title).toLowerCase().includes(q));
   }, [notes, listSearchQuery]);
   const listSearching = listSearchQuery.trim().length > 0;
-  const notesApi = window.electron.notes;
+  const notesApi = window.harness.notes;
   const hasSelection = selection != null;
   const showSelectionToolbar = hasSelection && !asideExpanded;
   const showAsidePanel = hasSelection && asideExpanded;
@@ -333,7 +333,7 @@ export function NotesView({
 
   useEffect(() => {
     void loadNotes();
-    void window.electron.settings
+    void window.harness.settings
       .get()
       .then((settings) => {
         setNoteTemplates(normalizeNoteTemplates((settings as { notes?: { templates?: unknown } }).notes?.templates));
@@ -860,7 +860,7 @@ export function NotesView({
                       onClick={() => {
                         const title = activeNote ? getDisplayNoteTitle(activeNote.title) : "Note";
                         const html = buildNotePrintHtml(title, draft);
-                        void window.electron.notes.print(html, title);
+                        void window.harness.notes.print(html, title);
                         setNoteToolbarMenuOpen(false);
                       }}
                     >
@@ -875,7 +875,7 @@ export function NotesView({
                       onClick={() => {
                         const id = selectedNoteId;
                         if (!id) return;
-                        void window.electron.notes.showInFolder(id);
+                        void window.harness.notes.showInFolder(id);
                         setNoteToolbarMenuOpen(false);
                       }}
                     >

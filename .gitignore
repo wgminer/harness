@@ -1,5 +1,24 @@
+# Dependencies
+node_modules
+
+# Build outputs
+dist/
+dist-web/
+dist-ssr/
+out/
+src-tauri/target/
+build/icon.iconset/
+*.tsbuildinfo
+
+# Environment & signing
+.env
+.env.*
+!.env.example
+*.local
+*.p12
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,18 +26,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Legacy Harness (v1 web app); keep ignored if stray file remains locally
-firebase.js
-
-# Editor directories and files
+# Editor & OS
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
@@ -26,43 +37,35 @@ firebase.js
 *.sln
 *.sw?
 
-import
-import_v2
-.env
-*.p12
-out
-*.tsbuildinfo
+# Local scratch / imports (not part of the repo)
+import/
+import_v2/
+backlog/
+
+# Legacy v1 web app (ignore if a stray file remains locally)
+firebase.js
+
+# Release artifacts copied into the download site
 site/downloads/*.dmg
 
-# Playwright / E2E
-.e2e-user-data/
-test-results/
-playwright-report/
-playwright/.cache/
-e2e/.auth/
-e2e/screenshots/
-e2e/videos/
-e2e/traces/
+# Test coverage (Vitest)
 coverage/
 
 # macOS native helpers (built by prebuild)
 resources/HarnessSpeech
 resources/HarnessFnMonitor
 
-# Legacy Parakeet (removed); ignore local build outputs and old bundled runtime
+# Removed Parakeet stack (local build artifacts only — safe to delete)
 resources/parakeet/
 build/parakeet-cpp/
 build/parakeet-cache/
 build/parakeet-venv/
 
-# Swift Package build artifacts
+# Swift Package build artifacts (native helpers)
 native/**/.build/
 native/**/.swiftpm/
 
-# Local backlog / scratch notes
-backlog/
-
-# Xcode (iOS app)
+# iOS / Xcode
 **/xcuserdata/
 *.xcuserstate
 ios/**/DerivedData/

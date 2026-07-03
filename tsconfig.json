@@ -16,9 +16,5 @@
     }
   },
   "include": ["src/**/*"],
-  "references": [
-    { "path": "./tsconfig.main.json" },
-    { "path": "./tsconfig.preload.json" },
-    { "path": "./tsconfig.renderer.json" }
-  ]
+  "references": [{ "path": "./tsconfig.renderer.json" }]
 }

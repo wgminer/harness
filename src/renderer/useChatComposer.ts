@@ -88,7 +88,7 @@ export function useChatComposer({
       setAttachmentTranscribing(true);
       try {
         const wav = await audioFileToWav(attached);
-        const result = await window.electron.recording.transcribe(wav);
+        const result = await window.harness.recording.transcribe(wav);
         if ("error" in result) {
           setAttachmentError(result.error);
           return;
@@ -123,8 +123,8 @@ export function useChatComposer({
     async (text: string, result?: { cleanupSkipped?: "no_api_key" }) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      const settings = (await window.electron.settings.get()) as Settings;
-      const credentialStatus = await window.electron.credentials.getStatus();
+      const settings = (await window.harness.settings.get()) as Settings;
+      const credentialStatus = await window.harness.credentials.getStatus();
       const autoSend = settings.recording?.autoSend ?? true;
       const canChat = credentialStatus.hasOpenAIApiKey;
       if (autoSend && canChat && !pendingHotkeyDraftOnly) {
@@ -164,10 +164,10 @@ export function useChatComposer({
     transcriptionCancelledRef.current = false;
     try {
       const wav = await recorder.stop();
-      window.electron.recording.saveWav(wav).catch(() => {});
+      window.harness.recording.saveWav(wav).catch(() => {});
       const requestId = crypto.randomUUID();
       transcriptionRequestIdRef.current = requestId;
-      const result = await window.electron.recording.transcribe(wav, { requestId });
+      const result = await window.harness.recording.transcribe(wav, { requestId });
       if (transcriptionCancelledRef.current || transcriptionRequestIdRef.current !== requestId) {
         return;
       }
@@ -215,7 +215,7 @@ export function useChatComposer({
     }
     if (voiceState === "processing" && transcriptionRequestIdRef.current) {
       transcriptionCancelledRef.current = true;
-      void window.electron.recording.cancelTranscription(transcriptionRequestIdRef.current).catch(() => {});
+      void window.harness.recording.cancelTranscription(transcriptionRequestIdRef.current).catch(() => {});
       transcriptionRequestIdRef.current = null;
     }
     try {

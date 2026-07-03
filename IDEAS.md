@@ -17,12 +17,12 @@ Scratchpad for future product directions. Not commitments.
 **Problem:** Two of the biggest invisible layers in Harness today:
 
 1. **Per-reply context assembly** — Each chat turn builds a system prompt (memory injection strategy, selected facts, temporal context, `[sent_at=…]` annotations) in `buildMessageList`, but users only configure strategy in Config → Context and never see what landed for a specific reply.
-2. **Dictation pipeline** — Voice capture runs Parakeet → optional LLM cleanup → dictionary → sent text, but only the final string is kept; raw WAV is saved unlinked and intermediate stages are discarded.
+2. **Dictation pipeline** — Voice capture runs Apple Speech → optional LLM cleanup → dictionary → sent text, but only the final string is kept; raw WAV is saved unlinked and intermediate stages are discarded.
 
 **Proposed:**
 
 - **Context inspector** on assistant messages — collapsed card (like tool calls) showing injection strategy, injected facts, temporal summary, and expandable full system prompt; snapshot persisted on the message at send time.
-- **Dictation inspector** on user messages — tabs for Audio (inline playback when WAV exists locally), Raw (Parakeet), Cleaned (LLM cleanup), Sent (final text); `DictationMeta` persisted on the message; text stages sync, audio stays local-only.
+- **Dictation inspector** on user messages — tabs for Audio (inline playback when WAV exists locally), Raw (Apple Speech), Cleaned (LLM cleanup), Sent (final text); `DictationMeta` persisted on the message; text stages sync, audio stays local-only.
 
 **Out of scope for this idea (deferred):** richer tool cards, sync merge narrative, provenance links, per-thread usage attribution.
 

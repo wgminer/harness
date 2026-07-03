@@ -1,29 +1,8 @@
 #!/usr/bin/env node
 /**
- * Unified dist runner for Harness.
+ * Unified dist runner for Harness (Tauri).
  *
- * Responsibilities:
- *   1. Auto-bump the patch version in package.json (and package-lock.json) on every run.
- *      - Opt out with `HARNESS_SKIP_VERSION_BUMP=1` (release.js also sets `REQUIRE_NOTARIZE=1`,
- *        which is treated as an implicit opt-out so release builds keep the existing version).
- *      - Only edits package.json / package-lock.json; never runs git commit or git tag.
- *   2. Run the full dist pipeline as discrete, timed steps so you get progress feedback:
- *      icon -> speech-helper -> fn-monitor -> electron-vite build -> electron-builder (+ optional /Applications install)
- *   3. Print a step counter, a simple ASCII progress bar, a per-step duration, and a running
- *      total elapsed time. Long-running steps emit a periodic "still running" heartbeat so it
- *      never looks frozen.
- *
- * Usage:
- *   node scripts/dist-runner.js                 # default cross-platform dist
- *   node scripts/dist-runner.js --mac           # mac dmg/zip via scripts/dist-mac.js
- *   node scripts/dist-runner.js --mac --replace   # also install the built .app into /Applications
- *   node scripts/dist-runner.js --mac --publish   # build + upload to GitHub Releases
- *   node scripts/dist-runner.js --mac --quick     # skip code signing + notarization (local only)
- *
- * Env flags:
- *   HARNESS_SKIP_VERSION_BUMP=1   skip the auto patch bump for this run
- *   REQUIRE_NOTARIZE=1            implies skip-bump (set by scripts/release.js)
- *   CSC_IDENTITY_AUTO_DISCOVERY=false  skip code signing (also set by --quick)
+ * Steps: icon -> speech-helper -> fn-monitor -> vite build -> tauri build
  */
 const fs = require("fs");
 const path = require("path");
@@ -33,7 +12,7 @@ const root = path.join(__dirname, "..");
 require("dotenv").config({ path: path.join(root, ".env") });
 
 const args = process.argv.slice(2);
-const isMac = args.includes("--mac");
+const isMac = args.includes("--mac") || process.platform === "darwin";
 const replace = args.includes("--replace");
 const quick = args.includes("--quick");
 const publish = args.includes("--publish");
@@ -85,6 +64,23 @@ function shouldBumpVersion() {
   return true;
 }
 
+function syncTauriVersion(next) {
+  const cargoPath = path.join(root, "src-tauri", "Cargo.toml");
+  const confPath = path.join(root, "src-tauri", "tauri.conf.json");
+  if (fs.existsSync(cargoPath)) {
+    const cargo = fs.readFileSync(cargoPath, "utf8");
+    fs.writeFileSync(
+      cargoPath,
+      cargo.replace(/^version = ".*"$/m, `version = "${next}"`)
+    );
+  }
+  if (fs.existsSync(confPath)) {
+    const conf = JSON.parse(fs.readFileSync(confPath, "utf8"));
+    conf.version = next;
+    fs.writeFileSync(confPath, `${JSON.stringify(conf, null, 2)}\n`);
+  }
+}
+
 function bumpPatchVersion() {
   const pkgPath = path.join(root, "package.json");
   const lockPath = path.join(root, "package-lock.json");
@@ -98,6 +94,7 @@ function bumpPatchVersion() {
   const next = `${m[1]}.${m[2]}.${Number(m[3]) + 1}${m[4]}`;
   pkg.version = next;
   fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  syncTauriVersion(next);
 
   if (fs.existsSync(lockPath)) {
     try {
@@ -135,18 +132,13 @@ async function runStep(ctx, idx, total, label, fn) {
   const stepStart = Date.now();
   const totalSoFar = fmtDuration(stepStart - startedAt);
   console.log(
-    `\n${color("cyan", makeBar(idx, total))} ${color(
-      "bold",
-      `[${idx + 1}/${total}]`
-    )} ${label} ${color("dim", `(total elapsed ${totalSoFar})`)}`
+    `\n${color("cyan", makeBar(idx, total))} ${color("bold", `[${idx + 1}/${total}]`)} ${label} ${color("dim", `(total elapsed ${totalSoFar})`)}`
   );
 
   const heartbeat = setInterval(() => {
     const stepE = fmtDuration(Date.now() - stepStart);
     const totalE = fmtDuration(Date.now() - startedAt);
-    console.log(
-      color("dim", `  · ${label}: still running — step ${stepE}, total ${totalE}`)
-    );
+    console.log(color("dim", `  · ${label}: still running — step ${stepE}, total ${totalE}`));
   }, HEARTBEAT_MS);
   heartbeat.unref?.();
 
@@ -160,26 +152,37 @@ async function runStep(ctx, idx, total, label, fn) {
   const totalE = fmtDuration(Date.now() - startedAt);
   ctx.timings.push({ label, ms: Date.now() - stepStart });
   console.log(
-    `${color("green", makeBar(idx + 1, total))} ${color(
-      "bold",
-      `[${idx + 1}/${total}]`
-    )} ${label} ${color("green", "done")} ${color("dim", `step ${stepE} · total ${totalE}`)}`
+    `${color("green", makeBar(idx + 1, total))} ${color("bold", `[${idx + 1}/${total}]`)} ${label} ${color("green", "done")} ${color("dim", `step ${stepE} · total ${totalE}`)}`
   );
 }
 
+function findBuiltApp() {
+  const candidates = [
+    path.join(root, "src-tauri", "target", "release", "bundle", "macos", "Harness.app"),
+    path.join(root, "dist", "mac-arm64", "Harness.app"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+function installToApplications(appPath) {
+  const dest = "/Applications/Harness.app";
+  if (fs.existsSync(dest)) {
+    fs.rmSync(dest, { recursive: true, force: true });
+  }
+  fs.cpSync(appPath, dest, { recursive: true });
+  console.log(color("green", `  Installed ${appPath} → ${dest}`));
+}
+
 async function main() {
-  const mode = isMac ? "mac" : "default";
   const modeExtras = [replace && "replace", quick && "quick (unsigned)", publish && "publish"].filter(Boolean);
   console.log(
-    color("bold", `\n▸ Harness dist (${mode}${modeExtras.length ? ` + ${modeExtras.join(" + ")}` : ""})`)
+    color("bold", `\n▸ Harness dist (tauri${modeExtras.length ? ` + ${modeExtras.join(" + ")}` : ""})`)
   );
   if (quick) {
-    console.log(
-      color(
-        "yellow",
-        "  quick: code signing and notarization disabled — for local testing only"
-      )
-    );
+    console.log(color("yellow", "  quick: code signing disabled — for local testing only"));
   }
 
   let versionInfo;
@@ -193,23 +196,11 @@ async function main() {
   } else {
     const cur = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
     versionInfo = { from: cur, to: cur, bumped: false };
-    console.log(
-      `  ${color("cyan", "version")}: ${color("green", `v${cur}`)} ${color("dim", "(bump skipped)")}`
-    );
+    console.log(`  ${color("cyan", "version")}: ${color("green", `v${cur}`)} ${color("dim", "(bump skipped)")}`);
   }
 
-  // electron-vite's package "exports" doesn't expose bin/, so resolve via package.json's
-  // "bin" field manually (avoids the ERR_PACKAGE_PATH_NOT_EXPORTED error from require.resolve).
-  const evPkg = require("electron-vite/package.json");
-  const evBin = typeof evPkg.bin === "string" ? evPkg.bin : evPkg.bin?.["electron-vite"];
-  if (!evBin) throw new Error("could not locate electron-vite bin in node_modules");
-  const electronViteCli = path.join(
-    path.dirname(require.resolve("electron-vite/package.json")),
-    evBin
-  );
-  const electronBuilderCli = require.resolve("electron-builder/cli");
+  const tauriCli = path.join(root, "node_modules", ".bin", "tauri");
 
-  /** Each step is { label, run: () => Promise<void> } */
   const steps = [
     {
       label: "icon:icns",
@@ -224,69 +215,47 @@ async function main() {
       run: () => runChild("bash", [path.join(root, "scripts", "build-fn-monitor.sh")]),
     },
     {
-      label: "electron-vite build",
-      run: () => runChild(process.execPath, [electronViteCli, "build"]),
+      label: "vite build",
+      run: () => runChild("npm", ["run", "build:web"]),
+    },
+    {
+      label: publish ? "tauri build + publish" : "tauri build",
+      run: () => {
+        const tauriArgs = ["build"];
+        if (isMac) tauriArgs.push("--bundles", "dmg,app");
+        return runChild(tauriCli, tauriArgs);
+      },
     },
   ];
-
-  if (isMac) {
-    const distMacArgs = [path.join(root, "scripts", "dist-mac.js")];
-    if (replace) distMacArgs.push("--replace");
-    if (publish) distMacArgs.push("--publish");
-    steps.push({
-      label: publish
-        ? "electron-builder (mac dmg/zip) + publish"
-        : replace
-          ? "electron-builder (mac) + install to /Applications"
-          : "electron-builder (mac dmg/zip)",
-      run: () => runChild(process.execPath, distMacArgs),
-    });
-  } else {
-    steps.push({
-      label: "electron-builder",
-      run: () => runChild(process.execPath, [electronBuilderCli]),
-    });
-  }
 
   const ctx = { timings: [] };
   for (let i = 0; i < steps.length; i += 1) {
     await runStep(ctx, i, steps.length, steps[i].label, steps[i].run);
   }
 
+  if (replace) {
+    const appPath = findBuiltApp();
+    if (!appPath) throw new Error("Built Harness.app not found");
+    installToApplications(appPath);
+  }
+
+  const builtApp = findBuiltApp();
+  if (builtApp) {
+    const { execSync } = require("child_process");
+    const size = execSync(`du -sh "${builtApp}"`, { encoding: "utf8" }).trim();
+    console.log(color("dim", `  artifact: ${builtApp} (${size.split("\t")[0]})`));
+  }
+
   const totalE = fmtDuration(Date.now() - startedAt);
   console.log(color("green", `\n✓ dist finished in ${totalE}`));
-
-  // Per-step breakdown
-  console.log(color("bold", "  breakdown:"));
-  for (const t of ctx.timings) {
-    console.log(`    ${String(t.label).padEnd(48)} ${color("dim", fmtDuration(t.ms))}`);
-  }
-
-  if (versionInfo.bumped) {
-    console.log(
-      color(
-        "dim",
-        `  package.json now at v${versionInfo.to} (no git commit/tag was created)`
-      )
-    );
-  } else {
-    console.log(color("dim", `  package.json version: v${versionInfo.to}`));
-  }
 }
 
 if (require.main === module) {
   main().catch((err) => {
     const totalE = fmtDuration(Date.now() - startedAt);
-    console.error(
-      color("red", `\n✗ dist failed after ${totalE}: ${err?.message ?? err}`)
-    );
+    console.error(color("red", `\n✗ dist failed after ${totalE}: ${err?.message ?? err}`));
     process.exit(1);
   });
 }
 
-module.exports = {
-  shouldBumpVersion,
-  bumpPatchVersion,
-  fmtDuration,
-  makeBar,
-};
+module.exports = { shouldBumpVersion, bumpPatchVersion, fmtDuration, makeBar };

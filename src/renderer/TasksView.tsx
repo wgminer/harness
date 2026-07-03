@@ -1,7 +1,7 @@
 import { snapToGrid } from "../shared/grid";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, ListTodo, Square, SquareCheck, Trash2, X } from "lucide-react";
-import type { TaskItem, TasksPayload } from "../shared/electronAPI";
+import type { TaskItem, TasksPayload } from "../shared/desktopAPI";
 import { normalizeTags } from "../shared/tags";
 import {
   migrateTaskFields,
@@ -113,7 +113,7 @@ export function TasksView() {
 
   const composer = useChatComposer({
     onSubmit: async (text) => {
-      const payload = await window.electron.tasks.create(text, []);
+      const payload = await window.harness.tasks.create(text, []);
       refreshFromPayload(payload);
     },
     composerRef,
@@ -140,7 +140,7 @@ export function TasksView() {
     (async () => {
       setLoading(true);
       try {
-        const payload = await window.electron.tasks.list();
+        const payload = await window.harness.tasks.list();
         setTasks((payload.tasks ?? []).map(normalizeTask));
       } finally {
         setLoading(false);
@@ -176,12 +176,12 @@ export function TasksView() {
     id: string,
     patch: { title?: string; status?: TaskStatus; tags?: string[] },
   ) => {
-    const payload = await window.electron.tasks.update({ id, ...patch });
+    const payload = await window.harness.tasks.update({ id, ...patch });
     refreshFromPayload(payload);
   };
 
   const deleteTask = async (id: string) => {
-    const payload = await window.electron.tasks.delete(id);
+    const payload = await window.harness.tasks.delete(id);
     refreshFromPayload(payload);
   };
 
@@ -269,7 +269,7 @@ export function TasksView() {
     if (!trimmed) return;
     setModalSaving(true);
     try {
-      const payload = await window.electron.tasks.update({
+      const payload = await window.harness.tasks.update({
         id: modalTask.id,
         title: trimmed,
         tags: modalTags,

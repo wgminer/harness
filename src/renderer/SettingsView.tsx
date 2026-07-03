@@ -220,8 +220,8 @@ export function SettingsView({
       });
     };
     void Promise.all([
-      window.electron.settings.get(),
-      window.electron.credentials.getSecretsForSettings(),
+      window.harness.settings.get(),
+      window.harness.credentials.getSecretsForSettings(),
     ])
       .then(([s, secrets]) => {
         if (cancelled) return;
@@ -270,8 +270,8 @@ export function SettingsView({
         if (!cancelled) settingsHydratedRef.current = true;
         enableSwitchAnimations();
       });
-    window.electron.memory.getUserMemory().then(setUserMemory);
-    window.electron.customization.getLayoutOptions().then(setLayoutOptions);
+    window.harness.memory.getUserMemory().then(setUserMemory);
+    window.harness.customization.getLayoutOptions().then(setLayoutOptions);
     return () => {
       cancelled = true;
     };
@@ -279,7 +279,7 @@ export function SettingsView({
 
   useEffect(() => {
     if (!isMac) return;
-    void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+    void window.harness.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
   }, [isMac]);
 
   useEffect(() => {
@@ -301,9 +301,9 @@ export function SettingsView({
   }, [activeTab]);
 
   useEffect(() => {
-    const unsub = window.electron.customization.onUpdated((payload) => {
+    const unsub = window.harness.customization.onUpdated((payload) => {
       if (payload.type === "layout") {
-        void window.electron.customization.getLayoutOptions().then(setLayoutOptions);
+        void window.harness.customization.getLayoutOptions().then(setLayoutOptions);
       }
     });
     return unsub;
@@ -350,7 +350,7 @@ export function SettingsView({
     setSaveStatus("saving");
 
     try {
-      await window.electron.settings.set({
+      await window.harness.settings.set({
         openai: next.apiKey.trim() ? { apiKey: next.apiKey } : undefined,
         recording: { autoSend: next.autoSend, globalFnHotkey: next.globalFnHotkey },
         chat: { openToComposeOnLaunch: next.openToComposeOnLaunch },
@@ -376,7 +376,7 @@ export function SettingsView({
         },
       });
       if (next.r2SecretAccessKey !== (prev.r2SecretAccessKey ?? "")) {
-        await window.electron.sync.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
+        await window.harness.sync.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
       }
       const r2Changed =
         next.r2AccountId !== prev.r2AccountId ||
@@ -384,7 +384,7 @@ export function SettingsView({
         next.r2Prefix !== prev.r2Prefix ||
         next.r2AccessKeyId !== prev.r2AccessKeyId ||
         next.r2SecretAccessKey !== prev.r2SecretAccessKey;
-      if (r2Changed) setDataStatus(await window.electron.memory.getDataStatus());
+      if (r2Changed) setDataStatus(await window.harness.memory.getDataStatus());
       lastPersistedRef.current = latest;
       setSaveStatus("saved");
       onSettingsChanged?.();
@@ -557,7 +557,7 @@ export function SettingsView({
     );
     const normalized = normalizeNoteTemplates(nextTemplates);
     setNoteTemplates(normalized);
-    await window.electron.settings.set({ notes: { templates: normalized } });
+    await window.harness.settings.set({ notes: { templates: normalized } });
     window.dispatchEvent(new CustomEvent("notes:templatesUpdated", { detail: normalized }));
     closeTemplatesModal();
   };
@@ -588,20 +588,20 @@ export function SettingsView({
     const nextTitle = newMemTitle.trim();
     const nextDetail = newMemDetail.trim();
     if (editingMemoryKey && editingMemoryKey !== nextTitle) {
-      await window.electron.memory.deleteUserMemoryKey(editingMemoryKey);
+      await window.harness.memory.deleteUserMemoryKey(editingMemoryKey);
     }
-    await window.electron.memory.setUserMemory(nextTitle, nextDetail);
-    setUserMemory(await window.electron.memory.getUserMemory());
+    await window.harness.memory.setUserMemory(nextTitle, nextDetail);
+    setUserMemory(await window.harness.memory.getUserMemory());
     closeMemoryModal();
   };
 
   const deleteMemoryEntry = async (key: string) => {
-    await window.electron.memory.deleteUserMemoryKey(key);
-    setUserMemory(await window.electron.memory.getUserMemory());
+    await window.harness.memory.deleteUserMemoryKey(key);
+    setUserMemory(await window.harness.memory.getUserMemory());
   };
 
   const refreshDataStatus = async () => {
-    const status = await window.electron.memory.getDataStatus();
+    const status = await window.harness.memory.getDataStatus();
     setDataStatus(status);
   };
 
@@ -609,7 +609,7 @@ export function SettingsView({
     setCleanupLegacyBusy(true);
     setCleanupLegacyMessage(null);
     try {
-      const result = await window.electron.memory.cleanupLegacyMemory();
+      const result = await window.harness.memory.cleanupLegacyMemory();
       setCleanupLegacyMessage(result.removed ? "Removed legacy memory folder." : "No legacy memory folder to remove.");
       await refreshDataStatus();
     } finally {
@@ -621,7 +621,7 @@ export function SettingsView({
     setSyncBusy(true);
     setSyncMessage(null);
     try {
-      const result = await window.electron.sync.runNow();
+      const result = await window.harness.sync.runNow();
       if (result.ok) {
         setSyncMessage(result.status.statusLine ?? "Synced.");
         if (result.mergeWarning) {
@@ -643,7 +643,7 @@ export function SettingsView({
     setSyncTestBusy(true);
     setSyncMessage(null);
     try {
-      const result = await window.electron.sync.testConnection();
+      const result = await window.harness.sync.testConnection();
       setSyncMessage(result.ok ? "R2 connected." : (result.error ?? "Connection failed."));
       if (result.ok) void refreshDataStatus();
     } finally {
@@ -655,7 +655,7 @@ export function SettingsView({
     setImporting(true);
     setImportStatus(null);
     try {
-      const result = await window.electron.memory.importFromChatGPTFolder();
+      const result = await window.harness.memory.importFromChatGPTFolder();
       setImportStatus(result);
       if (result.imported > 0) onImportComplete?.();
     } catch (e) {
@@ -672,7 +672,7 @@ export function SettingsView({
     setClaudeImporting(true);
     setClaudeImportStatus(null);
     try {
-      const result = await window.electron.memory.importFromClaudeFolder();
+      const result = await window.harness.memory.importFromClaudeFolder();
       setClaudeImportStatus(result);
       if (result.imported > 0) onImportComplete?.();
     } catch (e) {
@@ -686,7 +686,7 @@ export function SettingsView({
   };
 
   const refreshCompileStatus = async () => {
-    const status = await window.electron.memory.getCompileStatus();
+    const status = await window.harness.memory.getCompileStatus();
     setCompileStatus(status);
   };
 
@@ -703,7 +703,7 @@ export function SettingsView({
     setLlmImportBusy(true);
     setLlmImportMessage(null);
     try {
-      const response = await window.electron.memory.importLlmContext(llmImportDraft);
+      const response = await window.harness.memory.importLlmContext(llmImportDraft);
       if (response.ok) {
         const r = response.result;
         const parts = [`Added ${r.added}, updated ${r.updated}.`];
@@ -711,7 +711,7 @@ export function SettingsView({
         if (r.truncated) parts.push("Export was truncated before processing.");
         setLlmImportMessage(parts.join(" "));
         setLlmImportDraft("");
-        setUserMemory(await window.electron.memory.getUserMemory());
+        setUserMemory(await window.harness.memory.getUserMemory());
       } else {
         setLlmImportMessage(response.error);
       }
@@ -724,7 +724,7 @@ export function SettingsView({
     setCompileBusy(true);
     setCompileMessage(null);
     try {
-      const response = await window.electron.memory.runCompileNow();
+      const response = await window.harness.memory.runCompileNow();
       if (response.ok) {
         const r = response.result;
         if (r.skipped) {
@@ -740,7 +740,7 @@ export function SettingsView({
         setCompileMessage(response.error);
       }
       await refreshCompileStatus();
-      setUserMemory(await window.electron.memory.getUserMemory());
+      setUserMemory(await window.harness.memory.getUserMemory());
     } finally {
       setCompileBusy(false);
     }
@@ -748,7 +748,7 @@ export function SettingsView({
 
   const updateLayoutOptions = (patch: Partial<LayoutOptions>) => {
     setLayoutOptions((prev) => ({ ...prev, ...patch }));
-    void window.electron.customization.setLayout(patch);
+    void window.harness.customization.setLayout(patch);
   };
 
   const switchTab = (id: SettingsTabId) => {
@@ -1050,7 +1050,7 @@ export function SettingsView({
                 <button
                   type="button"
                   className="btn"
-                  onClick={() => window.electron.recording.openFolder()}
+                  onClick={() => window.harness.recording.openFolder()}
                 >
                   Show Recordings <ExternalLink size={14} aria-hidden />
                 </button>
@@ -1086,9 +1086,9 @@ export function SettingsView({
                           className="btn"
                           data-testid="settings-accessibility-prompt"
                           onClick={() => {
-                            void window.electron.system.requestAccessibilityPrompt();
+                            void window.harness.system.requestAccessibilityPrompt();
                             setTimeout(() => {
-                              void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+                              void window.harness.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
                             }, 800);
                           }}
                         >
@@ -1100,9 +1100,9 @@ export function SettingsView({
                         className="btn"
                         data-testid="settings-open-accessibility"
                         onClick={() => {
-                          void window.electron.system.openAccessibilitySettings();
+                          void window.harness.system.openAccessibilitySettings();
                           setTimeout(() => {
-                            void window.electron.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+                            void window.harness.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
                           }, 1500);
                         }}
                       >
@@ -1458,7 +1458,7 @@ export function SettingsView({
               description="Harness stores conversations, notes, and settings on this device. Backup syncs everything except local recordings."
             >
               <SettingsActions>
-                <button type="button" className="btn" onClick={() => window.electron.memory.openAppDataFolder()}>
+                <button type="button" className="btn" onClick={() => window.harness.memory.openAppDataFolder()}>
                   {appDataFolderButtonLabel(platform)} <ExternalLink size={14} aria-hidden />
                 </button>
                 {dataStatus?.legacyMemoryExists && (
