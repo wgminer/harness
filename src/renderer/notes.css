@@ -177,7 +177,8 @@
 }
 
 .notes-surface__note-word-count::after {
-  content: " · ";
+  content: "·";
+  margin: 0 0.35em;
 }
 
 .notes-surface__note-item:hover .notes-surface__note-word-count,

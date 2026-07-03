@@ -101,10 +101,27 @@ export function ChatMessageList({
           if (m.role !== "user") {
             if (m.content)
               assistantBubbleBody = (
-                <MarkdownContent content={stripSentAtPrefix(m.content)} />
+                <MarkdownContent
+                  content={stripSentAtPrefix(m.content)}
+                  messageId={m.id}
+                  messageTimestamp={m.timestamp}
+                  copiedId={copiedId}
+                  savedToNotesId={savedToNotesId}
+                  onCopied={onCopied}
+                  onSaveToNotes={onSaveToNotes}
+                />
               );
             else if (isLatestAssistantPending) assistantBubbleBody = <ReplyingIndicator />;
           }
+
+          const markdownActions = {
+            messageId: m.id,
+            messageTimestamp: m.timestamp,
+            copiedId,
+            savedToNotesId,
+            onCopied,
+            onSaveToNotes,
+          };
 
           return (
             <div
@@ -127,7 +144,7 @@ export function ChatMessageList({
                       <div className="message-user-card__fade" aria-hidden />
                     ) : null}
                     <div className="message-user-card__content" ref={(el) => { userCardContentRefs.current[m.id] = el; }}>
-                      {m.content ? <MarkdownContent content={m.content} /> : null}
+                      {m.content ? <MarkdownContent content={m.content} {...markdownActions} /> : null}
                     </div>
                     {(expandedUserCards.has(m.id) || overflowedUserCards.has(m.id)) && (
                       <button
@@ -185,14 +202,16 @@ export function ChatMessageList({
                     </>
                   )}
                 </div>
-                <SaveToNotesButton
-                  content={m.content}
-                  messageId={m.id}
-                  messageTimestamp={m.timestamp}
-                  savedNoteId={savedToNotesId}
-                  onSaveToNotes={onSaveToNotes}
-                />
-                <CopyButton content={m.content} messageId={m.id} copiedId={copiedId} onCopied={onCopied} />
+                <div className="message-block-footer-actions">
+                  <SaveToNotesButton
+                    content={m.content}
+                    messageId={m.id}
+                    messageTimestamp={m.timestamp}
+                    savedNoteId={savedToNotesId}
+                    onSaveToNotes={onSaveToNotes}
+                  />
+                  <CopyButton content={m.content} messageId={m.id} copiedId={copiedId} onCopied={onCopied} />
+                </div>
               </div>
             </div>
           );
