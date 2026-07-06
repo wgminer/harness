@@ -151,7 +151,7 @@ npm run verify:mac-trust -- /path/to/Harness.app
 
 Outputs (for Mac) are under:
 
-- `dist/harness-vx.x.x-mac.dmg` – installer (`harness` comes from `package.json` `name`; `v` matches `version`; a copy is also written to `site/downloads/harness.dmg` for the download page)
+- `dist/harness-vx.x.x-mac.dmg` – installer (`harness` comes from `package.json` `name`; `v` matches `version`)
 - `dist/harness-vx.x.x-mac.zip` – zip of the app (e.g. for auto-updates)
 - `dist/mac-arm64/Harness.app` (and/or `mac/` for Intel) – the app bundle (Dock/Finder title is **Harness**; the semantic version still comes from `package.json` and is shown in the app UI)
 
@@ -159,19 +159,29 @@ You can double‑click `Harness.app` in `dist/mac-`* or the DMG to install and o
 
 ---
 
-## 8. Release and auto-update
+## 8. Release, download site, and auto-update
 
-This project does not commit DMGs to git. Build artifacts are produced under `dist/` and published to GitHub Releases.
+This project does not commit DMGs to git. Build artifacts land under `dist/` and are published as **GitHub Releases on this repo** (`wgminer/harness`).
 
-The GitHub Pages download button points to:
+The download page lives in [`site/`](site/) and is deployed to GitHub Pages by [`.github/workflows/pages.yml`](.github/workflows/pages.yml) whenever `site/` changes on `main`. After you make the repo public, enable Pages under **Settings → Pages → Build and deployment → GitHub Actions**.
+
+The landing page download button points to:
 
 - `https://github.com/wgminer/harness/releases/latest`
 
 ### One-command release
 
 1. Bump `version` in `package.json` and commit to `main`.
-2. Set `GH_TOKEN` (GitHub personal access token with `repo` scope) in your shell or `.env`.
-3. Run:
+2. Set signing env vars in `.env` (see [`.env.example`](.env.example)): `GH_TOKEN`, Apple notarization (`APPLE_*`), code signing (`CSC_*`), and updater signing (`TAURI_SIGNING_PRIVATE_KEY`).
+3. Generate an updater key pair once (if you have not already):
+
+```bash
+npx tauri signer generate -w ~/.tauri/harness.key
+```
+
+Copy the printed public key into `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.
+
+4. Run:
 
 ```bash
 npm run release
@@ -182,7 +192,7 @@ This command:
 1. Verifies your git working tree is clean.
 2. Builds `dist:mac` with `REQUIRE_NOTARIZE=1` (signed + notarized).
 3. Runs `verify:mac-trust`.
-4. Publishes to GitHub Releases (DMG, zip, blockmap, and `latest-mac.yml` for in-app updates).
+4. Collects DMG, ZIP, updater bundle, and `latest.json`, then publishes them to GitHub Releases on this repo.
 5. Creates git tag `vX.Y.Z` and pushes tag + `main`.
 
 Installed copies of Harness check GitHub on launch and show an **Update** button in the sidebar when a newer release exists.
@@ -192,15 +202,26 @@ Optional flags:
 - `npm run release -- --dry-run` — build and verify only; skip publish and git tag.
 - `npm run release -- --no-tag` — publish to GitHub but skip git tag push.
 
+### Manual release
+
+```bash
+npm run dist:mac
+npm run verify:mac-trust
+node scripts/publish-github-release.js
+```
+
 ### GitHub asset size limit
 
 GitHub Release assets reject individual files **>= 2 GiB**. If upload fails due to size, host artifacts on a public bucket (e.g. R2) and configure the Tauri updater plugin for a generic endpoint.
 
 ### GitHub Pages setup
 
-1. In GitHub repo settings, open **Pages**.
-2. Set **Source** to **GitHub Actions**.
-3. The `Deploy Download Site` workflow publishes whenever `site/` changes on `main` (or you can run it manually).
+1. Make the repository **public** (required for free public Pages and public release downloads).
+2. Under **Settings → Pages**, set **Source** to **GitHub Actions**.
+3. Push changes under `site/` to `main`; the deploy workflow publishes automatically.
+4. Optionally set a custom domain (e.g. `williamminer.com`) in Pages settings and update DNS.
+
+You can archive the old [`wgminer/harness-site`](https://github.com/wgminer/harness-site) repo once Pages and releases run from this repo.
 
 ---
 
@@ -208,7 +229,7 @@ GitHub Release assets reject individual files **>= 2 GiB**. If upload fails due 
 
 In `src-tauri/tauri.conf.json`:
 
-- `identifier`: e.g. `com.yourcompany.harness` (reverse-DNS bundle id).
+- `identifier`: e.g. `com.harness.app` (reverse-DNS bundle id).
 - `productName`: **Harness** (Dock/Finder name; version is shown inside the app, not in the title).
 
 Update `author` and `description` in `package.json` as needed.
@@ -227,6 +248,8 @@ Use an **app-specific password**, not your normal Apple ID password. Confirm `AP
 Make sure you’re using a **Developer ID Application** certificate (not “Mac Development” or “Apple Distribution”). Re-export the `.p12` and try again.
 - **App crashes on launch**  
 Check Console.app for Rust panics. Ensure native helpers (`HarnessSpeech`, `HarnessFnMonitor`) were built (`npm run prebuild`).
+- **HarnessFnMonitor restart loop / global Fn hotkey not working**  
+Enable **Accessibility** for **Harness Dev** (or **Harness**) and **HarnessFnMonitor** if listed separately in System Settings → Privacy & Security → Accessibility, then restart the app. If the helper still fails, run `resources/HarnessFnMonitor` once from a terminal to trigger the permission prompt.
 - **Build without signing (local only)**  
 To build an unsigned app (not for distribution):  
 `CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac:quick`

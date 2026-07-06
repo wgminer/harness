@@ -1,7 +1,7 @@
 {
   "name": "harness",
   "version": "0.7.4",
-  "private": true,
+  "private": false,
   "license": "MIT",
   "author": "Will Miner",
   "description": "Personal all-in-one desktop harness for LLMs (chat, memory, tasks, tools)",
@@ -25,7 +25,6 @@
     "build:speech-helper": "bash scripts/build-speech-helper.sh",
     "build:fn-monitor": "bash scripts/build-fn-monitor.sh",
     "release": "node scripts/release.js",
-    "site": "npx --yes serve site -l 8080",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.renderer.json --noEmit",
     "test": "vitest run",

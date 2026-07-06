@@ -23,6 +23,16 @@ Regenerate the Xcode project after editing `project.yml`:
 xcodegen generate
 ```
 
+### Code signing (contributors)
+
+The repo does not commit an Apple Developer **Team ID**. Before building on a device:
+
+1. Open **HarnessMobile** in Xcode → select the project → **Signing & Capabilities**.
+2. Choose your **Team** for the `HarnessMobile`, `HarnessMobileRecordingLiveActivity`, and test targets (or set **DEVELOPMENT_TEAM** in `project.yml` and run `xcodegen generate`).
+3. Bundle IDs are `com.harness.mobile` (app) and `com.harness.mobile.recording-live-activity` (widget); change them if they conflict with your account.
+
+Simulator builds often work without a paid team; device builds require your own Apple Developer membership.
+
 ## First-run setup on iPhone
 
 1. Build and run on a device or simulator (iOS 17+).

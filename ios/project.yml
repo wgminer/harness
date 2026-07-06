@@ -9,7 +9,7 @@ settings:
     SWIFT_VERSION: "5.0"
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 0.1.0
-    DEVELOPMENT_TEAM: C64DYYG928
+    DEVELOPMENT_TEAM: ""
 packages:
   MarkdownUI:
     url: https://github.com/gonzalezreal/swift-markdown-ui
@@ -37,6 +37,20 @@ targets:
       - package: Highlightr
       - product: SotoS3
         package: Soto
+      - target: HarnessMobileRecordingLiveActivity
+        embed: true
+  HarnessMobileRecordingLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: HarnessMobileRecordingLiveActivity
+      - path: HarnessMobile/Dictation/LiveActivity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.harness.mobile.recording-live-activity
+        INFOPLIST_FILE: HarnessMobileRecordingLiveActivity/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
   HarnessMobileTests:
     type: bundle.unit-test
     platform: iOS

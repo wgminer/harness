@@ -45,11 +45,16 @@ backlog/
 # Legacy v1 web app (ignore if a stray file remains locally)
 firebase.js
 
-# Release artifacts copied into the download site
-site/downloads/*.dmg
-
 # Test coverage (Vitest)
 coverage/
+.e2e-user-data/
+playwright-report/
+test-results/
+
+# Agent workflow (local only)
+.cursor/
+docs/plans/
+docs/superpowers/
 
 # macOS native helpers (built by prebuild)
 resources/HarnessSpeech
