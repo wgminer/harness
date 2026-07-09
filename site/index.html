@@ -11,63 +11,26 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="page">
-      <div class="grid-texture" aria-hidden="true"></div>
-
-      <section class="hero">
-        <header class="hero__header">
-          <p class="hero__eyebrow">Mac OS · iOS</p>
-          <h1 class="hero__headline">
-            <img
-              class="hero__icon"
-              src="./assets/icon.png"
-              alt=""
-              width="100"
-              height="100"
-            />
-            <span class="hero__headline-words">
-              <span class="hero__headline-line">Put a bridle</span>
-              <span class="hero__headline-line">on the models</span>
-            </span>
-          </h1>
-          <p class="hero__thesis">
-            Chat, memory, tasks, and tools — on your machine, with full control
-            over what goes in and what comes out.
-          </p>
-        </header>
-
-        <figure class="hero__preview">
-          <div class="hero__preview-frame">
-            <img
-              class="hero__preview-gif"
-              src="./assets/demo.gif"
-              alt="Harness app in use — chat, memory, and tools on macOS"
-              width="1280"
-              height="800"
-              loading="eager"
-              decoding="async"
-            />
-            <img
-              class="hero__preview-still"
-              src="./assets/demo-poster.png"
-              alt="Harness app preview"
-              width="1280"
-              height="800"
-              hidden
-            />
-            <span class="hero__preview-placeholder" aria-hidden="true"
-              >demo.gif</span
-            >
-          </div>
-          <figcaption class="hero__preview-caption">App preview</figcaption>
-        </figure>
-
+      <div class="stack">
+        <img
+          class="stack__icon"
+          src="./assets/icon.png"
+          alt=""
+          width="80"
+          height="80"
+        />
+        <h1 class="stack__title">Harness</h1>
+        <p class="stack__manifesto">
+          An LLM harness built for me — voice, chat, memory, tasks, and tools in
+          one place, with full control over what goes in and what comes out.
+        </p>
         <ul class="principles" aria-label="Principles">
           <li class="principles__item">
             <span class="principles__tag">Personal</span>
@@ -92,18 +55,13 @@
             >
           </li>
         </ul>
-
-        <div class="hero__actions">
-          <a
-            class="cta"
-            href="https://github.com/wgminer/harness/releases/latest"
-          >
-            Download for macOS
-          </a>
-        </div>
-      </section>
+        <a
+          class="cta"
+          href="https://github.com/wgminer/harness/releases/latest"
+        >
+          Download for macOS
+        </a>
+      </div>
     </main>
-
-    <script src="./main.js" defer></script>
   </body>
 </html>
