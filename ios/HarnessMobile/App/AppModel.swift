@@ -67,6 +67,7 @@ final class AppModel: ObservableObject {
     let syncEngine: SyncEngine
     let chatService: ChatService
     let dictationService: DictationService
+    let recordingSession: RecordingSessionManager
     let themeStore: ThemeStore
 
     private var pendingAutoGenerateReply: Set<String> = []
@@ -80,6 +81,7 @@ final class AppModel: ObservableObject {
         syncEngine = SyncEngine(localDataDir: localDataDir)
         chatService = ChatService(store: store, tasksStore: tasksStore)
         dictationService = DictationService(localDataDir: localDataDir)
+        recordingSession = RecordingSessionManager()
         themeStore = ThemeStore()
         syncEngine.store = store
         lastSuccessfulSyncAt = UserDefaults.standard.object(forKey: Self.lastSuccessfulSyncAtKey) as? Date
@@ -88,14 +90,18 @@ final class AppModel: ObservableObject {
         composerDraftCache = ComposerDraftStorage.loadThreadDrafts()
         forwardObjectWillChange(from: store)
         forwardObjectWillChange(from: tasksStore)
+        forwardObjectWillChange(from: recordingSession)
         wireContentChangeHandlers()
     }
 
     private static let autoSyncDelayNs: UInt64 = 2_500_000_000
     private static let pendingStateRefreshDelayNs: UInt64 = 200_000_000
+    private static let draftPersistDelayNs: UInt64 = 300_000_000
 
     private var scheduledSyncTask: Task<Void, Never>?
     private var pendingStateRefreshTask: Task<Void, Never>?
+    private var threadDraftPersistTask: Task<Void, Never>?
+    private var composeDraftPersistTask: Task<Void, Never>?
     @Published private(set) var hasScheduledSync = false
 
     private func wireContentChangeHandlers() {
@@ -198,22 +204,57 @@ final class AppModel: ObservableObject {
         } else {
             composerDraftCache[conversationId] = draft
         }
-        ComposerDraftStorage.saveThreadDrafts(composerDraftCache)
+        scheduleThreadDraftPersist()
     }
 
     func clearComposerDraft(conversationId: String) {
         composerDraftCache.removeValue(forKey: conversationId)
+        threadDraftPersistTask?.cancel()
         ComposerDraftStorage.saveThreadDrafts(composerDraftCache)
     }
 
     func cacheComposeDraft(_ draft: String) {
         composeDraft = draft
-        ComposerDraftStorage.saveComposeDraft(draft)
+        scheduleComposeDraftPersist()
     }
 
     func clearComposeDraft() {
         composeDraft = ""
+        composeDraftPersistTask?.cancel()
         ComposerDraftStorage.saveComposeDraft("")
+    }
+
+    func flushComposerDrafts() {
+        threadDraftPersistTask?.cancel()
+        composeDraftPersistTask?.cancel()
+        ComposerDraftStorage.saveThreadDrafts(composerDraftCache)
+        ComposerDraftStorage.saveComposeDraft(composeDraft)
+    }
+
+    private func scheduleThreadDraftPersist() {
+        threadDraftPersistTask?.cancel()
+        threadDraftPersistTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: Self.draftPersistDelayNs)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let self else { return }
+            ComposerDraftStorage.saveThreadDrafts(self.composerDraftCache)
+        }
+    }
+
+    private func scheduleComposeDraftPersist() {
+        composeDraftPersistTask?.cancel()
+        composeDraftPersistTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: Self.draftPersistDelayNs)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let self else { return }
+            ComposerDraftStorage.saveComposeDraft(self.composeDraft)
+        }
     }
 
     func openCompose() {

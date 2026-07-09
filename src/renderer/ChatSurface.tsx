@@ -1,19 +1,16 @@
-import { snapToGrid } from "../shared/grid";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { MutableRefObject, ReactNode, RefObject, UIEvent, WheelEvent } from "react";
+import { useLayoutEffect, useRef } from "react";
+import type { MutableRefObject, ReactNode, RefObject } from "react";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessageList } from "./ChatMessageList";
 import {
-  SCROLL_TOP_THRESHOLD,
   type Message,
   type ToolCallDisplay,
   type VoiceState,
+  type LiveNoteStream,
 } from "./chatHelpers";
-import {
-  LIVE_EDGE_TOLERANCE_PX,
-  distanceFromLiveEdge,
-  useFollowChatLiveEdge,
-} from "./chatLiveScroll";
+import { useChatScrollController } from "./chatScroll/useChatScrollController";
+
+export type { LiveNoteStream } from "./chatHelpers";
 
 interface ChatSurfaceProps {
   chatAreaRef: RefObject<HTMLDivElement>;
@@ -33,6 +30,9 @@ interface ChatSurfaceProps {
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
   onGenerateReply: () => void;
+  onOptionSelect?: (label: string) => void | Promise<void>;
+  liveNoteStream?: LiveNoteStream | null;
+  onOpenNoteInEditor?: (noteId: string) => void;
   input: string;
   onInputChange: (next: string) => void;
   onSend: () => void | Promise<void>;
@@ -72,6 +72,9 @@ export function ChatSurface({
   onToolConfirm,
   onPolish,
   onGenerateReply,
+  onOptionSelect,
+  liveNoteStream,
+  onOpenNoteInEditor,
   input,
   onInputChange,
   onSend,
@@ -92,76 +95,19 @@ export function ChatSurface({
   composerTestId,
   inputRef,
 }: ChatSurfaceProps) {
-  const [hasScrolled, setHasScrolled] = useState(false);
-  const [followLiveEdge, setFollowLiveEdge] = useState(true);
   const chatPaneRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const centerSingleMessage =
     displayMessages.length === 1 && !sending && !streamingContent;
 
-  useFollowChatLiveEdge({
+  const { hasScrolled, onScroll, onKeyDown, scrollToTop } = useChatScrollController({
     scrollRef: chatAreaRef,
-    followLiveEdge: followLiveEdge && !centerSingleMessage,
-    sending: sending && !centerSingleMessage,
-    streamingContent,
-    messageCount: displayMessages.length,
+    transcriptRef,
+    chatPaneRef,
+    composerDockRef: composerRef,
+    scrollEnabled: !centerSingleMessage,
+    sending,
   });
-
-  useLayoutEffect(() => {
-    if (!centerSingleMessage) return;
-    const scroll = chatAreaRef.current;
-    if (scroll) scroll.scrollTop = 0;
-  }, [centerSingleMessage, chatAreaRef, displayMessages]);
-
-  useLayoutEffect(() => {
-    if (!sending) return;
-    setFollowLiveEdge(true);
-  }, [sending]);
-
-  /** Keep scroll padding in sync with the overlay composer height (textarea auto-grow, errors). */
-  useLayoutEffect(() => {
-    const pane = chatPaneRef.current;
-    const dock = composerRef.current;
-    if (!pane || !dock) return;
-
-    const sync = () => {
-      const h = Math.ceil(dock.getBoundingClientRect().height);
-      pane.style.setProperty("--chat-composer-dock-height", `${snapToGrid(h)}px`);
-    };
-
-    sync();
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(sync);
-      ro.observe(dock);
-    }
-
-    window.addEventListener("resize", sync);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", sync);
-    };
-  }, [composerRef]);
-
-  const onChatAreaScroll = useCallback((_e: UIEvent<HTMLDivElement>) => {
-    const el = chatAreaRef.current;
-    if (!el) return;
-    setHasScrolled(el.scrollTop > SCROLL_TOP_THRESHOLD);
-    const nearLiveEdge = distanceFromLiveEdge(el) <= LIVE_EDGE_TOLERANCE_PX;
-    setFollowLiveEdge(nearLiveEdge);
-  }, [chatAreaRef]);
-
-  /**
-   * Release the streaming follow-lock the moment the user wheels upward. Without this, a
-   * streaming chunk's layout effect can re-scroll to the live edge before the async `scroll`
-   * event from the user's wheel has had a chance to flip `followLiveEdge` off.
-   */
-  const onChatAreaWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
-    if (e.deltaY < 0) setFollowLiveEdge(false);
-  }, []);
-
-  const scrollToTop = useCallback(() => {
-    chatAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, [chatAreaRef]);
 
   useLayoutEffect(() => {
     if (focusComposerNonce == null || focusComposerNonce < 1) return;
@@ -169,8 +115,8 @@ export function ChatSurface({
   }, [composerRef, focusComposerNonce]);
 
   /*
-   * `.chat-pane` is `position: relative`. `.chat-scroll` fills it and scrolls; bottom padding matches
-   * the overlay `.chat-composer-dock` via `--chat-composer-dock-height`.
+   * `.chat-pane` is `position: relative`. `.chat-scroll` fills it and scrolls; bottom inset
+   * padding matches the overlay `.chat-composer-dock` via `--chat-composer-dock-height`.
    */
   return (
     <div ref={chatPaneRef} className="chat-pane">
@@ -183,8 +129,9 @@ export function ChatSurface({
         ref={chatAreaRef}
         className={centerSingleMessage ? "chat-scroll chat-scroll--single-message" : "chat-scroll"}
         data-scrolled={hasScrolled || undefined}
-        onScroll={onChatAreaScroll}
-        onWheel={onChatAreaWheel}
+        onScroll={onScroll}
+        onKeyDown={onKeyDown}
+        tabIndex={-1}
       >
         {hasScrolled && (
           <button
@@ -199,7 +146,7 @@ export function ChatSurface({
         <header className={headerClassName ? `chat-pane-header ${headerClassName}` : "chat-pane-header"}>
           {headerContent}
         </header>
-        <div className="chat-area-inner" data-testid={messagesTestId}>
+        <div ref={transcriptRef} className="chat-area-inner" data-testid={messagesTestId}>
           <ChatMessageList
             displayMessages={displayMessages}
             copiedId={copiedId}
@@ -213,7 +160,11 @@ export function ChatSurface({
             onToolConfirm={onToolConfirm}
             onPolish={onPolish}
             onGenerateReply={onGenerateReply}
+            onOptionSelect={onOptionSelect}
+            liveNoteStream={liveNoteStream}
+            onOpenNoteInEditor={onOpenNoteInEditor}
           />
+          <div id="chat-live-edge" className="chat-live-edge" aria-hidden />
         </div>
       </div>
       <div

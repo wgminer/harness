@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tokio::process::Command as TokioCommand;
 use tokio::sync::Mutex;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::credentials::resolve_openai_api_key;
 use crate::env_util::is_harness_e2e;
 use crate::memory::show_item_in_folder;
-use crate::paths::get_recordings_dir;
+use crate::paths::{get_recordings_dir, resolve_bundled_resource};
 use crate::settings::{default_settings, get_settings};
 
 const OPENAI_TRANSCRIPT_CLEANUP_MODEL: &str = "gpt-5.4-mini";
@@ -41,24 +41,8 @@ impl RecordingRuntime {
 }
 
 pub fn get_harness_speech_path() -> PathBuf {
-    let candidates = [
-        PathBuf::from("resources").join(HARNESS_SPEECH_BINARY),
-        PathBuf::from("../resources").join(HARNESS_SPEECH_BINARY),
-    ];
-    for path in candidates {
-        if path.exists() {
-            return path;
-        }
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            let bundled = parent.join("../Resources").join(HARNESS_SPEECH_BINARY);
-            if bundled.exists() {
-                return bundled;
-            }
-        }
-    }
-    PathBuf::from("resources").join(HARNESS_SPEECH_BINARY)
+    resolve_bundled_resource(HARNESS_SPEECH_BINARY)
+        .unwrap_or_else(|| PathBuf::from("resources").join(HARNESS_SPEECH_BINARY))
 }
 
 fn escape_regex(value: &str) -> String {
@@ -149,7 +133,7 @@ async fn run_harness_speech(
     wav_path: &PathBuf,
     cancel: &mut tokio::sync::watch::Receiver<bool>,
 ) -> Result<String, String> {
-    let mut child = TokioCommand::new(exe)
+    let child = TokioCommand::new(exe)
         .arg(wav_path)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())

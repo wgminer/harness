@@ -50,7 +50,7 @@ pub async fn import_from_claude_folder(
         return Ok(serde_json::json!({ "imported": 0, "errors": [] }));
     };
     let mut imported = 0usize;
-    let mut errors: Vec<String> = Vec::new();
+    let errors: Vec<String> = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&dir) {
         for entry in entries.flatten() {
             let path = entry.path();

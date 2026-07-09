@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideSyncAction } from "./sync";
+import { decideSyncAction, syncInlineStatusLine, syncNowButtonTooltip } from "./sync";
 
 describe("decideSyncAction", () => {
   const local = "local-rev";
@@ -88,5 +88,32 @@ describe("decideSyncAction", () => {
         localMaxMtimeMs: 300,
       }),
     ).toBe("conflict");
+  });
+});
+
+describe("syncNowButtonTooltip", () => {
+  it("explains when backup is not configured", () => {
+    expect(syncNowButtonTooltip({ busy: false, configured: false })).toBe(
+      "Set up backup in System → Data",
+    );
+  });
+
+  it("shows syncing state", () => {
+    expect(syncNowButtonTooltip({ busy: true, configured: true })).toBe("Syncing…");
+  });
+
+  it("shows default label when ready", () => {
+    expect(syncNowButtonTooltip({ busy: false, configured: true })).toBe("Sync now");
+  });
+});
+
+describe("syncInlineStatusLine", () => {
+  it("formats a compact synced hint", () => {
+    const now = Date.now();
+    expect(syncInlineStatusLine({ lastSuccessAt: now - 4_000 })).toBe("Synced 4s ago");
+  });
+
+  it("returns null when never synced", () => {
+    expect(syncInlineStatusLine({ lastSuccessAt: null })).toBeNull();
   });
 });

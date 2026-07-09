@@ -1,37 +1,57 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { HarnessAPI } from "../shared/desktopAPI";
+import type { GlobalRecordingStatus } from "../shared/desktopAPI";
 import type { AppendMessageMeta } from "../shared/types";
 import type { NoteEditProposalInput, NoteSpellCheckInput } from "../shared/writing";
 import type { SyncResult, SyncStatus } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
+import { legacyIpcCommand, legacyIpcEvent } from "../shared/ipcNames";
 
-/** Legacy `namespace:method` IPC → Tauri camelCase command (matches #[command(rename_all = "camelCase")]) */
-function cmd(name: string): string {
-  const colon = name.indexOf(":");
-  if (colon < 0) return name;
-  const ns = name.slice(0, colon);
-  const method = name.slice(colon + 1);
-  return ns + method.charAt(0).toUpperCase() + method.slice(1);
-}
+const cmd = legacyIpcCommand;
+const evt = legacyIpcEvent;
 
-/** Legacy `namespace:event` → Tauri kebab-case event wire name */
-function evt(name: string): string {
-  return name.replace(/:/g, "-");
-}
+type EventHub = {
+  handlers: Set<(payload: unknown) => void>;
+  unlisten: UnlistenFn | null;
+};
+
+/** One Tauri listener per wire event; React Strict Mode remounts must not stack duplicates. */
+const eventHubs = new Map<string, EventHub>();
 
 function subscribe<T>(
   eventName: string,
   handler: (payload: T) => void,
 ): () => void {
-  let unlisten: UnlistenFn | null = null;
-  void listen<T>(evt(eventName), (e) => {
-    handler(e.payload);
-  }).then((fn) => {
-    unlisten = fn;
-  });
+  const wireName = evt(eventName);
+  let hub = eventHubs.get(wireName);
+  if (!hub) {
+    hub = { handlers: new Set(), unlisten: null };
+    eventHubs.set(wireName, hub);
+    void listen<T>(wireName, (e) => {
+      for (const h of hub!.handlers) {
+        h(e.payload);
+      }
+    }).then((fn) => {
+      if (hub!.handlers.size === 0) {
+        void fn();
+        eventHubs.delete(wireName);
+        return;
+      }
+      hub!.unlisten = fn;
+    });
+  }
+
+  const wrapped = handler as (payload: unknown) => void;
+  hub.handlers.add(wrapped);
   return () => {
-    void unlisten?.();
+    const current = eventHubs.get(wireName);
+    if (!current) return;
+    current.handlers.delete(wrapped);
+    if (current.handlers.size === 0) {
+      void current.unlisten?.();
+      eventHubs.delete(wireName);
+    }
   };
 }
 
@@ -161,6 +181,20 @@ export function createHarnessAdapter(): HarnessAPI {
         subscribe<{ conversationId: string }>("chat:streamEnd", (p) =>
           cb(p.conversationId),
         ),
+      onNoteStreamOpen: (cb) =>
+        subscribe<{ conversationId: string; noteId: string; title: string; summary: string }>(
+          "chat:noteStreamOpen",
+          (p) => cb(p.conversationId, p.noteId, p.title, p.summary),
+        ),
+      onNoteStreamChunk: (cb) =>
+        subscribe<{ conversationId: string; noteId: string; chunk: string }>(
+          "chat:noteStreamChunk",
+          (p) => cb(p.conversationId, p.noteId, p.chunk),
+        ),
+      onNoteStreamClose: (cb) =>
+        subscribe<{ conversationId: string; noteId: string }>("chat:noteStreamClose", (p) =>
+          cb(p.conversationId, p.noteId),
+        ),
       onToolPanelUpdate: (cb) =>
         subscribe<{ conversationId: string; toolName: string; payload: unknown }>(
           "chat:toolPanelUpdate",
@@ -215,6 +249,7 @@ export function createHarnessAdapter(): HarnessAPI {
     recording: {
       setGlobalEnabled: (enabled: boolean) =>
         invoke(cmd("recording:setGlobalEnabled"), { enabled }),
+      signalFrontendReady: () => invoke(cmd("recording:signalFrontendReady")),
       requestMicrophoneAccess: () =>
         invoke<boolean>(cmd("recording:requestMicrophoneAccess")),
       saveWav: (data: ArrayBuffer) =>
@@ -230,6 +265,10 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("recording:cancelTranscription"), { requestId }),
       pasteText: (text: string) => invoke(cmd("recording:pasteText"), { text }),
       done: () => invoke(cmd("recording:done")),
+      startFailed: (reason: string) =>
+        invoke(cmd("recording:startFailed"), { reason }),
+      getGlobalStatus: () =>
+        invoke<GlobalRecordingStatus>(cmd("recording:getGlobalStatus")),
       onStartSilent: (cb) =>
         subscribe<Record<string, never>>("recording:startSilent", () => cb()),
       onStopAndPaste: (cb) =>

@@ -12,10 +12,11 @@ struct DictationRecordingSheet: View {
     @Binding var isPresented: Bool
     var onConversationCreated: (String) -> Void
 
-    @StateObject private var recorder = AudioRecorder()
     @State private var phase: DictationRecordingPhase = .starting
     @State private var savedAudioURL: URL?
     @State private var didAutoStart = false
+
+    private var recorder: AudioRecorder { app.recordingSession.recorder }
 
     var body: some View {
         NavigationStack {
@@ -62,6 +63,11 @@ struct DictationRecordingSheet: View {
             if ms >= Int(RecordingStorage.maxRecordingDuration * 1000), phase == .recording {
                 Task { await stopAndTranscribe() }
             }
+        }
+        .onChange(of: app.recordingSession.liveActivityStopRequested) { _, requested in
+            guard requested else { return }
+            app.recordingSession.acknowledgeLiveActivityStopRequest()
+            Task { await stopAndTranscribe() }
         }
     }
 
@@ -175,7 +181,7 @@ struct DictationRecordingSheet: View {
     private func startRecording() async {
         phase = .starting
         do {
-            _ = try await recorder.start()
+            _ = try await app.recordingSession.beginRecordingSession()
             phase = .recording
         } catch {
             phase = .failed(error.localizedDescription)
@@ -186,11 +192,13 @@ struct DictationRecordingSheet: View {
         guard phase == .recording else { return }
         do {
             let url = try recorder.stop()
+            await app.recordingSession.endRecordingSession()
             savedAudioURL = url
             phase = .processing
             try await OnDeviceTranscriber.ensureAudioFileReady(at: url)
             await transcribeSavedAudio()
         } catch {
+            await app.recordingSession.endRecordingSession()
             phase = .failed(error.localizedDescription)
         }
     }
@@ -229,6 +237,7 @@ struct DictationRecordingSheet: View {
         app.dictationService.cancel()
         if recorder.isRecording {
             recorder.cancel()
+            Task { await app.recordingSession.endRecordingSession() }
         }
     }
 

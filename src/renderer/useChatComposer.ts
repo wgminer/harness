@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { useRecorder } from "./useRecorder";
+import { transcribeWav } from "./recordingPipeline";
 import { playCancelChime } from "./recordingUtils";
 import { audioFileToWav } from "./audioFileToWav";
 import type { VoiceState } from "./chatHelpers";
@@ -9,7 +10,7 @@ import type { Settings } from "../shared/types";
 const MAX_RECORDING_MS = 5 * 60 * 1000;
 
 export interface UseChatComposerOptions {
-  onSubmit: (text: string, opts?: { fromDictation?: boolean }) => void | Promise<void>;
+  onSubmit: (text: string, opts?: { fromDictation?: boolean }) => void | boolean | Promise<void | boolean>;
   pendingHotkeyText?: string | null;
   pendingHotkeyDraftOnly?: boolean;
   onPendingHotkeyTextConsumed?: () => void;
@@ -62,12 +63,15 @@ export function useChatComposer({
   }, [focusComposerNonce, composerRef]);
 
   const submitMessage = useCallback(
-    async (text: string, opts?: { fromDictation?: boolean }) => {
+    async (text: string, opts?: { fromDictation?: boolean }): Promise<boolean> => {
       const trimmed = text.trim();
-      if (!trimmed || submitting || submitDisabled) return;
+      if (!trimmed || submitting || submitDisabled) return false;
       setSubmitting(true);
       try {
-        await onSubmitRef.current(trimmed, opts);
+        const result = await onSubmitRef.current(trimmed, opts);
+        return result !== false;
+      } catch {
+        return false;
       } finally {
         setSubmitting(false);
       }
@@ -109,9 +113,15 @@ export function useChatComposer({
     const messageText = text && transcript ? `${text}\n\n${transcript}` : text || transcript;
     if (!messageText) return;
 
+    const previousInput = input;
+    const previousAttached = attachedAudioFile;
     setInput("");
     setAttachedAudioFile(null);
-    await submitMessage(messageText);
+    const sent = await submitMessage(messageText);
+    if (!sent) {
+      setInput(previousInput);
+      setAttachedAudioFile(previousAttached);
+    }
   }, [attachedAudioFile, attachmentTranscribing, input, submitDisabled, submitMessage, submitting]);
 
   const submitMessageRef = useRef(submitMessage);
@@ -120,21 +130,21 @@ export function useChatComposer({
   });
 
   const applyTranscriptToComposer = useCallback(
-    async (text: string, result?: { cleanupSkipped?: "no_api_key" }) => {
+    async (text: string, result?: { cleanupSkipped?: "no_api_key" }): Promise<boolean> => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed) return false;
       const settings = (await window.harness.settings.get()) as Settings;
       const credentialStatus = await window.harness.credentials.getStatus();
       const autoSend = settings.recording?.autoSend ?? true;
       const canChat = credentialStatus.hasOpenAIApiKey;
       if (autoSend && canChat && !pendingHotkeyDraftOnly) {
-        await submitMessageRef.current(trimmed, { fromDictation: true });
-      } else {
-        setInput((prev) => (prev ? `${prev} ${trimmed}` : trimmed));
-        if (result?.cleanupSkipped === "no_api_key") {
-          setVoiceError(transcriptCleanupSkippedMessage());
-        }
+        return submitMessageRef.current(trimmed, { fromDictation: true });
       }
+      setInput((prev) => (prev ? `${prev} ${trimmed}` : trimmed));
+      if (result?.cleanupSkipped === "no_api_key") {
+        setVoiceError(transcriptCleanupSkippedMessage());
+      }
+      return true;
     },
     [pendingHotkeyDraftOnly]
   );
@@ -143,8 +153,8 @@ export function useChatComposer({
     if (!pendingHotkeyText) return;
     const hotkeyAllowed = hasConversation || allowHotkeyWithoutConversation;
     if (!hotkeyAllowed) return;
-    void applyTranscriptToComposer(pendingHotkeyText).finally(() => {
-      onPendingHotkeyTextConsumed?.();
+    void applyTranscriptToComposer(pendingHotkeyText).then((applied) => {
+      if (applied) onPendingHotkeyTextConsumed?.();
     });
   }, [
     allowHotkeyWithoutConversation,
@@ -164,17 +174,18 @@ export function useChatComposer({
     transcriptionCancelledRef.current = false;
     try {
       const wav = await recorder.stop();
-      window.harness.recording.saveWav(wav).catch(() => {});
       const requestId = crypto.randomUUID();
       transcriptionRequestIdRef.current = requestId;
-      const result = await window.harness.recording.transcribe(wav, { requestId });
+      const result = await transcribeWav(wav);
       if (transcriptionCancelledRef.current || transcriptionRequestIdRef.current !== requestId) {
         return;
       }
       if ("error" in result) {
         setVoiceError(result.error);
       } else {
-        await applyTranscriptToComposer(result.text, result);
+        await applyTranscriptToComposer(result.text, {
+          cleanupSkipped: result.cleanupSkipped === "no_api_key" ? "no_api_key" : undefined,
+        });
       }
     } catch (err) {
       setVoiceError(err instanceof Error ? err.message : "Recording failed.");
@@ -220,15 +231,15 @@ export function useChatComposer({
     }
     try {
       if (voiceState === "recording") {
-        await recorder.stop();
+        await recorder.stop({ chime: "none" });
       }
     } catch {
       // already stopped
     }
+    await playCancelChime();
     setVoiceState("idle");
     setVoiceError(null);
     setRecordingMs(0);
-    playCancelChime();
   }, [recorder, voiceState]);
 
   const resetComposerInput = useCallback(() => {

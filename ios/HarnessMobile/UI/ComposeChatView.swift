@@ -42,6 +42,9 @@ struct ComposeChatView: View {
         } message: {
             Text(sendError ?? "")
         }
+        .onDisappear {
+            app.flushComposerDrafts()
+        }
     }
 
     private static var quoteLineSpacing: CGFloat {
@@ -53,7 +56,7 @@ struct ComposeChatView: View {
     private var composerDock: some View {
         ChatComposerView(
             conversationId: "compose",
-            isStreaming: app.chatService.isStreaming,
+            isStreaming: false,
             autofocusOnAppear: true,
             startsExpanded: true,
             allowsCollapse: false,
@@ -64,7 +67,6 @@ struct ComposeChatView: View {
             onStop: { app.chatService.stop() },
             isFocused: $isComposerFocused
         )
-        .animation(nil, value: isComposerFocused)
         .padding(.horizontal, BottomBarMetrics.horizontalInset)
         .padding(.bottom, BottomBarMetrics.bottomInset)
     }

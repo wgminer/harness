@@ -8,6 +8,7 @@ pub mod env_util;
 pub mod file_tools;
 pub mod fn_monitor;
 pub mod global_recording;
+pub mod global_recording_effects;
 pub mod global_recording_session;
 pub mod import;
 pub mod memory;
@@ -63,6 +64,12 @@ pub fn run() {
             tauri::async_runtime::block_on(async {
                 let _ = sync_runtime.init().await;
                 let _ = memory::prune_empty_conversations(&app_state).await;
+                global_recording::register_global_recording(
+                    app.handle().clone(),
+                    global_recording_runtime.clone(),
+                    &app_state.write_chains,
+                )
+                .await;
             });
 
             let handle = app.handle().clone();
@@ -75,7 +82,6 @@ pub fn run() {
             app.manage(global_recording_runtime.clone());
 
             sync::start_sync_background(sync_runtime, handle.clone());
-            global_recording::register_global_recording(&handle, global_recording_runtime);
             updater::start_update_check(&handle, updater_runtime);
 
             Ok(())
@@ -161,6 +167,9 @@ pub fn run() {
             recording::recording_paste_text,
             global_recording::recording_set_global_enabled,
             global_recording::recording_done,
+            global_recording::recording_start_failed,
+            global_recording::recording_signal_frontend_ready,
+            global_recording::recording_get_global_status,
             global_recording::e2e_inject_fn_event,
             updater::updater_check,
             updater::updater_get_status,

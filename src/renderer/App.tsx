@@ -6,8 +6,7 @@ import { NotesView } from "./WritingSurfaceView";
 import { Sidebar } from "./Sidebar";
 import { SetupNoticeModal } from "./SetupNoticeModal";
 import { HotkeyRecordingOverlay } from "./HotkeyRecordingOverlay";
-import { useRecorder } from "./useRecorder";
-import { playCancelChime } from "./recordingUtils";
+import { wireGlobalHotkeyActions } from "./globalHotkeyController";
 import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan, type Settings } from "../shared/types";
 import type {} from "../shared/desktopAPI";
 import { isSidebarVisibleConversation } from "../shared/conversationSession";
@@ -54,17 +53,11 @@ export default function App() {
   const [openAIConfigured, setOpenAIConfigured] = useState(false);
   const [setupStateLoaded, setSetupStateLoaded] = useState(false);
 
-  // Hotkey recorder
-  const hotkeyRecorder = useRecorder();
-
-  // Text from the hotkey — injected into the open chat (send vs pre-fill follows recording.autoSend unless draft-only)
   const [pendingHotkeyText, setPendingHotkeyText] = useState<string | null>(null);
   /** When true, hotkey text is always pre-filled (never auto-sent). Used for global recording while the app was unfocused. */
   const [pendingHotkeyDraftOnly, setPendingHotkeyDraftOnly] = useState(false);
-
-  const hotkeyRecordingRef = useRef(false);
-  const hotkeyCancelledRef = useRef(false);
   const [globalHotkeyRecording, setGlobalHotkeyRecording] = useState(false);
+  const [globalHotkeyError, setGlobalHotkeyError] = useState<string | null>(null);
 
   const conversationIdRef = useRef(conversationId);
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
@@ -92,6 +85,15 @@ export default function App() {
     return gaps;
   }, []);
 
+  const prevViewRef = useRef<View>(view);
+  useEffect(() => {
+    const prev = prevViewRef.current;
+    if (prev === "settings" && view !== "settings") {
+      void refreshSetupState();
+    }
+    prevViewRef.current = view;
+  }, [view, refreshSetupState]);
+
   const openSettingsForGap = useCallback((gap: SetupGap) => {
     setSettingsInitialTab(gap.settingsTab);
     setView("settings");
@@ -104,11 +106,6 @@ export default function App() {
       void window.harness.uiSession.set({ setupNoticeDismissed: true });
     }
   }, [setupGaps]);
-
-  const openSetupSettings = useCallback(() => {
-    setSettingsInitialTab("general");
-    setView("settings");
-  }, []);
 
   const resolveConversationId = useCallback(
     (list: Conversation[], preferredId: string | null): string | null => {
@@ -332,94 +329,26 @@ export default function App() {
   }, [view]);
 
   useEffect(() => {
-    const unsub = window.harness.recording.onStartSilent(async () => {
-      hotkeyCancelledRef.current = false;
-      hotkeyRecordingRef.current = true;
-      setGlobalHotkeyRecording(true);
-      if (await window.harness.env.isHarnessE2E()) {
-        return;
-      }
-      try {
-        await hotkeyRecorder.start();
-      } catch (_) {
-        hotkeyRecordingRef.current = false;
-        setGlobalHotkeyRecording(false);
-      }
+    wireGlobalHotkeyActions({
+      setGlobalHotkeyRecording,
+      setGlobalHotkeyError,
+      setView,
+      setConversationId,
+      setFocusComposerNonce,
+      setPendingHotkeyText,
+      setPendingHotkeyDraftOnly,
+      setConversations,
+      loadConversations,
+      getConversationId: () => conversationIdRef.current,
     });
-    return unsub;
-  // hotkeyRecorder is stable (created once via useRef internals)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => wireGlobalHotkeyActions(null);
+  }, [loadConversations]);
 
   useEffect(() => {
-    const unsub = window.harness.recording.onStopAndPaste(async (wasFocused: boolean) => {
-      hotkeyRecordingRef.current = false;
-      setGlobalHotkeyRecording(false);
-      try {
-        const wav = (await window.harness.env.isHarnessE2E())
-          ? new ArrayBuffer(0)
-          : await hotkeyRecorder.stop();
-        if (hotkeyCancelledRef.current) return;
-        window.harness.recording.saveWav(wav).catch(() => {});
-        const result = await window.harness.recording.transcribe(wav);
-        if (hotkeyCancelledRef.current) return;
-        if ("error" in result) {
-          return;
-        }
-        const text = result.text.trim();
-        if (!text) return;
-        if (wasFocused) {
-          setView("chat");
-          if (!conversationIdRef.current) {
-            setConversationId(null);
-          }
-          setFocusComposerNonce((n) => n + 1);
-          setPendingHotkeyDraftOnly(false);
-          setPendingHotkeyText(text);
-        } else {
-          await window.harness.recording.pasteText(text);
-          const newId = await window.harness.memory.createConversation();
-          await window.harness.memory.appendMessage(newId, "user", text, { timestamp: Date.now() });
-          const voiceTitle = await window.harness.memory.markVoiceDictationSession(newId);
-          setConversations((prev) => [
-            {
-              id: newId,
-              title: voiceTitle,
-              createdAt: Date.now(),
-              sessionKind: "dictation",
-              hasMessages: true,
-            },
-            ...prev,
-          ]);
-          setConversationId(newId);
-          setView("chat");
-          setFocusComposerNonce((n) => n + 1);
-          void loadConversations();
-        }
-      } finally {
-        if (!hotkeyCancelledRef.current) {
-          await window.harness.recording.done();
-        }
-      }
-    });
-    return unsub;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const unsub = window.harness.recording.onCancel(async () => {
-      hotkeyCancelledRef.current = true;
-      setGlobalHotkeyRecording(false);
-      if (hotkeyRecordingRef.current) {
-        hotkeyRecordingRef.current = false;
-        try { await hotkeyRecorder.stop(); } catch (_) { /* already stopped */ }
-      }
-      playCancelChime();
-      await window.harness.recording.done();
-    });
-    return unsub;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!globalHotkeyError) return;
+    const timer = window.setTimeout(() => setGlobalHotkeyError(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [globalHotkeyError]);
 
   const sidebarConversations = useMemo(
     () => conversations.filter(isSidebarVisibleConversation),
@@ -495,7 +424,6 @@ export default function App() {
                 setView("notes");
               }}
               openAIConfigured={!setupStateLoaded || openAIConfigured}
-              onOpenSetup={openSetupSettings}
             />
           </div>
         )}
@@ -535,7 +463,7 @@ export default function App() {
         onConfigure={openSettingsForGap}
         onDismiss={dismissSetupNotice}
       />
-      <HotkeyRecordingOverlay active={globalHotkeyRecording} />
+      <HotkeyRecordingOverlay active={globalHotkeyRecording} error={globalHotkeyError} />
     </div>
   );
 }

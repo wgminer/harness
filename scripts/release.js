@@ -80,12 +80,7 @@ function main() {
 
   console.log(`Releasing Harness ${tag}${dryRun ? " (dry run — no publish/tag)" : ""}...`);
 
-  const distArgs = [path.join(root, "scripts", "dist-runner.js"), "--mac"];
-  if (!dryRun) {
-    distArgs.push("--publish");
-  }
-
-  run(process.execPath, distArgs, {
+  run(process.execPath, [path.join(root, "scripts", "dist-runner.js"), "--mac"], {
     env: {
       ...process.env,
       REQUIRE_NOTARIZE: "1",
@@ -101,7 +96,8 @@ function main() {
     return;
   }
 
-  console.log(`Published release assets for ${tag} to GitHub.`);
+  const { publishGithubRelease } = require("./publish-github-release");
+  publishGithubRelease(version);
 
   if (noTag) {
     console.log("Skipped git tag push (--no-tag).");

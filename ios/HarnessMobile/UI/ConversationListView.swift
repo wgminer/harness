@@ -69,6 +69,11 @@ struct ConversationListView: View {
                 onSelect(conversationId)
             }
         }
+        .onChange(of: app.recordingSession.recorder.isRecording) { _, isRecording in
+            if isRecording {
+                showDictationSheet = true
+            }
+        }
     }
 
     private var conversationList: some View {

@@ -2,18 +2,25 @@ import Foundation
 
 enum ChatServiceError: LocalizedError {
     case missingUserMessage
+    case cancelled
 
     var errorDescription: String? {
         switch self {
         case .missingUserMessage:
             return "No user message to polish."
+        case .cancelled:
+            return nil
         }
     }
 }
 
 @MainActor
 final class ChatService: ObservableObject {
-    @Published var isStreaming = false
+    @Published private(set) var streamingConversationId: String?
+
+    var isStreaming: Bool { streamingConversationId != nil }
+
+    private var userStoppedStream = false
 
     private let store: ConversationStore
     private let tasksStore: TasksStore
@@ -37,6 +44,26 @@ final class ChatService: ObservableObject {
             client = OpenAIClient(apiKey: key)
         } else {
             client = nil
+        }
+    }
+
+    func isStreaming(conversationId: String) -> Bool {
+        streamingConversationId == conversationId
+    }
+
+    private func beginStreaming(conversationId: String) {
+        streamingConversationId = conversationId
+        userStoppedStream = false
+    }
+
+    private func endStreaming() {
+        streamingConversationId = nil
+    }
+
+    private func throwIfStopped() throws {
+        if userStoppedStream {
+            userStoppedStream = false
+            throw ChatServiceError.cancelled
         }
     }
 
@@ -81,8 +108,8 @@ final class ChatService: ObservableObject {
         let trimmed = userContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        isStreaming = true
-        defer { isStreaming = false }
+        beginStreaming(conversationId: conversationId)
+        defer { endStreaming() }
 
         try appendMessage(conversationId: conversationId, role: .user, content: trimmed)
         let apiMessages = try buildMessages(conversationId: conversationId)
@@ -120,6 +147,7 @@ final class ChatService: ObservableObject {
             },
             onChunk: onStreamChunk
         )
+        try throwIfStopped()
 
         try appendMessage(
             conversationId: conversationId,
@@ -138,8 +166,8 @@ final class ChatService: ObservableObject {
         onToolCall: @escaping (ToolCallRecord) -> Void
     ) async throws {
         guard let client else { throw OpenAIError.missingAPIKey }
-        isStreaming = true
-        defer { isStreaming = false }
+        beginStreaming(conversationId: conversationId)
+        defer { endStreaming() }
 
         let apiMessages = try buildMessages(conversationId: conversationId)
         let result = try await client.streamChatWithTools(
@@ -173,6 +201,7 @@ final class ChatService: ObservableObject {
             },
             onChunk: onStreamChunk
         )
+        try throwIfStopped()
 
         try appendMessage(
             conversationId: conversationId,
@@ -196,8 +225,8 @@ final class ChatService: ObservableObject {
             throw ChatServiceError.missingUserMessage
         }
 
-        isStreaming = true
-        defer { isStreaming = false }
+        beginStreaming(conversationId: conversationId)
+        defer { endStreaming() }
 
         try appendMessage(conversationId: conversationId, role: .user, content: DictationPolish.instruction)
         try appendMessage(conversationId: conversationId, role: .user, content: transcript)
@@ -233,6 +262,8 @@ final class ChatService: ObservableObject {
             },
             onChunk: onStreamChunk
         )
+        try throwIfStopped()
+
         try appendMessage(
             conversationId: conversationId,
             role: .assistant,
@@ -312,8 +343,9 @@ final class ChatService: ObservableObject {
     }
 
     func stop() {
+        userStoppedStream = true
         client?.cancel()
         gatedToolCoordinator.cancelPending()
-        isStreaming = false
+        endStreaming()
     }
 }

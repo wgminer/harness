@@ -291,8 +291,6 @@
   border: none;
   background: transparent;
   color: var(--fg-muted);
-  font-size: var(--font-size-title);
-  line-height: var(--line-height-tight);
   cursor: pointer;
   opacity: 0;
   border-radius: 2px;
@@ -303,6 +301,11 @@
     opacity var(--motion-duration-ui) var(--motion-ease-standard),
     color var(--motion-duration-ui) var(--motion-ease-standard),
     background var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.sidebar-item-delete svg {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
 }
 
 .sidebar-item:hover .sidebar-item-delete {
@@ -327,10 +330,11 @@
   flex: 1;
   min-width: 0;
   justify-content: flex-start;
+  font-size: var(--font-size);
+  line-height: var(--line-height);
 }
 
 .sidebar-new-chat-btn .sidebar-new-chat-icon {
-  margin-right: 8px;
   flex-shrink: 0;
 }
 

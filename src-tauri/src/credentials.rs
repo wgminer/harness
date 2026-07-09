@@ -1,5 +1,12 @@
+use std::collections::HashMap;
+use std::fs;
+use std::sync::Once;
+
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
+
+use crate::env_util::{is_harness_dev, is_harness_e2e};
+use crate::paths::get_credentials_path;
 
 pub const SERVICE: &str = "com.harness.credentials";
 
@@ -46,8 +53,11 @@ pub struct CredentialStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsSecrets {
+    #[serde(rename = "openaiApiKey")]
     pub openai_api_key: String,
+    #[serde(rename = "tavilyApiKey")]
     pub tavily_api_key: String,
+    #[serde(rename = "r2SecretAccessKey")]
     pub r2_secret_access_key: String,
 }
 
@@ -55,7 +65,115 @@ fn entry_for(key: CredentialKey) -> Result<Entry, keyring::Error> {
     Entry::new(SERVICE, key.as_str())
 }
 
+fn uses_file_store() -> bool {
+    is_harness_dev() && !is_harness_e2e()
+}
+
+fn platform_failure(err: impl std::error::Error + Send + Sync + 'static) -> keyring::Error {
+    keyring::Error::PlatformFailure(Box::new(err))
+}
+
+fn read_file_store() -> HashMap<String, String> {
+    let path = get_credentials_path();
+    if !path.exists() {
+        return HashMap::new();
+    }
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+fn write_file_store(store: &HashMap<String, String>) -> Result<(), keyring::Error> {
+    let path = get_credentials_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(platform_failure)?;
+    }
+    let json = serde_json::to_string_pretty(store).map_err(platform_failure)?;
+    fs::write(&path, json).map_err(platform_failure)
+}
+
+fn file_store_has_secrets() -> bool {
+    read_file_store()
+        .values()
+        .any(|value| !value.trim().is_empty())
+}
+
+fn migrate_keyring_to_file_once() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        if file_store_has_secrets() {
+            return;
+        }
+        let mut store = HashMap::new();
+        for key in [
+            CredentialKey::OpenAiApiKey,
+            CredentialKey::TavilyApiKey,
+            CredentialKey::R2SecretAccessKey,
+        ] {
+            let Ok(entry) = entry_for(key) else {
+                continue;
+            };
+            let Ok(value) = entry.get_password() else {
+                continue;
+            };
+            if value.trim().is_empty() {
+                continue;
+            }
+            store.insert(key.as_str().to_string(), value);
+        }
+        if !store.is_empty() {
+            let _ = write_file_store(&store);
+        }
+    });
+}
+
+fn get_credential_from_file(key: CredentialKey) -> Option<String> {
+    migrate_keyring_to_file_once();
+    let value = read_file_store().get(key.as_str())?.clone();
+    if value.trim().is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+fn set_credential_in_file(key: CredentialKey, value: &str) -> Result<(), keyring::Error> {
+    migrate_keyring_to_file_once();
+    let mut store = read_file_store();
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        store.remove(key.as_str());
+    } else {
+        store.insert(key.as_str().to_string(), trimmed.to_string());
+    }
+    write_file_store(&store)
+}
+
+fn get_credential_from_keyring(key: CredentialKey) -> Option<String> {
+    let entry = entry_for(key).ok()?;
+    let value = entry.get_password().ok()?;
+    if value.trim().is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+fn set_credential_in_keyring(key: CredentialKey, value: &str) -> Result<(), keyring::Error> {
+    let entry = entry_for(key)?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        let _ = entry.set_password("");
+        return Ok(());
+    }
+    entry.set_password(trimmed)
+}
+
 pub fn encryption_available() -> bool {
+    if uses_file_store() {
+        return true;
+    }
     const PROBE_KEY: &str = "__harness_keyring_probe__";
     match Entry::new(SERVICE, PROBE_KEY) {
         Ok(entry) => {
@@ -71,13 +189,10 @@ pub fn encryption_available() -> bool {
 }
 
 pub fn get_credential(key: CredentialKey) -> Option<String> {
-    let entry = entry_for(key).ok()?;
-    let value = entry.get_password().ok()?;
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
+    if uses_file_store() {
+        get_credential_from_file(key)
     } else {
-        Some(value)
+        get_credential_from_keyring(key)
     }
 }
 
@@ -86,13 +201,11 @@ pub fn get_credential_by_name(key: &str) -> Option<String> {
 }
 
 pub fn set_credential(key: CredentialKey, value: &str) -> Result<(), keyring::Error> {
-    let entry = entry_for(key)?;
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        let _ = entry.set_password("");
-        return Ok(());
+    if uses_file_store() {
+        set_credential_in_file(key, value)
+    } else {
+        set_credential_in_keyring(key, value)
     }
-    entry.set_password(trimmed)
 }
 
 pub fn set_credential_by_name(key: &str, value: &str) -> Result<(), keyring::Error> {
@@ -172,4 +285,25 @@ pub async fn resolve_tavily_api_key() -> String {
 
 pub async fn resolve_r2_secret_access_key() -> String {
     get_credential(CredentialKey::R2SecretAccessKey).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SettingsSecrets;
+
+    #[test]
+    fn settings_secrets_use_frontend_field_names() {
+        let secrets = SettingsSecrets {
+            openai_api_key: "sk-test".into(),
+            tavily_api_key: "tvly-test".into(),
+            r2_secret_access_key: "r2-test".into(),
+        };
+        let json = serde_json::to_value(secrets).expect("serialize");
+        assert_eq!(json.get("openaiApiKey").and_then(|v| v.as_str()), Some("sk-test"));
+        assert_eq!(json.get("tavilyApiKey").and_then(|v| v.as_str()), Some("tvly-test"));
+        assert_eq!(
+            json.get("r2SecretAccessKey").and_then(|v| v.as_str()),
+            Some("r2-test")
+        );
+    }
 }

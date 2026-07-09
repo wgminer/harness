@@ -1,6 +1,6 @@
 [package]
 name = "harness"
-version = "0.7.4"
+version = "0.7.5"
 description = "Personal all-in-one desktop harness for LLMs"
 authors = ["Your Name"]
 edition = "2021"
@@ -26,7 +26,7 @@ tokio-util = "0.7"
 reqwest = { version = "0.12", features = ["json", "stream"] }
 rust-s3 = "0.35"
 flate2 = "1"
-keyring = "3"
+keyring = { version = "3", features = ["apple-native"] }
 arboard = "3"
 dirs = "6"
 tempfile = "3"

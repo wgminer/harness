@@ -209,7 +209,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-top: var(--space-1);
+  margin: 12px 0;
   cursor: pointer;
   user-select: none;
 }
@@ -296,6 +296,19 @@
   align-items: center;
   gap: var(--space-2);
   margin: 1rem 0;
+}
+
+.settings-sync-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-sync-status {
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
+  color: var(--fg-muted);
+  white-space: nowrap;
 }
 
 .settings-llm-import-prompt {

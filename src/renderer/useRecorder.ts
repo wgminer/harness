@@ -1,22 +1,26 @@
-import { useRef } from "react";
+import { useMemo } from "react";
+import { acquireRecordingStream, createRecordingAudioContext } from "./recordingBootstrap";
+import { isSilentAudio, NO_AUDIO_CAPTURED_MESSAGE } from "./recordingAudioUtils";
 import { encodeWav, playStartChime, playStopChime } from "./recordingUtils";
 
-export function useRecorder() {
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const scriptProcRef = useRef<ScriptProcessorNode | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const pcmBuffersRef = useRef<Float32Array[]>([]);
+export type Recorder = {
+  start: () => Promise<void>;
+  stop: (options?: { chime?: "stop" | "none" }) => Promise<ArrayBuffer>;
+};
+
+export function createRecorder(): Recorder {
+  let audioCtx: AudioContext | null = null;
+  let scriptProc: ScriptProcessorNode | null = null;
+  let mediaStream: MediaStream | null = null;
+  let pcmBuffers: Float32Array[] = [];
+  let releaseStreamOnStop = false;
 
   async function start(): Promise<void> {
     await playStartChime();
-    if (typeof window !== "undefined" && window.harness?.recording?.requestMicrophoneAccess) {
-      const ok = await window.harness.recording.requestMicrophoneAccess();
-      if (!ok) {
-        throw new Error("Microphone access denied.");
-      }
-    }
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const ctx = new AudioContext();
+    const { stream, releaseOnStop } = await acquireRecordingStream();
+    mediaStream = stream;
+    releaseStreamOnStop = releaseOnStop;
+    const ctx = await createRecordingAudioContext();
     const source = ctx.createMediaStreamSource(stream);
     // createScriptProcessor is deprecated but reliable in WKWebView
     // eslint-disable-next-line @typescript-eslint/no-deprecated
@@ -27,28 +31,39 @@ export function useRecorder() {
     };
     source.connect(processor);
     processor.connect(ctx.destination);
-    audioCtxRef.current = ctx;
-    scriptProcRef.current = processor;
-    mediaStreamRef.current = stream;
-    pcmBuffersRef.current = buffers;
+    audioCtx = ctx;
+    scriptProc = processor;
+    pcmBuffers = buffers;
   }
 
-  async function stop(): Promise<ArrayBuffer> {
-    const ctx = audioCtxRef.current;
-    const processor = scriptProcRef.current;
-    const stream = mediaStreamRef.current;
-    const buffers = pcmBuffersRef.current;
-    processor?.disconnect();
-    stream?.getTracks().forEach((t) => t.stop());
-    audioCtxRef.current = null;
-    scriptProcRef.current = null;
-    mediaStreamRef.current = null;
-    pcmBuffersRef.current = [];
-    playStopChime();
+  async function stop(options: { chime?: "stop" | "none" } = { chime: "stop" }): Promise<ArrayBuffer> {
+    const ctx = audioCtx;
+    const processor = scriptProc;
+    const stream = mediaStream;
+    const buffers = pcmBuffers;
     const sampleRate = ctx?.sampleRate ?? 44100;
+    processor?.disconnect();
+    if (releaseStreamOnStop) {
+      stream?.getTracks().forEach((t) => t.stop());
+    }
+    audioCtx = null;
+    scriptProc = null;
+    mediaStream = null;
+    pcmBuffers = [];
+    releaseStreamOnStop = false;
     await ctx?.close().catch(() => {});
+    if (options.chime === "stop") {
+      await playStopChime();
+    }
+    if (isSilentAudio(buffers)) {
+      throw new Error(NO_AUDIO_CAPTURED_MESSAGE);
+    }
     return encodeWav(buffers, sampleRate);
   }
 
   return { start, stop };
+}
+
+export function useRecorder(): Recorder {
+  return useMemo(() => createRecorder(), []);
 }

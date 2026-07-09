@@ -309,12 +309,13 @@ pub fn tool_definitions() -> Value {
         "type": "function",
         "function": {
           "name": "note_create",
-          "description": "Create a new note.",
+          "description": "Create a new note. For long chat replies, pass title and summary (1-3 sentences shown in chat), leave content empty, then write the full body in your following output. For background notes, pass title/content without summary.",
           "parameters": {
             "type": "object",
             "properties": {
-              "title": { "type": "string" },
-              "content": { "type": "string" }
+              "title": { "type": "string", "description": "Note title shown in the editor and inline preview" },
+              "summary": { "type": "string", "description": "Optional 1-3 sentence summary for chat when attaching a long write-up inline" },
+              "content": { "type": "string", "description": "Initial note body (usually empty when streaming a long reply)" }
             }
           }
         }

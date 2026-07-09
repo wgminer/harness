@@ -614,8 +614,24 @@ async fn execute_note_tool(state: &AppState, name: &str, args: &Value) -> Value 
         "note_create" => {
             let title = args.get("title").and_then(|v| v.as_str());
             let content = args.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let summary = args
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
             match notes::create_note(state, title, content).await {
-                Ok(note) => json!({ "note": note }),
+                Ok(note) => {
+                    if summary.is_empty() {
+                        json!({ "note": note })
+                    } else {
+                        json!({
+                            "note": note,
+                            "summary": summary,
+                            "attachedToMessage": true,
+                        })
+                    }
+                }
                 Err(err) => json!({ "error": err.to_string() }),
             }
         }

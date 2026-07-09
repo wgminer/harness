@@ -22,6 +22,12 @@ export interface TasksPayload {
   error?: string;
 }
 
+export interface GlobalRecordingStatus {
+  monitorHealth: "stopped" | "running" | "accessibility_denied";
+  frontendReady: boolean;
+  hotkeyActive: boolean;
+}
+
 export interface HarnessAPI {
   app: {
     getVersion: () => Promise<string>;
@@ -155,6 +161,11 @@ export interface HarnessAPI {
     resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") => Promise<void>;
     onStreamChunk: (cb: (conversationId: string, chunk: string) => void) => () => void;
     onStreamEnd: (cb: (conversationId: string) => void) => () => void;
+    onNoteStreamOpen: (
+      cb: (conversationId: string, noteId: string, title: string, summary: string) => void,
+    ) => () => void;
+    onNoteStreamChunk: (cb: (conversationId: string, noteId: string, chunk: string) => void) => () => void;
+    onNoteStreamClose: (cb: (conversationId: string, noteId: string) => void) => () => void;
     onToolPanelUpdate: (cb: (conversationId: string, toolName: string, payload: unknown) => void) => () => void;
     onConversationTitleUpdated: (cb: (conversationId: string) => void) => () => void;
     onTitleGenerationStarted: (cb: (conversationId: string) => void) => () => void;
@@ -187,6 +198,8 @@ export interface HarnessAPI {
   recording: {
     /** When false, Fn dictation is ignored while the app window is focused. */
     setGlobalEnabled: (enabled: boolean) => Promise<void>;
+    /** Call once after IPC listeners are registered so Fn monitor can start. */
+    signalFrontendReady: () => Promise<void>;
     requestMicrophoneAccess: () => Promise<boolean>;
     saveWav: (data: ArrayBuffer) => Promise<{ path: string }>;
     showInFolder: (path: string) => Promise<void>;
@@ -199,6 +212,9 @@ export interface HarnessAPI {
     cancelTranscription: (requestId: string) => Promise<void>;
     pasteText: (text: string) => Promise<void>;
     done: () => Promise<void>;
+    /** Reset tray/session when mic capture fails to start. */
+    startFailed: (reason: string) => Promise<void>;
+    getGlobalStatus: () => Promise<GlobalRecordingStatus>;
     onStartSilent: (cb: () => void) => () => void;
     onStopAndPaste: (cb: (wasFocused: boolean) => void) => () => void;
     onCancel: (cb: () => void) => () => void;

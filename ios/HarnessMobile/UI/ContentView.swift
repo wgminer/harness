@@ -31,6 +31,8 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await app.syncOnForeground() }
+            } else if phase == .background {
+                app.flushComposerDrafts()
             }
         }
         .sheet(isPresented: setupNoticeBinding) {

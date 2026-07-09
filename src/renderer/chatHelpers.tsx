@@ -1,10 +1,19 @@
-import { Children, isValidElement, useRef, useState, type ReactElement, type ReactNode } from "react";
+import {
+  Children,
+  isValidElement,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { Check, Copy, Loader2, SquarePen } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkDirective from "remark-directive";
 import rehypeHighlight from "rehype-highlight";
 import {
+  MarkdownInteractionContext,
   MermaidBlock,
   directiveComponents,
   remarkDirectiveToHast,
@@ -12,6 +21,84 @@ import {
 export interface ToolCallDisplay {
   toolName: string;
   payload?: unknown;
+}
+
+export type InlineWriteupPayload = {
+  noteId?: string;
+  title: string;
+  summary?: string;
+  /** Legacy inline body or live stream buffer fallback */
+  body?: string;
+  attachedToMessage?: boolean;
+};
+
+export type LiveNoteStream = {
+  noteId: string;
+  title: string;
+  summary: string;
+  body: string;
+};
+
+type NoteCreatePayload = {
+  note?: { id?: string; title?: string; content?: string };
+  attachedToMessage?: boolean;
+  summary?: string;
+};
+
+function parseNoteCreatePayload(payload: unknown): NoteCreatePayload | null {
+  if (!payload || typeof payload !== "object") return null;
+  return payload as NoteCreatePayload;
+}
+
+function parseLegacyDocumentPayload(payload: unknown): InlineWriteupPayload | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.title !== "string") return null;
+  return {
+    title: p.title,
+    summary: typeof p.summary === "string" ? p.summary : undefined,
+    body: typeof p.body === "string" ? p.body : undefined,
+    attachedToMessage: true,
+  };
+}
+
+/** @deprecated use getInlineWriteup */
+export function getDocumentPanel(toolCalls?: ToolCallDisplay[]): InlineWriteupPayload | null {
+  return getInlineWriteup(toolCalls);
+}
+
+export function getInlineWriteup(toolCalls?: ToolCallDisplay[]): InlineWriteupPayload | null {
+  if (!toolCalls?.length) return null;
+
+  const noteCreates = toolCalls.filter((tc) => tc.toolName === "note_create");
+  for (const call of noteCreates) {
+    const parsed = parseNoteCreatePayload(call.payload);
+    if (!parsed?.attachedToMessage) continue;
+    const title = parsed.note?.title?.trim();
+    if (!title) continue;
+    return {
+      noteId: parsed.note?.id,
+      title,
+      summary: parsed.summary,
+      body: parsed.note?.content,
+      attachedToMessage: true,
+    };
+  }
+
+  const legacy = toolCalls.filter((tc) => tc.toolName === "open_long_response");
+  let best: InlineWriteupPayload | null = null;
+  for (const call of legacy) {
+    const parsed = parseLegacyDocumentPayload(call.payload);
+    if (!parsed) continue;
+    if (!best || (parsed.body?.length ?? 0) >= (best.body?.length ?? 0)) best = parsed;
+  }
+  return best;
+}
+
+export function isAttachedNoteCreate(call: ToolCallDisplay): boolean {
+  if (call.toolName !== "note_create") return false;
+  const parsed = parseNoteCreatePayload(call.payload);
+  return parsed?.attachedToMessage === true;
 }
 
 export interface Message {
@@ -69,6 +156,8 @@ export interface MarkdownContentProps {
   savedToNotesId?: string | null;
   onCopied?: (id: string | null) => void;
   onSaveToNotes?: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
+  /** When set, `:::option` directives render as clickable buttons that call this handler. */
+  onOptionSelect?: (label: string) => void | Promise<void>;
 }
 
 function CodeBlock({
@@ -158,9 +247,14 @@ export function MarkdownContent({
   savedToNotesId,
   onCopied,
   onSaveToNotes,
+  onOptionSelect,
 }: MarkdownContentProps) {
   const codeBlockIndexRef = useRef(0);
   codeBlockIndexRef.current = 0;
+  const markdownInteraction = useMemo(
+    () => (onOptionSelect ? { onOptionSelect } : {}),
+    [onOptionSelect],
+  );
 
   const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
     <p {...props}>{children}</p>
@@ -207,13 +301,15 @@ export function MarkdownContent({
   } as unknown as Components;
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
-      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
-      components={components}
-    >
-      {content}
-    </ReactMarkdown>
+    <MarkdownInteractionContext.Provider value={markdownInteraction}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
+        rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+        components={components}
+      >
+        {content}
+      </ReactMarkdown>
+    </MarkdownInteractionContext.Provider>
   );
 }
 
@@ -237,6 +333,22 @@ export function summarizeToolCalls(calls: ToolCallDisplay[]): string {
   );
   if (parts.length <= 4) return parts.join(", ");
   return `${calls.length} actions`;
+}
+
+export function toolCallLabel(call: ToolCallDisplay): string {
+  if (call.toolName === "note_create") {
+    const parsed = parseNoteCreatePayload(call.payload);
+    if (parsed?.attachedToMessage && parsed.note?.title?.trim()) {
+      return parsed.note.title.trim();
+    }
+    return "Created note";
+  }
+  if (call.toolName === "open_long_response") {
+    const legacy = parseLegacyDocumentPayload(call.payload);
+    if (legacy?.title) return legacy.title;
+    return "Long write-up";
+  }
+  return toolLabel(call.toolName);
 }
 
 export function toolLabel(name: string): string {

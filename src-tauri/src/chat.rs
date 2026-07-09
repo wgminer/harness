@@ -19,6 +19,7 @@ use crate::memory::{
     append_message, get_messages, get_user_memory, pop_last_user_message, AppendMessageMeta,
     AppState, ToolCallRecord,
 };
+use crate::notes;
 use crate::openai::{map_http_cancel, ChatMessageParam, OpenAIChatClient, OpenAIError};
 use crate::settings;
 
@@ -47,12 +48,22 @@ struct PendingGatedTool {
     respond_to: oneshot::Sender<String>,
 }
 
+#[derive(Debug, Clone)]
+struct NoteStreamState {
+    note_id: String,
+    title: String,
+    summary: String,
+    body: String,
+    routing_active: bool,
+}
+
 #[derive(Clone)]
 pub struct ChatController {
     app: AppHandle,
     state: AppState,
     cancel_token: Arc<Mutex<Option<CancellationToken>>>,
     pending_gated: Arc<Mutex<HashMap<String, PendingGatedTool>>>,
+    note_stream: Arc<std::sync::Mutex<Option<NoteStreamState>>>,
 }
 
 impl ChatController {
@@ -62,6 +73,7 @@ impl ChatController {
             state,
             cancel_token: Arc::new(Mutex::new(None)),
             pending_gated: Arc::new(Mutex::new(HashMap::new())),
+            note_stream: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -98,6 +110,45 @@ impl ChatController {
                 "conversationId": conversation_id,
                 "toolName": tool_name,
                 "payload": payload
+            }),
+        );
+    }
+
+    fn emit_note_stream_open(
+        &self,
+        conversation_id: &str,
+        note_id: &str,
+        title: &str,
+        summary: &str,
+    ) {
+        let _ = self.app.emit(
+            "chat-note-stream-open",
+            json!({
+                "conversationId": conversation_id,
+                "noteId": note_id,
+                "title": title,
+                "summary": summary,
+            }),
+        );
+    }
+
+    fn emit_note_stream_chunk(&self, conversation_id: &str, note_id: &str, chunk: &str) {
+        let _ = self.app.emit(
+            "chat-note-stream-chunk",
+            json!({
+                "conversationId": conversation_id,
+                "noteId": note_id,
+                "chunk": chunk,
+            }),
+        );
+    }
+
+    fn emit_note_stream_close(&self, conversation_id: &str, note_id: &str) {
+        let _ = self.app.emit(
+            "chat-note-stream-close",
+            json!({
+                "conversationId": conversation_id,
+                "noteId": note_id,
             }),
         );
     }
@@ -269,7 +320,7 @@ impl ChatController {
         conversation_id: &str,
     ) -> Result<String, String> {
         let gated = matches!(name, "task_delete" | "task_clear_completed" | "task_update");
-        let mut skip_tool_panel_update = false;
+        let mut skip_tool_panel_update = should_skip_note_stream_tool_panel(name, &args);
 
         let result = if is_customization_tool_name(name) {
             execute_customization_tool(name, &args)
@@ -309,6 +360,12 @@ impl ChatController {
         if is_assistant_tool_name(name) && !skip_tool_panel_update {
             let payload = serde_json::from_str::<Value>(&result).unwrap_or_else(|_| json!(result));
             self.emit_tool_panel_update(conversation_id, name, payload);
+        }
+
+        if name == "note_create" {
+            if let Ok(payload) = serde_json::from_str::<Value>(&result) {
+                activate_note_stream_from_payload(self, conversation_id, &payload);
+            }
         }
 
         Ok(result)
@@ -387,6 +444,7 @@ impl ChatController {
             let mut guard = self.cancel_token.lock().await;
             *guard = Some(cancel.clone());
         }
+        *self.note_stream.lock().unwrap() = None;
 
         let model_label = Self::active_chat_model_label();
         let tool_calls_this_turn = Arc::new(Mutex::new(Vec::<ToolCallRecord>::new()));
@@ -401,6 +459,19 @@ impl ChatController {
             .send_message_with_tools(
                 messages,
                 |chunk| {
+                    let mut guard = controller.note_stream.lock().unwrap();
+                    if let Some(stream) = guard.as_mut() {
+                        if stream.routing_active {
+                            stream.body.push_str(chunk);
+                            controller.emit_note_stream_chunk(
+                                &conversation_id_owned,
+                                &stream.note_id,
+                                chunk,
+                            );
+                            return;
+                        }
+                    }
+                    drop(guard);
                     controller.emit_stream_chunk(&conversation_id_owned, chunk);
                 },
                 {
@@ -434,17 +505,44 @@ impl ChatController {
 
         self.emit_stream_end(conversation_id);
 
+        let stream_state = self.note_stream.lock().unwrap().take();
+        if let Some(ref stream) = stream_state {
+            self.emit_note_stream_close(conversation_id, &stream.note_id);
+        }
+
         let captured_content = stream_result.as_ref().ok().cloned().unwrap_or_default();
-        let tool_calls_this_turn = tool_calls_this_turn.lock().await.clone();
+        let mut tool_calls_this_turn = tool_calls_this_turn.lock().await.clone();
+        if let Some(ref stream) = stream_state {
+            if !stream.body.is_empty() {
+                if let Ok(note) = notes::save_note(&self.state, &stream.note_id, &stream.body).await
+                {
+                    tool_calls_this_turn =
+                        finalize_tool_calls_with_note_stream(tool_calls_this_turn, stream, &note);
+                } else {
+                    tool_calls_this_turn =
+                        finalize_tool_calls_with_note_stream_metadata(tool_calls_this_turn, stream);
+                }
+            } else {
+                tool_calls_this_turn =
+                    finalize_tool_calls_with_note_stream_metadata(tool_calls_this_turn, stream);
+            }
+        } else {
+            tool_calls_this_turn = strip_note_content_from_tool_calls(tool_calls_this_turn);
+        }
 
         match stream_result {
             Ok(content) => {
-                if !content.is_empty() || !tool_calls_this_turn.is_empty() {
+                let message_content = message_content_for_turn(
+                    stream_state.as_ref(),
+                    &tool_calls_this_turn,
+                    &content,
+                );
+                if !message_content.is_empty() || !tool_calls_this_turn.is_empty() {
                     append_message(
                         &self.state,
                         conversation_id,
                         "assistant",
-                        &strip_sent_at_prefix(&content),
+                        &message_content,
                         Some(AppendMessageMeta {
                             timestamp: Some(chrono::Utc::now().timestamp_millis()),
                             model: Some(model_label.clone()),
@@ -463,16 +561,18 @@ impl ChatController {
             Err(err) => {
                 let is_abort = map_http_cancel(&err);
                 if !captured_content.is_empty() || !tool_calls_this_turn.is_empty() {
-                    let content = if captured_content.is_empty() {
+                    let message_content = if let Some(ref stream) = stream_state {
+                        stream.summary.clone()
+                    } else if captured_content.is_empty() {
                         "[Error]".to_string()
                     } else {
-                        strip_sent_at_prefix(&captured_content)
+                        message_content_for_turn(None, &tool_calls_this_turn, &captured_content)
                     };
                     append_message(
                         &self.state,
                         conversation_id,
                         "assistant",
-                        &content,
+                        &message_content,
                         Some(AppendMessageMeta {
                             timestamp: Some(chrono::Utc::now().timestamp_millis()),
                             model: Some(model_label.clone()),
@@ -529,6 +629,206 @@ impl ChatController {
     }
 }
 
+fn should_skip_note_stream_tool_panel(name: &str, args: &Value) -> bool {
+    if name != "note_create" {
+        return false;
+    }
+    let summary = args
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if summary.is_empty() {
+        return false;
+    }
+    let content = args
+        .get("content")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    content.is_empty()
+}
+
+fn activate_note_stream_from_payload(
+    controller: &ChatController,
+    conversation_id: &str,
+    payload: &Value,
+) {
+    if payload.get("attachedToMessage").and_then(|v| v.as_bool()) != Some(true) {
+        return;
+    }
+    let Some(note) = payload.get("note") else {
+        return;
+    };
+    let Some(note_id) = note.get("id").and_then(|v| v.as_str()) else {
+        return;
+    };
+    let title = note
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let summary = payload
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if summary.trim().is_empty() {
+        return;
+    }
+    let content = note
+        .get("content")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if !content.is_empty() {
+        return;
+    }
+
+    let mut guard = controller.note_stream.lock().unwrap();
+    if guard.is_some() {
+        return;
+    }
+    *guard = Some(NoteStreamState {
+        note_id: note_id.to_string(),
+        title: title.clone(),
+        summary: summary.clone(),
+        body: String::new(),
+        routing_active: true,
+    });
+    controller.emit_note_stream_open(conversation_id, note_id, &title, &summary);
+}
+
+fn note_summary_metadata(note: &notes::Note) -> Value {
+    json!({
+        "id": note.id,
+        "title": note.title,
+        "createdAt": note.created_at,
+        "updatedAt": note.updated_at,
+        "wordCount": note.word_count,
+    })
+}
+
+fn finalize_tool_calls_with_note_stream(
+    mut tool_calls: Vec<ToolCallRecord>,
+    stream: &NoteStreamState,
+    saved_note: &notes::Note,
+) -> Vec<ToolCallRecord> {
+    let mut found = false;
+    for tc in &mut tool_calls {
+        if tc.tool_name == "note_create" {
+            if let Some(payload) = tc.payload.as_mut() {
+                if let Some(obj) = payload.as_object_mut() {
+                    obj.insert("note".into(), note_summary_metadata(saved_note));
+                    obj.insert("attachedToMessage".into(), json!(true));
+                    obj.insert("summary".into(), json!(stream.summary));
+                }
+            }
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        tool_calls.push(ToolCallRecord {
+            tool_name: "note_create".into(),
+            payload: Some(json!({
+                "note": note_summary_metadata(saved_note),
+                "attachedToMessage": true,
+                "summary": stream.summary,
+            })),
+        });
+    }
+    tool_calls
+}
+
+fn finalize_tool_calls_with_note_stream_metadata(
+    mut tool_calls: Vec<ToolCallRecord>,
+    stream: &NoteStreamState,
+) -> Vec<ToolCallRecord> {
+    let mut found = false;
+    for tc in &mut tool_calls {
+        if tc.tool_name == "note_create" {
+            if let Some(payload) = tc.payload.as_mut() {
+                if let Some(obj) = payload.as_object_mut() {
+                    if let Some(note) = obj.get_mut("note") {
+                        if let Some(note_obj) = note.as_object_mut() {
+                            note_obj.remove("content");
+                        }
+                    }
+                    obj.insert("attachedToMessage".into(), json!(true));
+                    obj.insert("summary".into(), json!(stream.summary));
+                }
+            }
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        tool_calls.push(ToolCallRecord {
+            tool_name: "note_create".into(),
+            payload: Some(json!({
+                "note": {
+                    "id": stream.note_id,
+                    "title": stream.title,
+                },
+                "attachedToMessage": true,
+                "summary": stream.summary,
+            })),
+        });
+    }
+    tool_calls
+}
+
+fn strip_note_content_from_tool_calls(mut tool_calls: Vec<ToolCallRecord>) -> Vec<ToolCallRecord> {
+    for tc in &mut tool_calls {
+        if tc.tool_name != "note_create" {
+            continue;
+        }
+        let Some(payload) = tc.payload.as_mut() else {
+            continue;
+        };
+        let Some(obj) = payload.as_object_mut() else {
+            continue;
+        };
+        if obj.get("attachedToMessage").and_then(|v| v.as_bool()) != Some(true) {
+            continue;
+        }
+        if let Some(note) = obj.get_mut("note") {
+            if let Some(note_obj) = note.as_object_mut() {
+                note_obj.remove("content");
+            }
+        }
+    }
+    tool_calls
+}
+
+fn message_content_for_turn(
+    stream_state: Option<&NoteStreamState>,
+    tool_calls: &[ToolCallRecord],
+    stream_content: &str,
+) -> String {
+    if let Some(stream) = stream_state {
+        return stream.summary.clone();
+    }
+    for tc in tool_calls {
+        if tc.tool_name != "note_create" {
+            continue;
+        }
+        let Some(payload) = &tc.payload else {
+            continue;
+        };
+        if payload.get("attachedToMessage").and_then(|v| v.as_bool()) != Some(true) {
+            continue;
+        }
+        if let Some(summary) = payload.get("summary").and_then(|v| v.as_str()) {
+            if !summary.trim().is_empty() {
+                return summary.to_string();
+            }
+        }
+    }
+    strip_sent_at_prefix(stream_content)
+}
+
 fn split_into_word_chunks(content: &str) -> Vec<String> {
     let parts: Vec<&str> = content.split_whitespace().collect();
     let len = parts.len();
@@ -583,13 +883,11 @@ Mermaid diagrams — for flows, sequences, small state diagrams:
     A --> B
   ```
 
-Options compare — exactly 2-5 alternatives the user must choose between. Outer fence uses FOUR colons so the inner :::option fences nest cleanly:
-  ::::options{title="Pick an approach"}
-  :::option{title="Redis" recommended}
-  Fast and proven. Adds an ops dependency.
+Options — 2-5 short labels the user can tap to reply. Only title is shown; no body text, recommended flag, or section title. Outer fence uses FOUR colons:
+  ::::options
+  :::option{title="Plain-English walkthrough"}
   :::
-  :::option{title="In-memory"}
-  Zero ops. Cache is lost on restart.
+  :::option{title="Full Express demo"}
   :::
   ::::
 
@@ -612,6 +910,7 @@ Slide deck — a small inline deck (max ~6 slides). Outer fence uses FOUR colons
 Rules of thumb: prefer plain prose first; use at most one layout block per reply unless the user is explicitly asking for a comparison or a deck; never nest :::slides inside another directive; do not use callouts as section headers."#;
 
     let mut out = core.to_string();
+    out.push_str("\n\nLong replies: when a response will exceed ~3 short paragraphs, call note_create with title and summary (1-3 sentences). Leave content empty and write the full body in your following output — it streams into the note and appears inline in chat. Do not put the long body in normal chat prose. One inline write-up per turn.");
     if !memory_block.is_empty() {
         out.push_str("\n\n");
         out.push_str(memory_block);

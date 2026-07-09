@@ -57,13 +57,6 @@ pub async fn save_plans_in(
     atomic_write_utf8(&state.write_chains, &path, &pretty).await
 }
 
-async fn save_plans(
-    state: &AppState,
-    plans: &HashMap<String, Plan>,
-) -> Result<(), std::io::Error> {
-    save_plans_in(state, &get_app_state_dir(), plans).await
-}
-
 pub async fn list_plans(state: &AppState) -> Result<Vec<Plan>, std::io::Error> {
     let plans = load_plans(state).await?;
     let mut rows: Vec<Plan> = plans.into_values().collect();

@@ -15,6 +15,10 @@ export function transcriptCleanupSkippedMessage(): string {
   return `Transcript cleanup needs an OpenAI API key (${rigSection("General")}). Using the raw transcription.`;
 }
 
+export function chatRequiresApiKeyMessage(): string {
+  return `Chat needs an OpenAI API key in ${rigSection("General")}.`;
+}
+
 export function collectSetupGaps(input: {
   hasOpenAIApiKey: boolean;
   syncConfigured: boolean;

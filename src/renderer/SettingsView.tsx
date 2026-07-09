@@ -11,7 +11,7 @@ import { DEFAULT_LAYOUT, DEFAULT_SETTINGS } from "../shared/types";
 import type { LayoutOptions, Settings, TranscriptDictionaryEntry } from "../shared/types";
 import { appDataFolderButtonLabel } from "../shared/dataStorageLayout";
 import type { SyncStatus } from "../shared/sync";
-import { syncResultChangedLocalData } from "../shared/sync";
+import { syncResultChangedLocalData, syncNowButtonTooltip, syncInlineStatusLine } from "../shared/sync";
 import {
   DEFAULT_NOTE_TEMPLATES,
   NOTE_TEMPLATE_CURSOR_TOKEN,
@@ -20,7 +20,10 @@ import {
   normalizeNoteTemplates,
   type NoteTemplateConfig,
 } from "../shared/writing";
+import type { GlobalRecordingStatus } from "../shared/desktopAPI";
+import { isRecordingReady } from "./recordingBootstrap";
 import { Modal } from "./Modal";
+import { Tooltip } from "./Tooltip";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
@@ -49,6 +52,7 @@ interface SettingsViewProps {
 }
 
 const SAVE_DEBOUNCE_MS = 500;
+const SECRETS_SAVE_DEBOUNCE_MS = 150;
 const SAVED_TOAST_VISIBLE_MS = 3000;
 
 type PersistedFormState = {
@@ -75,7 +79,7 @@ function serializeFormState(state: PersistedFormState): string {
 
 const D = DEFAULT_SETTINGS;
 
-type SaveStatus = "idle" | "saving" | "saved";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 function SettingsSaveToast({
   status,
@@ -83,16 +87,19 @@ function SettingsSaveToast({
   status: SaveStatus;
 }) {
   const open = status !== "idle";
+  const label =
+    status === "saving" ? "Saving…" : status === "error" ? "Could not save settings" : "Saved";
   return createPortal(
     <div
       className="settings-toast"
       data-testid="settings-toast"
+      data-status={status}
       role="status"
       aria-live="polite"
       aria-hidden={!open}
       style={{ display: open ? "block" : "none" }}
     >
-      {status === "saving" ? "Saving…" : "Saved"}
+      {label}
     </div>,
     document.body,
   );
@@ -162,8 +169,8 @@ export function SettingsView({
   const [cleanupLegacyBusy, setCleanupLegacyBusy] = useState(false);
   const [cleanupLegacyMessage, setCleanupLegacyMessage] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncTestBusy, setSyncTestBusy] = useState(false);
+  const [r2TestError, setR2TestError] = useState<string | null>(null);
   const [r2AccountId, setR2AccountId] = useState(D.sync!.accountId);
   const [r2Bucket, setR2Bucket] = useState(D.sync!.bucket);
   const [r2Prefix, setR2Prefix] = useState(D.sync!.prefix);
@@ -191,11 +198,17 @@ export function SettingsView({
   }, []);
   const isMac = platform === "darwin";
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
+  const [micReady, setMicReady] = useState(false);
+  const [globalRecordingStatus, setGlobalRecordingStatus] = useState<GlobalRecordingStatus | null>(
+    null,
+  );
   const [layoutOptions, setLayoutOptions] = useState<LayoutOptions>(DEFAULT_LAYOUT);
   const settingsHydratedRef = useRef(false);
   const skipAutosaveRef = useRef(false);
   const lastPersistedRef = useRef("");
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistSettingsRef = useRef<() => Promise<boolean>>(async () => true);
+  const flushSettingsOnUnmountRef = useRef(false);
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const tabButtonRefs = useRef<Record<SettingsTabId, HTMLButtonElement | null>>({
     general: null,
@@ -282,6 +295,26 @@ export function SettingsView({
     void window.harness.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
   }, [isMac]);
 
+  const refreshGlobalRecordingStatus = useCallback(async () => {
+    setMicReady(isRecordingReady());
+    try {
+      const status = await window.harness.recording.getGlobalStatus();
+      setGlobalRecordingStatus(status);
+    } catch {
+      setGlobalRecordingStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isMac || activeTab !== "voice") return;
+    void refreshGlobalRecordingStatus();
+    const timer = setInterval(() => {
+      setMicReady(isRecordingReady());
+      void refreshGlobalRecordingStatus();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [activeTab, isMac, refreshGlobalRecordingStatus]);
+
   useEffect(() => {
     if (activeTab !== "data") return;
     void refreshDataStatus();
@@ -350,8 +383,16 @@ export function SettingsView({
     setSaveStatus("saving");
 
     try {
+      if (next.apiKey !== (prev.apiKey ?? "")) {
+        await window.harness.credentials.setOpenAIApiKey(next.apiKey.trim());
+      }
+      if (next.tavilyApiKey !== (prev.tavilyApiKey ?? "")) {
+        await window.harness.credentials.setTavilyApiKey(next.tavilyApiKey.trim());
+      }
+      if (next.r2SecretAccessKey !== (prev.r2SecretAccessKey ?? "")) {
+        await window.harness.credentials.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
+      }
       await window.harness.settings.set({
-        openai: next.apiKey.trim() ? { apiKey: next.apiKey } : undefined,
         recording: { autoSend: next.autoSend, globalFnHotkey: next.globalFnHotkey },
         chat: { openToComposeOnLaunch: next.openToComposeOnLaunch },
         transcription: {
@@ -364,7 +405,6 @@ export function SettingsView({
         weather: {
           defaultZip: next.weatherZip.trim(),
         },
-        search: next.tavilyApiKey.trim() ? { tavilyApiKey: next.tavilyApiKey.trim() } : undefined,
         memory: {
           injectionStrategy: next.memoryInjectionStrategy,
         },
@@ -375,9 +415,6 @@ export function SettingsView({
           accessKeyId: next.r2AccessKeyId.trim(),
         },
       });
-      if (next.r2SecretAccessKey !== (prev.r2SecretAccessKey ?? "")) {
-        await window.harness.sync.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
-      }
       const r2Changed =
         next.r2AccountId !== prev.r2AccountId ||
         next.r2Bucket !== prev.r2Bucket ||
@@ -393,8 +430,13 @@ export function SettingsView({
         hideToastRef.current = null;
       }, SAVED_TOAST_VISIBLE_MS);
       return true;
-    } catch {
-      setSaveStatus("idle");
+    } catch (err) {
+      console.error("[Settings] save failed", err);
+      setSaveStatus("error");
+      hideToastRef.current = setTimeout(() => {
+        setSaveStatus("idle");
+        hideToastRef.current = null;
+      }, SAVED_TOAST_VISIBLE_MS);
       return false;
     }
   }, [
@@ -416,8 +458,53 @@ export function SettingsView({
     onSettingsChanged,
   ]);
 
+  persistSettingsRef.current = persistSettings;
+
+  useEffect(() => {
+    return () => {
+      if (flushSettingsOnUnmountRef.current && settingsHydratedRef.current) {
+        void persistSettingsRef.current();
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!settingsHydratedRef.current) return;
+    flushSettingsOnUnmountRef.current = true;
+    if (skipAutosaveRef.current) {
+      skipAutosaveRef.current = false;
+      return;
+    }
+
+    const current = serializeFormState({
+      apiKey,
+      tavilyApiKey,
+      r2SecretAccessKey,
+      autoSend,
+      globalFnHotkey,
+      openToComposeOnLaunch,
+      cleanupEnabled,
+      cleanupPrompt,
+      transcriptDictionary,
+      weatherZip,
+      memoryInjectionStrategy,
+      r2AccountId,
+      r2Bucket,
+      r2Prefix,
+      r2AccessKeyId,
+    });
+    if (current === lastPersistedRef.current) return;
+
+    const timer = setTimeout(() => {
+      void persistSettings();
+    }, SECRETS_SAVE_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [apiKey, tavilyApiKey, r2SecretAccessKey, persistSettings]);
+
+  useEffect(() => {
+    if (!settingsHydratedRef.current) return;
+    flushSettingsOnUnmountRef.current = true;
     if (skipAutosaveRef.current) {
       skipAutosaveRef.current = false;
       return;
@@ -448,7 +535,6 @@ export function SettingsView({
 
     return () => clearTimeout(timer);
   }, [
-    apiKey,
     autoSend,
     globalFnHotkey,
     openToComposeOnLaunch,
@@ -456,13 +542,11 @@ export function SettingsView({
     cleanupPrompt,
     transcriptDictionary,
     weatherZip,
-    tavilyApiKey,
     memoryInjectionStrategy,
     r2AccountId,
     r2Bucket,
     r2Prefix,
     r2AccessKeyId,
-    r2SecretAccessKey,
     persistSettings,
   ]);
 
@@ -619,17 +703,8 @@ export function SettingsView({
 
   const runSyncNow = async () => {
     setSyncBusy(true);
-    setSyncMessage(null);
     try {
       const result = await window.harness.sync.runNow();
-      if (result.ok) {
-        setSyncMessage(result.status.statusLine ?? "Synced.");
-        if (result.mergeWarning) {
-          setSyncMessage((prev) => `${prev ?? ""} ${result.mergeWarning}`.trim());
-        }
-      } else {
-        setSyncMessage(result.status.lastError ?? "Sync failed.");
-      }
       await refreshDataStatus();
       if (syncResultChangedLocalData(result)) {
         onSyncComplete?.();
@@ -641,15 +716,30 @@ export function SettingsView({
 
   const testR2Connection = async () => {
     setSyncTestBusy(true);
-    setSyncMessage(null);
+    setR2TestError(null);
     try {
       const result = await window.harness.sync.testConnection();
-      setSyncMessage(result.ok ? "R2 connected." : (result.error ?? "Connection failed."));
-      if (result.ok) void refreshDataStatus();
+      if (result.ok) {
+        await refreshDataStatus();
+      } else {
+        setR2TestError(result.error ?? "Connection failed.");
+      }
     } finally {
       setSyncTestBusy(false);
     }
   };
+
+  const syncTooltip = syncNowButtonTooltip({
+    busy: syncBusy,
+    configured: dataStatus?.sync.configured ?? false,
+  });
+
+  const syncInlineStatus =
+    dataStatus?.sync.configured && !dataStatus.sync.lastError
+      ? syncBusy
+        ? "Syncing…"
+        : syncInlineStatusLine({ lastSuccessAt: dataStatus.sync.lastSuccessAt ?? null })
+      : null;
 
   const runImport = async () => {
     setImporting(true);
@@ -836,6 +926,7 @@ export function SettingsView({
                 id="settings-api-key"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
+                onBlur={() => void persistSettings()}
                 placeholder="sk-…"
                 ariaLabel="OpenAI API key"
               />
@@ -856,6 +947,7 @@ export function SettingsView({
                   testId="settings-tavily-key"
                   value={tavilyApiKey}
                   onChange={(e) => setTavilyApiKey(e.target.value)}
+                  onBlur={() => void persistSettings()}
                   placeholder="tvly-…"
                   ariaLabel="Tavily API key"
                 />
@@ -1115,6 +1207,18 @@ export function SettingsView({
                         : accessibilityTrusted === false
                           ? "Accessibility not enabled yet."
                           : "Checking…"}
+                    </SettingsHint>
+                    <SettingsHint flush data-testid="settings-global-recording-status">
+                      Fn monitor:{" "}
+                      {globalRecordingStatus?.monitorHealth === "running"
+                        ? "running"
+                        : globalRecordingStatus?.monitorHealth === "accessibility_denied"
+                          ? "needs Accessibility"
+                          : globalRecordingStatus?.hotkeyActive
+                            ? "starting…"
+                            : "off"}
+                      {" · "}
+                      Microphone: {micReady ? "ready" : "not primed — click anywhere in Harness or use the in-app mic once"}
                     </SettingsHint>
                   </>
                 )}
@@ -1530,17 +1634,15 @@ export function SettingsView({
                   id="settings-r2-secret"
                   value={r2SecretAccessKey}
                   onChange={(e) => setR2SecretAccessKey(e.target.value)}
+                  onBlur={() => void persistSettings()}
                   placeholder="Secret access key"
                   ariaLabel="R2 secret access key"
                 />
               </SettingsField>
-              {dataStatus?.sync.statusLine && (
-                <p className="settings-data-status" role="status">
-                  {dataStatus.sync.statusLine}
+              {(dataStatus?.sync.lastError || r2TestError) && (
+                <p className="settings-import-status__errors">
+                  {dataStatus?.sync.lastError ?? r2TestError}
                 </p>
-              )}
-              {dataStatus?.sync.lastError && (
-                <p className="settings-import-status__errors">{dataStatus.sync.lastError}</p>
               )}
               <SettingsActions>
                 <button
@@ -1551,16 +1653,24 @@ export function SettingsView({
                 >
                   {syncTestBusy ? "Testing…" : "Test Connection"}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void runSyncNow()}
-                  disabled={syncBusy || !dataStatus?.sync.configured}
-                >
-                  {syncBusy ? "Syncing…" : "Sync Now"}
-                </button>
+                <div className="settings-sync-control">
+                  <Tooltip label={syncTooltip}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void runSyncNow()}
+                      disabled={syncBusy || !dataStatus?.sync.configured}
+                    >
+                      {syncBusy ? "Syncing…" : "Sync Now"}
+                    </button>
+                  </Tooltip>
+                  {syncInlineStatus ? (
+                    <span className="settings-sync-status" role="status">
+                      {syncInlineStatus}
+                    </span>
+                  ) : null}
+                </div>
               </SettingsActions>
-              {syncMessage && <SettingsHint flush>{syncMessage}</SettingsHint>}
             </SettingsGroup>
 
             <SettingsGroup title="Import chat history">

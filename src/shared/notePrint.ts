@@ -19,7 +19,7 @@ export function buildNotePrintHtml(title: string, content: string): string {
 <title>${safeTitle}</title>
 <style>
   @page { size: letter; margin: 0.75in; }
-  body { margin: 0; font-family: system-ui, sans-serif; color: #111; }
+  body { margin: 0; font-family: "IBM Plex Sans", sans-serif; color: #111; }
   h1 {
     font-size: 14pt;
     font-weight: 600;
@@ -29,7 +29,7 @@ export function buildNotePrintHtml(title: string, content: string): string {
   }
   pre {
     margin: 0;
-    font-family: "Courier New", Courier, monospace;
+    font-family: "IBM Plex Mono", monospace;
     font-size: 11pt;
     line-height: 1.4;
     white-space: pre-wrap;

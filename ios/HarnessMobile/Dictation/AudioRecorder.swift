@@ -49,7 +49,11 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard granted else { throw AudioRecorderError.permissionDenied }
 
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+        try session.setCategory(
+            .playAndRecord,
+            mode: .spokenAudio,
+            options: [.defaultToSpeaker, .allowBluetooth]
+        )
         try session.setActive(true)
 
         let url = try RecordingStorage.newRecordingURL()

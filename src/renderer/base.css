@@ -1,5 +1,5 @@
 /**
- * Global design tokens — fixed dark palette and 14px type scale.
+ * Global design tokens — fixed dark palette and 16px type scale.
  */
 :root {
   color-scheme: dark;
@@ -55,7 +55,7 @@
   --danger-fg: #e05353;
   --danger-hover: #a33226;
   --danger-muted: #913127;
-  --danger-surface: color-mix(in srgb, var(--danger) 30%, var(--bg-secondary));
+  --danger-surface: #512925;
   --warning: #d99024;
   --warning-fg: #d99024;
   --success: #238636;
@@ -70,13 +70,13 @@
   --focus-ring: 2px solid var(--accent);
 
   /* --- Typography --- */
-  --font-family: system-ui, sans-serif;
-  --font-family-mono: ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Code", monospace;
+  --font-family: "IBM Plex Sans", sans-serif;
+  --font-family-mono: "IBM Plex Mono", monospace;
   --font-size: var(--font-size-body);
   --font-size-caption: 12px;
-  --font-size-body: 14px;
+  --font-size-body: 16px;
   --font-size-ui: 12px;
-  --font-size-title: 16px;
+  --font-size-title: 18px;
   --icon-size-xs: 12px;
   --icon-size-sm: 12px;
   --icon-size-md: 16px;
@@ -86,13 +86,13 @@
   --line-height-tight: 16px;
   --line-height-caption: 16px;
   --line-height-ui: 16px;
-  --line-height-body: 20px;
-  --line-height-title: 24px;
-  --line-height-message: 24px;
-  --line-height-prose: 28px;
+  --line-height-body: 24px;
+  --line-height-title: 28px;
+  --line-height-message: 28px;
+  --line-height-prose: 32px;
   --line-height-compact: 16px;
-  --line-height-snug: 20px;
-  --line-height-normal: 20px;
+  --line-height-snug: 24px;
+  --line-height-normal: 24px;
   --line-height: var(--line-height-body);
 
   /* --- Layout (4px grid; shared across themes) --- */
@@ -246,6 +246,39 @@ hr {
   cursor: not-allowed;
 }
 
+.tooltip {
+  position: relative;
+  display: inline-flex;
+}
+
+.tooltip__label {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  width: max-content;
+  max-width: 240px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-snug);
+  text-align: center;
+  color: var(--fg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.tooltip:hover .tooltip__label,
+.tooltip:focus-within .tooltip__label {
+  opacity: 1;
+  visibility: visible;
+}
+
 .btn:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--space-1);
@@ -360,6 +393,8 @@ hr {
   display: flex;
   height: 100%;
   width: 100%;
+  /* Separates the native titlebar from the in-app header, which shares its background. */
+  border-top: 1px solid var(--border-edge);
 }
 
 .app-grid-overlay {
@@ -465,12 +500,28 @@ hr {
   inset: 0;
   z-index: 1500;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--space-3);
   background: var(--scrim);
   -webkit-backdrop-filter: blur(6px) saturate(0.92);
   backdrop-filter: blur(6px) saturate(0.92);
   pointer-events: none;
+}
+
+.hotkey-recording-overlay__error {
+  max-width: min(28rem, calc(100vw - var(--space-8)));
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--fg);
+  text-align: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-edge);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
 }
 
 .hotkey-recording-overlay__badge {

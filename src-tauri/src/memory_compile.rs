@@ -216,7 +216,7 @@ async fn collect_slices_since(
     out
 }
 
-pub fn build_transcript(slices: &[ConversationSlice]) -> (String, Vec<ConversationSlice>) {
+fn build_transcript(slices: &[ConversationSlice]) -> (String, Vec<ConversationSlice>) {
     let mut included = Vec::new();
     let mut blocks = Vec::new();
     let mut used = 0usize;

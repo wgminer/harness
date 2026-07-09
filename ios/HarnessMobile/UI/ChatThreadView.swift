@@ -14,6 +14,8 @@ struct ChatThreadView: View {
     @Environment(\.harnessTheme) private var theme
     let conversationId: String
 
+    @StateObject private var scrollController = ChatScrollController()
+
     @State private var messages: [MessageRecord]
     @State private var streamingMessageTimestamp: Int64?
     @State private var streamingToolCalls: [ToolCallRecord] = []
@@ -25,6 +27,10 @@ struct ChatThreadView: View {
     @State private var showRenameAlert = false
     @State private var renameDraft = ""
     @State private var showDeleteConfirm = false
+    @State private var scrollContentOffset: CGFloat = 0
+    @State private var scrollContentBottom: CGFloat = 0
+    @State private var scrollViewportBottom: CGFloat = 0
+    @State private var didInitialScrollToLiveEdge = false
     @FocusState private var isComposerFocused: Bool
 
     private let autofocusComposer: Bool
@@ -41,22 +47,26 @@ struct ChatThreadView: View {
         )
     }
 
+    private var isStreamingThisThread: Bool {
+        app.chatService.isStreaming(conversationId: conversationId)
+    }
+
     private var isAwaitingFirstToken: Bool {
-        app.chatService.isStreaming && streamingMessageTimestamp == nil && streamingToolCalls.isEmpty
+        isStreamingThisThread && streamingMessageTimestamp == nil && streamingToolCalls.isEmpty
     }
 
     private var centerSingleMessage: Bool {
         isDictationSession
             && messages.count == 1
             && messages.first?.messageRole == .user
-            && !app.chatService.isStreaming
+            && !isStreamingThisThread
             && !isAwaitingFirstToken
     }
 
     private var showReplyActions: Bool {
         guard isDictationSession, let last = messages.last else { return false }
         return last.messageRole == .user
-            && !app.chatService.isStreaming
+            && !isStreamingThisThread
             && streamingMessageTimestamp == nil
     }
 
@@ -64,6 +74,8 @@ struct ChatThreadView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
+                    ChatScrollOffsetTracker()
+
                     if centerSingleMessage {
                         Spacer(minLength: 0)
                     }
@@ -120,6 +132,8 @@ struct ChatThreadView: View {
                     if centerSingleMessage {
                         Spacer(minLength: 0)
                     }
+
+                    ChatScrollOffsetTracker()
                 }
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
@@ -128,18 +142,39 @@ struct ChatThreadView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 24)
             }
+            .coordinateSpace(name: "chatScroll")
+            .background(ChatScrollViewportTracker())
+            .modifier(
+                ChatScrollPreferenceHandlers(
+                    controller: scrollController,
+                    contentOffset: $scrollContentOffset,
+                    contentBottom: $scrollContentBottom,
+                    viewportBottom: $scrollViewportBottom
+                )
+            )
             .scrollDisabled(centerSingleMessage)
-            .defaultScrollAnchor(centerSingleMessage ? .center : .bottom)
+            .defaultScrollAnchor(centerSingleMessage ? .center : .top)
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(
-                TapGesture().onEnded {
-                    isComposerFocused = false
-                }
+                DragGesture(minimumDistance: 12)
+                    .onChanged { value in
+                        if value.translation.height > 0 {
+                            scrollController.onUserDraggedUp()
+                        }
+                    }
             )
-            .safeAreaInset(edge: .bottom, spacing: 16) {
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 composerDock
             }
             .onAppear { scrollProxy = proxy }
+            .onChange(of: scrollContentBottom) { _, bottom in
+                guard !didInitialScrollToLiveEdge,
+                      bottom > 0,
+                      !centerSingleMessage,
+                      !messages.isEmpty else { return }
+                didInitialScrollToLiveEdge = true
+                scrollToBottom(animated: false)
+            }
         }
         .background(theme.bgColor.ignoresSafeArea())
         .navigationTitle(titleForConversation)
@@ -182,6 +217,8 @@ struct ChatThreadView: View {
             Text("This chat and its messages will be removed from this device and synced to your Mac.")
         }
         .task(id: conversationId) {
+            scrollController.reset()
+            didInitialScrollToLiveEdge = false
             reloadMessages()
             loadSessionKind()
             if let text = app.takePendingOutboundMessage(conversationId: conversationId) {
@@ -190,6 +227,21 @@ struct ChatThreadView: View {
                 didAutoGenerateReply = true
                 await generateReply()
             }
+        }
+        .onChange(of: isStreamingThisThread) { _, sending in
+            scrollController.onSendingChange(sending)
+            if sending {
+                followLiveEdgeIfPinned(animated: true)
+            }
+        }
+        .onChange(of: streamingContent) { _, _ in
+            followLiveEdgeIfPinned(animated: false)
+        }
+        .onChange(of: messages.count) { _, _ in
+            followLiveEdgeIfPinned(animated: false)
+        }
+        .onDisappear {
+            app.flushComposerDrafts()
         }
         .alert("Error", isPresented: .constant(loadError != nil)) {
             Button("OK") { loadError = nil }
@@ -207,7 +259,7 @@ struct ChatThreadView: View {
     private var composerDock: some View {
         ChatComposerView(
             conversationId: conversationId,
-            isStreaming: app.chatService.isStreaming,
+            isStreaming: isStreamingThisThread,
             autofocusOnAppear: autofocusComposer,
             startsExpanded: app.hasPendingOutboundMessage(conversationId: conversationId),
             allowsCollapse: true,
@@ -333,12 +385,33 @@ struct ChatThreadView: View {
         streamingToolCalls = []
     }
 
+    private func commitStreamingToMessages() {
+        guard let timestamp = streamingMessageTimestamp else { return }
+        let content = ChatTemporalContext.stripSentAtPrefix(streamingContent)
+        guard !content.isEmpty || !streamingToolCalls.isEmpty else {
+            finishStreaming()
+            return
+        }
+        let record = MessageRecord(
+            role: MessageRole.assistant.rawValue,
+            content: content,
+            timestamp: timestamp,
+            model: OpenAIModel.chat,
+            toolCalls: streamingToolCalls.isEmpty ? nil : streamingToolCalls
+        )
+        if !messages.contains(where: { $0.timestamp == timestamp && $0.messageRole == .assistant }) {
+            messages.append(record)
+        }
+        finishStreaming()
+    }
+
     private func send(text: String) async {
         guard !text.isEmpty else { return }
 
         appendOptimisticUserMessage(text)
         finishStreaming()
-        scrollToBottom(animated: true)
+        scrollController.pinForTurn()
+        followLiveEdgeIfPinned(animated: true)
 
         do {
             try await app.chatService.send(conversationId: conversationId, userContent: text) { chunk in
@@ -346,9 +419,15 @@ struct ChatThreadView: View {
             } onToolCall: { call in
                 appendStreamingToolCall(call)
             }
-            finishStreaming()
+            commitStreamingToMessages()
             reloadMessages()
             await app.pushAfterChat()
+        } catch is CancellationError {
+            finishStreaming()
+            reloadMessages()
+        } catch ChatServiceError.cancelled {
+            finishStreaming()
+            reloadMessages()
         } catch {
             loadError = error.localizedDescription
             finishStreaming()
@@ -358,7 +437,8 @@ struct ChatThreadView: View {
 
     private func generateReply() async {
         finishStreaming()
-        scrollToBottom(animated: true)
+        scrollController.pinForTurn()
+        followLiveEdgeIfPinned(animated: true)
 
         do {
             try await app.chatService.generateReply(conversationId: conversationId) { chunk in
@@ -366,9 +446,15 @@ struct ChatThreadView: View {
             } onToolCall: { call in
                 appendStreamingToolCall(call)
             }
-            finishStreaming()
+            commitStreamingToMessages()
             reloadMessages()
             await app.pushAfterChat()
+        } catch is CancellationError {
+            finishStreaming()
+            reloadMessages()
+        } catch ChatServiceError.cancelled {
+            finishStreaming()
+            reloadMessages()
         } catch {
             loadError = error.localizedDescription
             finishStreaming()
@@ -378,7 +464,8 @@ struct ChatThreadView: View {
 
     private func polishLastUser() async {
         finishStreaming()
-        scrollToBottom(animated: true)
+        scrollController.pinForTurn()
+        followLiveEdgeIfPinned(animated: true)
 
         do {
             try await app.chatService.polishLastUser(conversationId: conversationId) { chunk in
@@ -386,15 +473,26 @@ struct ChatThreadView: View {
             } onToolCall: { call in
                 appendStreamingToolCall(call)
             }
-            finishStreaming()
+            commitStreamingToMessages()
             reloadMessages()
             isDictationSession = false
             await app.pushAfterChat()
+        } catch is CancellationError {
+            finishStreaming()
+            reloadMessages()
+        } catch ChatServiceError.cancelled {
+            finishStreaming()
+            reloadMessages()
         } catch {
             loadError = error.localizedDescription
             finishStreaming()
             reloadMessages()
         }
+    }
+
+    private func followLiveEdgeIfPinned(animated: Bool) {
+        guard scrollController.shouldFollow, !centerSingleMessage else { return }
+        scrollToBottom(animated: animated)
     }
 
     private func scrollToBottom(animated: Bool) {
@@ -410,14 +508,12 @@ struct ChatThreadView: View {
         } else {
             return
         }
-        Task { @MainActor in
-            if animated {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo(targetId, anchor: .bottom)
-                }
-            } else {
+        if animated {
+            withAnimation(.easeOut(duration: 0.2)) {
                 proxy.scrollTo(targetId, anchor: .bottom)
             }
+        } else {
+            proxy.scrollTo(targetId, anchor: .bottom)
         }
     }
 

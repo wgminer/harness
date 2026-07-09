@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
-use serde::Serialize;
 use serde_json::Value;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
@@ -110,7 +109,7 @@ pub async fn read_json_object_file(path: &Path) -> ParseJsonResult<Value> {
     }
     let raw = tokio::fs::read_to_string(path).await.unwrap_or_default();
     match parse_json_utf8::<Value>(&raw) {
-        Ok(mut parsed) => {
+        Ok(parsed) => {
             if parsed.repaired {
                 let stamp = chrono::Utc::now().timestamp_millis();
                 let corrupt = format!("{}.corrupt-{}", path.display(), stamp);

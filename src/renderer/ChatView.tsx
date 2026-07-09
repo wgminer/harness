@@ -11,9 +11,14 @@ import {
   type Message,
   type ToolCallDisplay,
   formatMessageNoteTitle,
+  getInlineWriteup,
+  type LiveNoteStream,
 } from "./chatHelpers";
+import { shouldFocusComposerAfterTurn } from "./composerFocusPolicy";
 import { shouldApplyTurnUpdate } from "./chatTurnFlow";
+import { scheduleAfterStreamEndSync } from "./streamEndScheduling";
 import { stripSentAtPrefix } from "../shared/chatTemporalContext";
+import { chatRequiresApiKeyMessage } from "../shared/setupState";
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -37,7 +42,6 @@ interface ChatViewProps {
   onOpenNotesView?: (noteId: string) => void;
   /** When false, chat/polish/reply are blocked with a setup message. */
   openAIConfigured?: boolean;
-  onOpenSetup?: () => void;
 }
 
 export function ChatView({
@@ -54,7 +58,6 @@ export function ChatView({
   onWindowSizeToggle,
   onOpenNotesView,
   openAIConfigured = true,
-  onOpenSetup,
 }: ChatViewProps) {
   /** Set synchronously on first send so thread UI mounts before parent re-renders. */
   const [draftConversationId, setDraftConversationId] = useState<string | null>(null);
@@ -78,6 +81,8 @@ export function ChatView({
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [titleSaving, setTitleSaving] = useState(false);
+
+  const [liveNoteStream, setLiveNoteStream] = useState<LiveNoteStream | null>(null);
 
   /** Tool calls for the assistant turn currently being streamed; shown inline and then stored on the message when stream ends. */
   const chatAreaRef = useRef<HTMLDivElement>(null);
@@ -137,7 +142,7 @@ export function ChatView({
     );
   }, []);
 
-  const completeTurn = useCallback((turnId: number) => {
+  const completeTurn = useCallback((turnId: number, documentHasFocus = document.hasFocus()) => {
     if (activeTurnIdRef.current !== turnId) return;
     activeTurnIdRef.current = null;
     streamAbortRef.current = null;
@@ -147,23 +152,34 @@ export function ChatView({
     setIsTurnPending(false);
     setIsStreaming(false);
     setActiveAssistantMessageId(null);
-    focusComposer();
+    if (shouldFocusComposerAfterTurn(documentHasFocus)) {
+      focusComposer();
+    }
   }, [focusComposer]);
 
   const syncAssistantFromStorage = useCallback(async (convId: string, assistantId: string | null) => {
     const list = await window.harness.memory.getMessages(convId);
     const lastAssistant = [...list].reverse().find((m) => m.role === "assistant");
     if (!lastAssistant?.content?.trim()) return;
+    const storedToolCalls = (lastAssistant as Message).toolCalls;
+    const storedWriteup = getInlineWriteup(storedToolCalls);
+    const storedHasNote = !!storedWriteup?.noteId;
     setMessages((prev) => {
       let patched = false;
       const next = prev.map((m) => {
         if (m.id !== assistantId) return m;
-        if (m.content.length >= lastAssistant.content.length) return m;
+        const localWriteup = getInlineWriteup(m.toolCalls);
+        const contentNeedsSync = m.content.length < lastAssistant.content.length;
+        const toolCallsNeedSync =
+          !!storedToolCalls &&
+          (storedToolCalls.length !== (m.toolCalls?.length ?? 0) ||
+            storedHasNote !== !!localWriteup?.noteId);
+        if (!contentNeedsSync && !toolCallsNeedSync) return m;
         patched = true;
         return {
           ...m,
-          content: lastAssistant.content,
-          toolCalls: (lastAssistant as Message).toolCalls ?? m.toolCalls,
+          content: contentNeedsSync ? lastAssistant.content : m.content,
+          toolCalls: toolCallsNeedSync ? storedToolCalls : m.toolCalls,
           model: (lastAssistant as Message).model ?? m.model,
         };
       });
@@ -198,6 +214,7 @@ export function ChatView({
     streamAbortRef.current = new AbortController();
     setIsTurnPending(true);
     setIsStreaming(false);
+    setLiveNoteStream(null);
     return { turnId: nextTurnId, signal: streamAbortRef.current.signal };
   }, []);
 
@@ -216,14 +233,18 @@ export function ChatView({
 
   const setAssistantToolCall = useCallback((assistantId: string, toolName: string, payload: unknown) => {
     setMessages((prev) =>
-      prev.map((message) =>
-        message.id === assistantId
-          ? {
-              ...message,
-              toolCalls: [...(message.toolCalls ?? []), { toolName, payload }],
-            }
-          : message
-      )
+      prev.map((message) => {
+        if (message.id !== assistantId) return message;
+        const existing = message.toolCalls ?? [];
+        if (toolName === "note_create" || toolName === "open_long_response") {
+          const idx = existing.findIndex((tc) => tc.toolName === toolName);
+          const entry = { toolName, payload };
+          const toolCalls =
+            idx >= 0 ? existing.map((tc, i) => (i === idx ? entry : tc)) : [...existing, entry];
+          return { ...message, toolCalls };
+        }
+        return { ...message, toolCalls: [...existing, { toolName, payload }] };
+      })
     );
   }, []);
 
@@ -301,6 +322,7 @@ export function ChatView({
         setSavedToNotesId(null);
         setPolishHintAfterDictation(false);
         setTitleModalOpen(false);
+        setLiveNoteStream(null);
         resetComposerInputRef.current();
         focusComposer();
       }
@@ -326,6 +348,7 @@ export function ChatView({
     setSavedToNotesId(null);
     setPolishHintAfterDictation(false);
     setTitleModalOpen(false);
+    setLiveNoteStream(null);
     focusComposer();
 
     let cancelled = false;
@@ -354,12 +377,28 @@ export function ChatView({
       const turnId = activeTurnIdRef.current;
       const signal = streamAbortRef.current?.signal;
       if (!assistantId || turnId == null || !isTurnCurrent(turnId, signal)) return;
+
+      if (toolName === "note_create") {
+        const p = payload as {
+          attachedToMessage?: boolean;
+          summary?: string;
+        };
+        if (p?.attachedToMessage && typeof p.summary === "string" && p.summary.trim()) {
+          applyAssistantChunk(assistantId, () => p.summary!.trim());
+          setAssistantToolCall(assistantId, toolName, payload);
+        } else {
+          setAssistantToolCall(assistantId, toolName, payload);
+        }
+        return;
+      }
+
+      if (toolName === "open_long_response") return;
       setAssistantToolCall(assistantId, toolName, payload);
     });
     return () => {
       unsub();
     };
-  }, [activeAssistantMessageId, isTurnCurrent, setAssistantToolCall]);
+  }, [activeAssistantMessageId, applyAssistantChunk, isTurnCurrent, setAssistantToolCall]);
 
   useEffect(() => {
     const unsubChunk = window.harness.chat.onStreamChunk((cid, chunk) => {
@@ -376,10 +415,13 @@ export function ChatView({
       const turnId = activeTurnIdRef.current;
       if (turnId == null) return;
       const assistantId = activeAssistantMessageIdRef.current;
+      const documentHasFocus = document.hasFocus();
       void syncAssistantFromStorage(cid, assistantId).finally(() => {
-        if (activeTurnIdRef.current === turnId) {
-          completeTurn(turnId);
-        }
+        scheduleAfterStreamEndSync(() => {
+          if (activeTurnIdRef.current === turnId) {
+            completeTurn(turnId, documentHasFocus);
+          }
+        });
       });
     });
     return () => {
@@ -387,6 +429,47 @@ export function ChatView({
       unsubEnd();
     };
   }, [applyAssistantChunk, completeTurn, isTurnCurrent, syncAssistantFromStorage]);
+
+  useEffect(() => {
+    const unsubOpen = window.harness.chat.onNoteStreamOpen((cid, noteId, title, summary) => {
+      if (cid !== conversationIdRef.current) return;
+      const assistantId = activeAssistantMessageIdRef.current;
+      if (!assistantId) return;
+      setLiveNoteStream({ noteId, title, summary, body: "" });
+      applyAssistantChunk(assistantId, () => summary);
+      setAssistantToolCall(assistantId, "note_create", {
+        note: { id: noteId, title },
+        summary,
+        attachedToMessage: true,
+      });
+    });
+    const unsubChunk = window.harness.chat.onNoteStreamChunk((cid, noteId, chunk) => {
+      if (cid !== conversationIdRef.current) return;
+      setLiveNoteStream((prev) =>
+        prev && prev.noteId === noteId ? { ...prev, body: prev.body + chunk } : prev,
+      );
+    });
+    const unsubClose = window.harness.chat.onNoteStreamClose((cid, noteId) => {
+      if (cid !== conversationIdRef.current) return;
+      const assistantId = activeAssistantMessageIdRef.current;
+      setLiveNoteStream((prev) => {
+        if (!prev || prev.noteId !== noteId) return prev;
+        if (assistantId) {
+          setAssistantToolCall(assistantId, "note_create", {
+            note: { id: prev.noteId, title: prev.title },
+            summary: prev.summary,
+            attachedToMessage: true,
+          });
+        }
+        return null;
+      });
+    });
+    return () => {
+      unsubOpen();
+      unsubChunk();
+      unsubClose();
+    };
+  }, [applyAssistantChunk, setAssistantToolCall]);
 
   useEffect(() => {
     return () => {
@@ -442,9 +525,10 @@ export function ChatView({
 
   const setVoiceErrorRef = useRef<(message: string | null) => void>(() => {});
 
-  const blockLlmAction = useCallback(() => {
-    onOpenSetup?.();
-  }, [onOpenSetup]);
+  const blockLlmAction = useCallback((): false => {
+    setVoiceErrorRef.current(chatRequiresApiKeyMessage());
+    return false;
+  }, []);
 
   /** Core send logic; accepts text directly so it can be called programmatically (e.g. hotkey injection). */
   const sendText = useCallback(
@@ -501,10 +585,9 @@ export function ChatView({
   );
 
   const ensureConversationAndSend = useCallback(
-    async (text: string, opts?: { fromDictation?: boolean }) => {
+    async (text: string, opts?: { fromDictation?: boolean }): Promise<boolean> => {
       if (!openAIConfigured) {
-        blockLlmAction();
-        return;
+        return blockLlmAction();
       }
       let convId = effectiveConversationId;
       if (!convId) {
@@ -515,6 +598,7 @@ export function ChatView({
         onAssignConversationId(convId);
       }
       await sendText(text, opts, convId);
+      return true;
     },
     [blockLlmAction, effectiveConversationId, onAssignConversationId, openAIConfigured, sendText]
   );
@@ -613,6 +697,11 @@ export function ChatView({
     openAIConfigured,
     runAssistantTurn,
   ]);
+
+  const handleOptionSelect = useCallback(
+    (label: string) => void ensureConversationAndSend(label),
+    [ensureConversationAndSend],
+  );
 
   const saveMessageToNotes = useCallback(
     async (messageId: string, content: string, messageTimestamp?: number) => {
@@ -756,6 +845,9 @@ export function ChatView({
         onToolConfirm={handleToolConfirm}
         onPolish={polishLastUserFromStrip}
         onGenerateReply={generateReply}
+        onOptionSelect={handleOptionSelect}
+        liveNoteStream={liveNoteStream}
+        onOpenNoteInEditor={onOpenNotesView}
         {...composerProps}
         messagesTestId="chat-messages"
         composerTestId="chat-composer"

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -226,7 +226,7 @@ fn local_backups_root() -> PathBuf {
     get_local_data_sync_dir().join(LOCAL_BACKUP_DIR)
 }
 
-async fn load_state(app_state: &AppState) -> Result<PersistedState, std::io::Error> {
+async fn load_state(_app_state: &AppState) -> Result<PersistedState, std::io::Error> {
     let path = state_path();
     if !file_exists(&path).await {
         return Ok(PersistedState::default());

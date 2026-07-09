@@ -12,19 +12,21 @@
  */
 import {
   Children,
+  createContext,
   isValidElement,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
   type ComponentType,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import {
   AlertOctagon,
   AlertTriangle,
-  Check,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -92,6 +94,12 @@ export const remarkDirectiveToHast: Plugin<[], Root> = () => (tree) => {
 interface CommonProps {
   children?: ReactNode;
 }
+
+export interface MarkdownInteractionContextValue {
+  onOptionSelect?: (label: string) => void | Promise<void>;
+}
+
+export const MarkdownInteractionContext = createContext<MarkdownInteractionContextValue>({});
 
 function joinClass(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -192,37 +200,27 @@ function MdLink({
   );
 }
 
-function MdOptions({ title, children }: CommonProps & { title?: string }) {
-  return (
-    <section className="md-options">
-      {title ? <header className="md-options__title">{title}</header> : null}
-      <div className="md-options__grid">{children}</div>
-    </section>
-  );
+function MdOptions({ children }: CommonProps) {
+  return <div className="md-options">{children}</div>;
 }
 
-function MdOption({
-  title,
-  recommended,
-  children,
-}: CommonProps & { title?: string; recommended?: string }) {
-  const isRecommended = recommended !== undefined;
-  return (
-    <article
-      className={joinClass("md-option", isRecommended && "md-option--recommended")}
-    >
-      <header className="md-option__head">
-        <span className="md-option__title">{title || "Option"}</span>
-        {isRecommended ? (
-          <span className="md-option__badge">
-            <Check size={11} aria-hidden /> Recommended
-          </span>
-        ) : null}
-      </header>
-      <div className="md-option__body">{children}</div>
-    </article>
-  );
+function MdOption({ title }: { title?: string }) {
+  const { onOptionSelect } = useContext(MarkdownInteractionContext);
+  const label = title?.trim() || "Option";
+  if (onOptionSelect) {
+    return (
+      <button
+        type="button"
+        className="btn md-option-btn"
+        onClick={() => void onOptionSelect(label)}
+      >
+        {label}
+      </button>
+    );
+  }
+  return <span className="btn md-option-btn md-option-btn--static">{label}</span>;
 }
+(MdOption as ComponentType & { displayName?: string }).displayName = "MdOption";
 
 const SLIDE_LAYOUTS = new Set(["title", "bullets", "quote", "blank"]);
 

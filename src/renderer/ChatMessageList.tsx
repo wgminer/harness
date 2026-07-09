@@ -10,7 +10,11 @@ import {
   SaveToNotesButton,
   formatMessageTime,
   ReplyingIndicator,
+  getInlineWriteup,
+  isAttachedNoteCreate,
+  type LiveNoteStream,
 } from "./chatHelpers";
+import { InlineWriteupCard } from "./DocumentCard";
 import { ToolCallsCard } from "./ToolCallsCard";
 
 interface ChatMessageListProps {
@@ -26,6 +30,9 @@ interface ChatMessageListProps {
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
   onGenerateReply: () => void;
+  onOptionSelect?: (label: string) => void | Promise<void>;
+  liveNoteStream?: LiveNoteStream | null;
+  onOpenNoteInEditor?: (noteId: string) => void;
 }
 
 export function ChatMessageList({
@@ -41,10 +48,14 @@ export function ChatMessageList({
   onToolConfirm,
   onPolish,
   onGenerateReply,
+  onOptionSelect,
+  liveNoteStream,
+  onOpenNoteInEditor,
 }: ChatMessageListProps) {
   const [expandedUserCards, setExpandedUserCards] = useState<Set<string>>(new Set());
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set());
   const [overflowedUserCards, setOverflowedUserCards] = useState<Set<string>>(new Set());
+  const [noteBodyCache, setNoteBodyCache] = useState<Record<string, string>>({});
   const userCardContentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const toggleUserCardExpanded = useCallback((messageId: string) => {
@@ -54,6 +65,10 @@ export function ChatMessageList({
       else next.add(messageId);
       return next;
     });
+  }, []);
+
+  const handleNoteBodyLoaded = useCallback((noteId: string, body: string) => {
+    setNoteBodyCache((prev) => (prev[noteId] === body ? prev : { ...prev, [noteId]: body }));
   }, []);
 
   const toggleToolCardExpanded = useCallback((messageId: string) => {
@@ -78,10 +93,11 @@ export function ChatMessageList({
     );
   }, [displayMessages, expandedUserCards]);
 
+  const lastMessage = displayMessages[displayMessages.length - 1];
   const showReplyActions =
-    displayMessages.length > 0 &&
-    displayMessages[displayMessages.length - 1].role === "user" &&
-    !streamingContent;
+    displayMessages.length > 0 && lastMessage?.role === "user" && !streamingContent;
+  const optionSelectEnabled =
+    !!onOptionSelect && llmActionsEnabled && !sending && !streamingContent;
   const showPolishInStrip = showReplyActions && polishHintAfterDictation;
   const replyLabel = resolveDictationReplyLabel();
   return (
@@ -90,12 +106,30 @@ export function ChatMessageList({
         {displayMessages.map((m, idx) => {
           const isAssistant = m.role === "assistant";
           const hasToolCalls = isAssistant && m.toolCalls && m.toolCalls.length > 0;
+          const inlineWriteup = isAssistant ? getInlineWriteup(m.toolCalls) : null;
+          const isLatestAssistant = isAssistant && idx === displayMessages.length - 1;
+          const isStreamingWriteup =
+            sending && !!liveNoteStream && isLatestAssistant;
           const isLatestAssistantPending =
             sending &&
             isAssistant &&
-            idx === displayMessages.length - 1 &&
+            isLatestAssistant &&
             !m.content &&
             !streamingContent;
+
+          const optionsInteractive =
+            optionSelectEnabled && isAssistant && lastMessage?.id === m.id;
+
+          const cachedNoteBody =
+            inlineWriteup?.noteId != null ? noteBodyCache[inlineWriteup.noteId] : undefined;
+          const liveWriteupBody =
+            isStreamingWriteup && liveNoteStream ? liveNoteStream.body : undefined;
+          const saveCopyContent =
+            liveWriteupBody ||
+            inlineWriteup?.body ||
+            cachedNoteBody ||
+            m.content;
+          const hideSaveToNotes = !!inlineWriteup?.noteId && !inlineWriteup.body;
 
           let assistantBubbleBody: ReactNode = null;
           if (m.role !== "user") {
@@ -109,6 +143,7 @@ export function ChatMessageList({
                   savedToNotesId={savedToNotesId}
                   onCopied={onCopied}
                   onSaveToNotes={onSaveToNotes}
+                  onOptionSelect={optionsInteractive ? onOptionSelect : undefined}
                 />
               );
             else if (isLatestAssistantPending) assistantBubbleBody = <ReplyingIndicator />;
@@ -172,13 +207,39 @@ export function ChatMessageList({
                   <>
                     {hasToolCalls && (
                       <ToolCallsCard
-                        toolCalls={m.toolCalls!}
+                        toolCalls={
+                          m.toolCalls!.filter((tc, i, arr) => {
+                            if (isAttachedNoteCreate(tc)) {
+                              return (
+                                arr.findIndex(
+                                  (x) =>
+                                    x.toolName === "note_create" && isAttachedNoteCreate(x),
+                                ) === i
+                              );
+                            }
+                            if (tc.toolName === "open_long_response") {
+                              return (
+                                arr.findIndex((x) => x.toolName === "open_long_response") === i
+                              );
+                            }
+                            return true;
+                          })
+                        }
                         expanded={expandedToolCards.has(m.id)}
                         onToggleExpanded={() => toggleToolCardExpanded(m.id)}
                         onToolConfirm={onToolConfirm}
                       />
                     )}
                     {assistantBubbleBody}
+                    {inlineWriteup && (
+                      <InlineWriteupCard
+                        writeup={inlineWriteup}
+                        liveStream={liveNoteStream}
+                        streaming={isStreamingWriteup}
+                        onOpenInEditor={onOpenNoteInEditor}
+                        onBodyLoaded={handleNoteBodyLoaded}
+                      />
+                    )}
                   </>
                 )}
               </div>
@@ -203,14 +264,16 @@ export function ChatMessageList({
                   )}
                 </div>
                 <div className="message-block-footer-actions">
-                  <SaveToNotesButton
-                    content={m.content}
-                    messageId={m.id}
-                    messageTimestamp={m.timestamp}
-                    savedNoteId={savedToNotesId}
-                    onSaveToNotes={onSaveToNotes}
-                  />
-                  <CopyButton content={m.content} messageId={m.id} copiedId={copiedId} onCopied={onCopied} />
+                  {!hideSaveToNotes ? (
+                    <SaveToNotesButton
+                      content={saveCopyContent}
+                      messageId={m.id}
+                      messageTimestamp={m.timestamp}
+                      savedNoteId={savedToNotesId}
+                      onSaveToNotes={onSaveToNotes}
+                    />
+                  ) : null}
+                  <CopyButton content={saveCopyContent} messageId={m.id} copiedId={copiedId} onCopied={onCopied} />
                 </div>
               </div>
             </div>

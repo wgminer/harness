@@ -66,6 +66,17 @@ fn file_bytes_equal(a: &[u8], b: &[u8]) -> bool {
     a == b
 }
 
+fn truncate_preview(text: &str, max_bytes: usize) -> String {
+    if text.len() <= max_bytes {
+        return text.to_string();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", &text[..end])
+}
+
 fn preview_text(bytes: Option<&[u8]>, max_len: usize) -> Option<String> {
     let bytes = bytes?;
     if bytes.is_empty() {
@@ -78,11 +89,7 @@ fn preview_text(bytes: Option<&[u8]>, max_len: usize) -> Option<String> {
     if text.is_empty() {
         return Some("(empty)".into());
     }
-    if text.len() <= max_len {
-        Some(text)
-    } else {
-        Some(format!("{}…", &text[..max_len]))
-    }
+    Some(truncate_preview(&text, max_len))
 }
 
 fn label_for_path(path: &str) -> String {
@@ -404,6 +411,21 @@ pub fn build_merged_file_map(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_truncates_on_char_boundary_not_byte_boundary() {
+        // U+2019 (') is three UTF-8 bytes; a naive byte slice at 120 panics inside it.
+        let apostrophe = '\u{2019}';
+        let prefix = "x".repeat(118);
+        let content = format!("[ {{ \"content\": \"{prefix}ab{apostrophe}cd\" }} ]");
+        let review = build_sync_conflict_review(
+            &HashMap::from([("app-state/messages_abc.json".into(), content.into_bytes())]),
+            &HashMap::new(),
+        );
+        let preview = review.files[0].local_preview.as_ref().unwrap();
+        assert!(preview.ends_with('…'));
+        assert!(preview.is_char_boundary(preview.len() - '…'.len_utf8()));
+    }
 
     #[test]
     fn classifies_unchanged_local_remote_conflict() {

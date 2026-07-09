@@ -1,7 +1,7 @@
 //! Tauri command handlers wiring renderer IPC to backend modules.
 
 use serde_json::Value;
-use tauri::{command, AppHandle, Emitter, Manager, State, Window};
+use tauri::{command, AppHandle, Emitter, State, Window};
 
 use crate::chat::ChatController;
 use crate::credentials::{
@@ -10,12 +10,14 @@ use crate::credentials::{
 use crate::customization::{get_layout_options, set_layout};
 use crate::env_util::{is_harness_dev, is_harness_e2e};
 use crate::file_tools::get_allowed_roots;
-use crate::global_recording::apply_global_fn_hotkey_setting;
+use crate::global_recording::{
+    apply_global_fn_hotkey_setting, global_fn_hotkey_enabled_from_recording,
+};
 use crate::import::{import_from_claude_folder, import_from_chatgpt_folder};
 use crate::memory::{
     append_message, cleanup_legacy_memory, create_conversation, delete_conversation,
     delete_user_memory_key, get_conversation, get_data_status, get_messages, get_user_memory,
-    list_conversations, mark_voice_dictation_session, open_app_data_folder, prune_empty_conversations,
+    list_conversations, mark_voice_dictation_session, open_app_data_folder,
     search_conversations, set_conversation_title, set_user_memory, AppState, AppendMessageMeta,
 };
 use crate::memory_compile::{get_memory_compile_status, run_memory_compile_now};
@@ -26,6 +28,7 @@ use crate::plans::{
     update_plan, PlanUpdates,
 };
 use crate::settings::{get_settings, set_settings};
+use crate::sync::{get_sync_status, SyncRuntime};
 use crate::tasks::{clear_completed_tasks, create_task, delete_task, list_tasks, update_task};
 use crate::ui_session::{get_ui_session, set_ui_session};
 
@@ -95,12 +98,15 @@ pub async fn settings_set(
     set_settings(&state.write_chains, &partial)
         .await
         .map_err(map_err)?;
-    if let Some(enabled) = partial
-        .get("recording")
-        .and_then(|r| r.get("globalFnHotkey"))
-        .and_then(|v| v.as_bool())
-    {
-        apply_global_fn_hotkey_setting(app, runtime.inner().clone(), enabled).await;
+    if let Some(recording) = partial.get("recording") {
+        if recording.get("globalFnHotkey").is_some() {
+            apply_global_fn_hotkey_setting(
+                app,
+                runtime.inner().clone(),
+                global_fn_hotkey_enabled_from_recording(recording),
+            )
+            .await;
+        }
     }
     Ok(())
 }
@@ -269,8 +275,12 @@ pub async fn memory_open_app_data_folder() -> Result<(), String> {
 }
 
 #[command(rename_all = "camelCase")]
-pub async fn memory_get_data_status(state: State<'_, AppState>) -> Result<Value, String> {
-    let status = get_data_status(&state).await.map_err(map_err)?;
+pub async fn memory_get_data_status(
+    state: State<'_, AppState>,
+    sync_runtime: State<'_, std::sync::Arc<SyncRuntime>>,
+) -> Result<Value, String> {
+    let mut status = get_data_status(&state).await.map_err(map_err)?;
+    status.sync = serde_json::to_value(get_sync_status(&sync_runtime).await).map_err(map_err)?;
     serde_json::to_value(status).map_err(map_err)
 }
 
@@ -293,12 +303,19 @@ pub async fn memory_set_conversation_title(
 
 #[command(rename_all = "camelCase")]
 pub async fn memory_mark_voice_dictation_session(
+    app: AppHandle,
     state: State<'_, AppState>,
     conversation_id: String,
 ) -> Result<String, String> {
-    mark_voice_dictation_session(&state, &conversation_id)
+    let title = mark_voice_dictation_session(&state, &conversation_id)
         .await
-        .map_err(map_err)
+        .map_err(map_err)?;
+    crate::conversation_title::schedule_conversation_title_refinement(
+        app,
+        state.inner().clone(),
+        conversation_id,
+    );
+    Ok(title)
 }
 
 #[command(rename_all = "camelCase")]

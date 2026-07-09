@@ -5,6 +5,7 @@ import {
   TOOL_CALLS_COMPRESS_THRESHOLD,
   isToolCallPending,
   summarizeToolCalls,
+  toolCallLabel,
   toolIcon,
   toolLabel,
 } from "./chatHelpers";
@@ -58,7 +59,7 @@ function ToolCallRow({
     <div className="tool-card-row">
       <span className="tool-card-icon">{toolIcon()}</span>
       <div className="tool-card-row-text">
-        <span className="tool-card-label">{toolLabel(call.toolName)}</span>
+        <span className="tool-card-label">{toolCallLabel(call)}</span>
       </div>
       {isPending && (
         <span className="tool-card-actions">

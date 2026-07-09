@@ -57,25 +57,24 @@ describe("markdown directives", () => {
     expect(bad).not.toContain("md-link-card");
   });
 
-  it("renders an options compare block with a recommended option", () => {
+  it("renders option labels as static buttons without body text", () => {
     const html = render(
       [
-        '::::options{title="Pick one"}',
-        ':::option{title="Redis" recommended}',
-        "Fast.",
+        "::::options",
+        ':::option{title="Redis"}',
+        "Ignored body.",
         ":::",
         ':::option{title="Memory"}',
-        "Simple.",
         ":::",
         "::::",
       ].join("\n"),
     );
     expect(html).toContain("md-options");
-    expect(html).toContain("Pick one");
-    expect(html).toContain("md-option--recommended");
+    expect(html).toContain("md-option-btn");
     expect(html).toContain("Redis");
     expect(html).toContain("Memory");
-    expect(html).toContain("Recommended");
+    expect(html).not.toContain("Ignored body");
+    expect(html).not.toContain("Recommended");
   });
 
   it("renders a slide deck: shows the first slide and a nav for two slides", () => {

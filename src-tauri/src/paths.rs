@@ -1,12 +1,9 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use serde_json::Value;
-use tokio::sync::Mutex;
 
 use crate::env_util::user_data_dir;
-use crate::storage::{atomic_write_utf8, read_json_array_file, read_json_object_file};
+use crate::storage::{read_json_array_file, read_json_object_file};
 
 const LOCAL_DATA_DIR: &str = "local-data";
 const APP_STATE_DIR: &str = "app-state";
@@ -59,6 +56,32 @@ pub fn get_layout_path() -> PathBuf {
 
 pub fn get_credentials_path() -> PathBuf {
     get_user_data_dir().join("credentials.json")
+}
+
+/// Resolve a bundled native helper or resource file (HarnessFnMonitor, HarnessSpeech, tray PNGs).
+pub fn resolve_bundled_resource(name: &str) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(resource_dir) = std::env::var("RESOURCE_DIR") {
+        candidates.push(PathBuf::from(&resource_dir).join(name));
+        // Tauri 2 maps `../resources/*` in tauri.conf.json to `$RESOURCE/_up_/resources/*`.
+        candidates.push(PathBuf::from(&resource_dir).join("_up_/resources").join(name));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let resources = parent.join("../Resources");
+            candidates.push(resources.join(name));
+            candidates.push(resources.join("_up_/resources").join(name));
+            candidates.push(parent.join(name));
+        }
+    }
+    candidates.push(PathBuf::from("resources").join(name));
+    candidates.push(PathBuf::from("../resources").join(name));
+    for path in candidates {
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    None
 }
 
 pub fn get_recordings_dir() -> PathBuf {
@@ -183,3 +206,37 @@ pub async fn read_app_state_array<T: serde::de::DeserializeOwned>(path: &Path) -
 }
 
 pub use crate::storage::WriteChains;
+
+#[cfg(test)]
+mod bundled_resource_tests {
+    use super::resolve_bundled_resource;
+
+    #[test]
+    fn resolve_icon_tray_from_resources() {
+        assert!(
+            resolve_bundled_resource("icon-tray.png").is_some(),
+            "icon-tray.png should resolve from resources/"
+        );
+    }
+
+    #[test]
+    fn resolve_icon_tray_from_tauri_up_resources_dir() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let bundled = tmp.path().join("_up_/resources");
+        std::fs::create_dir_all(&bundled).expect("create bundled dir");
+        let icon = bundled.join("icon-tray.png");
+        std::fs::write(&icon, b"tray").expect("write icon");
+
+        let key = "RESOURCE_DIR";
+        let prev = std::env::var(key).ok();
+        // SAFETY: test runs in isolation; restored before return.
+        unsafe { std::env::set_var(key, tmp.path()) };
+        let resolved = resolve_bundled_resource("icon-tray.png");
+        match prev {
+            Some(v) => unsafe { std::env::set_var(key, v) },
+            None => unsafe { std::env::remove_var(key) },
+        }
+
+        assert_eq!(resolved, Some(icon));
+    }
+}

@@ -1,3 +1,5 @@
+import { rigSection } from "./rigPage";
+
 /** Cloudflare R2 remote backup sync. */
 export type SyncProvider = "s3Backup";
 
@@ -74,6 +76,28 @@ export {
   type SyncFileChoice,
   type SyncFileChangeKind,
 } from "./syncMerge";
+
+/** Native tooltip text for Sync now controls (sidebar icon and settings button). */
+export function syncNowButtonTooltip(input: { busy: boolean; configured: boolean }): string {
+  if (input.busy) return "Syncing…";
+  if (!input.configured) return `Set up backup in ${rigSection("Data")}`;
+  return "Sync now";
+}
+
+/** Compact sync hint shown beside Sync now in System → Data. */
+export function syncInlineStatusLine(input: {
+  lastSuccessAt: number | null;
+}): string | null {
+  if (!input.lastSuccessAt) return null;
+  const agoSec = Math.max(0, Math.round((Date.now() - input.lastSuccessAt) / 1000));
+  const ago =
+    agoSec < 60
+      ? `${agoSec}s ago`
+      : agoSec < 3600
+        ? `${Math.round(agoSec / 60)}m ago`
+        : `${Math.round(agoSec / 3600)}h ago`;
+  return `Synced ${ago}`;
+}
 
 export function formatSyncStatusLine(input: {
   lastSuccessAt: number | null;

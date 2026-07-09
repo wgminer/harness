@@ -152,7 +152,7 @@ export function ChatComposer({
           {voiceState !== "processing" && (
             <button
               type="button"
-              className={`btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn${voiceState === "recording" ? " voice-btn--recording" : ""}`}
+              className={`btn btn-icon chat-pane-btn chat-pane-btn--icon${voiceState === "recording" ? " btn-primary" : " voice-btn"}`}
               onClick={voiceState === "recording" ? onStopRecording : onStartRecording}
               disabled={sending}
               title={voiceState === "recording" ? "Stop recording" : "Record voice message"}

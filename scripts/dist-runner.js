@@ -15,8 +15,6 @@ const args = process.argv.slice(2);
 const isMac = args.includes("--mac") || process.platform === "darwin";
 const replace = args.includes("--replace");
 const quick = args.includes("--quick");
-const publish = args.includes("--publish");
-
 if (quick) {
   process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
   process.env.HARNESS_SKIP_VERSION_BUMP = "1";
@@ -177,7 +175,7 @@ function installToApplications(appPath) {
 }
 
 async function main() {
-  const modeExtras = [replace && "replace", quick && "quick (unsigned)", publish && "publish"].filter(Boolean);
+  const modeExtras = [replace && "replace", quick && "quick (unsigned)"].filter(Boolean);
   console.log(
     color("bold", `\n▸ Harness dist (tauri${modeExtras.length ? ` + ${modeExtras.join(" + ")}` : ""})`)
   );
@@ -219,7 +217,11 @@ async function main() {
       run: () => runChild("npm", ["run", "build:web"]),
     },
     {
-      label: publish ? "tauri build + publish" : "tauri build",
+      label: "typecheck",
+      run: () => runChild("npm", ["run", "typecheck"]),
+    },
+    {
+      label: "tauri build",
       run: () => {
         const tauriArgs = ["build"];
         if (isMac) tauriArgs.push("--bundles", "dmg,app");

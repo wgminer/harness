@@ -235,7 +235,7 @@ pub async fn pop_last_user_message(
 }
 
 pub async fn get_user_memory_in(
-    state: &AppState,
+    _state: &AppState,
     memory_dir: &Path,
 ) -> Result<HashMap<String, String>, std::io::Error> {
     let path = user_memory_path(memory_dir);
@@ -269,7 +269,7 @@ pub async fn set_user_memory_in(
 }
 
 async fn load_conversations_map(
-    state: &AppState,
+    _state: &AppState,
     memory_dir: &Path,
 ) -> HashMap<String, ConversationMeta> {
     let path = conversations_path(memory_dir);
@@ -450,7 +450,7 @@ pub async fn delete_conversation(state: &AppState, conversation_id: &str) -> Res
     Ok(())
 }
 
-pub async fn get_user_memory(state: &AppState) -> Result<HashMap<String, String>, std::io::Error> {
+pub async fn get_user_memory(_state: &AppState) -> Result<HashMap<String, String>, std::io::Error> {
     let memory_dir = get_memory_dir();
     let path = user_memory_path(&memory_dir);
     if !file_exists(&path).await {

@@ -281,7 +281,7 @@ export function Sidebar({
             }}
             aria-label="Delete conversation"
           >
-            ×
+            <X size={12} strokeWidth={2.5} aria-hidden />
           </button>
         </li>
       );
@@ -429,11 +429,18 @@ export function Sidebar({
             )
           ) : (
             <>
-              {sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => (
+              {sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => {
+                const groupLabelTitle =
+                  key === "recent"
+                    ? `${conversations.length} conversation${conversations.length === 1 ? "" : "s"}`
+                    : undefined;
+                return (
                 <li key={key} className="sidebar-group">
                   {groupIndex === 0 ? (
                     <div className="sidebar-group-header">
-                      <span className="sidebar-group-label">{label}</span>
+                      <span className="sidebar-group-label" title={groupLabelTitle}>
+                        {label}
+                      </span>
                       <button
                         type="button"
                         className="btn btn-icon sidebar-group-sort-toggle"
@@ -446,13 +453,16 @@ export function Sidebar({
                       </button>
                     </div>
                   ) : (
-                    <span className="sidebar-group-label">{label}</span>
+                    <span className="sidebar-group-label" title={groupLabelTitle}>
+                      {label}
+                    </span>
                   )}
                   <ul className="sidebar-group-items">
                     {items.map((c) => renderConversationItem(c))}
                   </ul>
                 </li>
-              ))}
+                );
+              })}
               {showSidebarMoreControl ? (
                 <li className="sidebar-list-expand">
                   <div className="sidebar-list-expand-row">
