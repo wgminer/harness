@@ -1,5 +1,12 @@
 import SwiftUI
 
+enum DictationRecordingMode: Equatable {
+    /// Home Dictate: create a dictation session and navigate.
+    case createSession
+    /// Composer mic: send transcript into an existing conversation.
+    case sendToConversation(conversationId: String)
+}
+
 private enum DictationRecordingPhase: Equatable {
     case starting
     case recording
@@ -9,8 +16,10 @@ private enum DictationRecordingPhase: Equatable {
 
 struct DictationRecordingSheet: View {
     @ObservedObject var app: AppModel
+    let mode: DictationRecordingMode
     @Binding var isPresented: Bool
-    var onConversationCreated: (String) -> Void
+    var onConversationCreated: (String) -> Void = { _ in }
+    var onTranscriptSent: (String) -> Void = { _ in }
 
     @State private var phase: DictationRecordingPhase = .starting
     @State private var savedAudioURL: URL?
@@ -220,12 +229,19 @@ struct DictationRecordingSheet: View {
 
         do {
             let transcript = try await app.dictationService.transcribeRecording(at: audioURL)
-            let conversationId = try app.createDictationConversation(
-                userMessage: transcript,
-                recordingURL: audioURL
-            )
-            isPresented = false
-            onConversationCreated(conversationId)
+            switch mode {
+            case .createSession:
+                let conversationId = try app.createDictationConversation(
+                    userMessage: transcript,
+                    recordingURL: audioURL
+                )
+                isPresented = false
+                onConversationCreated(conversationId)
+            case .sendToConversation(let conversationId):
+                try DictationRecordingIndex.link(conversationId: conversationId, recordingURL: audioURL)
+                isPresented = false
+                onTranscriptSent(transcript)
+            }
         } catch is CancellationError {
             phase = .failed("Transcription cancelled. Your recording is still saved on this device.")
         } catch {
@@ -253,6 +269,7 @@ struct DictationRecordingSheet: View {
 #Preview("Recording") {
     DictationRecordingSheet(
         app: PreviewSupport.emptyApp(syncNotConfigured: false, needsAPIKey: false),
+        mode: .createSession,
         isPresented: .constant(true),
         onConversationCreated: { _ in }
     )

@@ -6,6 +6,8 @@ struct ComposeChatView: View {
     @Environment(\.harnessTheme) private var theme
 
     @State private var sendError: String?
+    @State private var showDictationSheet = false
+    @State private var dictationConversationId: String?
     @FocusState private var isComposerFocused: Bool
 
     private var headerQuote: String {
@@ -45,6 +47,24 @@ struct ComposeChatView: View {
         .onDisappear {
             app.flushComposerDrafts()
         }
+        .sheet(isPresented: $showDictationSheet) {
+            if let conversationId = dictationConversationId {
+                DictationRecordingSheet(
+                    app: app,
+                    mode: .sendToConversation(conversationId: conversationId),
+                    isPresented: $showDictationSheet,
+                    onTranscriptSent: { transcript in
+                        app.queueOutboundMessage(conversationId: conversationId, text: transcript)
+                        app.openThread(id: conversationId)
+                    }
+                )
+            }
+        }
+        .onChange(of: showDictationSheet) { _, isPresented in
+            if !isPresented {
+                dictationConversationId = nil
+            }
+        }
     }
 
     private static var quoteLineSpacing: CGFloat {
@@ -65,6 +85,7 @@ struct ComposeChatView: View {
             onClearDraft: { app.clearComposeDraft() },
             onSend: { text in Task { await sendFirstMessage(text) } },
             onStop: { app.chatService.stop() },
+            onDictate: { startComposeDictation() },
             isFocused: $isComposerFocused
         )
         .padding(.horizontal, BottomBarMetrics.horizontalInset)
@@ -77,6 +98,16 @@ struct ComposeChatView: View {
             app.queueOutboundMessage(conversationId: id, text: text)
             app.clearComposeDraft()
             app.openThread(id: id)
+        } catch {
+            sendError = error.localizedDescription
+        }
+    }
+
+    private func startComposeDictation() {
+        do {
+            let id = try app.store.createConversation()
+            dictationConversationId = id
+            showDictationSheet = true
         } catch {
             sendError = error.localizedDescription
         }

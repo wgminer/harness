@@ -23,6 +23,7 @@ struct ChatComposerView: View {
     let onClearDraft: () -> Void
     let onSend: (String) -> Void
     let onStop: () -> Void
+    let onDictate: (() -> Void)?
 
     @FocusState.Binding var isFocused: Bool
 
@@ -41,6 +42,7 @@ struct ChatComposerView: View {
         onClearDraft: @escaping () -> Void,
         onSend: @escaping (String) -> Void,
         onStop: @escaping () -> Void,
+        onDictate: (() -> Void)? = nil,
         isFocused: FocusState<Bool>.Binding
     ) {
         self.conversationId = conversationId
@@ -53,6 +55,7 @@ struct ChatComposerView: View {
         self.onClearDraft = onClearDraft
         self.onSend = onSend
         self.onStop = onStop
+        self.onDictate = onDictate
         self._isFocused = isFocused
         _draft = State(initialValue: initialDraft)
         _heldExpanded = State(initialValue: startsExpanded)
@@ -138,11 +141,26 @@ struct ChatComposerView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                if let onDictate {
+                    dictateButton(action: onDictate)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: ComposerLayout.collapsedHeight, alignment: .center)
         .padding(.horizontal, BottomBarMetrics.collapsedInnerHorizontal)
+    }
+
+    private func dictateButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Color.red))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Dictate")
     }
 
     private var stopButton: some View {
@@ -174,6 +192,10 @@ struct ChatComposerView: View {
                 .padding(.bottom, 10)
 
             HStack(alignment: .center, spacing: 12) {
+                if let onDictate {
+                    dictateButton(action: onDictate)
+                }
+
                 Spacer(minLength: 0)
 
                 if isStreaming {

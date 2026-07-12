@@ -51,4 +51,25 @@ final class ConversationStoreDictationTests: XCTestCase {
         XCTAssertEqual(popped, "Remove me")
         XCTAssertTrue(try store.loadMessages(conversationId: id).isEmpty)
     }
+
+    func testSendToConversationPreservesChatSessionKindAndLinksRecording() throws {
+        let store = ConversationStore(localDataDir: tempDir)
+        let id = try store.createConversation()
+
+        let meta = try store.loadConversationMeta(conversationId: id)
+        XCTAssertEqual(meta?.sessionKind, "chat")
+
+        let recording = try RecordingStorage.newRecordingURL()
+        try Data([0x00]).write(to: recording)
+        try DictationRecordingIndex.link(conversationId: id, recordingURL: recording)
+        try store.appendMessage(conversationId: id, role: .user, content: "Dictated into open chat")
+
+        let updatedMeta = try store.loadConversationMeta(conversationId: id)
+        XCTAssertEqual(updatedMeta?.sessionKind, "chat")
+
+        let messages = try store.loadMessages(conversationId: id)
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(messages.first?.content, "Dictated into open chat")
+        XCTAssertEqual(DictationRecordingIndex.recordingURL(for: id)?.lastPathComponent, recording.lastPathComponent)
+    }
 }
