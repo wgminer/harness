@@ -254,39 +254,12 @@
   padding-bottom: 0;
 }
 
-/* Clipped user cards: subtle height peek on hover to hint more content below. */
+/* Clipped user cards: fixed 5-line clamp; expand via Show more only. */
 .message-user-card.message-user-card--overlay-toggle .message-user-card__content {
   display: block;
   -webkit-line-clamp: unset;
   line-clamp: unset;
   max-height: calc(var(--line-height-message) * 5);
-  transition: max-height var(--motion-duration-normal) var(--motion-ease-out);
-}
-
-.message-user-card.message-user-card--overlay-toggle:hover .message-user-card__content,
-.message-user-card.message-user-card--overlay-toggle:focus-within .message-user-card__content {
-  max-height: calc(var(--line-height-message) * 5 + var(--space-3));
-}
-
-.message-user-card.message-user-card--overlay-toggle .message-user-card__fade {
-  transition: opacity var(--motion-duration-normal) var(--motion-ease-out);
-}
-
-.message-user-card.message-user-card--overlay-toggle:hover .message-user-card__fade,
-.message-user-card.message-user-card--overlay-toggle:focus-within .message-user-card__fade {
-  opacity: 0.5;
-}
-
-.message-user-card.message-user-card--overlay-toggle:hover .message-user-card__toggle svg,
-.message-user-card.message-user-card--overlay-toggle:focus-within .message-user-card__toggle svg {
-  opacity: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .message-user-card.message-user-card--overlay-toggle .message-user-card__content,
-  .message-user-card.message-user-card--overlay-toggle .message-user-card__fade {
-    transition: none;
-  }
 }
 
 .message-user-card__toggle:hover {
