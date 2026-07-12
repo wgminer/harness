@@ -6,6 +6,8 @@ export interface UiSession {
   notesOpenNoteId: string | null;
   /** When true, the first-run setup notice is not shown again. */
   setupNoticeDismissed?: boolean;
+  /** When true, "New note" opens a sticky window instead of the main Editor. */
+  openNoteInStickyWindow?: boolean;
 }
 
 export const DEFAULT_UI_SESSION: UiSession = {
@@ -13,6 +15,7 @@ export const DEFAULT_UI_SESSION: UiSession = {
   conversationId: null,
   notesOpenNoteId: null,
   setupNoticeDismissed: false,
+  openNoteInStickyWindow: false,
 };
 
 const UI_SESSION_VIEWS: UiSessionView[] = ["chat", "settings", "tasks", "notes"];
@@ -40,5 +43,6 @@ export function normalizeUiSession(raw: unknown): UiSession {
     conversationId: normalizeOptionalId(data.conversationId),
     notesOpenNoteId: normalizeOptionalId(data.notesOpenNoteId),
     setupNoticeDismissed: data.setupNoticeDismissed === true,
+    openNoteInStickyWindow: data.openNoteInStickyWindow === true,
   };
 }

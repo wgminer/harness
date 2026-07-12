@@ -12,6 +12,8 @@ describe("legacyIpcCommand", () => {
     expect(legacyIpcCommand("recording:signalFrontendReady")).toBe("recording_signal_frontend_ready");
     expect(legacyIpcCommand("recording:startFailed")).toBe("recording_start_failed");
     expect(legacyIpcCommand("recording:getGlobalStatus")).toBe("recording_get_global_status");
+    expect(legacyIpcCommand("notes:openSticky")).toBe("notes_open_sticky");
+    expect(legacyIpcCommand("notes:setStickyPinned")).toBe("notes_set_sticky_pinned");
   });
 });
 

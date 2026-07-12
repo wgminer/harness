@@ -194,6 +194,16 @@ export interface HarnessAPI {
     proposeEdit: (input: NoteEditProposalInput) => Promise<NoteEditProposal>;
     spellCheck: (input: NoteSpellCheckInput) => Promise<NoteEditProposal>;
     print: (html: string, jobName?: string) => Promise<{ success: boolean }>;
+    openSticky: (noteId: string) => Promise<{
+      noteId: string;
+      pinned: boolean;
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+    }>;
+    setStickyPinned: (noteId: string, pinned: boolean) => Promise<void>;
+    setStickyTitle: (noteId: string, title: string) => Promise<void>;
   };
   recording: {
     /** When false, Fn dictation is ignored while the app window is focused. */

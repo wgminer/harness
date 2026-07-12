@@ -245,6 +245,11 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("notes:spellCheck"), { input }),
       print: (html: string, jobName?: string) =>
         invoke(cmd("notes:print"), { html, jobName }),
+      openSticky: (noteId: string) => invoke(cmd("notes:openSticky"), { noteId }),
+      setStickyPinned: (noteId: string, pinned: boolean) =>
+        invoke(cmd("notes:setStickyPinned"), { noteId, pinned }),
+      setStickyTitle: (noteId: string, title: string) =>
+        invoke(cmd("notes:setStickyTitle"), { noteId, title }),
     },
     recording: {
       setGlobalEnabled: (enabled: boolean) =>

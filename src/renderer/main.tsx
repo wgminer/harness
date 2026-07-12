@@ -1,9 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
 import { createHarnessAdapter } from "./desktopAdapter";
 import { initGlobalHotkeyController } from "./globalHotkeyController";
 import { primeOnUserGesture } from "./recordingBootstrap";
+import { RootApp } from "./RootApp";
+import { isCurrentStickyWindow } from "./stickyWindow";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
@@ -18,19 +19,23 @@ import "./workspaceShell.css";
 import "./settings.css";
 import "./tasks.css";
 import "./notes.css";
+import "./stickyNote.css";
 import "highlight.js/styles/github-dark.css";
 
 window.harness = createHarnessAdapter();
-initGlobalHotkeyController();
-primeOnUserGesture();
-void window.harness.recording.signalFrontendReady();
-
-void window.harness.env.isHarnessDev().then((dev) => {
-  if (dev) document.title = "Harness Dev";
-});
+void (async () => {
+  const sticky = await isCurrentStickyWindow();
+  if (!sticky) {
+    initGlobalHotkeyController();
+    primeOnUserGesture();
+    void window.harness.recording.signalFrontendReady();
+  }
+  const dev = await window.harness.env.isHarnessDev();
+  if (dev && !sticky) document.title = "Harness Dev";
+})();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <RootApp />
   </React.StrictMode>
 );

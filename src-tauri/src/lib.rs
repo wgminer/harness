@@ -16,6 +16,7 @@ pub mod memory_compile;
 pub mod memory_import;
 pub mod note_print;
 pub mod notes;
+pub mod sticky_notes;
 pub mod openai;
 pub mod paths;
 pub mod plans;
@@ -32,8 +33,9 @@ pub mod ui_session;
 pub mod updater;
 
 use memory::AppState;
+use sticky_notes::persist_open_sticky_windows;
 use sync::register_sync_state;
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 
 use crate::chat::ChatController;
 
@@ -70,6 +72,7 @@ pub fn run() {
                     &app_state.write_chains,
                 )
                 .await;
+                sticky_notes::restore_sticky_windows(&app.handle(), &app_state).await;
             });
 
             let handle = app.handle().clone();
@@ -175,7 +178,15 @@ pub fn run() {
             updater::updater_get_status,
             updater::updater_download_and_install,
             note_print::notes_print,
+            commands::notes_open_sticky,
+            commands::notes_set_sticky_pinned,
+            commands::notes_set_sticky_title,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, RunEvent::Exit) {
+                persist_open_sticky_windows(app);
+            }
+        });
 }
