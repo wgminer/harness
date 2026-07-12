@@ -8,6 +8,7 @@ import { SetupNoticeModal } from "./SetupNoticeModal";
 import { HotkeyRecordingOverlay } from "./HotkeyRecordingOverlay";
 import { wireGlobalHotkeyActions } from "./globalHotkeyController";
 import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan, type Settings } from "../shared/types";
+import { DEFAULT_UI_SESSION } from "../shared/uiSession";
 import type {} from "../shared/desktopAPI";
 import { isSidebarVisibleConversation } from "../shared/conversationSession";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
@@ -52,6 +53,9 @@ export default function App() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTabId | undefined>();
   const [openAIConfigured, setOpenAIConfigured] = useState(false);
   const [setupStateLoaded, setSetupStateLoaded] = useState(false);
+  const [openNoteInStickyWindow, setOpenNoteInStickyWindow] = useState(
+    DEFAULT_UI_SESSION.openNoteInStickyWindow ?? false,
+  );
 
   const [pendingHotkeyText, setPendingHotkeyText] = useState<string | null>(null);
   /** When true, hotkey text is always pre-filled (never auto-sent). Used for global recording while the app was unfocused. */
@@ -142,6 +146,7 @@ export default function App() {
       if (session.notesOpenNoteId) {
         setPendingOpenNoteRequest({ id: session.notesOpenNoteId, nonce: Date.now() });
       }
+      setOpenNoteInStickyWindow(session.openNoteInStickyWindow === true);
     }
     setUiSessionReady(true);
   }, [resolveConversationId]);
@@ -207,10 +212,11 @@ export default function App() {
         view,
         conversationId,
         notesOpenNoteId: view === "notes" && notesScreen === "detail" ? activeNoteId : null,
+        openNoteInStickyWindow,
       });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [uiSessionReady, view, conversationId, notesScreen, activeNoteId]);
+  }, [uiSessionReady, view, conversationId, notesScreen, activeNoteId, openNoteInStickyWindow]);
 
   useEffect(() => {
     const unsub = window.harness.chat.onConversationTitleUpdated(() => {
@@ -279,6 +285,20 @@ export default function App() {
     setView("chat");
     setFocusComposerNonce((n) => n + 1);
   }, []);
+
+  const createNewNote = useCallback(async () => {
+    try {
+      const note = await window.harness.notes.create(undefined, "# Note\n");
+      if (openNoteInStickyWindow) {
+        await window.harness.notes.openSticky(note.id);
+        return;
+      }
+      setPendingOpenNoteRequest({ id: note.id, nonce: Date.now() });
+      setView("notes");
+    } catch (e) {
+      console.error("Failed to create note", e);
+    }
+  }, [openNoteInStickyWindow]);
 
   const handleAssignConversationId = useCallback((id: string) => {
     setConversationId(id);
@@ -379,6 +399,9 @@ export default function App() {
         onConversationSelect={setConversationId}
         onConversationDelete={handleConversationDelete}
         onNewChat={createNew}
+        onNewNote={() => void createNewNote()}
+        openNoteInStickyWindow={openNoteInStickyWindow}
+        onOpenNoteInStickyWindowChange={setOpenNoteInStickyWindow}
         activeChatProcessing={activeChatProcessing}
         titleGenInFlight={titleGenInFlight}
         appVersion={appVersion}

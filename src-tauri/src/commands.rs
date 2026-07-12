@@ -28,6 +28,7 @@ use crate::plans::{
     update_plan, PlanUpdates,
 };
 use crate::settings::{get_settings, set_settings};
+use crate::sticky_notes::{open_sticky_window, set_sticky_pinned, set_sticky_title, StickyWindowEntry};
 use crate::sync::{get_sync_status, SyncRuntime};
 use crate::tasks::{clear_completed_tasks, create_task, delete_task, list_tasks, update_task};
 use crate::ui_session::{get_ui_session, set_ui_session};
@@ -548,4 +549,31 @@ pub async fn notes_propose_edit(input: Value) -> Result<Value, String> {
 pub async fn notes_spell_check(input: Value) -> Result<Value, String> {
     let proposal = propose_note_spell_check(&input).await.map_err(map_err)?;
     serde_json::to_value(proposal).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn notes_open_sticky(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<StickyWindowEntry, String> {
+    open_sticky_window(&app, &state, &note_id, None).await
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn notes_set_sticky_pinned(
+    app: AppHandle,
+    note_id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    set_sticky_pinned(&app, &note_id, pinned)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn notes_set_sticky_title(
+    app: AppHandle,
+    note_id: String,
+    title: String,
+) -> Result<(), String> {
+    set_sticky_title(&app, &note_id, &title)
 }

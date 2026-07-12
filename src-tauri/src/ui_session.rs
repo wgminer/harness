@@ -23,6 +23,8 @@ pub struct UiSession {
     pub notes_open_note_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_notice_dismissed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_note_in_sticky_window: Option<bool>,
 }
 
 impl Default for UiSession {
@@ -32,6 +34,7 @@ impl Default for UiSession {
             conversation_id: None,
             notes_open_note_id: None,
             setup_notice_dismissed: Some(false),
+            open_note_in_sticky_window: Some(false),
         }
     }
 }
@@ -71,6 +74,11 @@ pub fn normalize_ui_session(raw: &serde_json::Value) -> UiSession {
             obj.get("notesOpenNoteId").and_then(|v| v.as_str()),
         ),
         setup_notice_dismissed: Some(obj.get("setupNoticeDismissed").and_then(|v| v.as_bool()).unwrap_or(false)),
+        open_note_in_sticky_window: Some(
+            obj.get("openNoteInStickyWindow")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        ),
     }
 }
 

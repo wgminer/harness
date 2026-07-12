@@ -20,6 +20,7 @@ describe("normalizeUiSession", () => {
       conversationId: "abc",
       notesOpenNoteId: "note-1",
       setupNoticeDismissed: true,
+      openNoteInStickyWindow: false,
     });
   });
 
@@ -35,6 +36,7 @@ describe("normalizeUiSession", () => {
       conversationId: null,
       notesOpenNoteId: null,
       setupNoticeDismissed: false,
+      openNoteInStickyWindow: false,
     });
   });
 });

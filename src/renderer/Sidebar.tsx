@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Circle,
   ListFilter,
+  ChevronDown,
 } from "lucide-react";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import type { SearchResult } from "../shared/types";
@@ -48,6 +49,9 @@ interface SidebarProps {
   onConversationSelect: (id: string) => void;
   onConversationDelete: (id: string) => void;
   onNewChat: () => void;
+  onNewNote: () => void;
+  openNoteInStickyWindow: boolean;
+  onOpenNoteInStickyWindowChange: (value: boolean) => void;
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
   appVersion: string | null;
@@ -82,6 +86,9 @@ export function Sidebar({
   onConversationSelect,
   onConversationDelete,
   onNewChat,
+  onNewNote,
+  openNoteInStickyWindow,
+  onOpenNoteInStickyWindowChange,
   activeChatProcessing,
   titleGenInFlight,
   appVersion,
@@ -130,6 +137,8 @@ export function Sidebar({
   const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("recent");
   const [syncConfigured, setSyncConfigured] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const newMenuRef = useRef<HTMLDivElement | null>(null);
   const { scrollRef: sidebarListRef, fadeTop, fadeBottom, onScroll: onSidebarListScroll } =
     useScrollFadeEdges();
 
@@ -193,6 +202,23 @@ export function Sidebar({
     setSearchOpen(false);
     setSearchQuery("");
   }, []);
+
+  useEffect(() => {
+    if (!newMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNewMenuOpen(false);
+    };
+    const onPointerDown = (e: MouseEvent) => {
+      const el = newMenuRef.current;
+      if (el && !el.contains(e.target as Node)) setNewMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [newMenuOpen]);
 
   const handleSearchResultClick = useCallback(
     (id: string) => {
@@ -325,16 +351,64 @@ export function Sidebar({
           </div>
         ) : (
           <div className="sidebar-buttons">
-            <button
-              type="button"
-              className="btn sidebar-new-chat-btn"
-              data-testid="sidebar-new-chat"
-              aria-label="New chat"
-              onClick={onNewChat}
-            >
-              <Plus size={16} className="sidebar-new-chat-icon" aria-hidden />
-              <span className="sidebar-new-chat-label">New</span>
-            </button>
+            <div className="sidebar-new-menu-wrap" ref={newMenuRef}>
+              <button
+                type="button"
+                className="btn sidebar-new-chat-btn"
+                data-testid="sidebar-new-menu"
+                aria-label="New"
+                aria-haspopup="menu"
+                aria-expanded={newMenuOpen}
+                onClick={() => setNewMenuOpen((open) => !open)}
+              >
+                <Plus size={16} className="sidebar-new-chat-icon" aria-hidden />
+                <span className="sidebar-new-chat-label">New</span>
+                <ChevronDown size={14} className="sidebar-new-menu-chevron" aria-hidden />
+              </button>
+              {newMenuOpen ? (
+                <div className="sidebar-new-menu" role="menu" aria-label="Create new">
+                  <button
+                    type="button"
+                    className="sidebar-new-menu-item"
+                    role="menuitem"
+                    data-testid="sidebar-new-chat"
+                    onClick={() => {
+                      setNewMenuOpen(false);
+                      onNewChat();
+                    }}
+                  >
+                    New chat
+                  </button>
+                  <div className="sidebar-new-menu-item sidebar-new-menu-item--note" role="none">
+                    <button
+                      type="button"
+                      className="sidebar-new-menu-item__action"
+                      role="menuitem"
+                      data-testid="sidebar-new-note"
+                      onClick={() => {
+                        setNewMenuOpen(false);
+                        onNewNote();
+                      }}
+                    >
+                      New note
+                    </button>
+                    <label className="sidebar-new-menu-switch settings-switch-row settings-switch-row--static">
+                      <input
+                        type="checkbox"
+                        className="settings-switch-input"
+                        checked={openNoteInStickyWindow}
+                        onChange={(e) => onOpenNoteInStickyWindowChange(e.target.checked)}
+                        aria-label="Open note in new window"
+                        data-testid="sidebar-new-note-sticky-toggle"
+                      />
+                      <span className="settings-switch-track" aria-hidden="true">
+                        <span className="settings-switch-thumb" />
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <button
               ref={searchButtonRef}
               type="button"
