@@ -74,9 +74,14 @@ final class ChatService: ObservableObject {
         let memory = try store.loadUserMemory()
         let selected = MemorySelector.selectForPrompt(strategy: strategy, memory: memory, userContent: lastUser)
         let memoryBlock = MemorySelector.formatBlock(selected: selected)
+        let recentConversationsBlock = try RecentConversations.buildBlock(
+            store: store,
+            excludeConversationId: conversationId
+        )
         let systemPromptSettings = SystemPromptSettings.load(from: store.localDataDir)
         let system = systemPromptSettings.assembledSystemPrompt(
             memoryBlock: memoryBlock,
+            recentConversationsBlock: recentConversationsBlock,
             temporalContext: ChatTemporalContext.temporalContextBlock(),
             platform: .ios
         )

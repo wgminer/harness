@@ -21,6 +21,7 @@ use crate::memory::{
 };
 use crate::notes;
 use crate::openai::{map_http_cancel, ChatMessageParam, OpenAIChatClient, OpenAIError};
+use crate::recent_conversations::build_recent_conversations_block;
 use crate::settings;
 use crate::system_prompt::{
     build_system_prompt, fields_from_settings, SystemPromptPreview, SystemPromptPreviewFact,
@@ -263,15 +264,25 @@ impl ChatController {
         let selected_memory =
             select_memory_entries_for_prompt(strategy, &user_memory, None);
         let memory_block = format_memory_context_block(&selected_memory);
+        let recent_conversations_block =
+            build_recent_conversations_block(&self.state, None)
+                .await
+                .map_err(|e| e.to_string())?;
         let temporal_context = format_temporal_context_block();
         let fields = fields_from_settings(&settings);
         let static_prompt = crate::system_prompt::build_static_system_prompt(&fields, platform);
-        let assembled_prompt =
-            build_system_prompt(&fields, platform, &memory_block, &temporal_context);
+        let assembled_prompt = build_system_prompt(
+            &fields,
+            platform,
+            &memory_block,
+            &recent_conversations_block,
+            &temporal_context,
+        );
         Ok(SystemPromptPreview {
             platform: platform.to_string(),
             static_prompt,
             memory_block,
+            recent_conversations_block,
             temporal_context,
             assembled_prompt,
             injection_strategy: strategy.to_string(),
@@ -301,12 +312,17 @@ impl ChatController {
         let selected_memory =
             select_memory_entries_for_prompt(strategy, &user_memory, scoring_content);
         let memory_block = format_memory_context_block(&selected_memory);
+        let recent_conversations_block =
+            build_recent_conversations_block(&self.state, Some(conversation_id))
+                .await
+                .map_err(|e| e.to_string())?;
         let temporal_context = format_temporal_context_block();
         let fields = fields_from_settings(&settings);
         let system_prompt = build_system_prompt(
             &fields,
             "desktop",
             &memory_block,
+            &recent_conversations_block,
             &temporal_context,
         );
 

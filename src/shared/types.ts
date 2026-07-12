@@ -18,6 +18,7 @@ export interface SystemPromptPreview {
   platform: "desktop" | "ios";
   staticPrompt: string;
   memoryBlock: string;
+  recentConversationsBlock: string;
   temporalContext: string;
   assembledPrompt: string;
   injectionStrategy: MemoryInjectionStrategy;

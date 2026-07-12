@@ -295,7 +295,7 @@ final class ConversationStore: ObservableObject {
 
     // MARK: - Private
 
-    private func loadConversationMapRaw() throws -> [String: ConversationMeta] {
+    func loadConversationMapRaw() throws -> [String: ConversationMeta] {
         let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.conversationsFile)
         guard FileManager.default.fileExists(atPath: path.path) else { return [:] }
         let data: Data

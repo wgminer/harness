@@ -91,8 +91,8 @@ export function SystemPromptPreviewPanel({
           </label>
 
           <SettingsHint flush>
-            At send time, memory facts ({strategyLabel.toLowerCase()}) and temporal context append
-            below the static prompt.
+            At send time, memory facts ({strategyLabel.toLowerCase()}), recent conversations, and
+            temporal context append below the static prompt.
             {preview.selectedFacts.length > 0
               ? ` ${preview.selectedFacts.length} fact${preview.selectedFacts.length === 1 ? "" : "s"} would inject now.`
               : preview.injectionStrategy === "none"
@@ -110,6 +110,20 @@ export function SystemPromptPreviewPanel({
                 rows={6}
                 aria-label="Memory block appended to system prompt"
                 data-testid="settings-system-prompt-memory"
+              />
+            </label>
+          )}
+
+          {preview.recentConversationsBlock && (
+            <label className="app-modal-field">
+              <span className="app-modal-field__label">Recent conversations (appended at send)</span>
+              <textarea
+                readOnly
+                value={preview.recentConversationsBlock}
+                className="app-modal-input app-modal-input--multiline settings-system-prompt-preview"
+                rows={8}
+                aria-label="Recent conversations block appended to system prompt"
+                data-testid="settings-system-prompt-recent"
               />
             </label>
           )}

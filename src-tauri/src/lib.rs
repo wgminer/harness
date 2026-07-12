@@ -19,6 +19,7 @@ pub mod notes;
 pub mod openai;
 pub mod paths;
 pub mod plans;
+pub mod recent_conversations;
 pub mod recording;
 pub mod remote_store;
 pub mod settings;

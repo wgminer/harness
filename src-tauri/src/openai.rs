@@ -260,7 +260,7 @@ pub fn tool_definitions() -> Value {
         "type": "function",
         "function": {
           "name": "memory_search_conversations",
-          "description": "Search across the full chat history for a free-text query.",
+          "description": "Search all prior conversations for a free-text query. Use whenever cross-thread recall, continuity, names, or prior decisions would help — not only when the user explicitly asks to search chat history.",
           "parameters": {
             "type": "object",
             "properties": { "query": { "type": "string" } },
