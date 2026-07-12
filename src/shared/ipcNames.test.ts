@@ -8,6 +8,7 @@ describe("legacyIpcCommand", () => {
     expect(legacyIpcCommand("credentials:getStatus")).toBe("credentials_get_status");
     expect(legacyIpcCommand("credentials:setOpenAIApiKey")).toBe("credentials_set_open_ai_api_key");
     expect(legacyIpcCommand("settings:set")).toBe("settings_set");
+    expect(legacyIpcCommand("settings:getSystemPromptPreview")).toBe("settings_get_system_prompt_preview");
     expect(legacyIpcCommand("env:isHarnessE2E")).toBe("env_is_harness_e2e");
     expect(legacyIpcCommand("recording:signalFrontendReady")).toBe("recording_signal_frontend_ready");
     expect(legacyIpcCommand("recording:startFailed")).toBe("recording_start_failed");

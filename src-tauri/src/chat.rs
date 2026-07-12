@@ -22,6 +22,9 @@ use crate::memory::{
 use crate::notes;
 use crate::openai::{map_http_cancel, ChatMessageParam, OpenAIChatClient, OpenAIError};
 use crate::settings;
+use crate::system_prompt::{
+    build_system_prompt, fields_from_settings, SystemPromptPreview, SystemPromptPreviewFact,
+};
 
 const DICTATION_POLISH_INSTRUCTION: &str =
     "Polish and clarify the following dictation. Fix grammar and wording; keep the meaning. Reply with a clear, concise version.";
@@ -243,6 +246,42 @@ impl ChatController {
         self.stream_assistant_reply(conversation_id, messages).await
     }
 
+    pub async fn get_system_prompt_preview(
+        &self,
+        platform: &str,
+    ) -> Result<SystemPromptPreview, String> {
+        let platform = if platform == "ios" { "ios" } else { "desktop" };
+        let settings = settings::get_settings(&self.state.write_chains).await;
+        let strategy = parse_memory_injection_strategy(
+            settings
+                .get("memory")
+                .and_then(|v| v.get("injectionStrategy")),
+        );
+        let user_memory = get_user_memory(&self.state)
+            .await
+            .map_err(|e| e.to_string())?;
+        let selected_memory =
+            select_memory_entries_for_prompt(strategy, &user_memory, None);
+        let memory_block = format_memory_context_block(&selected_memory);
+        let temporal_context = format_temporal_context_block();
+        let fields = fields_from_settings(&settings);
+        let static_prompt = crate::system_prompt::build_static_system_prompt(&fields, platform);
+        let assembled_prompt =
+            build_system_prompt(&fields, platform, &memory_block, &temporal_context);
+        Ok(SystemPromptPreview {
+            platform: platform.to_string(),
+            static_prompt,
+            memory_block,
+            temporal_context,
+            assembled_prompt,
+            injection_strategy: strategy.to_string(),
+            selected_facts: selected_memory
+                .into_iter()
+                .map(|(key, value)| SystemPromptPreviewFact { key, value })
+                .collect(),
+        })
+    }
+
     async fn build_message_list(
         &self,
         conversation_id: &str,
@@ -262,7 +301,14 @@ impl ChatController {
         let selected_memory =
             select_memory_entries_for_prompt(strategy, &user_memory, scoring_content);
         let memory_block = format_memory_context_block(&selected_memory);
-        let system_prompt = build_system_prompt(&memory_block);
+        let temporal_context = format_temporal_context_block();
+        let fields = fields_from_settings(&settings);
+        let system_prompt = build_system_prompt(
+            &fields,
+            "desktop",
+            &memory_block,
+            &temporal_context,
+        );
 
         let history = get_messages(&self.state, conversation_id)
             .await
@@ -846,78 +892,6 @@ fn split_into_word_chunks(content: &str) -> Vec<String> {
             }
         })
         .collect()
-}
-
-fn build_system_prompt(memory_block: &str) -> String {
-    let core = r#"[CORE_INSTRUCTIONS]
-You are a helpful assistant running in a local desktop app.
-Prefer concise, practical, high-signal responses.
-For complex writing/thinking tasks, start with structure (questions, outline, tradeoffs) unless the user explicitly asks for a full draft immediately.
-Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); set_layout (sidebar position and optional design grid overlay); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat; short saved snippets belong in a note titled "Clippings" as a numbered markdown list, optionally with inline #tags). Call them when appropriate.
-
-[FORMATTING_CAPABILITIES]
-Standard markdown (bold, italic, lists, tables, fenced code, blockquotes) is supported. Use plain prose by default. Only reach for the layout blocks below when they add genuine clarity over a paragraph or list. Never wrap an entire reply in a single block.
-
-Callouts — one sentence of emphasis, not a heading replacement:
-  :::tip
-  Short suggestion.
-  :::
-  (variants: :::tip, :::note, :::warning, :::danger)
-
-Collapsible — fold away long context or sources the user may not need:
-  :::details{summary="Sources"}
-  Long content.
-  :::
-
-Inline chip — a short status tag inside a sentence:
-  Build is :chip[failing]{tone=danger}.
-  (tones: info, warn, danger, success, neutral)
-
-Link card — only when surfacing a single primary URL the user should open:
-  :::link{url="https://example.com" title="Example" desc="One-line summary." site="example.com"}
-  :::
-
-Mermaid diagrams — for flows, sequences, small state diagrams:
-  ```mermaid
-  flowchart LR
-    A --> B
-  ```
-
-Options — 2-5 short labels the user can tap to reply. Only title is shown; no body text, recommended flag, or section title. Outer fence uses FOUR colons:
-  ::::options
-  :::option{title="Plain-English walkthrough"}
-  :::
-  :::option{title="Full Express demo"}
-  :::
-  ::::
-
-Slide deck — a small inline deck (max ~6 slides). Outer fence uses FOUR colons. Layouts: title, bullets, quote, blank.
-  ::::slides
-  :::slide{layout=title title="Q3 Review" subtitle="Highlights"}
-  :::
-  :::slide{layout=bullets title="Wins"}
-  - Shipped feature X
-  - Closed deal Y
-  :::
-  :::slide{layout=quote attribution="— Lee"}
-  Make it work, then make it fast.
-  :::
-  :::slide{layout=blank title="Notes"}
-  Free-form markdown body.
-  :::
-  ::::
-
-Rules of thumb: prefer plain prose first; use at most one layout block per reply unless the user is explicitly asking for a comparison or a deck; never nest :::slides inside another directive; do not use callouts as section headers."#;
-
-    let mut out = core.to_string();
-    out.push_str("\n\nLong replies: when a response will exceed ~3 short paragraphs, call note_create with title and summary (1-3 sentences). Leave content empty and write the full body in your following output — it streams into the note and appears inline in chat. Do not put the long body in normal chat prose. One inline write-up per turn.");
-    if !memory_block.is_empty() {
-        out.push_str("\n\n");
-        out.push_str(memory_block);
-    }
-    out.push_str("\n\n");
-    out.push_str(&format_temporal_context_block());
-    out
 }
 
 fn format_temporal_context_block() -> String {

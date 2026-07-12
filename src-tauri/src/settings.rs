@@ -1,6 +1,7 @@
 use serde_json::{json, Value};
 
 use crate::credentials::{migrate_secrets_from_settings_raw, set_credential, CredentialKey};
+use crate::system_prompt::{default_system_prompt_value, parse_system_prompt};
 use crate::paths::{ensure_local_data_migration, get_local_data_settings_path};
 use crate::storage::{atomic_write_utf8, file_exists, read_json_object_file, WriteChains};
 
@@ -37,7 +38,8 @@ pub fn default_settings() -> Value {
         },
         "chat": {
             "openToComposeOnLaunch": true
-        }
+        },
+        "systemPrompt": default_system_prompt_value()
     })
 }
 
@@ -347,7 +349,11 @@ pub fn parse_settings(data: &Value) -> Value {
         "transcription": parse_transcription(obj.and_then(|o| o.get("transcription")), &defaults),
         "sync": parse_sync(obj.and_then(|o| o.get("sync")), &defaults),
         "memory": { "injectionStrategy": injection_strategy },
-        "chat": { "openToComposeOnLaunch": open_to_compose }
+        "chat": { "openToComposeOnLaunch": open_to_compose },
+        "systemPrompt": parse_system_prompt(
+            obj.and_then(|o| o.get("systemPrompt")),
+            &defaults,
+        )
     })
 }
 
@@ -543,6 +549,18 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
             current.get("chat").unwrap_or(&json!({})),
             chat,
             &["openToComposeOnLaunch"],
+        );
+    }
+
+    if let Some(system_prompt) = partial.get("systemPrompt") {
+        let current_sp = current
+            .get("systemPrompt")
+            .cloned()
+            .unwrap_or_else(default_system_prompt_value);
+        next["systemPrompt"] = merge_object_fields(
+            &current_sp,
+            system_prompt,
+            &["shared", "desktop", "ios"],
         );
     }
 

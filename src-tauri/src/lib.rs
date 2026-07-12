@@ -23,6 +23,7 @@ pub mod plans;
 pub mod recording;
 pub mod remote_store;
 pub mod settings;
+pub mod system_prompt;
 pub mod storage;
 pub mod sync;
 pub mod sync_bundle;
@@ -97,6 +98,7 @@ pub fn run() {
             commands::window_toggle_size,
             commands::settings_get,
             commands::settings_set,
+            commands::settings_get_system_prompt_preview,
             commands::credentials_get_status,
             commands::credentials_get_secrets_for_settings,
             commands::credentials_set_open_ai_api_key,

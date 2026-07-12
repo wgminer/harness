@@ -51,6 +51,9 @@ coverage/
 playwright-report/
 test-results/
 
+# Git worktrees (local agent branches)
+.worktrees/
+
 # Agent workflow (local only)
 .cursor/
 docs/plans/

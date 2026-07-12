@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { HarnessAPI } from "../shared/desktopAPI";
 import type { GlobalRecordingStatus } from "../shared/desktopAPI";
-import type { AppendMessageMeta } from "../shared/types";
+import type { AppendMessageMeta, SystemPromptPreview } from "../shared/types";
 import type { NoteEditProposalInput, NoteSpellCheckInput } from "../shared/writing";
 import type { SyncResult, SyncStatus } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
@@ -80,6 +80,8 @@ export function createHarnessAdapter(): HarnessAPI {
     settings: {
       get: () => invoke(cmd("settings:get")),
       set: (partial: unknown) => invoke(cmd("settings:set"), { partial }),
+      getSystemPromptPreview: (platform: "desktop" | "ios") =>
+        invoke<SystemPromptPreview>(cmd("settings:getSystemPromptPreview"), { platform }),
     },
     credentials: {
       getStatus: () => invoke(cmd("credentials:getStatus")),
