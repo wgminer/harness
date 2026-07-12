@@ -56,17 +56,20 @@ Slide deck — a small inline deck (max ~6 slides). Outer fence uses FOUR colons
   :::
   ::::
 
-Rules of thumb: prefer plain prose first; use at most one layout block per reply unless the user is explicitly asking for a comparison or a deck; never nest :::slides inside another directive; do not use callouts as section headers."#;
+Rules of thumb: prefer plain prose first; use at most one layout block per reply unless the user is explicitly asking for a comparison or a deck; never nest :::slides inside another directive; do not use callouts as section headers.
+
+[CONVERSATION_RECALL]
+Prior chats may appear in [RECENT_CONVERSATIONS] below. Call memory_search_conversations whenever names, continuity, prior decisions, or cross-thread context would help — not only when the user explicitly asks to search or find something in chat history."#;
 
 pub const DEFAULT_DESKTOP: &str = r#"[CORE_INSTRUCTIONS]
 You are a helpful assistant running in a local desktop app.
-Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); set_layout (sidebar position and optional design grid overlay); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (to remember stable user facts and search across prior conversations); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat; short saved snippets belong in a note titled "Clippings" as a numbered markdown list, optionally with inline #tags). Call them when appropriate.
+Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); set_layout (sidebar position and optional design grid overlay); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (search all prior chats — call proactively when recall would help, not only on explicit search requests); get_datetime (for the current date and time, optionally in a specific IANA timezone); get_weather (current conditions and a short daily forecast for a US ZIP; call with no arguments to use the user's default ZIP from Settings); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat; short saved snippets belong in a note titled "Clippings" as a numbered markdown list, optionally with inline #tags). Call them when appropriate.
 
 Long replies: when a response will exceed ~3 short paragraphs, call note_create with title and summary (1-3 sentences). Leave content empty and write the full body in your following output — it streams into the note and appears inline in chat. Do not put the long body in normal chat prose. One inline write-up per turn."#;
 
 pub const DEFAULT_IOS: &str = r#"[CORE_INSTRUCTIONS]
 You are a helpful assistant in Harness Mobile (iOS).
-Available tools: task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_search_conversations (search all prior chats for a free-text query when the user asks about past conversations or needs recall across threads). Call them when appropriate."#;
+Available tools: task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_search_conversations (search all prior chats — call proactively when recall would help, not only on explicit search requests). Call them when appropriate."#;
 
 #[derive(Debug, Clone)]
 pub struct SystemPromptFields {
@@ -81,6 +84,7 @@ pub struct SystemPromptPreview {
     pub platform: String,
     pub static_prompt: String,
     pub memory_block: String,
+    pub recent_conversations_block: String,
     pub temporal_context: String,
     pub assembled_prompt: String,
     pub injection_strategy: String,
@@ -175,12 +179,17 @@ pub fn build_system_prompt(
     fields: &SystemPromptFields,
     platform: &str,
     memory_block: &str,
+    recent_conversations_block: &str,
     temporal_context: &str,
 ) -> String {
     let mut out = build_static_system_prompt(fields, platform);
     if !memory_block.is_empty() {
         out.push_str("\n\n");
         out.push_str(memory_block);
+    }
+    if !recent_conversations_block.is_empty() {
+        out.push_str("\n\n");
+        out.push_str(recent_conversations_block);
     }
     out.push_str("\n\n");
     out.push_str(temporal_context);
@@ -233,11 +242,13 @@ mod tests {
             &fields,
             "desktop",
             "[USER_MEMORY_CONTEXT]\nfact",
+            "[RECENT_CONVERSATIONS]\nrecent",
             "[TEMPORAL_CONTEXT]\nnow",
         );
         assert!(prompt.contains(DEFAULT_SHARED));
         assert!(prompt.contains(DEFAULT_DESKTOP));
         assert!(prompt.contains("[USER_MEMORY_CONTEXT]"));
+        assert!(prompt.contains("[RECENT_CONVERSATIONS]"));
         assert!(prompt.contains("[TEMPORAL_CONTEXT]"));
     }
 
