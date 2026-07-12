@@ -61,7 +61,7 @@ export const SETTINGS_NAV: Array<{
     label: RIG_MEMORY_TAB_LABEL,
     subtitle: "Facts & imports",
     icon: "Brain",
-    keywords: ["memory", "context", "facts", "import", "compile"],
+    keywords: ["memory", "context", "facts", "import", "compile", "system prompt", "prompt"],
   },
   {
     id: "data",

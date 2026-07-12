@@ -36,6 +36,7 @@ import {
   SettingsSwitch,
   SettingsSwitchProvider,
   SettingsTabPanel,
+  SystemPromptPreviewPanel,
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
@@ -1227,6 +1228,8 @@ export function SettingsView({
           </SettingsTabPanel>}
 
           {activeTab === "memory" && <SettingsTabPanel id="memory">
+            <SystemPromptPreviewPanel memoryInjectionStrategy={memoryInjectionStrategy} />
+
             <SettingsGroup
               title="Your facts"
               description="Stable facts stored locally and synced with your backup. Pick a short label and a one-line value; the same label updates the existing entry."

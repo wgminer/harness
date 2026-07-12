@@ -74,17 +74,12 @@ final class ChatService: ObservableObject {
         let memory = try store.loadUserMemory()
         let selected = MemorySelector.selectForPrompt(strategy: strategy, memory: memory, userContent: lastUser)
         let memoryBlock = MemorySelector.formatBlock(selected: selected)
-
-        var system = """
-        [CORE_INSTRUCTIONS]
-        You are a helpful assistant in Harness Mobile (iOS).
-        Prefer concise, practical, high-signal responses.
-        Available tools: task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_search_conversations (search all prior chats for a free-text query when the user asks about past conversations or needs recall across threads). Call them when appropriate.
-        """
-        if !memoryBlock.isEmpty {
-            system += "\n\n" + memoryBlock
-        }
-        system += "\n\n" + ChatTemporalContext.temporalContextBlock()
+        let systemPromptSettings = SystemPromptSettings.load(from: store.localDataDir)
+        let system = systemPromptSettings.assembledSystemPrompt(
+            memoryBlock: memoryBlock,
+            temporalContext: ChatTemporalContext.temporalContextBlock(),
+            platform: .ios
+        )
 
         var messages: [ChatCompletionMessage] = [ChatCompletionMessage(role: "system", content: system)]
         for record in history {

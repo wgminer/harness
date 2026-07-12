@@ -112,6 +112,14 @@ pub async fn settings_set(
 }
 
 #[command(rename_all = "camelCase")]
+pub async fn settings_get_system_prompt_preview(
+    chat: State<'_, ChatController>,
+    platform: String,
+) -> Result<crate::system_prompt::SystemPromptPreview, String> {
+    chat.get_system_prompt_preview(&platform).await
+}
+
+#[command(rename_all = "camelCase")]
 pub async fn credentials_get_status() -> Result<Value, String> {
     let status = get_credential_status().await;
     serde_json::to_value(status).map_err(map_err)

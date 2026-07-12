@@ -1,4 +1,4 @@
-import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult, Settings } from "./types";
+import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult, Settings, SystemPromptPreview } from "./types";
 import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput, NoteSummary } from "./writing";
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
@@ -49,6 +49,7 @@ export interface HarnessAPI {
   settings: {
     get: () => Promise<Settings>;
     set: (partial: Partial<Settings>) => Promise<void>;
+    getSystemPromptPreview: (platform: "desktop" | "ios") => Promise<SystemPromptPreview>;
   };
   credentials: {
     getStatus: () => Promise<{

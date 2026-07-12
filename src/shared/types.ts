@@ -1,11 +1,27 @@
 import type { MemoryInjectionStrategy } from "./memoryInjection";
 import { DEFAULT_NOTE_TEMPLATES } from "./writing";
+import { DEFAULT_SYSTEM_PROMPT, type SystemPromptSettings } from "./systemPromptDefaults";
 
 export type MessageRole = "user" | "assistant" | "system";
 
 export interface ToolCallRecord {
   toolName: string;
   payload?: unknown;
+}
+
+export interface SystemPromptPreviewFact {
+  key: string;
+  value: string;
+}
+
+export interface SystemPromptPreview {
+  platform: "desktop" | "ios";
+  staticPrompt: string;
+  memoryBlock: string;
+  temporalContext: string;
+  assembledPrompt: string;
+  injectionStrategy: MemoryInjectionStrategy;
+  selectedFacts: SystemPromptPreviewFact[];
 }
 
 export interface ChatMessage {
@@ -85,6 +101,8 @@ export interface Settings {
     /** When true, app launch opens the centered compose splash instead of restoring the last session. */
     openToComposeOnLaunch: boolean;
   };
+  /** Shared chat system prompt fields synced across desktop and iOS. */
+  systemPrompt?: SystemPromptSettings;
 }
 
 export interface SearchResult {
@@ -153,4 +171,5 @@ export const DEFAULT_SETTINGS: Settings = {
   chat: {
     openToComposeOnLaunch: true,
   },
+  systemPrompt: { ...DEFAULT_SYSTEM_PROMPT },
 };

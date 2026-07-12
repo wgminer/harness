@@ -321,6 +321,24 @@
   min-height: 280px;
 }
 
+.settings-system-prompt-toggle {
+  display: inline-flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.settings-system-prompt-toggle__btn--active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.settings-system-prompt-preview {
+  min-height: 180px;
+  font-size: var(--font-size-caption);
+  color: var(--fg-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
 .settings-template-content-input {
   min-height: 220px;
 }
