@@ -1,5 +1,6 @@
 import MarkdownUI
 import SwiftUI
+import UIKit
 
 struct HarnessMarkdownView: View {
     let content: String
@@ -96,22 +97,25 @@ extension Theme {
                 .markdownMargin(top: 0, bottom: 0)
         }
         .codeBlock { configuration in
-            ScrollView(.horizontal, showsIndicators: false) {
-                configuration.label
-                    .relativeLineSpacing(.em(0.2))
-                    .markdownTextStyle {
-                        FontFamilyVariant(.monospaced)
-                        FontSize(.em(0.9))
-                    }
-                    .padding(12)
-            }
-            .background(Color(.tertiarySystemGroupedBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .markdownMargin(top: 10, bottom: 10)
+            configuration.label
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .relativeLineSpacing(.em(0.2))
+                .markdownTextStyle {
+                    FontFamilyVariant(.monospaced)
+                    FontSize(.em(0.9))
+                }
+                .padding(12)
+                .background(Color(.tertiarySystemGroupedBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .markdownMargin(top: 10, bottom: 10)
+                .onLongPressGesture {
+                    UIPasteboard.general.string = configuration.content
+                }
         }
 }
 
@@ -128,6 +132,7 @@ extension Theme {
             ```swift
             struct Demo {
                 let value: Int
+                let description: String = "This is a very long line that should wrap inside the code block instead of scrolling horizontally."
             }
             ```
             """
