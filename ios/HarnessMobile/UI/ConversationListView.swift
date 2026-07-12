@@ -65,9 +65,14 @@ struct ConversationListView: View {
             }
         }
         .sheet(isPresented: $showDictationSheet) {
-            DictationRecordingSheet(app: app, isPresented: $showDictationSheet) { conversationId in
-                onSelect(conversationId)
-            }
+            DictationRecordingSheet(
+                app: app,
+                mode: .createSession,
+                isPresented: $showDictationSheet,
+                onConversationCreated: { conversationId in
+                    onSelect(conversationId)
+                }
+            )
         }
         .onChange(of: app.recordingSession.recorder.isRecording) { _, isRecording in
             if isRecording {

@@ -31,6 +31,7 @@ struct ChatThreadView: View {
     @State private var scrollContentBottom: CGFloat = 0
     @State private var scrollViewportBottom: CGFloat = 0
     @State private var didInitialScrollToLiveEdge = false
+    @State private var showDictationSheet = false
     @FocusState private var isComposerFocused: Bool
 
     private let autofocusComposer: Bool
@@ -248,6 +249,16 @@ struct ChatThreadView: View {
         } message: {
             Text(loadError ?? "")
         }
+        .sheet(isPresented: $showDictationSheet) {
+            DictationRecordingSheet(
+                app: app,
+                mode: .sendToConversation(conversationId: conversationId),
+                isPresented: $showDictationSheet,
+                onTranscriptSent: { transcript in
+                    Task { await send(text: transcript) }
+                }
+            )
+        }
     }
 
     @State private var streamingContent = ""
@@ -268,6 +279,7 @@ struct ChatThreadView: View {
             onClearDraft: { app.clearComposerDraft(conversationId: conversationId) },
             onSend: { text in Task { await send(text: text) } },
             onStop: { app.chatService.stop() },
+            onDictate: { showDictationSheet = true },
             isFocused: $isComposerFocused
         )
         .padding(.horizontal, ChatThreadLayout.horizontalInset)
