@@ -4,10 +4,12 @@ pub mod commands;
 pub mod conversation_title;
 pub mod credentials;
 pub mod customization;
+pub mod dictation_recording_index;
 pub mod env_util;
 pub mod file_tools;
 pub mod fn_monitor;
 pub mod global_recording;
+pub mod global_recording_capture;
 pub mod global_recording_effects;
 pub mod global_recording_session;
 pub mod import;
@@ -61,7 +63,8 @@ pub fn run() {
             let app_state = AppState::new();
             let sync_runtime = register_sync_state(app_state.clone());
             let recording_runtime = recording::init_recording_runtime(app_state.clone());
-            let global_recording_runtime = global_recording::init_global_recording_runtime();
+            let global_recording_runtime =
+                global_recording::init_global_recording_runtime(app_state.clone());
             let updater_runtime = updater::init_updater_runtime();
             app.manage(updater_runtime.clone());
 
@@ -125,6 +128,8 @@ pub fn run() {
             commands::memory_cleanup_legacy_memory,
             commands::memory_set_conversation_title,
             commands::memory_mark_voice_dictation_session,
+            commands::memory_link_dictation_recording,
+            commands::memory_get_conversation_recordings,
             commands::plans_list,
             commands::plans_create,
             commands::plans_update,
@@ -139,6 +144,7 @@ pub fn run() {
             commands::chat_send,
             commands::chat_polish_last_user,
             commands::chat_generate_reply,
+            commands::chat_get_context_preview,
             commands::chat_stop,
             commands::chat_resolve_gated_tool,
             commands::ui_session_get,
@@ -171,9 +177,6 @@ pub fn run() {
             recording::recording_cancel_transcription,
             recording::recording_transcribe,
             recording::recording_paste_text,
-            global_recording::recording_set_global_enabled,
-            global_recording::recording_done,
-            global_recording::recording_start_failed,
             global_recording::recording_signal_frontend_ready,
             global_recording::recording_get_global_status,
             global_recording::e2e_inject_fn_event,
@@ -184,6 +187,7 @@ pub fn run() {
             commands::notes_open_sticky,
             commands::notes_set_sticky_pinned,
             commands::notes_set_sticky_title,
+            commands::notes_pop_in_sticky,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -240,33 +240,6 @@ export function stripLeadingMarkdownHeading(text: string): string {
   return trimmed.replace(/^\s{0,3}#{1,6}\s*/, "").trim();
 }
 
-/** Split stored note markdown into sticky-window title + body fields. */
-export function splitNoteTitleAndBody(content: string): { title: string; body: string } {
-  const normalized = String(content ?? "").replace(/\r\n/g, "\n");
-  const lines = normalized.split("\n");
-  const firstIndex = lines.findIndex((line) => line.trim().length > 0);
-  if (firstIndex === -1) {
-    return { title: "", body: "" };
-  }
-  const heading = parseMarkdownHeadingLine(lines[firstIndex] ?? "");
-  if (heading?.level === 1) {
-    const title = (lines[firstIndex] ?? "").slice(heading.markerLength).trim();
-    const body = lines.slice(firstIndex + 1).join("\n").replace(/^\n+/, "");
-    return { title, body };
-  }
-  return { title: "", body: normalized };
-}
-
-/** Merge sticky-window title + body back into note markdown. */
-export function joinNoteTitleAndBody(title: string, body: string): string {
-  const trimmedTitle = title.trim() || "Untitled";
-  const normalizedBody = body.replace(/\r\n/g, "\n");
-  if (!normalizedBody.trim()) {
-    return `# ${trimmedTitle}\n`;
-  }
-  return `# ${trimmedTitle}\n\n${normalizedBody}`;
-}
-
 export interface ParsedMarkdownHeadingLine {
   level: 1 | 2 | 3 | 4 | 5 | 6;
   /** Character length of leading indent + `#` markers + required trailing space. */

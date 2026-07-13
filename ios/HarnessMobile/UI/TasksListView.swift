@@ -1,18 +1,22 @@
 import SwiftUI
 
 private enum TaskCompleteTiming {
-    /// Keep in sync with `src/shared/motion.ts` (`TASK_COMPLETE_MS`).
-    static let ms: Double = 0.36
+    /// Keep in sync with `src/shared/motion.ts`.
+    static let holdSeconds: Double = 2.0
+    static let tvSeconds: Double = 0.36
 }
 
 struct TasksListView: View {
     @ObservedObject var app: AppModel
+    @ObservedObject private var tasksStore: TasksStore
 
     @FocusState private var isComposerFocused: Bool
     @State private var searchQuery = ""
     @State private var activeOpen = true
     @State private var completedOpen = false
     @State private var completingIds: Set<String> = []
+    @State private var dismissingIds: Set<String> = []
+    @State private var completionTasks: [String: Task<Void, Never>] = [:]
     @State private var modalTask: TaskItem?
     @State private var modalTitle = ""
     @State private var modalStatus: TaskStatus = .pending
@@ -23,15 +27,20 @@ struct TasksListView: View {
     @State private var isReordering = false
     @State private var showClearCompletedConfirm = false
 
+    init(app: AppModel) {
+        self.app = app
+        self.tasksStore = app.tasksStore
+    }
+
     private var isSearching: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var filteredTasks: [TaskItem] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return app.tasksStore.tasks }
+        guard !query.isEmpty else { return tasksStore.tasks }
         let tagQuery = query.replacingOccurrences(of: #"\s+"#, with: "_", options: .regularExpression)
-        return app.tasksStore.tasks.filter { task in
+        return tasksStore.tasks.filter { task in
             task.title.lowercased().contains(query)
                 || TagNormalization.normalizeTags(task.tags).contains { $0.contains(tagQuery) }
         }
@@ -61,7 +70,11 @@ struct TasksListView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(activeTasks) { task in
-                            taskRow(task, completing: completingIds.contains(task.id))
+                            taskRow(
+                                task,
+                                completing: completingIds.contains(task.id),
+                                dismissing: dismissingIds.contains(task.id)
+                            )
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         deleteTask(task.id)
@@ -198,7 +211,7 @@ struct TasksListView: View {
     }
 
     private var emptyActiveMessage: String {
-        if app.tasksStore.tasks.isEmpty { return "No tasks yet." }
+        if tasksStore.tasks.isEmpty { return "No tasks yet." }
         if isSearching { return "No active tasks match your search." }
         return "No active tasks."
     }
@@ -223,9 +236,9 @@ struct TasksListView: View {
         .padding(.bottom, BottomBarMetrics.bottomInset)
     }
 
-    private func taskRow(_ task: TaskItem, completing: Bool) -> some View {
+    private func taskRow(_ task: TaskItem, completing: Bool, dismissing: Bool = false) -> some View {
         let status = TaskStatusPolicy.resolveStatus(for: task)
-        let done = TaskStatusPolicy.taskIsDone(status)
+        let done = TaskStatusPolicy.taskIsDone(status) || completing
         return HStack(alignment: .top, spacing: 12) {
             Button {
                 toggleDone(task)
@@ -235,7 +248,7 @@ struct TasksListView: View {
                     .foregroundStyle(done ? .primary : .secondary)
             }
             .buttonStyle(.plain)
-            .disabled(completing)
+            .disabled(dismissing)
 
             Button {
                 openModal(task)
@@ -264,8 +277,15 @@ struct TasksListView: View {
             .buttonStyle(.plain)
             .disabled(completing)
         }
-        .opacity(completing ? 0.45 : 1)
-        .animation(.easeOut(duration: TaskCompleteTiming.ms), value: completing)
+        .scaleEffect(y: dismissing ? 0.01 : 1, anchor: .center)
+        .opacity(dismissing ? 0 : 1)
+        .animation(
+            dismissing
+                ? .easeIn(duration: TaskCompleteTiming.tvSeconds)
+                : .easeOut(duration: 0.15),
+            value: dismissing
+        )
+        .animation(.easeOut(duration: 0.15), value: completing)
     }
 
     private func editSheet(_ task: TaskItem) -> some View {
@@ -324,7 +344,7 @@ struct TasksListView: View {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         do {
-            _ = try app.tasksStore.create(title: trimmed)
+            _ = try tasksStore.create(title: trimmed)
         } catch {
             loadError = error.localizedDescription
         }
@@ -336,7 +356,17 @@ struct TasksListView: View {
             patchStatus(task.id, status: TaskStatusPolicy.toggleTaskCompleted(status))
             return
         }
-        if completingIds.contains(task.id) { return }
+
+        // Undo during hold (before TV-out).
+        if completingIds.contains(task.id) {
+            guard !dismissingIds.contains(task.id) else { return }
+            completionTasks[task.id]?.cancel()
+            completionTasks.removeValue(forKey: task.id)
+            completingIds.remove(task.id)
+            return
+        }
+
+        HapticFeedback.success()
 
         if UIAccessibility.isReduceMotionEnabled {
             patchStatus(task.id, status: TaskStatusPolicy.toggleTaskCompleted(status))
@@ -344,11 +374,18 @@ struct TasksListView: View {
         }
 
         completingIds.insert(task.id)
-        Task {
-            try? await Task.sleep(for: .seconds(TaskCompleteTiming.ms))
+        let work = Task {
+            try? await Task.sleep(for: .seconds(TaskCompleteTiming.holdSeconds))
+            guard !Task.isCancelled else { return }
+            dismissingIds.insert(task.id)
+            try? await Task.sleep(for: .seconds(TaskCompleteTiming.tvSeconds))
+            guard !Task.isCancelled else { return }
             patchStatus(task.id, status: TaskStatusPolicy.toggleTaskCompleted(status))
             completingIds.remove(task.id)
+            dismissingIds.remove(task.id)
+            completionTasks.removeValue(forKey: task.id)
         }
+        completionTasks[task.id] = work
     }
 
     private func setStatus(_ id: String, status: TaskStatus) {
@@ -358,7 +395,7 @@ struct TasksListView: View {
     private func patchStatus(_ id: String, status: TaskStatus) {
         Task {
             do {
-                _ = try app.tasksStore.update(id: id, status: status)
+                _ = try tasksStore.update(id: id, status: status)
             } catch {
                 loadError = error.localizedDescription
             }
@@ -368,7 +405,7 @@ struct TasksListView: View {
     private func deleteTask(_ id: String) {
         Task {
             do {
-                _ = try app.tasksStore.delete(id: id)
+                _ = try tasksStore.delete(id: id)
             } catch {
                 loadError = error.localizedDescription
             }
@@ -378,7 +415,7 @@ struct TasksListView: View {
     private func clearCompleted() {
         Task {
             do {
-                _ = try app.tasksStore.clearCompleted()
+                _ = try tasksStore.clearCompleted()
             } catch {
                 loadError = error.localizedDescription
             }
@@ -390,7 +427,7 @@ struct TasksListView: View {
         ordered.move(fromOffsets: source, toOffset: destination)
         Task {
             do {
-                try app.tasksStore.reorderActive(taskIds: ordered.map(\.id))
+                try tasksStore.reorderActive(taskIds: ordered.map(\.id))
             } catch {
                 loadError = error.localizedDescription
             }
@@ -423,7 +460,7 @@ struct TasksListView: View {
         modalSaving = true
         defer { modalSaving = false }
         do {
-            _ = try app.tasksStore.update(id: task.id, title: trimmed, status: modalStatus, tags: modalTags)
+            _ = try tasksStore.update(id: task.id, title: trimmed, status: modalStatus, tags: modalTags)
             modalTask = nil
         } catch {
             loadError = error.localizedDescription
@@ -436,7 +473,7 @@ struct TasksListView: View {
         modalSaving = true
         defer { modalSaving = false }
         do {
-            _ = try app.tasksStore.delete(id: task.id)
+            _ = try tasksStore.delete(id: task.id)
             modalTask = nil
         } catch {
             loadError = error.localizedDescription

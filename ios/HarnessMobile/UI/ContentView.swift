@@ -10,19 +10,16 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ConversationListView(app: app) { conversationId in
-                app.openThread(id: conversationId)
-            }
-            .navigationDestination(item: chatRouteBinding) { route in
-                switch route {
-                case .compose:
-                    ComposeChatView(app: app)
-                case .thread(let conversationId):
-                    ChatThreadView(app: app, conversationId: conversationId)
-                }
+        ZStack {
+            if app.hasCompletedInitialLoad {
+                mainNavigation
+                    .transition(.opacity)
+            } else {
+                HarnessBootView()
+                    .transition(.opacity)
             }
         }
+        .animation(.easeOut(duration: 0.25), value: app.hasCompletedInitialLoad)
         .preferredColorScheme(app.themeStore.preferredColorScheme)
         .environment(\.harnessTheme, app.themeStore.harnessTheme)
         .task {
@@ -52,6 +49,22 @@ struct ContentView: View {
                             }
                         }
                     }
+            }
+        }
+    }
+
+    private var mainNavigation: some View {
+        NavigationStack {
+            ConversationListView(app: app) { conversationId in
+                app.openThread(id: conversationId)
+            }
+            .navigationDestination(item: chatRouteBinding) { route in
+                switch route {
+                case .compose:
+                    ComposeChatView(app: app)
+                case .thread(let conversationId):
+                    ChatThreadView(app: app, conversationId: conversationId)
+                }
             }
         }
     }
@@ -98,4 +111,8 @@ struct ContentView: View {
             return app
         }()
     )
+}
+
+#Preview("Boot") {
+    ContentView(app: AppModel(localDataSubpath: "preview-boot-\(UUID().uuidString)"))
 }

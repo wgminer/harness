@@ -3,7 +3,9 @@ use tauri::{AppHandle, Emitter};
 
 use crate::credentials::resolve_openai_api_key;
 use crate::env_util::is_harness_e2e;
-use crate::memory::{AppState, ConversationTitleSource, MessageRecord};
+use crate::memory::{
+    mark_voice_dictation_session, AppState, ConversationTitleSource, MessageRecord,
+};
 use crate::openai::generate_thread_title_with_openai;
 
 const CONTEXT_MAX_CHARS: usize = 2400;
@@ -78,6 +80,17 @@ pub fn emit_title_generation_ended(app: &AppHandle, conversation_id: &str) {
     "chat-title-generation-ended",
     serde_json::json!({ "conversationId": conversation_id }),
   );
+}
+
+/// Placeholder dictation title + async LLM refinement (single entry point for voice sessions).
+pub async fn finalize_voice_dictation_session(
+    app: AppHandle,
+    state: &AppState,
+    conversation_id: &str,
+) -> Result<String, std::io::Error> {
+    let title = mark_voice_dictation_session(state, conversation_id).await?;
+    schedule_conversation_title_refinement(app, state.clone(), conversation_id.to_string());
+    Ok(title)
 }
 
 pub fn schedule_conversation_title_refinement(

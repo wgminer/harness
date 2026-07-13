@@ -10,6 +10,7 @@ import {
   Printer,
   RefreshCw,
   SpellCheck,
+  SquareArrowOutUpRight,
   SquarePen,
   Trash2,
   X,
@@ -532,6 +533,20 @@ export function NotesView({
     setScreen("list");
   }, [closeAsidePanel]);
 
+  const openInNewWindow = useCallback(async () => {
+    if (!selectedNoteId || status.kind === "deleting") return;
+    setNoteToolbarMenuOpen(false);
+    try {
+      if (dirty) {
+        await save();
+      }
+      await window.harness.notes.openSticky(selectedNoteId);
+      goBackToList();
+    } catch (e) {
+      setStatus({ kind: "error", message: String(e) });
+    }
+  }, [dirty, goBackToList, save, selectedNoteId, status.kind]);
+
   const cycleNoteWidthMode = useCallback(() => {
     setNoteWidthMode((prev) => {
       const idx = NOTE_WIDTH_MODES.indexOf(prev);
@@ -881,6 +896,19 @@ export function NotesView({
                     >
                       <FolderOpen size={16} aria-hidden />
                       <span>Show file</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="notes-surface__toolbar-menu-item"
+                      role="menuitem"
+                      data-testid="notes-open-in-new-window"
+                      disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                      onClick={() => {
+                        void openInNewWindow();
+                      }}
+                    >
+                      <SquareArrowOutUpRight size={16} aria-hidden />
+                      <span>Open in new window</span>
                     </button>
                     <button
                       type="button"

@@ -16,6 +16,7 @@ private enum DictationRecordingPhase: Equatable {
 
 struct DictationRecordingSheet: View {
     @ObservedObject var app: AppModel
+    @ObservedObject private var recordingSession: RecordingSessionManager
     let mode: DictationRecordingMode
     @Binding var isPresented: Bool
     var onConversationCreated: (String) -> Void = { _ in }
@@ -24,8 +25,25 @@ struct DictationRecordingSheet: View {
     @State private var phase: DictationRecordingPhase = .starting
     @State private var savedAudioURL: URL?
     @State private var didAutoStart = false
+    /// Invalidates in-flight stop/transcribe work when the user cancels.
+    @State private var operationGeneration = 0
 
-    private var recorder: AudioRecorder { app.recordingSession.recorder }
+    init(
+        app: AppModel,
+        mode: DictationRecordingMode,
+        isPresented: Binding<Bool>,
+        onConversationCreated: @escaping (String) -> Void = { _ in },
+        onTranscriptSent: @escaping (String) -> Void = { _ in }
+    ) {
+        self.app = app
+        self.recordingSession = app.recordingSession
+        self.mode = mode
+        self._isPresented = isPresented
+        self.onConversationCreated = onConversationCreated
+        self.onTranscriptSent = onTranscriptSent
+    }
+
+    private var recorder: AudioRecorder { recordingSession.recorder }
 
     var body: some View {
         NavigationStack {
@@ -49,15 +67,26 @@ struct DictationRecordingSheet: View {
                 Spacer()
             }
             .padding(.bottom, 32)
-            .navigationTitle(phase == .processing ? "" : "Dictate")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if phase != .processing {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
-                            cancelActiveWork()
-                            isPresented = false
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        Task { await cancelAndDismiss() }
+                    }
+                }
+                if phase == .recording {
+                    ToolbarItem(placement: .principal) {
+                        HStack(spacing: 8) {
+                            RecordingPulseDot()
+                            Text(formattedElapsed(recorder.elapsedMs))
+                                .font(.system(.body, design: .monospaced).weight(.medium))
+                                .monospacedDigit()
+                                .foregroundStyle(.primary)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Recording duration")
+                        .accessibilityValue(formattedElapsed(recorder.elapsedMs))
                     }
                 }
             }
@@ -73,9 +102,9 @@ struct DictationRecordingSheet: View {
                 Task { await stopAndTranscribe() }
             }
         }
-        .onChange(of: app.recordingSession.liveActivityStopRequested) { _, requested in
+        .onChange(of: recordingSession.liveActivityStopRequested) { _, requested in
             guard requested else { return }
-            app.recordingSession.acknowledgeLiveActivityStopRequest()
+            recordingSession.acknowledgeLiveActivityStopRequest()
             Task { await stopAndTranscribe() }
         }
     }
@@ -86,6 +115,15 @@ struct DictationRecordingSheet: View {
             return true
         default:
             return false
+        }
+    }
+
+    private var navigationTitle: String {
+        switch phase {
+        case .recording, .processing:
+            return ""
+        default:
+            return "Dictate"
         }
     }
 
@@ -100,47 +138,37 @@ struct DictationRecordingSheet: View {
     }
 
     private var recordingContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 36) {
             LiveAudioWaveformView(samples: recorder.waveformSamples, barColor: .red)
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
                 .ignoresSafeArea(edges: .horizontal)
 
-            VStack(spacing: 20) {
-                Text(formattedElapsed(recorder.elapsedMs))
-                    .font(.system(.title, design: .monospaced))
-                    .foregroundStyle(.primary)
-
-                if recorder.audioLevel < 0.12 {
-                    Text("Listening… speak now.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            HStack(spacing: 28) {
+                Button {
+                    HapticFeedback.warning()
+                    Task { await cancelAndDismiss() }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 17, weight: .semibold))
+                        .frame(width: 52, height: 52)
+                        .background(Circle().fill(Color.primary.opacity(0.1)))
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cancel recording")
 
-                HStack(spacing: 20) {
-                    Button {
-                        cancelActiveWork()
-                        isPresented = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 20, weight: .bold))
-                            .frame(width: 52, height: 52)
-                            .background(Circle().fill(Color.primary.opacity(0.1)))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Cancel recording")
-
-                    Button {
-                        Task { await stopAndTranscribe() }
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 72, height: 72)
-                            .background(Circle().fill(Color.accentColor))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Stop and transcribe")
+                Button {
+                    HapticFeedback.success()
+                    Task { await stopAndTranscribe() }
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 32, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 96, height: 96)
+                        .background(Circle().fill(Color.accentColor))
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Stop and transcribe")
             }
             .padding(.horizontal, 28)
         }
@@ -190,8 +218,21 @@ struct DictationRecordingSheet: View {
     private func startRecording() async {
         phase = .starting
         do {
-            _ = try await app.recordingSession.beginRecordingSession()
+            _ = try await recordingSession.beginRecordingSession()
+            // Cancel may have completed between start returning and this resume.
+            guard recorder.isRecording else {
+                if isPresented {
+                    isPresented = false
+                }
+                return
+            }
             phase = .recording
+        } catch is CancellationError {
+            // Cancelled mid-start; session manager already tore down. Avoid a stuck "Starting…" UI
+            // if cancellation came from task teardown rather than the Cancel button.
+            if isPresented {
+                isPresented = false
+            }
         } catch {
             phase = .failed(error.localizedDescription)
         }
@@ -199,15 +240,19 @@ struct DictationRecordingSheet: View {
 
     private func stopAndTranscribe() async {
         guard phase == .recording else { return }
+        let generation = operationGeneration
         do {
             let url = try recorder.stop()
-            await app.recordingSession.endRecordingSession()
+            await recordingSession.endRecordingSession()
+            guard generation == operationGeneration else { return }
             savedAudioURL = url
             phase = .processing
             try await OnDeviceTranscriber.ensureAudioFileReady(at: url)
+            guard generation == operationGeneration else { return }
             await transcribeSavedAudio()
         } catch {
-            await app.recordingSession.endRecordingSession()
+            await recordingSession.endRecordingSession()
+            guard generation == operationGeneration else { return }
             phase = .failed(error.localizedDescription)
         }
     }
@@ -249,20 +294,36 @@ struct DictationRecordingSheet: View {
         }
     }
 
-    private func cancelActiveWork() {
+    private func cancelAndDismiss() async {
+        operationGeneration += 1
         app.dictationService.cancel()
-        if recorder.isRecording {
-            recorder.cancel()
-            Task { await app.recordingSession.endRecordingSession() }
-        }
+        await recordingSession.cancelRecordingSession()
+        isPresented = false
     }
 
     private func formattedElapsed(_ ms: Int) -> String {
         let totalSeconds = ms / 1000
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
-        let milliseconds = ms % 1000
-        return String(format: "%d:%02d.%03d", minutes, seconds, milliseconds)
+        let tenths = (ms % 1000) / 100
+        return String(format: "%d:%02d.%d", minutes, seconds, tenths)
+    }
+}
+
+private struct RecordingPulseDot: View {
+    @State private var isPulsing = false
+
+    var body: some View {
+        Circle()
+            .fill(Color.red)
+            .frame(width: 6, height: 6)
+            .opacity(isPulsing ? 0.35 : 1)
+            .animation(
+                .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                value: isPulsing
+            )
+            .onAppear { isPulsing = true }
+            .accessibilityHidden(true)
     }
 }
 

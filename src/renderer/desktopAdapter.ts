@@ -1,58 +1,26 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { HarnessAPI } from "../shared/desktopAPI";
 import type { GlobalRecordingStatus } from "../shared/desktopAPI";
-import type { AppendMessageMeta, SystemPromptPreview } from "../shared/types";
+import type {
+  AppendMessageMeta,
+  ContextPreview,
+  RecordingLink,
+  SystemPromptPreview,
+} from "../shared/types";
 import type { NoteEditProposalInput, NoteSpellCheckInput } from "../shared/writing";
 import type { SyncResult, SyncStatus } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
 import { legacyIpcCommand, legacyIpcEvent } from "../shared/ipcNames";
+import { subscribeToWire } from "./tauriEventHub";
 
 const cmd = legacyIpcCommand;
 const evt = legacyIpcEvent;
-
-type EventHub = {
-  handlers: Set<(payload: unknown) => void>;
-  unlisten: UnlistenFn | null;
-};
-
-/** One Tauri listener per wire event; React Strict Mode remounts must not stack duplicates. */
-const eventHubs = new Map<string, EventHub>();
 
 function subscribe<T>(
   eventName: string,
   handler: (payload: T) => void,
 ): () => void {
-  const wireName = evt(eventName);
-  let hub = eventHubs.get(wireName);
-  if (!hub) {
-    hub = { handlers: new Set(), unlisten: null };
-    eventHubs.set(wireName, hub);
-    void listen<T>(wireName, (e) => {
-      for (const h of hub!.handlers) {
-        h(e.payload);
-      }
-    }).then((fn) => {
-      if (hub!.handlers.size === 0) {
-        void fn();
-        eventHubs.delete(wireName);
-        return;
-      }
-      hub!.unlisten = fn;
-    });
-  }
-
-  const wrapped = handler as (payload: unknown) => void;
-  hub.handlers.add(wrapped);
-  return () => {
-    const current = eventHubs.get(wireName);
-    if (!current) return;
-    current.handlers.delete(wrapped);
-    if (current.handlers.size === 0) {
-      void current.unlisten?.();
-      eventHubs.delete(wireName);
-    }
-  };
+  return subscribeToWire(evt(eventName), handler);
 }
 
 export function createHarnessAdapter(): HarnessAPI {
@@ -136,6 +104,12 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("memory:setConversationTitle"), { conversationId, title }),
       markVoiceDictationSession: (conversationId: string) =>
         invoke<string>(cmd("memory:markVoiceDictationSession"), { conversationId }),
+      linkDictationRecording: (conversationId: string, path: string) =>
+        invoke(cmd("memory:linkDictationRecording"), { conversationId, path }),
+      getConversationRecordings: (conversationId: string) =>
+        invoke<{ recordings: RecordingLink[] }>(cmd("memory:getConversationRecordings"), {
+          conversationId,
+        }),
     },
     plans: {
       list: () => invoke(cmd("plans:list")),
@@ -174,6 +148,10 @@ export function createHarnessAdapter(): HarnessAPI {
       stop: () => invoke(cmd("chat:stop")),
       resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") =>
         invoke(cmd("chat:resolveGatedTool"), { pendingId, action }),
+      getContextPreview: (conversationId?: string | null) =>
+        invoke<ContextPreview>(cmd("chat:getContextPreview"), {
+          conversationId: conversationId ?? null,
+        }),
       onStreamChunk: (cb) =>
         subscribe<{ conversationId: string; chunk: string }>(
           "chat:streamChunk",
@@ -252,10 +230,13 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("notes:setStickyPinned"), { noteId, pinned }),
       setStickyTitle: (noteId: string, title: string) =>
         invoke(cmd("notes:setStickyTitle"), { noteId, title }),
+      popInSticky: (noteId: string) => invoke(cmd("notes:popInSticky"), { noteId }),
+      onOpenInMain: (cb) =>
+        subscribeToWire<{ noteId: string }>(evt("notes:openInMain"), (payload) => {
+          if (payload?.noteId) cb(payload.noteId);
+        }),
     },
     recording: {
-      setGlobalEnabled: (enabled: boolean) =>
-        invoke(cmd("recording:setGlobalEnabled"), { enabled }),
       signalFrontendReady: () => invoke(cmd("recording:signalFrontendReady")),
       requestMicrophoneAccess: () =>
         invoke<boolean>(cmd("recording:requestMicrophoneAccess")),
@@ -271,19 +252,26 @@ export function createHarnessAdapter(): HarnessAPI {
       cancelTranscription: (requestId: string) =>
         invoke(cmd("recording:cancelTranscription"), { requestId }),
       pasteText: (text: string) => invoke(cmd("recording:pasteText"), { text }),
-      done: () => invoke(cmd("recording:done")),
-      startFailed: (reason: string) =>
-        invoke(cmd("recording:startFailed"), { reason }),
       getGlobalStatus: () =>
         invoke<GlobalRecordingStatus>(cmd("recording:getGlobalStatus")),
-      onStartSilent: (cb) =>
-        subscribe<Record<string, never>>("recording:startSilent", () => cb()),
-      onStopAndPaste: (cb) =>
-        subscribe<{ wasFocused: boolean }>("recording:stopAndPaste", (p) =>
-          cb(p.wasFocused),
+      onGlobalRecordingStarted: (cb) =>
+        subscribeToWire<Record<string, never>>("global-recording-started", () => cb()),
+      onGlobalRecordingStopped: (cb) =>
+        subscribeToWire<Record<string, never>>("global-recording-stopped", () => cb()),
+      onGlobalRecordingCancelled: (cb) =>
+        subscribeToWire<Record<string, never>>("global-recording-cancelled", () => cb()),
+      onGlobalRecordingError: (cb) =>
+        subscribeToWire<{ message?: string }>("global-recording-error", (p) =>
+          cb(p?.message ?? "Recording failed."),
         ),
-      onCancel: (cb) =>
-        subscribe<Record<string, never>>("recording:cancel", () => cb()),
+      onGlobalTranscriptReady: (cb) =>
+        subscribeToWire<{ text?: string }>("global-transcript-ready", (p) =>
+          cb(p?.text ?? ""),
+        ),
+      onGlobalTranscriptDelivered: (cb) =>
+        subscribeToWire<{ conversationId?: string }>("global-transcript-delivered", (p) => {
+          if (p?.conversationId) cb(p.conversationId);
+        }),
     },
     sync: {
       getStatus: () => invoke<SyncStatus>(cmd("sync:getStatus")),

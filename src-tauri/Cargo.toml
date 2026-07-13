@@ -46,6 +46,7 @@ objc2-foundation = "0.3"
 core-foundation = "0.10"
 urlencoding = "2"
 url = "2"
+cpal = "0.18.1"
 
 [profile.release]
 strip = true

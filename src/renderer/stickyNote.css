@@ -1,78 +1,87 @@
-.sticky-note {
+.windowed-note {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
+  padding: 0;
+  box-sizing: border-box;
   background: var(--bg);
   color: var(--fg);
 }
 
-.sticky-note__header {
+.windowed-note__editor-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+
+.windowed-note__editor {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.windowed-note__editor .cm-editor {
+  height: 100%;
+}
+
+.windowed-note .notes-code-editor .cm-content {
+  padding: 8px 16px 16px;
+}
+
+.windowed-note__actions {
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border-edge);
-  flex-shrink: 0;
+  gap: 2px;
 }
 
-.sticky-note__title {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--fg);
-  font-family: var(--font-family);
-  font-size: var(--font-size-ui);
-  font-weight: 600;
-  line-height: var(--line-height-normal);
-  padding: var(--space-1) 0;
-}
-
-.sticky-note__title:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.sticky-note__pin {
-  flex-shrink: 0;
+.windowed-note__action {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
   color: var(--fg-muted);
+  opacity: 0.75;
 }
 
-.sticky-note__pin--active,
-.sticky-note__pin:hover:not(:disabled) {
+.windowed-note__action:hover:not(:disabled) {
+  opacity: 0.95;
+}
+
+.windowed-note__action--active {
+  color: var(--accent);
+  opacity: 0.95;
+}
+
+.windowed-note__action--active:hover:not(:disabled) {
   color: var(--accent);
 }
 
-.sticky-note__body {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  border: none;
-  resize: none;
-  background: transparent;
-  color: var(--fg);
-  font-family: var(--font-family);
-  font-size: var(--font-size);
-  line-height: var(--line-height);
-  padding: var(--space-3);
+.windowed-note__action svg {
+  width: 14px;
+  height: 14px;
 }
 
-.sticky-note__body:focus-visible {
-  outline: none;
-}
-
-.sticky-note__status {
+.windowed-note__status {
   padding: var(--space-4);
   color: var(--fg-muted);
 }
 
-.sticky-note__status--error {
+.windowed-note__status--error {
   color: var(--danger, #e55);
 }
 
-.sticky-note__inline-error {
+.windowed-note__inline-error {
+  position: fixed;
+  left: 8px;
+  right: 48px;
+  bottom: 8px;
   margin: 0;
-  padding: 0 var(--space-3) var(--space-2);
   font-size: var(--font-size-ui);
   color: var(--danger, #e55);
 }

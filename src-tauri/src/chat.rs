@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use regex::Regex;
+use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, oneshot};
@@ -20,7 +21,9 @@ use crate::memory::{
     AppState, ToolCallRecord,
 };
 use crate::notes;
-use crate::openai::{map_http_cancel, ChatMessageParam, OpenAIChatClient, OpenAIError};
+use crate::openai::{
+    map_http_cancel, tool_definitions, ChatMessageParam, OpenAIChatClient, OpenAIError,
+};
 use crate::recent_conversations::build_recent_conversations_block;
 use crate::settings;
 use crate::system_prompt::{
@@ -293,12 +296,60 @@ impl ChatController {
         })
     }
 
+    pub async fn get_context_preview(
+        &self,
+        conversation_id: Option<&str>,
+    ) -> Result<ContextPreview, String> {
+        let (assembly, messages) = self
+            .assemble_context(conversation_id, None, None)
+            .await?;
+        Ok(ContextPreview {
+            injection_strategy: assembly.strategy.to_string(),
+            selected_facts: assembly
+                .selected_memory
+                .iter()
+                .map(|(key, value)| ContextPreviewFact {
+                    key: key.clone(),
+                    value: value.clone(),
+                })
+                .collect(),
+            system_prompt: assembly.system_prompt,
+            temporal_context: assembly.temporal_context,
+            memory_block: assembly.memory_block,
+            messages: messages
+                .into_iter()
+                .filter(|m| m.role != "system")
+                .map(|m| ContextPreviewMessage {
+                    role: m.role,
+                    content: m.content.unwrap_or_default(),
+                })
+                .collect(),
+            tools: tool_summaries(),
+        })
+    }
+
     async fn build_message_list(
         &self,
         conversation_id: &str,
         user_content: Option<&str>,
         second_user_content: Option<&str>,
     ) -> Result<Vec<ChatMessageParam>, String> {
+        let (_, messages) = self
+            .assemble_context(
+                Some(conversation_id),
+                user_content,
+                second_user_content,
+            )
+            .await?;
+        Ok(messages)
+    }
+
+    async fn assemble_context(
+        &self,
+        conversation_id: Option<&str>,
+        user_content: Option<&str>,
+        second_user_content: Option<&str>,
+    ) -> Result<(ContextAssembly, Vec<ChatMessageParam>), String> {
         let settings = settings::get_settings(&self.state.write_chains).await;
         let strategy = parse_memory_injection_strategy(
             settings
@@ -313,7 +364,7 @@ impl ChatController {
             select_memory_entries_for_prompt(strategy, &user_memory, scoring_content);
         let memory_block = format_memory_context_block(&selected_memory);
         let recent_conversations_block =
-            build_recent_conversations_block(&self.state, Some(conversation_id))
+            build_recent_conversations_block(&self.state, conversation_id)
                 .await
                 .map_err(|e| e.to_string())?;
         let temporal_context = format_temporal_context_block();
@@ -325,10 +376,21 @@ impl ChatController {
             &recent_conversations_block,
             &temporal_context,
         );
+        let assembly = ContextAssembly {
+            strategy,
+            selected_memory,
+            memory_block,
+            system_prompt: system_prompt.clone(),
+            temporal_context,
+        };
 
-        let history = get_messages(&self.state, conversation_id)
-            .await
-            .map_err(|e| e.to_string())?;
+        let history = if let Some(conversation_id) = conversation_id {
+            get_messages(&self.state, conversation_id)
+                .await
+                .map_err(|e| e.to_string())?
+        } else {
+            Vec::new()
+        };
         let mut messages = vec![ChatMessageParam {
             role: "system".into(),
             content: Some(system_prompt),
@@ -372,7 +434,7 @@ impl ChatController {
                 tool_call_id: None,
             });
         }
-        Ok(messages)
+        Ok((assembly, messages))
     }
 
     async fn execute_tool(
@@ -910,6 +972,69 @@ fn split_into_word_chunks(content: &str) -> Vec<String> {
         .collect()
 }
 
+#[derive(Debug, Clone)]
+struct ContextAssembly {
+    strategy: MemoryStrategy,
+    selected_memory: Vec<(String, String)>,
+    memory_block: String,
+    system_prompt: String,
+    temporal_context: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextPreviewFact {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextPreviewMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextPreviewTool {
+    pub name: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextPreview {
+    pub injection_strategy: String,
+    pub selected_facts: Vec<ContextPreviewFact>,
+    pub system_prompt: String,
+    pub temporal_context: String,
+    pub memory_block: String,
+    pub messages: Vec<ContextPreviewMessage>,
+    pub tools: Vec<ContextPreviewTool>,
+}
+
+fn tool_summaries() -> Vec<ContextPreviewTool> {
+    let defs = tool_definitions();
+    let Some(items) = defs.as_array() else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(|item| {
+            let func = item.get("function")?;
+            Some(ContextPreviewTool {
+                name: func.get("name")?.as_str()?.to_string(),
+                description: func
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+            })
+        })
+        .collect()
+}
+
 fn format_temporal_context_block() -> String {
     let tz = iana_time_zone::get_timezone().unwrap_or_else(|_| "UTC".into());
     let now = chrono::Local::now();
@@ -1082,4 +1207,38 @@ fn format_memory_context_block(selected: &[(String, String)]) -> String {
     lines.push("- If memory conflicts with the user's current message, follow the current message.".into());
     lines.push("- If uncertain whether memory still applies, ask one brief clarifying question.".into());
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod context_preview_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn tool_summaries_include_known_tools() {
+        let tools = tool_summaries();
+        assert!(tools.iter().any(|t| t.name == "list_directory"));
+        assert!(tools.iter().any(|t| t.name == "task_create"));
+        assert!(tools
+            .iter()
+            .all(|t| !t.name.is_empty() && !t.description.is_empty()));
+    }
+
+    #[test]
+    fn build_system_prompt_includes_memory_and_temporal_blocks() {
+        let memory = format_memory_context_block(&[("tone".into(), "concise".into())]);
+        let temporal = format_temporal_context_block();
+        let prompt = build_system_prompt(&memory, &temporal);
+        assert!(prompt.contains("[CORE_INSTRUCTIONS]"));
+        assert!(prompt.contains("[USER_MEMORY_CONTEXT]"));
+        assert!(prompt.contains("[TEMPORAL_CONTEXT]"));
+    }
+
+    #[test]
+    fn select_memory_none_strategy_returns_empty() {
+        let mut mem = HashMap::new();
+        mem.insert("tone".into(), "warm".into());
+        let selected = select_memory_entries_for_prompt("none", &mem, Some("hello"));
+        assert!(selected.is_empty());
+    }
 }

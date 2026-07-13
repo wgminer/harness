@@ -2,7 +2,7 @@ import MarkdownUI
 import SwiftUI
 import UIKit
 
-struct HarnessMarkdownView: View {
+struct HarnessMarkdownView: View, Equatable {
     let content: String
     let lineLimit: Int?
     let isStreaming: Bool
@@ -115,6 +115,7 @@ extension Theme {
                 .markdownMargin(top: 10, bottom: 10)
                 .onLongPressGesture {
                     UIPasteboard.general.string = configuration.content
+                    HapticFeedback.success()
                 }
         }
 }

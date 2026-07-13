@@ -6,12 +6,12 @@
     <title>Harness</title>
     <meta
       name="description"
-      content="Personal, local-first macOS workbench for LLMs — chat, memory, tasks, and tools."
+      content="Personal, voice-first LLM harness for macOS — built as a creative tool, not an answer engine. Open source."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
@@ -19,48 +19,51 @@
   <body>
     <main class="page">
       <div class="stack">
-        <img
-          class="stack__icon"
-          src="./assets/icon.png"
-          alt=""
-          width="80"
-          height="80"
-        />
-        <h1 class="stack__title">Harness</h1>
-        <p class="stack__manifesto">
-          An LLM harness built for me — voice, chat, memory, tasks, and tools in
-          one place, with full control over what goes in and what comes out.
-        </p>
-        <ul class="principles" aria-label="Principles">
-          <li class="principles__item">
-            <span class="principles__tag">Personal</span>
-            <span class="principles__desc"
-              >Built for one workflow, opinionated</span
-            >
-          </li>
-          <li class="principles__item">
-            <span class="principles__tag">Portable</span>
-            <span class="principles__desc">Your data, any model</span>
-          </li>
-          <li class="principles__item">
-            <span class="principles__tag">Legible</span>
-            <span class="principles__desc"
-              >See prompts, tools, and context assembly</span
-            >
-          </li>
-          <li class="principles__item">
-            <span class="principles__tag">Exploratory</span>
-            <span class="principles__desc"
-              >Learn the stack, not just use it</span
-            >
-          </li>
-        </ul>
+        <header class="stack__header">
+          <img
+            class="stack__icon"
+            src="./assets/icon.png"
+            alt=""
+            width="80"
+            height="80"
+          />
+          <!-- <h1 class="stack__title">Harness</h1> -->
+        </header>
+        <div class="manifesto">
+          <p class="manifesto__lede">
+            An LLM harness I built for myself: dictation, chat without the
+            persona, notes, and tasks. Offline-first. Full control over the
+            inputs, the outputs, and everything in between.
+          </p>
+          <p>
+            I have my own opinions about how I want to use an LLM. I don't want
+            it personified. I want it <em>voice-first</em>. I want it as a
+            <em>creative tool</em>: not an answer engine, not something designed
+            to drive engagement. Commercial tools are built for a mainstream
+            audience, and that's fine. They're just not built for me.
+          </p>
+          <p>
+            I'm also building this to learn agentic harness design and
+            engineering firsthand. Coding tools have finally gotten good enough
+            to keep up with my ambitions, so it felt like the right time to try
+            building one myself.
+          </p>
+          <p>
+            It's more <em>art project</em> than product, so I've
+            <a href="https://github.com/wgminer/harness">open-sourced</a> it for
+            anyone who wants to read the code.
+          </p>
+        </div>
         <a
           class="cta"
           href="https://github.com/wgminer/harness/releases/latest"
         >
           Download for macOS
         </a>
+        <p class="colophon">
+          <span class="colophon__label">Colophon:</span> Tauri (Rust, React),
+          Swift UI, OpenAI, Apple Speech, Cloudflare R2, IBM Plex Sans &amp; Mono
+        </p>
       </div>
     </main>
   </body>

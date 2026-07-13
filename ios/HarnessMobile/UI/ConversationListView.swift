@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ConversationListView: View {
     @ObservedObject var app: AppModel
+    @ObservedObject private var store: ConversationStore
     let onSelect: (String) -> Void
 
     @State private var createError: String?
@@ -11,10 +12,16 @@ struct ConversationListView: View {
     @State private var renameDraft = ""
     @State private var showRenameAlert = false
 
+    init(app: AppModel, onSelect: @escaping (String) -> Void) {
+        self.app = app
+        self.store = app.store
+        self.onSelect = onSelect
+    }
+
     private var filteredConversations: [ConversationListItem] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return app.store.conversations }
-        return app.store.conversations.filter { $0.displayTitle.lowercased().contains(query) }
+        guard !query.isEmpty else { return store.conversations }
+        return store.conversations.filter { $0.displayTitle.lowercased().contains(query) }
     }
 
     var body: some View {
@@ -29,7 +36,7 @@ struct ConversationListView: View {
                 NavigationLink {
                     TasksListView(app: app)
                 } label: {
-                    Image(systemName: "checklist")
+                    Image(systemName: "list.bullet.clipboard")
                 }
                 .accessibilityLabel("Tasks")
             }
@@ -74,16 +81,11 @@ struct ConversationListView: View {
                 }
             )
         }
-        .onChange(of: app.recordingSession.recorder.isRecording) { _, isRecording in
-            if isRecording {
-                showDictationSheet = true
-            }
-        }
     }
 
     private var conversationList: some View {
         List {
-            if app.hasCompletedInitialLoad, !app.store.conversations.isEmpty {
+            if !store.conversations.isEmpty {
                 Section {
                     TextField("Search conversations…", text: $searchQuery)
                         .textInputAutocapitalization(.never)
@@ -91,9 +93,7 @@ struct ConversationListView: View {
                 }
             }
 
-            if !app.hasCompletedInitialLoad {
-                conversationsLoadingSection
-            } else if app.store.conversations.isEmpty {
+            if store.conversations.isEmpty {
                 ContentUnavailableView(
                     "No conversations",
                     systemImage: "bubble.left.and.bubble.right",
@@ -112,22 +112,6 @@ struct ConversationListView: View {
             }
         }
         .listStyle(.plain)
-    }
-
-    private var conversationsLoadingSection: some View {
-        Section {
-            VStack(spacing: 16) {
-                ProgressView()
-                    .controlSize(.large)
-                Text("Loading conversations…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 48)
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-        }
     }
 
     private var homeBottomBar: some View {
@@ -151,6 +135,7 @@ struct ConversationListView: View {
             .accessibilityLabel("New Chat")
 
             Button {
+                HapticFeedback.medium()
                 showDictationSheet = true
             } label: {
                 Image(systemName: "mic.fill")
@@ -178,7 +163,7 @@ struct ConversationListView: View {
 
     private func renameConversation(id: String, title: String) {
         do {
-            try app.store.setUserTitle(conversationId: id, title: title)
+            try store.setUserTitle(conversationId: id, title: title)
         } catch {
             createError = error.localizedDescription
         }
@@ -222,12 +207,6 @@ private struct ConversationRow: View {
         Text(item.displayTitle)
             .font(.headline)
             .foregroundStyle(.primary)
-    }
-}
-
-#Preview("Loading") {
-    PreviewNavigationRoot {
-        ConversationListView(app: AppModel(localDataSubpath: "preview-loading-\(UUID().uuidString)")) { _ in }
     }
 }
 

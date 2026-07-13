@@ -1,4 +1,13 @@
-import type { AppendMessageMeta, LayoutOptions, Plan, SearchResult, Settings, SystemPromptPreview } from "./types";
+import type {
+  AppendMessageMeta,
+  ContextPreview,
+  LayoutOptions,
+  Plan,
+  RecordingLink,
+  SearchResult,
+  Settings,
+  SystemPromptPreview,
+} from "./types";
 import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput, NoteSummary } from "./writing";
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
@@ -26,6 +35,8 @@ export interface GlobalRecordingStatus {
   monitorHealth: "stopped" | "running" | "accessibility_denied";
   frontendReady: boolean;
   hotkeyActive: boolean;
+  sessionMode: string;
+  captureBackend: string;
 }
 
 export interface HarnessAPI {
@@ -130,6 +141,8 @@ export interface HarnessAPI {
     cleanupLegacyMemory: () => Promise<{ removed: boolean }>;
     setConversationTitle: (conversationId: string, title: string) => Promise<void>;
     markVoiceDictationSession: (conversationId: string) => Promise<string>;
+    linkDictationRecording: (conversationId: string, path: string) => Promise<void>;
+    getConversationRecordings: (conversationId: string) => Promise<{ recordings: RecordingLink[] }>;
   };
   plans: {
     list: () => Promise<Plan[]>;
@@ -160,6 +173,7 @@ export interface HarnessAPI {
     generateReply: (conversationId: string) => Promise<void>;
     stop: () => Promise<void>;
     resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") => Promise<void>;
+    getContextPreview: (conversationId?: string | null) => Promise<ContextPreview>;
     onStreamChunk: (cb: (conversationId: string, chunk: string) => void) => () => void;
     onStreamEnd: (cb: (conversationId: string) => void) => () => void;
     onNoteStreamOpen: (
@@ -205,10 +219,10 @@ export interface HarnessAPI {
     }>;
     setStickyPinned: (noteId: string, pinned: boolean) => Promise<void>;
     setStickyTitle: (noteId: string, title: string) => Promise<void>;
+    popInSticky: (noteId: string) => Promise<void>;
+    onOpenInMain: (cb: (noteId: string) => void) => () => void;
   };
   recording: {
-    /** When false, Fn dictation is ignored while the app window is focused. */
-    setGlobalEnabled: (enabled: boolean) => Promise<void>;
     /** Call once after IPC listeners are registered so Fn monitor can start. */
     signalFrontendReady: () => Promise<void>;
     requestMicrophoneAccess: () => Promise<boolean>;
@@ -222,13 +236,13 @@ export interface HarnessAPI {
     ) => Promise<{ text: string; cleanupSkipped?: "no_api_key" } | { error: string }>;
     cancelTranscription: (requestId: string) => Promise<void>;
     pasteText: (text: string) => Promise<void>;
-    done: () => Promise<void>;
-    /** Reset tray/session when mic capture fails to start. */
-    startFailed: (reason: string) => Promise<void>;
     getGlobalStatus: () => Promise<GlobalRecordingStatus>;
-    onStartSilent: (cb: () => void) => () => void;
-    onStopAndPaste: (cb: (wasFocused: boolean) => void) => () => void;
-    onCancel: (cb: () => void) => () => void;
+    onGlobalRecordingStarted: (cb: () => void) => () => void;
+    onGlobalRecordingStopped: (cb: () => void) => () => void;
+    onGlobalRecordingCancelled: (cb: () => void) => () => void;
+    onGlobalRecordingError: (cb: (message: string) => void) => () => void;
+    onGlobalTranscriptReady: (cb: (text: string) => void) => () => void;
+    onGlobalTranscriptDelivered: (cb: (conversationId: string) => void) => () => void;
   };
   sync: {
     getStatus: () => Promise<SyncStatus>;

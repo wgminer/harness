@@ -447,6 +447,7 @@ pub async fn delete_conversation(state: &AppState, conversation_id: &str) -> Res
     if file_exists(&messages_path).await {
         tokio::fs::remove_file(messages_path).await?;
     }
+    crate::dictation_recording_index::unlink(conversation_id);
     Ok(())
 }
 

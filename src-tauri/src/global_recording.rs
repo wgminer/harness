@@ -1,8 +1,6 @@
-//! Owns global Fn hotkey session + menu bar tray.
-//! Does not capture audio or transcribe — the frontend + `recording.rs` handle that after IPC events.
+//! Owns global Fn hotkey session + menu bar tray + native capture pipeline.
 
 use std::sync::{Arc, Mutex as StdMutex};
-use std::time::{Duration, Instant};
 
 use tauri::{
     image::Image,
@@ -16,14 +14,15 @@ use serde_json::Value;
 
 use crate::env_util::{app_display_name, is_global_hotkey_disabled, is_harness_e2e};
 use crate::fn_monitor::{resolve_fn_monitor_path, FnMonitorCallbacks, FnMonitorProcess};
+use crate::global_recording_capture::NativeCapture;
 use crate::global_recording_effects::{
-    is_main_window_focused, run_recording_effects, set_tray_state, show_and_focus_main,
-    unregister_escape, TrayIconState,
+    run_recording_effects, show_and_focus_main, unregister_escape,
 };
 use crate::global_recording_session::{
-    create_initial_fn_recording_state, reduce_escape, reduce_fn_edge, reduce_start_failed,
-    FnEdge, FnRecordingState, SessionMode,
+    create_initial_fn_recording_state, reduce_escape, reduce_fn_edge, FnEdge, FnRecordingState,
+    SessionMode,
 };
+use crate::memory::AppState;
 use crate::paths::resolve_bundled_resource;
 use crate::settings::get_settings;
 use crate::storage::WriteChains;
@@ -36,8 +35,8 @@ pub enum FnMonitorHealth {
 }
 
 pub struct GlobalRecordingRuntime {
+    pub(crate) app_state: AppState,
     fn_state: Mutex<FnRecordingState>,
-    global_recording_enabled: Mutex<bool>,
     hotkey_active: Mutex<bool>,
     frontend_ready: Mutex<bool>,
     monitor_health: Mutex<FnMonitorHealth>,
@@ -45,15 +44,15 @@ pub struct GlobalRecordingRuntime {
     pub(crate) tray_id: Mutex<Option<String>>,
     session_lock: Mutex<()>,
     pub(crate) escape_registered: StdMutex<bool>,
-    processing_started_at: Mutex<Option<Instant>>,
-    processing_timeout_handle: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    pub(crate) transcribing: Mutex<bool>,
+    pub(crate) capture: StdMutex<Option<NativeCapture>>,
 }
 
 impl GlobalRecordingRuntime {
-    pub fn new() -> Self {
+    pub fn new(app_state: AppState) -> Self {
         Self {
+            app_state,
             fn_state: Mutex::new(create_initial_fn_recording_state()),
-            global_recording_enabled: Mutex::new(true),
             hotkey_active: Mutex::new(false),
             frontend_ready: Mutex::new(false),
             monitor_health: Mutex::new(FnMonitorHealth::Stopped),
@@ -61,8 +60,8 @@ impl GlobalRecordingRuntime {
             tray_id: Mutex::new(None),
             session_lock: Mutex::new(()),
             escape_registered: StdMutex::new(false),
-            processing_started_at: Mutex::new(None),
-            processing_timeout_handle: Mutex::new(None),
+            transcribing: Mutex::new(false),
+            capture: StdMutex::new(None),
         }
     }
 
@@ -72,6 +71,13 @@ impl GlobalRecordingRuntime {
 
     pub(crate) async fn is_frontend_ready(&self) -> bool {
         *self.frontend_ready.lock().await
+    }
+
+    fn session_mode_label(&self) -> &'static str {
+        match self.fn_state.try_lock().map(|s| s.session) {
+            Ok(SessionMode::Recording) => "recording",
+            _ => "idle",
+        }
     }
 }
 
@@ -88,7 +94,8 @@ pub(crate) async fn dispatch_fn_edge(
 ) {
     let _guard = runtime.session_lock.lock().await;
 
-    if is_main_window_focused(app) && !*runtime.global_recording_enabled.lock().await {
+    if *runtime.transcribing.lock().await {
+        eprintln!("[Harness:recording] Fn tap ignored — transcription in progress");
         return;
     }
 
@@ -96,43 +103,12 @@ pub(crate) async fn dispatch_fn_edge(
     let state = *runtime.fn_state.lock().await;
     let (next, effects) = reduce_fn_edge(state, edge, ms);
     *runtime.fn_state.lock().await = next;
-    if next.session == SessionMode::Processing {
-        schedule_processing_timeout(app.clone(), runtime.clone()).await;
-    }
+    eprintln!(
+        "[Harness:recording] fn {:?} -> session {:?}",
+        edge,
+        next.session
+    );
     run_recording_effects(app, runtime, effects).await;
-}
-
-const PROCESSING_TIMEOUT_SECS: u64 = 90;
-
-async fn schedule_processing_timeout(app: AppHandle, runtime: Arc<GlobalRecordingRuntime>) {
-    if let Some(handle) = runtime.processing_timeout_handle.lock().await.take() {
-        handle.abort();
-    }
-    *runtime.processing_started_at.lock().await = Some(Instant::now());
-    let runtime_for_task = runtime.clone();
-    let handle = tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(PROCESSING_TIMEOUT_SECS)).await;
-        let _guard = runtime_for_task.session_lock.lock().await;
-        let state = *runtime_for_task.fn_state.lock().await;
-        if state.session != SessionMode::Processing {
-            return;
-        }
-        eprintln!(
-            "[Harness] global recording processing timed out after {PROCESSING_TIMEOUT_SECS}s — resetting session"
-        );
-        *runtime_for_task.fn_state.lock().await = create_initial_fn_recording_state();
-        set_tray_state(&app, &runtime_for_task, TrayIconState::Ready).await;
-        unregister_escape(&app, &runtime_for_task);
-        *runtime_for_task.processing_started_at.lock().await = None;
-    });
-    *runtime.processing_timeout_handle.lock().await = Some(handle);
-}
-
-pub(crate) async fn clear_processing_timeout(runtime: &GlobalRecordingRuntime) {
-    if let Some(handle) = runtime.processing_timeout_handle.lock().await.take() {
-        handle.abort();
-    }
-    *runtime.processing_started_at.lock().await = None;
 }
 
 pub(crate) async fn cancel_active_recording(
@@ -270,7 +246,6 @@ async fn start_tray_and_monitor(app: AppHandle, runtime: Arc<GlobalRecordingRunt
         .expect("tray icon");
 
     *runtime.tray_id.lock().await = Some(tray_id);
-    // Fn monitor starts after the webview signals frontend ready (see recording_signal_frontend_ready).
 }
 
 pub fn global_fn_hotkey_enabled_from_recording(recording: &Value) -> bool {
@@ -308,54 +283,14 @@ pub async fn apply_global_fn_hotkey_setting(
     }
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub async fn recording_set_global_enabled(
-    runtime: State<'_, Arc<GlobalRecordingRuntime>>,
-    app: AppHandle,
-    enabled: bool,
-) -> Result<(), String> {
-    *runtime.global_recording_enabled.lock().await = enabled;
-    if !enabled {
-        cancel_active_recording(&app, &runtime).await;
-    }
-    Ok(())
-}
-
-#[tauri::command(rename_all = "camelCase")]
-pub async fn recording_done(
-    app: AppHandle,
-    runtime: State<'_, Arc<GlobalRecordingRuntime>>,
-) -> Result<(), String> {
-    let _guard = runtime.session_lock.lock().await;
-    clear_processing_timeout(&runtime).await;
-    *runtime.fn_state.lock().await = create_initial_fn_recording_state();
-    set_tray_state(&app, &runtime, TrayIconState::Ready).await;
-    unregister_escape(&app, &runtime);
-    Ok(())
-}
-
-#[tauri::command(rename_all = "camelCase")]
-pub async fn recording_start_failed(
-    app: AppHandle,
-    runtime: State<'_, Arc<GlobalRecordingRuntime>>,
-    reason: String,
-) -> Result<(), String> {
-    let _guard = runtime.session_lock.lock().await;
-    let state = *runtime.fn_state.lock().await;
-    *runtime.fn_state.lock().await = reduce_start_failed(state);
-    clear_processing_timeout(&runtime).await;
-    set_tray_state(&app, &runtime, TrayIconState::Ready).await;
-    unregister_escape(&app, &runtime);
-    eprintln!("[Harness] global recording start failed: {reason}");
-    Ok(())
-}
-
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalRecordingStatus {
     pub monitor_health: String,
     pub frontend_ready: bool,
     pub hotkey_active: bool,
+    pub session_mode: String,
+    pub capture_backend: String,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -369,10 +304,17 @@ pub async fn recording_get_global_status(
         FnMonitorHealth::AccessibilityDenied => "accessibility_denied",
     }
     .to_string();
+    let session_mode = if *runtime.transcribing.lock().await {
+        "transcribing".to_string()
+    } else {
+        runtime.session_mode_label().to_string()
+    };
     Ok(GlobalRecordingStatus {
         monitor_health,
         frontend_ready: *runtime.frontend_ready.lock().await,
         hotkey_active: *runtime.hotkey_active.lock().await,
+        session_mode,
+        capture_backend: "cpal".to_string(),
     })
 }
 
@@ -416,6 +358,6 @@ pub async fn register_global_recording(
     apply_global_fn_hotkey_setting(app, runtime, enabled).await;
 }
 
-pub fn init_global_recording_runtime() -> Arc<GlobalRecordingRuntime> {
-    Arc::new(GlobalRecordingRuntime::new())
+pub fn init_global_recording_runtime(app_state: AppState) -> Arc<GlobalRecordingRuntime> {
+    Arc::new(GlobalRecordingRuntime::new(app_state))
 }

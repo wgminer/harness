@@ -31,7 +31,7 @@ export function isSidebarVisibleConversation(row: ConversationListRow): boolean 
 /** Fallback when a conversation has no stored title (matches historical sidebar labels). */
 export function formatNewChatLabel(createdAt: number): string {
   return (
-    "Empty chat @ " +
+    "New chat @ " +
     new Date(createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
   );
 }

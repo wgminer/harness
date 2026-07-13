@@ -16,7 +16,7 @@ import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceListSearch } from "./WorkspaceListSearch";
-import { TASK_COMPLETE_MS } from "../shared/motion";
+import { TASK_COMPLETE_HOLD_MS, TASK_COMPLETE_TV_MS } from "../shared/motion";
 import { ChatComposer } from "./ChatComposer";
 import { useChatComposer } from "./useChatComposer";
 
@@ -38,19 +38,26 @@ function TaskRow({
   onToggleDone,
   onOpen,
   completing = false,
+  dismissing = false,
 }: {
   task: TaskItem;
   onToggleDone: (t: TaskItem) => void;
   onOpen: (t: TaskItem) => void;
   completing?: boolean;
+  dismissing?: boolean;
 }) {
   const displayTags = normalizeTags(t.tags);
   const status = resolveTaskStatus(t);
-  const done = taskIsDone(status);
+  const done = taskIsDone(status) || completing;
+  const phaseClass = dismissing
+    ? " tasks-row-item--completing tasks-row-item--dismissing"
+    : completing
+      ? " tasks-row-item--completing"
+      : "";
   return (
     <li
-      className={`tasks-row-item${completing ? " tasks-row-item--completing" : ""}`}
-      aria-hidden={completing || undefined}
+      className={`tasks-row-item${phaseClass}`}
+      aria-hidden={dismissing || undefined}
     >
       <div className="tasks-row">
         <button
@@ -59,7 +66,7 @@ function TaskRow({
           onClick={() => onToggleDone(t)}
           aria-label={done ? "Mark as not done" : "Mark as done"}
           title={done ? "Mark as not done" : "Mark as done"}
-          disabled={completing}
+          disabled={dismissing}
         >
           {done ? (
             <SquareCheck size={20} strokeWidth={2} className="tasks-check-icon tasks-check-icon--on" />
@@ -95,6 +102,7 @@ export function TasksView() {
   const [activeOpen, setActiveOpen] = useState(true);
   const [completedOpen, setCompletedOpen] = useState(false);
   const [completingIds, setCompletingIds] = useState<Set<string>>(() => new Set());
+  const [dismissingIds, setDismissingIds] = useState<Set<string>>(() => new Set());
   const completionTimeoutsRef = useRef<Map<string, number>>(new Map());
   const tasksPaneRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -192,7 +200,23 @@ export function TasksView() {
       void patchTask(t.id, { status: toggleTaskCompleted(status) });
       return;
     }
-    if (completingIds.has(t.id)) return;
+
+    // Undo during hold (before TV-out).
+    if (completingIds.has(t.id)) {
+      if (dismissingIds.has(t.id)) return;
+      const handle = completionTimeoutsRef.current.get(t.id);
+      if (handle !== undefined) {
+        window.clearTimeout(handle);
+        completionTimeoutsRef.current.delete(t.id);
+      }
+      setCompletingIds((prev) => {
+        if (!prev.has(t.id)) return prev;
+        const next = new Set(prev);
+        next.delete(t.id);
+        return next;
+      });
+      return;
+    }
 
     const reduceMotion =
       typeof window !== "undefined" &&
@@ -210,7 +234,7 @@ export function TasksView() {
       return next;
     });
 
-    const handle = window.setTimeout(() => {
+    const finish = () => {
       completionTimeoutsRef.current.delete(t.id);
       void patchTask(t.id, { status: toggleTaskCompleted(status) });
       setCompletingIds((prev) => {
@@ -219,8 +243,26 @@ export function TasksView() {
         next.delete(t.id);
         return next;
       });
-    }, TASK_COMPLETE_MS);
-    completionTimeoutsRef.current.set(t.id, handle);
+      setDismissingIds((prev) => {
+        if (!prev.has(t.id)) return prev;
+        const next = new Set(prev);
+        next.delete(t.id);
+        return next;
+      });
+    };
+
+    const holdHandle = window.setTimeout(() => {
+      // Cancelled during hold — skip TV-out.
+      if (!completionTimeoutsRef.current.has(t.id)) return;
+      setDismissingIds((prev) => {
+        const next = new Set(prev);
+        next.add(t.id);
+        return next;
+      });
+      const tvHandle = window.setTimeout(finish, TASK_COMPLETE_TV_MS);
+      completionTimeoutsRef.current.set(t.id, tvHandle);
+    }, TASK_COMPLETE_HOLD_MS);
+    completionTimeoutsRef.current.set(t.id, holdHandle);
   };
 
   const openModal = (t: TaskItem) => {
@@ -356,6 +398,7 @@ export function TasksView() {
                       onToggleDone={toggleDone}
                       onOpen={openModal}
                       completing={completingIds.has(t.id)}
+                      dismissing={dismissingIds.has(t.id)}
                     />
                   ))}
                 </ul>

@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindow,
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
 
@@ -13,8 +13,8 @@ use crate::paths::get_app_state_dir;
 pub const STICKY_LABEL_PREFIX: &str = "sticky-";
 
 const STICKY_STATE_FILE: &str = "sticky-notes-windows.json";
-const DEFAULT_WIDTH: f64 = 320.0;
-const DEFAULT_HEIGHT: f64 = 360.0;
+const DEFAULT_WIDTH: f64 = 420.0;
+const DEFAULT_HEIGHT: f64 = 540.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -183,6 +183,27 @@ pub fn set_sticky_title(app: &AppHandle, note_id: &str, title: &str) -> Result<(
             .set_title(title.trim())
             .map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+/// Close the windowed note, focus main, and ask the main UI to open the note.
+pub fn pop_in_sticky(app: &AppHandle, note_id: &str) -> Result<(), String> {
+    let clean_id = note_id.trim();
+    if clean_id.is_empty() {
+        return Err("Note id is required.".into());
+    }
+    let label = sticky_label(clean_id);
+    if let Some(window) = app.get_webview_window(&label) {
+        window.close().map_err(|e| e.to_string())?;
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
+    let _ = app.emit(
+        "notes-open-in-main",
+        serde_json::json!({ "noteId": clean_id }),
+    );
     Ok(())
 }
 

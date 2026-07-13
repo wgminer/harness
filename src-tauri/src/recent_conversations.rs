@@ -20,7 +20,7 @@ pub struct RecentConversationEntry {
 }
 
 #[derive(Debug, Clone)]
-struct RecentCandidate {
+pub(crate) struct RecentCandidate {
     id: String,
     title: Option<String>,
     created_at: i64,

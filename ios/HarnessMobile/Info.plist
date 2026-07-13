@@ -22,8 +22,18 @@
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>UIUserInterfaceStyle</key>
-	<string>Dark</string>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Harness uses the microphone to record voice dictation.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Harness transcribes voice recordings on-device using Apple Speech recognition.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
@@ -34,19 +44,7 @@
 	</array>
 	<key>UISupportsDocumentBrowser</key>
 	<false/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>audio</string>
-	</array>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Harness uses the microphone to record voice dictation.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Harness transcribes voice recordings on-device using Apple Speech recognition.</string>
-	<key>UIFileSharingEnabled</key>
-	<true/>
-	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<true/>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 </dict>
 </plist>

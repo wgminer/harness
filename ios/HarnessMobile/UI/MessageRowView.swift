@@ -1,12 +1,14 @@
 import SwiftUI
 
-struct MessageRowView: View {
+struct MessageRowView: View, Equatable {
     let message: MessageRecord
     var isStreaming = false
-    var toolCallsExpanded = false
-    var onToggleToolCallsExpanded: (() -> Void)?
     var onToolConfirm: ((ToolCallRecord, GatedToolAction) -> Void)?
     @State private var isExpanded = false
+
+    static func == (lhs: MessageRowView, rhs: MessageRowView) -> Bool {
+        lhs.message == rhs.message && lhs.isStreaming == rhs.isStreaming
+    }
 
     var body: some View {
         switch message.messageRole {
@@ -15,8 +17,6 @@ struct MessageRowView: View {
                 content: ChatTemporalContext.stripSentAtPrefix(message.content),
                 isStreaming: isStreaming,
                 toolCalls: message.toolCalls ?? [],
-                toolCallsExpanded: toolCallsExpanded,
-                onToggleToolCallsExpanded: onToggleToolCallsExpanded,
                 onToolConfirm: onToolConfirm
             )
         case .user:
@@ -26,8 +26,6 @@ struct MessageRowView: View {
                 content: message.content,
                 isStreaming: isStreaming,
                 toolCalls: message.toolCalls ?? [],
-                toolCallsExpanded: toolCallsExpanded,
-                onToggleToolCallsExpanded: onToggleToolCallsExpanded,
                 onToolConfirm: onToolConfirm
             )
         }
@@ -50,8 +48,6 @@ private struct AssistantMessageView: View {
     let content: String
     var isStreaming = false
     var toolCalls: [ToolCallRecord]
-    var toolCallsExpanded = false
-    var onToggleToolCallsExpanded: (() -> Void)?
     var onToolConfirm: ((ToolCallRecord, GatedToolAction) -> Void)?
 
     var body: some View {
@@ -59,13 +55,12 @@ private struct AssistantMessageView: View {
             if !toolCalls.isEmpty {
                 ToolCallsCardView(
                     toolCalls: toolCalls,
-                    expanded: toolCallsExpanded,
-                    onToggleExpanded: { onToggleToolCallsExpanded?() },
                     onToolConfirm: { call, action in onToolConfirm?(call, action) }
                 )
             }
             if !content.isEmpty || isStreaming {
                 HarnessMarkdownView(content: content, isStreaming: isStreaming)
+                    .equatable()
                     .lineSpacing(4)
             }
         }
@@ -78,18 +73,24 @@ private struct UserMessageCard: View {
     let content: String
     @Binding var isExpanded: Bool
     @State private var isOverflowing = false
+    @State private var didMeasureOverflow = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .bottom) {
                 HarnessMarkdownView(content: content, lineLimit: isExpanded ? nil : 5)
+                    .equatable()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: UserMessageHeightKey.self,
-                                value: proxy.size.height
-                            )
+                        Group {
+                            if !didMeasureOverflow {
+                                GeometryReader { proxy in
+                                    Color.clear.preference(
+                                        key: UserMessageHeightKey.self,
+                                        value: proxy.size.height
+                                    )
+                                }
+                            }
                         }
                     )
 
@@ -124,13 +125,11 @@ private struct UserMessageCard: View {
         .background(theme.bgSecondaryColor)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onPreferenceChange(UserMessageHeightKey.self) { height in
-            guard !isExpanded else {
-                isOverflowing = true
-                return
-            }
+            guard !didMeasureOverflow, !isExpanded else { return }
             let lineHeight: CGFloat = 24
             let maxCollapsedHeight = lineHeight * 5 + 8
             isOverflowing = height > maxCollapsedHeight + 1
+            didMeasureOverflow = true
         }
     }
 }
@@ -155,7 +154,6 @@ private struct UserMessageHeightKey: PreferenceKey {
                         ToolCallRecord(toolName: "task_create", payload: ["lastAction": "create"]),
                     ]
                 ),
-                onToggleToolCallsExpanded: {},
                 onToolConfirm: { _, _ in }
             )
             MessageRowView(

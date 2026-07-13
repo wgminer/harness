@@ -14,7 +14,6 @@ import { isSidebarVisibleConversation } from "../shared/conversationSession";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
 import type { Conversation, View } from "./sidebarUtils";
 import { useViewportLayout } from "./useViewportLayout";
-import { isGlobalFnRecordingEnabledForView } from "../shared/globalFnRecording";
 import {
   collectSetupGaps,
   shouldShowSetupNotice,
@@ -206,6 +205,14 @@ export default function App() {
   }, [refreshConversations]);
 
   useEffect(() => {
+    const unsub = window.harness.notes.onOpenInMain((noteId) => {
+      setPendingOpenNoteRequest({ id: noteId, nonce: Date.now() });
+      setView("notes");
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
     if (!uiSessionReady) return;
     const timer = window.setTimeout(() => {
       void window.harness.uiSession.set({
@@ -315,14 +322,17 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "n" && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        void createNew();
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== "n") return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        void createNewNote();
+        return;
       }
+      void createNew();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [createNew]);
+  }, [createNew, createNewNote]);
 
   const handleWindowSizeToggle = useCallback(async () => {
     await window.harness.windowSize.toggle();
@@ -343,10 +353,6 @@ export default function App() {
     setNotesOverviewNonce((n) => n + 1);
     setView("notes");
   }, []);
-
-  useEffect(() => {
-    void window.harness.recording.setGlobalEnabled(isGlobalFnRecordingEnabledForView(view));
-  }, [view]);
 
   useEffect(() => {
     wireGlobalHotkeyActions({
@@ -400,8 +406,6 @@ export default function App() {
         onConversationDelete={handleConversationDelete}
         onNewChat={createNew}
         onNewNote={() => void createNewNote()}
-        openNoteInStickyWindow={openNoteInStickyWindow}
-        onOpenNoteInStickyWindowChange={setOpenNoteInStickyWindow}
         activeChatProcessing={activeChatProcessing}
         titleGenInFlight={titleGenInFlight}
         appVersion={appVersion}
@@ -453,6 +457,8 @@ export default function App() {
         {view === "settings" && (
           <SettingsView
             initialTab={settingsInitialTab}
+            openNoteInStickyWindow={openNoteInStickyWindow}
+            onOpenNoteInStickyWindowChange={setOpenNoteInStickyWindow}
             onSettingsChanged={() => {
               void refreshSetupState();
             }}

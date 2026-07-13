@@ -1,4 +1,4 @@
-/* Harness download site — matches app dark palette */
+/* Harness download site: matches app dark palette */
 
 :root {
   color-scheme: dark;
@@ -6,19 +6,23 @@
   --bg: #111;
   --fg: #ccc;
   --fg-muted: #999;
+  --fg-faint: #383838;
   --accent: #5b9cf5;
   --btn-primary-bg: #2e4463;
   --btn-primary-fg: #87b5f4;
   --btn-primary-bg-hover: #355178;
   --border-edge: #222;
+  --selection-bg: #416eac;
 
   --font-body: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
+  --font-display: "IBM Plex Sans", sans-serif;
 
   --space-sm: 0.5rem;
   --space-md: 1rem;
   --space-lg: 1.5rem;
-  --space-xl: 2.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 2.5rem;
 }
 
 *,
@@ -42,6 +46,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+::selection {
+  background: var(--selection-bg);
+  color: var(--fg);
+}
+
 img {
   display: block;
   max-width: 100%;
@@ -57,17 +66,25 @@ a:focus-visible {
 .page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: var(--space-lg) var(--space-md);
+  padding: var(--space-2xl) var(--space-md);
 }
 
 .stack {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  width: min(100%, 540px);
+  text-align: left;
+}
+
+.stack__header {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-lg);
-  width: min(100%, 40ch);
+  gap: var(--space-sm);
+  width: 100%;
   text-align: center;
 }
 
@@ -79,48 +96,60 @@ a:focus-visible {
 
 .stack__title {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   line-height: 1.25;
   color: var(--fg);
 }
 
-.stack__manifesto {
-  margin: 0;
-  font-size: 1rem;
-  line-height: 1.55;
-  color: var(--fg-muted);
-}
-
-/* --- Principles --- */
-
-.principles {
+.manifesto {
   display: grid;
   gap: var(--space-md);
   width: 100%;
+  margin-top: var(--space-xl);
+}
+
+.manifesto p {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  text-align: center;
+  line-height: 1.65;
+  color: var(--fg-muted);
 }
 
-.principles__item {
-  display: grid;
-  gap: var(--space-sm);
-}
-
-.principles__tag {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.manifesto__lede {
   color: var(--fg);
 }
 
-.principles__desc {
-  font-size: 0.9rem;
-  color: var(--fg-muted);
-  line-height: 1.4;
+.manifesto em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.manifesto a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.manifesto a:hover {
+  color: var(--fg);
+}
+
+/* --- Colophon --- */
+
+.colophon {
+  margin: var(--space-md) 0 0;
+  width: 100%;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--fg-faint);
+  text-align: left;
+}
+
+.colophon__label {
+  font-family: var(--font-mono);
 }
 
 /* --- CTA --- */
@@ -129,28 +158,53 @@ a:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-top: var(--space-sm);
-  padding: 0.625rem 1.25rem;
-  border-radius: 2px;
+  align-self: stretch;
+  width: 100%;
+  margin: var(--space-lg) 0 0;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
   font-family: var(--font-body);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 500;
+  letter-spacing: 0.01em;
   text-decoration: none;
   color: var(--btn-primary-fg);
-  background: var(--btn-primary-bg);
-  border: 1px solid var(--border-edge);
+  background: linear-gradient(180deg, #355178 0%, var(--btn-primary-bg) 100%);
+  border: 1px solid #3d5f8a;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 1px 2px rgba(0, 0, 0, 0.2);
   transition:
     background 150ms ease,
-    color 150ms ease;
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
 }
 
 .cta:hover {
-  background: var(--btn-primary-bg-hover);
-  color: var(--btn-primary-fg);
+  background: linear-gradient(180deg, #3d5f8a 0%, var(--btn-primary-bg-hover) 100%);
+  border-color: #4a6f9e;
+  color: #a8c8f8;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 2px 8px rgba(91, 156, 245, 0.15);
+  transform: translateY(-1px);
+}
+
+.cta:active {
+  transform: translateY(0);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .cta {
     transition: none;
+  }
+
+  .cta:hover,
+  .cta:active {
+    transform: none;
   }
 }

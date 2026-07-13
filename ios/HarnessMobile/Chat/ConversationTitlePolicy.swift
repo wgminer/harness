@@ -39,7 +39,7 @@ enum ConversationTitlePolicy {
         let formatter = DateFormatter()
         formatter.locale = Locale.current
         formatter.setLocalizedDateFormatFromTemplate("jm")
-        return "Empty chat @ \(formatter.string(from: date))"
+        return "New chat @ \(formatter.string(from: date))"
     }
 
     static func conversationDisplayTitle(title: String?, createdAtMs: Int64) -> String {

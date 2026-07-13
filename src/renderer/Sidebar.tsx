@@ -50,8 +50,6 @@ interface SidebarProps {
   onConversationDelete: (id: string) => void;
   onNewChat: () => void;
   onNewNote: () => void;
-  openNoteInStickyWindow: boolean;
-  onOpenNoteInStickyWindowChange: (value: boolean) => void;
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
   appVersion: string | null;
@@ -87,8 +85,6 @@ export function Sidebar({
   onConversationDelete,
   onNewChat,
   onNewNote,
-  openNoteInStickyWindow,
-  onOpenNoteInStickyWindowChange,
   activeChatProcessing,
   titleGenInFlight,
   appVersion,
@@ -139,6 +135,7 @@ export function Sidebar({
   const [syncBusy, setSyncBusy] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement | null>(null);
+  const modKey = navigator.platform.startsWith("Mac") ? "⌘" : "Ctrl+";
   const { scrollRef: sidebarListRef, fadeTop, fadeBottom, onScroll: onSidebarListScroll } =
     useScrollFadeEdges();
 
@@ -377,35 +374,26 @@ export function Sidebar({
                       onNewChat();
                     }}
                   >
-                    New chat
+                    <span>New chat</span>
+                    <span className="sidebar-new-menu-item__shortcut" aria-hidden>
+                      {modKey}N
+                    </span>
                   </button>
-                  <div className="sidebar-new-menu-item sidebar-new-menu-item--note" role="none">
-                    <button
-                      type="button"
-                      className="sidebar-new-menu-item__action"
-                      role="menuitem"
-                      data-testid="sidebar-new-note"
-                      onClick={() => {
-                        setNewMenuOpen(false);
-                        onNewNote();
-                      }}
-                    >
-                      New note
-                    </button>
-                    <label className="sidebar-new-menu-switch settings-switch-row settings-switch-row--static">
-                      <input
-                        type="checkbox"
-                        className="settings-switch-input"
-                        checked={openNoteInStickyWindow}
-                        onChange={(e) => onOpenNoteInStickyWindowChange(e.target.checked)}
-                        aria-label="Open note in new window"
-                        data-testid="sidebar-new-note-sticky-toggle"
-                      />
-                      <span className="settings-switch-track" aria-hidden="true">
-                        <span className="settings-switch-thumb" />
-                      </span>
-                    </label>
-                  </div>
+                  <button
+                    type="button"
+                    className="sidebar-new-menu-item"
+                    role="menuitem"
+                    data-testid="sidebar-new-note"
+                    onClick={() => {
+                      setNewMenuOpen(false);
+                      onNewNote();
+                    }}
+                  >
+                    <span>New note</span>
+                    <span className="sidebar-new-menu-item__shortcut" aria-hidden>
+                      ⇧{modKey}N
+                    </span>
+                  </button>
                 </div>
               ) : null}
             </div>

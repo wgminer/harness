@@ -10,46 +10,41 @@ private enum ChatThreadLayout {
 }
 
 struct ChatThreadView: View {
-    @ObservedObject var app: AppModel
+    let app: AppModel
+    @ObservedObject private var chatService: ChatService
     @Environment(\.harnessTheme) private var theme
     let conversationId: String
 
     @StateObject private var scrollController = ChatScrollController()
 
-    @State private var messages: [MessageRecord]
+    @State private var messages: [MessageRecord] = []
     @State private var streamingMessageTimestamp: Int64?
     @State private var streamingToolCalls: [ToolCallRecord] = []
-    @State private var expandedToolCards: Set<Int64> = []
     @State private var loadError: String?
     @State private var scrollProxy: ScrollViewProxy?
-    @State private var isDictationSession: Bool
+    @State private var isDictationSession = false
     @State private var didAutoGenerateReply = false
     @State private var showRenameAlert = false
     @State private var renameDraft = ""
     @State private var showDeleteConfirm = false
-    @State private var scrollContentOffset: CGFloat = 0
-    @State private var scrollContentBottom: CGFloat = 0
-    @State private var scrollViewportBottom: CGFloat = 0
     @State private var didInitialScrollToLiveEdge = false
     @State private var showDictationSheet = false
+    @State private var conversationTitle = "Chat"
+    @State private var streamingContent = ""
+    @State private var lastLiveEdgeFollowAt = Date.distantPast
     @FocusState private var isComposerFocused: Bool
 
     private let autofocusComposer: Bool
 
     init(app: AppModel, conversationId: String) {
         self.app = app
+        self.chatService = app.chatService
         self.conversationId = conversationId
         autofocusComposer = false
-        _messages = State(
-            initialValue: (try? app.store.loadMessages(conversationId: conversationId)) ?? []
-        )
-        _isDictationSession = State(
-            initialValue: (try? app.store.loadConversationMeta(conversationId: conversationId)?.sessionKind) == "dictation"
-        )
     }
 
     private var isStreamingThisThread: Bool {
-        app.chatService.isStreaming(conversationId: conversationId)
+        chatService.isStreaming(conversationId: conversationId)
     }
 
     private var isAwaitingFirstToken: Bool {
@@ -85,22 +80,17 @@ struct ChatThreadView: View {
                         MessageRowView(
                             message: msg,
                             isStreaming: msg.timestamp == streamingMessageTimestamp,
-                            toolCallsExpanded: expandedToolCards.contains(msg.timestamp ?? -1),
-                            onToggleToolCallsExpanded: {
-                                toggleToolCard(for: msg.timestamp)
-                            },
                             onToolConfirm: { call, action in
                                 handleToolConfirm(call: call, action: action, messageTimestamp: msg.timestamp)
                             }
                         )
+                        .equatable()
                         .id(rowId(for: msg))
                     }
 
                     if showReplyActions {
                         DictationReplyStrip(
-                            showPolish: isDictationSession,
-                            onContinue: { Task { await generateReply() } },
-                            onPolish: { Task { await polishLastUser() } }
+                            onContinue: { Task { await generateReply() } }
                         )
                         .id("dictation-reply-strip")
                     }
@@ -115,14 +105,11 @@ struct ChatThreadView: View {
                                 toolCalls: streamingToolCalls.isEmpty ? nil : streamingToolCalls
                             ),
                             isStreaming: true,
-                            toolCallsExpanded: expandedToolCards.contains(streamingTimestamp),
-                            onToggleToolCallsExpanded: {
-                                toggleToolCard(for: streamingTimestamp)
-                            },
                             onToolConfirm: { call, action in
                                 handleToolConfirm(call: call, action: action, messageTimestamp: streamingTimestamp)
                             }
                         )
+                        .equatable()
                         .id(ChatScrollAnchor.streaming)
                     }
                     if isAwaitingFirstToken {
@@ -134,7 +121,7 @@ struct ChatThreadView: View {
                         Spacer(minLength: 0)
                     }
 
-                    ChatScrollOffsetTracker()
+                    ChatScrollBottomTracker()
                 }
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
@@ -142,15 +129,26 @@ struct ChatThreadView: View {
                 .padding(.horizontal, ChatThreadLayout.horizontalInset)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
+                .contentShape(Rectangle())
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        isComposerFocused = false
+                    }
+                )
             }
             .coordinateSpace(name: "chatScroll")
             .background(ChatScrollViewportTracker())
             .modifier(
                 ChatScrollPreferenceHandlers(
                     controller: scrollController,
-                    contentOffset: $scrollContentOffset,
-                    contentBottom: $scrollContentBottom,
-                    viewportBottom: $scrollViewportBottom
+                    onContentBottomChange: { bottom in
+                        guard !didInitialScrollToLiveEdge,
+                              bottom > 0,
+                              !centerSingleMessage,
+                              !messages.isEmpty else { return }
+                        didInitialScrollToLiveEdge = true
+                        scrollToBottom(animated: false)
+                    }
                 )
             )
             .scrollDisabled(centerSingleMessage)
@@ -168,23 +166,15 @@ struct ChatThreadView: View {
                 composerDock
             }
             .onAppear { scrollProxy = proxy }
-            .onChange(of: scrollContentBottom) { _, bottom in
-                guard !didInitialScrollToLiveEdge,
-                      bottom > 0,
-                      !centerSingleMessage,
-                      !messages.isEmpty else { return }
-                didInitialScrollToLiveEdge = true
-                scrollToBottom(animated: false)
-            }
         }
         .background(theme.bgColor.ignoresSafeArea())
-        .navigationTitle(titleForConversation)
+        .navigationTitle(conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
-                        renameDraft = titleForConversation
+                        renameDraft = conversationTitle
                         showRenameAlert = true
                     } label: {
                         Label("Rename", systemImage: "pencil")
@@ -220,8 +210,7 @@ struct ChatThreadView: View {
         .task(id: conversationId) {
             scrollController.reset()
             didInitialScrollToLiveEdge = false
-            reloadMessages()
-            loadSessionKind()
+            await loadThread()
             if let text = app.takePendingOutboundMessage(conversationId: conversationId) {
                 await send(text: text)
             } else if app.takePendingAutoGenerateReply(conversationId: conversationId), !didAutoGenerateReply {
@@ -261,8 +250,6 @@ struct ChatThreadView: View {
         }
     }
 
-    @State private var streamingContent = ""
-
     private var minScrollHeight: CGFloat {
         UIScreen.main.bounds.height * 0.55
     }
@@ -278,7 +265,7 @@ struct ChatThreadView: View {
             onDraftChange: { app.cacheComposerDraft($0, conversationId: conversationId) },
             onClearDraft: { app.clearComposerDraft(conversationId: conversationId) },
             onSend: { text in Task { await send(text: text) } },
-            onStop: { app.chatService.stop() },
+            onStop: { chatService.stop() },
             onDictate: { showDictationSheet = true },
             isFocused: $isComposerFocused
         )
@@ -286,12 +273,26 @@ struct ChatThreadView: View {
         .padding(.bottom, BottomBarMetrics.bottomInset)
     }
 
-    private var titleForConversation: String {
-        app.store.conversations.first(where: { $0.id == conversationId })?.displayTitle ?? "Chat"
+    private func loadThread() async {
+        let id = conversationId
+        let dir = app.localDataDir
+        do {
+            let loaded = try await Task.detached(priority: .userInitiated) {
+                let messages = try ConversationStore.loadMessages(localDataDir: dir, conversationId: id)
+                let meta = try ConversationStore.loadConversationMapRaw(localDataDir: dir)[id]
+                return (messages, meta)
+            }.value
+            messages = loaded.0
+            isDictationSession = loaded.1?.sessionKind == "dictation"
+            refreshConversationTitle()
+        } catch {
+            loadError = error.localizedDescription
+        }
     }
 
-    private func loadSessionKind() {
-        isDictationSession = (try? app.store.loadConversationMeta(conversationId: conversationId)?.sessionKind) == "dictation"
+    private func refreshConversationTitle() {
+        conversationTitle = app.store.conversations.first(where: { $0.id == conversationId })?.displayTitle
+            ?? "Chat"
     }
 
     private func rowId(for message: MessageRecord) -> String {
@@ -301,17 +302,8 @@ struct ChatThreadView: View {
         return message.id
     }
 
-    private func toggleToolCard(for timestamp: Int64?) {
-        guard let timestamp else { return }
-        if expandedToolCards.contains(timestamp) {
-            expandedToolCards.remove(timestamp)
-        } else {
-            expandedToolCards.insert(timestamp)
-        }
-    }
-
     private func handleToolConfirm(call: ToolCallRecord, action: GatedToolAction, messageTimestamp: Int64?) {
-        app.chatService.resolveGatedTool(action)
+        chatService.resolveGatedTool(action)
         guard let messageTimestamp else { return }
         updateToolCallPendingState(timestamp: messageTimestamp, toolName: call.toolName, action: action)
     }
@@ -426,13 +418,13 @@ struct ChatThreadView: View {
         followLiveEdgeIfPinned(animated: true)
 
         do {
-            try await app.chatService.send(conversationId: conversationId, userContent: text) { chunk in
+            try await chatService.send(conversationId: conversationId, userContent: text) { chunk in
                 appendStreamingChunk(chunk)
             } onToolCall: { call in
                 appendStreamingToolCall(call)
             }
             commitStreamingToMessages()
-            reloadMessages()
+            refreshConversationTitle()
             await app.pushAfterChat()
         } catch is CancellationError {
             finishStreaming()
@@ -453,41 +445,13 @@ struct ChatThreadView: View {
         followLiveEdgeIfPinned(animated: true)
 
         do {
-            try await app.chatService.generateReply(conversationId: conversationId) { chunk in
+            try await chatService.generateReply(conversationId: conversationId) { chunk in
                 appendStreamingChunk(chunk)
             } onToolCall: { call in
                 appendStreamingToolCall(call)
             }
             commitStreamingToMessages()
-            reloadMessages()
-            await app.pushAfterChat()
-        } catch is CancellationError {
-            finishStreaming()
-            reloadMessages()
-        } catch ChatServiceError.cancelled {
-            finishStreaming()
-            reloadMessages()
-        } catch {
-            loadError = error.localizedDescription
-            finishStreaming()
-            reloadMessages()
-        }
-    }
-
-    private func polishLastUser() async {
-        finishStreaming()
-        scrollController.pinForTurn()
-        followLiveEdgeIfPinned(animated: true)
-
-        do {
-            try await app.chatService.polishLastUser(conversationId: conversationId) { chunk in
-                appendStreamingChunk(chunk)
-            } onToolCall: { call in
-                appendStreamingToolCall(call)
-            }
-            commitStreamingToMessages()
-            reloadMessages()
-            isDictationSession = false
+            refreshConversationTitle()
             await app.pushAfterChat()
         } catch is CancellationError {
             finishStreaming()
@@ -504,6 +468,13 @@ struct ChatThreadView: View {
 
     private func followLiveEdgeIfPinned(animated: Bool) {
         guard scrollController.shouldFollow, !centerSingleMessage else { return }
+        if !animated {
+            let now = Date()
+            if now.timeIntervalSince(lastLiveEdgeFollowAt) < 0.04 {
+                return
+            }
+            lastLiveEdgeFollowAt = now
+        }
         scrollToBottom(animated: animated)
     }
 
@@ -532,6 +503,7 @@ struct ChatThreadView: View {
     private func renameConversation(title: String) {
         do {
             try app.store.setUserTitle(conversationId: conversationId, title: title)
+            refreshConversationTitle()
         } catch {
             loadError = error.localizedDescription
         }

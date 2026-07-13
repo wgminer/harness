@@ -4,6 +4,37 @@ import { DEFAULT_SYSTEM_PROMPT, type SystemPromptSettings } from "./systemPrompt
 
 export type MessageRole = "user" | "assistant" | "system";
 
+export interface ContextPreviewFact {
+  key: string;
+  value: string;
+}
+
+export interface ContextPreviewMessage {
+  role: string;
+  content: string;
+}
+
+export interface ContextPreviewTool {
+  name: string;
+  description: string;
+}
+
+export interface ContextPreview {
+  injectionStrategy: MemoryInjectionStrategy;
+  selectedFacts: ContextPreviewFact[];
+  systemPrompt: string;
+  temporalContext: string;
+  memoryBlock: string;
+  messages: ContextPreviewMessage[];
+  tools: ContextPreviewTool[];
+}
+
+export interface RecordingLink {
+  path: string;
+  filename: string;
+  exists: boolean;
+}
+
 export interface ToolCallRecord {
   toolName: string;
   payload?: unknown;

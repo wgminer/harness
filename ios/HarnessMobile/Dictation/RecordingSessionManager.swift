@@ -10,6 +10,8 @@ final class RecordingSessionManager: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var liveActivity: Activity<DictationRecordingAttributes>?
+    /// Bumped when a session starts or is cancelled so orphaned start work cannot tear down a newer session.
+    private var sessionEpoch = 0
 
     init() {
         recorder.objectWillChange
@@ -32,9 +34,39 @@ final class RecordingSessionManager: ObservableObject {
 
     func beginRecordingSession() async throws -> URL {
         liveActivityStopRequested = false
-        let url = try await recorder.start()
-        await startLiveActivity(startedAt: Date())
-        return url
+        sessionEpoch += 1
+        let epoch = sessionEpoch
+
+        do {
+            let url = try await recorder.start()
+            guard epoch == sessionEpoch else {
+                recorder.cancel()
+                throw CancellationError()
+            }
+
+            await startLiveActivity(startedAt: Date())
+            guard epoch == sessionEpoch else {
+                recorder.cancel()
+                await endLiveActivity()
+                throw CancellationError()
+            }
+
+            return url
+        } catch {
+            if epoch == sessionEpoch {
+                recorder.cancel()
+                await endLiveActivity()
+            }
+            throw error
+        }
+    }
+
+    /// Tear down capture and Live Activity whether or not recording has fully started.
+    func cancelRecordingSession() async {
+        sessionEpoch += 1
+        liveActivityStopRequested = false
+        recorder.cancel()
+        await endLiveActivity()
     }
 
     func endRecordingSession() async {

@@ -47,7 +47,7 @@ export const SETTINGS_NAV: Array<{
     label: RIG_APPEARANCE_TAB_LABEL,
     subtitle: "Layout & editor",
     icon: "Palette",
-    keywords: ["grid", "overlay", "template", "notes", "writing", "editor"],
+    keywords: ["grid", "overlay", "template", "notes", "writing", "editor", "window", "sticky"],
   },
   {
     id: "voice",

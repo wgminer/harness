@@ -8,6 +8,7 @@ use crate::credentials::{
     get_credential_status, get_secrets_for_settings, set_credential, CredentialKey,
 };
 use crate::customization::{get_layout_options, set_layout};
+use crate::dictation_recording_index;
 use crate::env_util::{is_harness_dev, is_harness_e2e};
 use crate::file_tools::get_allowed_roots;
 use crate::global_recording::{
@@ -17,7 +18,7 @@ use crate::import::{import_from_claude_folder, import_from_chatgpt_folder};
 use crate::memory::{
     append_message, cleanup_legacy_memory, create_conversation, delete_conversation,
     delete_user_memory_key, get_conversation, get_data_status, get_messages, get_user_memory,
-    list_conversations, mark_voice_dictation_session, open_app_data_folder,
+    list_conversations, open_app_data_folder,
     search_conversations, set_conversation_title, set_user_memory, AppState, AppendMessageMeta,
 };
 use crate::memory_compile::{get_memory_compile_status, run_memory_compile_now};
@@ -28,7 +29,9 @@ use crate::plans::{
     update_plan, PlanUpdates,
 };
 use crate::settings::{get_settings, set_settings};
-use crate::sticky_notes::{open_sticky_window, set_sticky_pinned, set_sticky_title, StickyWindowEntry};
+use crate::sticky_notes::{
+    open_sticky_window, pop_in_sticky, set_sticky_pinned, set_sticky_title, StickyWindowEntry,
+};
 use crate::sync::{get_sync_status, SyncRuntime};
 use crate::tasks::{clear_completed_tasks, create_task, delete_task, list_tasks, update_task};
 use crate::ui_session::{get_ui_session, set_ui_session};
@@ -316,15 +319,25 @@ pub async fn memory_mark_voice_dictation_session(
     state: State<'_, AppState>,
     conversation_id: String,
 ) -> Result<String, String> {
-    let title = mark_voice_dictation_session(&state, &conversation_id)
+    crate::conversation_title::finalize_voice_dictation_session(app, &state, &conversation_id)
         .await
-        .map_err(map_err)?;
-    crate::conversation_title::schedule_conversation_title_refinement(
-        app,
-        state.inner().clone(),
-        conversation_id,
-    );
-    Ok(title)
+        .map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn memory_link_dictation_recording(
+    conversation_id: String,
+    path: String,
+) -> Result<(), String> {
+    dictation_recording_index::link(&conversation_id, std::path::Path::new(&path))
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn memory_get_conversation_recordings(
+    conversation_id: String,
+) -> Result<Value, String> {
+    let recordings = dictation_recording_index::list_links(&conversation_id);
+    serde_json::to_value(serde_json::json!({ "recordings": recordings })).map_err(map_err)
 }
 
 #[command(rename_all = "camelCase")]
@@ -447,6 +460,17 @@ pub async fn chat_generate_reply(
     conversation_id: String,
 ) -> Result<(), String> {
     chat.generate_reply(&conversation_id).await
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn chat_get_context_preview(
+    chat: State<'_, ChatController>,
+    conversation_id: Option<String>,
+) -> Result<Value, String> {
+    let preview = chat
+        .get_context_preview(conversation_id.as_deref())
+        .await?;
+    serde_json::to_value(preview).map_err(map_err)
 }
 
 #[command(rename_all = "camelCase")]
@@ -584,4 +608,9 @@ pub async fn notes_set_sticky_title(
     title: String,
 ) -> Result<(), String> {
     set_sticky_title(&app, &note_id, &title)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn notes_pop_in_sticky(app: AppHandle, note_id: String) -> Result<(), String> {
+    pop_in_sticky(&app, &note_id)
 }

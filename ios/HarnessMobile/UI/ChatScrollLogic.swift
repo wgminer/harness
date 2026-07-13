@@ -53,6 +53,9 @@ final class ChatScrollController: ObservableObject {
     private var userTookOver = false
     private var prevSending = false
     private var lastScrollOffset: CGFloat = 0
+    private var contentOffset: CGFloat = 0
+    private var contentBottom: CGFloat = 0
+    private var viewportBottom: CGFloat = 0
 
     var shouldFollow: Bool {
         ChatScrollLogic.shouldFollowTranscriptResize(mode: mode, userTookOver: userTookOver)
@@ -71,18 +74,37 @@ final class ChatScrollController: ObservableObject {
         mode = .pinned
     }
 
-    func onScrollOffsetChange(_ offset: CGFloat, nearLiveEdge: Bool) {
-        if ChatScrollLogic.shouldUnlockFromScrollDelta(prevOffset: lastScrollOffset, nextOffset: offset) {
+    func updateContentOffset(_ offset: CGFloat) {
+        contentOffset = offset
+        applyScrollDelta()
+    }
+
+    func updateContentBottom(_ bottom: CGFloat) {
+        contentBottom = bottom
+        applyScrollDelta()
+    }
+
+    func updateViewportBottom(_ bottom: CGFloat) {
+        viewportBottom = bottom
+        applyScrollDelta()
+    }
+
+    private func applyScrollDelta() {
+        let nearLiveEdge = ChatScrollLogic.isNearLiveEdge(
+            contentBottom: contentBottom,
+            viewportBottom: viewportBottom
+        )
+        if ChatScrollLogic.shouldUnlockFromScrollDelta(prevOffset: lastScrollOffset, nextOffset: contentOffset) {
             userTookOver = true
             mode = .free
         }
         mode = ChatScrollLogic.shouldRepinFromUserScroll(
             mode: mode,
             prevOffset: lastScrollOffset,
-            nextOffset: offset,
+            nextOffset: contentOffset,
             nearLiveEdge: nearLiveEdge
         )
-        lastScrollOffset = offset
+        lastScrollOffset = contentOffset
     }
 
     func onUserDraggedUp() {
@@ -95,6 +117,9 @@ final class ChatScrollController: ObservableObject {
         mode = .pinned
         prevSending = false
         lastScrollOffset = 0
+        contentOffset = 0
+        contentBottom = 0
+        viewportBottom = 0
     }
 }
 
@@ -122,6 +147,7 @@ private struct ScrollViewportBottomKey: PreferenceKey {
     }
 }
 
+/// Placed at the top of the transcript; reports scroll content offset only.
 struct ChatScrollOffsetTracker: View {
     var body: some View {
         GeometryReader { geo in
@@ -130,6 +156,16 @@ struct ChatScrollOffsetTracker: View {
                     key: ScrollContentOffsetKey.self,
                     value: geo.frame(in: .named("chatScroll")).minY
                 )
+        }
+        .frame(height: 0)
+    }
+}
+
+/// Placed at the bottom of the transcript; reports content bottom only.
+struct ChatScrollBottomTracker: View {
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear
                 .preference(
                     key: ScrollContentBottomKey.self,
                     value: geo.frame(in: .named("chatScroll")).maxY
@@ -153,28 +189,15 @@ struct ChatScrollViewportTracker: View {
 
 struct ChatScrollPreferenceHandlers: ViewModifier {
     @ObservedObject var controller: ChatScrollController
-    @Binding var contentOffset: CGFloat
-    @Binding var contentBottom: CGFloat
-    @Binding var viewportBottom: CGFloat
+    var onContentBottomChange: (CGFloat) -> Void
 
     func body(content: Content) -> some View {
         content
-            .onPreferenceChange(ScrollContentOffsetKey.self) { contentOffset = $0 }
-            .onPreferenceChange(ScrollContentBottomKey.self) { contentBottom = $0 }
-            .onPreferenceChange(ScrollViewportBottomKey.self) { viewportBottom = $0 }
-            .onChange(of: contentOffset) { _, offset in
-                let nearLiveEdge = ChatScrollLogic.isNearLiveEdge(
-                    contentBottom: contentBottom,
-                    viewportBottom: viewportBottom
-                )
-                controller.onScrollOffsetChange(offset, nearLiveEdge: nearLiveEdge)
+            .onPreferenceChange(ScrollContentOffsetKey.self) { controller.updateContentOffset($0) }
+            .onPreferenceChange(ScrollContentBottomKey.self) { bottom in
+                controller.updateContentBottom(bottom)
+                onContentBottomChange(bottom)
             }
-            .onChange(of: contentBottom) { _, bottom in
-                let nearLiveEdge = ChatScrollLogic.isNearLiveEdge(
-                    contentBottom: bottom,
-                    viewportBottom: viewportBottom
-                )
-                controller.onScrollOffsetChange(contentOffset, nearLiveEdge: nearLiveEdge)
-            }
+            .onPreferenceChange(ScrollViewportBottomKey.self) { controller.updateViewportBottom($0) }
     }
 }

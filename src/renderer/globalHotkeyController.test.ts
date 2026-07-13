@@ -5,43 +5,25 @@ import {
   wireGlobalHotkeyActions,
   type GlobalHotkeyActions,
 } from "./globalHotkeyController";
-import type { Recorder } from "./useRecorder";
-import {
-  deliverTranscriptFocused,
-  deliverTranscriptUnfocused,
-  finishGlobalSession,
-  transcribeWav,
-} from "./recordingPipeline";
-
-vi.mock("./recordingPipeline", () => ({
-  transcribeWav: vi.fn(async () => ({ text: "hello world" })),
-  deliverTranscriptFocused: vi.fn((text: string) => ({ kind: "focused", text })),
-  deliverTranscriptUnfocused: vi.fn(async () => {}),
-  finishGlobalSession: vi.fn(async () => {}),
-}));
+import * as recordingUtils from "./recordingUtils";
 
 vi.mock("./recordingUtils", () => ({
+  playStartChime: vi.fn(async () => {}),
+  playStopChime: vi.fn(async () => {}),
   playCancelChime: vi.fn(async () => {}),
 }));
 
-const mockedTranscribeWav = vi.mocked(transcribeWav);
-const mockedDeliverUnfocused = vi.mocked(deliverTranscriptUnfocused);
-const mockedFinishGlobalSession = vi.mocked(finishGlobalSession);
-
-function createDeferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-} {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
-}
+const mockedPlayStartChime = vi.mocked(recordingUtils.playStartChime);
+const mockedPlayStopChime = vi.mocked(recordingUtils.playStopChime);
+const mockedPlayCancelChime = vi.mocked(recordingUtils.playCancelChime);
 
 describe("globalHotkeyController", () => {
-  let startCb: (() => void) | null = null;
-  let stopCb: ((wasFocused: boolean) => void) | null = null;
+  let startedCb: (() => void) | null = null;
+  let stoppedCb: (() => void) | null = null;
+  let cancelledCb: (() => void) | null = null;
+  let errorCb: ((message: string) => void) | null = null;
+  let transcriptReadyCb: ((text: string) => void) | null = null;
+  let transcriptDeliveredCb: ((conversationId: string) => void) | null = null;
   let teardown: (() => void) | null = null;
   let actions: GlobalHotkeyActions;
 
@@ -49,37 +31,51 @@ describe("globalHotkeyController", () => {
     resetGlobalHotkeyControllerForTests();
     vi.clearAllMocks();
 
-    startCb = null;
-    stopCb = null;
+    startedCb = null;
+    stoppedCb = null;
+    cancelledCb = null;
+    errorCb = null;
+    transcriptReadyCb = null;
+    transcriptDeliveredCb = null;
 
     const harness = {
-      env: {
-        isHarnessE2E: vi.fn(async () => false),
-      },
       recording: {
-        onStartSilent: vi.fn((cb: () => void) => {
-          startCb = cb;
+        onGlobalRecordingStarted: vi.fn((cb: () => void) => {
+          startedCb = cb;
           return () => {
-            startCb = null;
+            startedCb = null;
           };
         }),
-        onStopAndPaste: vi.fn((cb: (wasFocused: boolean) => void) => {
-          stopCb = cb;
+        onGlobalRecordingStopped: vi.fn((cb: () => void) => {
+          stoppedCb = cb;
           return () => {
-            stopCb = null;
+            stoppedCb = null;
           };
         }),
-        onCancel: vi.fn(() => () => {}),
-        startFailed: vi.fn(async () => {}),
-        done: vi.fn(async () => {}),
-        pasteText: vi.fn(async () => {}),
-        transcribe: vi.fn(async () => ({ text: "hello world" })),
-        saveWav: vi.fn(async () => ({ path: "/tmp/test.wav" })),
-      },
-      memory: {
-        createConversation: vi.fn(async () => "conv-1"),
-        appendMessage: vi.fn(async () => {}),
-        markVoiceDictationSession: vi.fn(async () => "Dictation"),
+        onGlobalRecordingCancelled: vi.fn((cb: () => void) => {
+          cancelledCb = cb;
+          return () => {
+            cancelledCb = null;
+          };
+        }),
+        onGlobalRecordingError: vi.fn((cb: (message: string) => void) => {
+          errorCb = cb;
+          return () => {
+            errorCb = null;
+          };
+        }),
+        onGlobalTranscriptReady: vi.fn((cb: (text: string) => void) => {
+          transcriptReadyCb = cb;
+          return () => {
+            transcriptReadyCb = null;
+          };
+        }),
+        onGlobalTranscriptDelivered: vi.fn((cb: (conversationId: string) => void) => {
+          transcriptDeliveredCb = cb;
+          return () => {
+            transcriptDeliveredCb = null;
+          };
+        }),
       },
     };
 
@@ -107,134 +103,42 @@ describe("globalHotkeyController", () => {
     delete (globalThis as { window?: unknown }).window;
   });
 
-  it("shows recording overlay before start() resolves", async () => {
-    const startDeferred = createDeferred<void>();
-    const stopDeferred = createDeferred<ArrayBuffer>();
-    let stopCalls = 0;
-
-    const recorder: Recorder = {
-      start: vi.fn(() => startDeferred.promise),
-      stop: vi.fn(() => {
-        stopCalls += 1;
-        return stopDeferred.promise;
-      }),
-    };
-
-    teardown?.();
-    teardown = createGlobalHotkeyController({ createRecorder: () => recorder });
-
-    startCb?.();
+  it("shows recording overlay and plays start chime on started event", () => {
+    startedCb?.();
     expect(actions.setGlobalHotkeyRecording).toHaveBeenCalledWith(true);
+    expect(actions.setGlobalHotkeyError).toHaveBeenCalledWith(null);
+    expect(mockedPlayStartChime).toHaveBeenCalled();
+  });
 
-    startDeferred.resolve();
-    await vi.waitFor(() => expect(recorder.start).toHaveBeenCalled());
-
-    stopCb?.(false);
+  it("hides overlay and plays stop chime on stopped event", () => {
+    stoppedCb?.();
     expect(actions.setGlobalHotkeyRecording).toHaveBeenCalledWith(false);
-    expect(stopCalls).toBe(0);
-
-    stopDeferred.resolve(new ArrayBuffer(8));
-    await vi.waitFor(() => expect(stopCalls).toBe(1));
+    expect(mockedPlayStopChime).toHaveBeenCalled();
   });
 
-  it("waits for in-flight start before stop()", async () => {
-    const startDeferred = createDeferred<void>();
-    const recorder: Recorder = {
-      start: vi.fn(() => startDeferred.promise),
-      stop: vi.fn(async () => new ArrayBuffer(8)),
-    };
-
-    teardown?.();
-    teardown = createGlobalHotkeyController({ createRecorder: () => recorder });
-
-    startCb?.();
-    stopCb?.(false);
-    expect(recorder.stop).not.toHaveBeenCalled();
-
-    startDeferred.resolve();
-    await vi.waitFor(() => expect(recorder.stop).toHaveBeenCalled());
-    expect(mockedTranscribeWav).toHaveBeenCalled();
-  });
-
-  it("clears recording overlay before async transcribe completes", async () => {
-    const transcribeDeferred = createDeferred<{ text: string }>();
-    mockedTranscribeWav.mockImplementationOnce(() => transcribeDeferred.promise);
-
-    const recorder: Recorder = {
-      start: vi.fn(async () => {}),
-      stop: vi.fn(async () => new ArrayBuffer(8)),
-    };
-
-    teardown?.();
-    teardown = createGlobalHotkeyController({ createRecorder: () => recorder });
-
-    startCb?.();
-    await vi.waitFor(() => expect(recorder.start).toHaveBeenCalled());
-
-    vi.mocked(actions.setGlobalHotkeyRecording).mockClear();
-    stopCb?.(false);
+  it("plays cancel chime on cancelled event", () => {
+    cancelledCb?.();
     expect(actions.setGlobalHotkeyRecording).toHaveBeenCalledWith(false);
-    expect(mockedTranscribeWav).not.toHaveBeenCalled();
-
-    transcribeDeferred.resolve({ text: "hello world" });
-    await vi.waitFor(() => expect(mockedTranscribeWav).toHaveBeenCalled());
-    await vi.waitFor(() => expect(mockedFinishGlobalSession).toHaveBeenCalled());
+    expect(mockedPlayCancelChime).toHaveBeenCalled();
   });
 
-  it("delivers unfocused transcripts without bumping focus nonce", async () => {
-    const recorder: Recorder = {
-      start: vi.fn(async () => {}),
-      stop: vi.fn(async () => new ArrayBuffer(8)),
-    };
-
-    teardown?.();
-    teardown = createGlobalHotkeyController({ createRecorder: () => recorder });
-
-    startCb?.();
-    await vi.waitFor(() => expect(recorder.start).toHaveBeenCalled());
-    stopCb?.(false);
-    await vi.waitFor(() => expect(mockedDeliverUnfocused).toHaveBeenCalled());
-    expect(actions.setFocusComposerNonce).not.toHaveBeenCalled();
-    expect(actions.setPendingHotkeyText).not.toHaveBeenCalled();
+  it("reports errors from global-recording-error", () => {
+    errorCb?.("mic denied");
+    expect(actions.setGlobalHotkeyRecording).toHaveBeenCalledWith(false);
+    expect(actions.setGlobalHotkeyError).toHaveBeenCalledWith("mic denied");
   });
 
-  it("delivers focused transcripts into the composer", async () => {
-    const recorder: Recorder = {
-      start: vi.fn(async () => {}),
-      stop: vi.fn(async () => new ArrayBuffer(8)),
-    };
-
-    teardown?.();
-    teardown = createGlobalHotkeyController({ createRecorder: () => recorder });
-
-    startCb?.();
-    await vi.waitFor(() => expect(recorder.start).toHaveBeenCalled());
-    stopCb?.(true);
-    await vi.waitFor(() => expect(deliverTranscriptFocused).toHaveBeenCalled());
+  it("delivers focused transcripts into the composer", () => {
+    transcriptReadyCb?.("hello world");
+    expect(actions.setView).toHaveBeenCalledWith("chat");
     expect(actions.setFocusComposerNonce).toHaveBeenCalled();
     expect(actions.setPendingHotkeyText).toHaveBeenCalledWith("hello world");
   });
 
-  it("reports start failure and skips transcription on stop", async () => {
-    const recorder: Recorder = {
-      start: vi.fn(async () => {
-        throw new Error("mic denied");
-      }),
-      stop: vi.fn(async () => new ArrayBuffer(8)),
-    };
-
-    teardown?.();
-    teardown = createGlobalHotkeyController({ createRecorder: () => recorder });
-
-    startCb?.();
-    await vi.waitFor(() =>
-      expect(window.harness.recording.startFailed).toHaveBeenCalledWith("mic denied"),
-    );
-    expect(actions.setGlobalHotkeyRecording).toHaveBeenLastCalledWith(false);
-
-    stopCb?.(false);
-    await Promise.resolve();
-    expect(recorder.stop).not.toHaveBeenCalled();
-    expect(mockedTranscribeWav).not.toHaveBeenCalled();
+  it("selects conversation on unfocused delivery", () => {
+    transcriptDeliveredCb?.("conv-new");
+    expect(actions.setView).toHaveBeenCalledWith("chat");
+    expect(actions.setConversationId).toHaveBeenCalledWith("conv-new");
+    expect(actions.loadConversations).toHaveBeenCalled();
   });
 });

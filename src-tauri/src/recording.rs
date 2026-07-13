@@ -458,6 +458,81 @@ pub async fn recording_cancel_transcription(
     Ok(())
 }
 
+/// Transcribe WAV bytes for global Fn hotkey (no cancellation).
+pub async fn transcribe_wav_bytes(
+    app_state: &crate::memory::AppState,
+    data: &[u8],
+) -> Result<String, String> {
+    if is_harness_e2e() {
+        return Ok(HARNESS_E2E_TRANSCRIBE_TEXT.into());
+    }
+
+    let (_cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
+    let settings = get_settings(&app_state.write_chains).await;
+    let text = transcribe_with_apple_speech(data, &mut cancel_rx).await?;
+    let dictionary: Vec<DictionaryEntry> = settings
+        .get("transcription")
+        .and_then(|v| v.get("dictionary"))
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    let cleanup_enabled = settings
+        .get("transcription")
+        .and_then(|v| v.get("cleanup"))
+        .and_then(|v| v.get("enabled"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if !cleanup_enabled || text.trim().is_empty() {
+        return Ok(apply_transcript_dictionary(&text, &dictionary));
+    }
+
+    let key = resolve_openai_api_key().await.trim().to_string();
+    if key.is_empty() {
+        return Ok(apply_transcript_dictionary(&text, &dictionary));
+    }
+
+    let cleanup_prompt = settings
+        .get("transcription")
+        .and_then(|v| v.get("cleanup"))
+        .and_then(|v| v.get("prompt"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            default_settings()["transcription"]["cleanup"]["prompt"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        });
+
+    match run_transcript_cleanup(&text, &key, &cleanup_prompt).await {
+        Ok(cleaned) => Ok(apply_transcript_dictionary(&cleaned, &dictionary)),
+        Err(err) => {
+            eprintln!("Transcript cleanup failed; returning original transcript. {err}");
+            Ok(apply_transcript_dictionary(&text, &dictionary))
+        }
+    }
+}
+
+pub async fn paste_text_impl(text: &str) -> Result<(), String> {
+    arboard::Clipboard::new()
+        .map_err(|e| e.to_string())?
+        .set_text(text.to_string())
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = TokioCommand::new("osascript")
+            .arg("-e")
+            .arg(r#"tell application "System Events" to keystroke "v" using command down"#)
+            .status()
+            .await;
+    }
+    Ok(())
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn recording_transcribe(
     runtime: State<'_, Arc<RecordingRuntime>>,
@@ -563,20 +638,7 @@ pub async fn recording_transcribe(
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn recording_paste_text(text: String) -> Result<(), String> {
-    arboard::Clipboard::new()
-        .map_err(|e| e.to_string())?
-        .set_text(text)
-        .map_err(|e| e.to_string())?;
-
-    #[cfg(target_os = "macos")]
-    {
-        let _ = TokioCommand::new("osascript")
-            .arg("-e")
-            .arg(r#"tell application "System Events" to keystroke "v" using command down"#)
-            .status()
-            .await;
-    }
-    Ok(())
+    paste_text_impl(&text).await
 }
 
 pub fn init_recording_runtime(app_state: crate::memory::AppState) -> Arc<RecordingRuntime> {

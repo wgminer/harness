@@ -15,7 +15,7 @@ describe("chatDisplayTitle", () => {
     expect(conversationDisplayTitle("New chat @ 3:45 PM")).toBe("New chat @ 3:45 PM");
   });
 
-  it("falls back to empty chat label when title is empty", () => {
+  it("falls back to new chat label when title is empty", () => {
     const createdAt = 1_700_000_000_000;
     expect(conversationDisplayTitle("   ", createdAt)).toBe(formatNewChatLabel(createdAt));
   });

@@ -8,7 +8,8 @@ enum MessageRole: String, Codable {
 }
 
 struct MessageRecord: Codable, Identifiable, Equatable {
-    var id: String { "\(role)-\(timestamp ?? 0)-\(Self.stableContentKey(content))" }
+    private let cachedId: String
+    var id: String { cachedId }
     let role: String
     let content: String
     let timestamp: Int64?
@@ -27,10 +28,38 @@ struct MessageRecord: Codable, Identifiable, Equatable {
         self.timestamp = timestamp
         self.model = model
         self.toolCalls = toolCalls
+        self.cachedId = Self.makeId(role: role, timestamp: timestamp, content: content)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case role, content, timestamp, model, toolCalls
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(String.self, forKey: .role)
+        content = try container.decode(String.self, forKey: .content)
+        timestamp = try container.decodeIfPresent(Int64.self, forKey: .timestamp)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        toolCalls = try container.decodeIfPresent([ToolCallRecord].self, forKey: .toolCalls)
+        cachedId = Self.makeId(role: role, timestamp: timestamp, content: content)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(role, forKey: .role)
+        try container.encode(content, forKey: .content)
+        try container.encodeIfPresent(timestamp, forKey: .timestamp)
+        try container.encodeIfPresent(model, forKey: .model)
+        try container.encodeIfPresent(toolCalls, forKey: .toolCalls)
     }
 
     var messageRole: MessageRole {
         MessageRole(rawValue: role) ?? .user
+    }
+
+    private static func makeId(role: String, timestamp: Int64?, content: String) -> String {
+        "\(role)-\(timestamp ?? 0)-\(stableContentKey(content))"
     }
 
     private static func stableContentKey(_ content: String) -> String {

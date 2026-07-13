@@ -66,8 +66,11 @@ struct ChatComposerView: View {
     }
 
     private var isCollapsed: Bool {
-        guard allowsCollapse else { return false }
-        return !heldExpanded && !isFocused && !canSend
+        ComposerCollapsePolicy.isCollapsed(
+            allowsCollapse: allowsCollapse,
+            heldExpanded: heldExpanded,
+            isFocused: isFocused
+        )
     }
 
     private var cornerRadius: CGFloat {
@@ -95,13 +98,13 @@ struct ChatComposerView: View {
         .onChange(of: isFocused) { _, focused in
             if focused {
                 heldExpanded = true
-            } else {
-                releaseExpandedIfIdle()
+            } else if ComposerCollapsePolicy.shouldReleaseExpanded(isFocused: focused) {
+                heldExpanded = false
             }
         }
         .onChange(of: draft) { _, newValue in
             onDraftChange(newValue)
-            if !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if isFocused, !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 heldExpanded = true
             }
         }
@@ -132,9 +135,9 @@ struct ChatComposerView: View {
                     isFocused = true
                 } label: {
                     HStack(spacing: 0) {
-                        Text("Type a message…")
+                        Text(ComposerCollapsePolicy.collapsedLabel(draft: draft))
                             .font(.body.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(canSend ? .primary : .secondary)
                             .lineLimit(1)
                         Spacer(minLength: 0)
                     }
@@ -152,7 +155,10 @@ struct ChatComposerView: View {
     }
 
     private func dictateButton(action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            HapticFeedback.medium()
+            action()
+        } label: {
             Image(systemName: "mic.fill")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
@@ -164,7 +170,10 @@ struct ChatComposerView: View {
     }
 
     private var stopButton: some View {
-        Button(action: onStop) {
+        Button {
+            HapticFeedback.medium()
+            onStop()
+        } label: {
             Text("Stop")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
@@ -192,30 +201,27 @@ struct ChatComposerView: View {
                 .padding(.bottom, 10)
 
             HStack(alignment: .center, spacing: 12) {
-                if let onDictate {
-                    dictateButton(action: onDictate)
-                }
-
                 Spacer(minLength: 0)
 
                 if isStreaming {
                     stopButton
-                } else {
+                } else if canSend {
                     Button {
                         submitDraft()
                     } label: {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(canSend ? Color(.systemBackground) : Color.secondary)
+                            .foregroundStyle(Color(.systemBackground))
                             .frame(width: 36, height: 36)
                             .background(
                                 Circle()
-                                    .fill(canSend ? Color.accentColor : Color.primary.opacity(0.12))
+                                    .fill(Color.accentColor)
                             )
                     }
                     .buttonStyle(.plain)
-                    .disabled(!canSend)
                     .accessibilityLabel("Send message")
+                } else if let onDictate {
+                    dictateButton(action: onDictate)
                 }
             }
             .padding(.horizontal, 14)
@@ -224,7 +230,7 @@ struct ChatComposerView: View {
     }
 
     private func releaseExpandedIfIdle() {
-        guard !isFocused, !canSend else { return }
+        guard ComposerCollapsePolicy.shouldReleaseExpanded(isFocused: isFocused) else { return }
         heldExpanded = false
     }
 
@@ -237,6 +243,7 @@ struct ChatComposerView: View {
     private func submitDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        HapticFeedback.light()
         isFocused = false
         heldExpanded = false
         draft = ""

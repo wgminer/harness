@@ -2,9 +2,8 @@ import SwiftUI
 
 struct ToolCallsCardView: View {
     let toolCalls: [ToolCallRecord]
-    var expanded: Bool
-    var onToggleExpanded: () -> Void
     var onToolConfirm: (ToolCallRecord, GatedToolAction) -> Void
+    @State private var expanded = false
 
     private var hasPending: Bool {
         toolCalls.contains(where: \.isPending)
@@ -25,11 +24,11 @@ struct ToolCallsCardView: View {
                     label: ToolCallLabels.summarize(toolCalls),
                     chevron: "chevron.down",
                     expanded: false,
-                    action: onToggleExpanded
+                    action: { expanded = true }
                 )
             } else {
                 if canCompress {
-                    summaryRow(label: "Hide", chevron: "chevron.up", expanded: true, action: onToggleExpanded)
+                    summaryRow(label: "Hide", chevron: "chevron.up", expanded: true, action: { expanded = false })
                 }
                 ForEach(Array(toolCalls.enumerated()), id: \.offset) { _, call in
                     toolRow(call)
@@ -95,16 +94,12 @@ struct ToolCallsCardView: View {
                 ToolCallRecord(toolName: "task_list", payload: ["lastAction": "list"]),
                 ToolCallRecord(toolName: "task_create", payload: ["lastAction": "create"]),
             ],
-            expanded: false,
-            onToggleExpanded: {},
             onToolConfirm: { _, _ in }
         )
         ToolCallsCardView(
             toolCalls: [
                 ToolCallRecord(toolName: "task_delete", payload: ["pending": true, "tool": "task_delete"]),
             ],
-            expanded: true,
-            onToggleExpanded: {},
             onToolConfirm: { _, _ in }
         )
     }

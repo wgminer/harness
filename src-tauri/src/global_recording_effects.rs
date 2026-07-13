@@ -1,12 +1,18 @@
 //! Side effects from the global Fn recording state machine.
-//! IPC events are always emitted before tray updates.
+
+use std::sync::Arc;
 
 use tauri::{image::Image, AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
+use crate::conversation_title::finalize_voice_dictation_session;
+use crate::dictation_recording_index;
 use crate::env_util::is_harness_e2e;
+use crate::global_recording_capture::NativeCapture;
 use crate::global_recording_session::GlobalRecordingEffect;
-use crate::paths::resolve_bundled_resource;
+use crate::memory::{append_message, create_conversation, AppendMessageMeta};
+use crate::paths::{get_recordings_dir, resolve_bundled_resource};
+use crate::recording::{paste_text_impl, transcribe_wav_bytes};
 
 use crate::global_recording::{cancel_active_recording, GlobalRecordingRuntime};
 
@@ -43,7 +49,6 @@ fn apply_tray_state(tray: &tauri::tray::TrayIcon, state: TrayIconState) {
     if let Some(icon) = load_tray_image(file_name) {
         let _ = tray.set_icon(Some(icon));
     }
-    // macOS may not clear the status title when passed None — use empty string.
     let title = tray_title(state).map(str::to_string).or_else(|| Some(String::new()));
     let _ = tray.set_title(title);
 }
@@ -78,9 +83,117 @@ pub fn show_and_focus_main(app: &AppHandle) {
     }
 }
 
+fn emit_recording_error(app: &AppHandle, message: &str) {
+    let _ = app.emit(
+        "global-recording-error",
+        serde_json::json!({ "message": message }),
+    );
+}
+
+async fn save_wav(wav: &[u8]) -> Option<std::path::PathBuf> {
+    let dir = get_recordings_dir();
+    if tokio::fs::create_dir_all(&dir).await.is_err() {
+        return None;
+    }
+    let path = dir.join(format!("rec_{}.wav", chrono::Utc::now().timestamp_millis()));
+    if tokio::fs::write(&path, wav).await.is_err() {
+        return None;
+    }
+    Some(path)
+}
+
+async fn deliver_unfocused(
+    app: &AppHandle,
+    app_state: &crate::memory::AppState,
+    text: &str,
+    recording_path: Option<&std::path::Path>,
+) -> Result<String, String> {
+    paste_text_impl(text).await?;
+    let conversation_id = create_conversation(app_state)
+        .await
+        .map_err(|e| e.to_string())?;
+    append_message(
+        app_state,
+        &conversation_id,
+        "user",
+        text,
+        Some(AppendMessageMeta {
+            tool_calls: None,
+            timestamp: Some(chrono::Utc::now().timestamp_millis()),
+            model: None,
+        }),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    finalize_voice_dictation_session(app.clone(), app_state, &conversation_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(path) = recording_path {
+        let _ = dictation_recording_index::link(&conversation_id, path);
+    }
+    Ok(conversation_id)
+}
+
+async fn run_stop_pipeline(
+    app: AppHandle,
+    runtime: Arc<GlobalRecordingRuntime>,
+    was_focused: bool,
+    wav: Vec<u8>,
+) {
+    *runtime.transcribing.lock().await = true;
+    let recording_path = save_wav(&wav).await;
+
+    let app_state = runtime.app_state.clone();
+    let result = transcribe_wav_bytes(&app_state, &wav).await;
+    let text = match result {
+        Ok(t) => t.trim().to_string(),
+        Err(err) => {
+            emit_recording_error(&app, &err);
+            *runtime.transcribing.lock().await = false;
+            set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+            return;
+        }
+    };
+
+    if text.is_empty() {
+        emit_recording_error(&app, "No speech was detected in the recording.");
+        *runtime.transcribing.lock().await = false;
+        set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+        return;
+    }
+
+    if was_focused {
+        let _ = app.emit("global-transcript-ready", serde_json::json!({ "text": text }));
+    } else {
+        match deliver_unfocused(
+            &app,
+            &app_state,
+            &text,
+            recording_path.as_deref(),
+        )
+        .await {
+            Ok(conversation_id) => {
+                let _ = app.emit(
+                    "global-transcript-delivered",
+                    serde_json::json!({ "conversationId": conversation_id }),
+                );
+            }
+            Err(err) => {
+                emit_recording_error(&app, &err);
+                *runtime.transcribing.lock().await = false;
+                set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+                return;
+            }
+        }
+    }
+
+    *runtime.transcribing.lock().await = false;
+    set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+}
+
 pub async fn run_recording_effects(
     app: &AppHandle,
-    runtime: &GlobalRecordingRuntime,
+    runtime: &Arc<GlobalRecordingRuntime>,
     effects: Vec<GlobalRecordingEffect>,
 ) {
     for effect in effects {
@@ -93,25 +206,66 @@ pub async fn run_recording_effects(
                     runtime.reset_fn_state().await;
                     continue;
                 }
-                register_escape_cancel(app, runtime);
-                let _ = app.emit("recording-start-silent", ());
-                set_tray_state(app, runtime, TrayIconState::Recording).await;
+
+                let capture_result = if is_harness_e2e() {
+                    Ok(())
+                } else {
+                    NativeCapture::start().map(|cap| {
+                        *runtime.capture.lock().unwrap() = Some(cap);
+                    })
+                };
+
+                match capture_result {
+                    Ok(()) => {
+                        register_escape_cancel(app, runtime);
+                        let _ = app.emit("global-recording-started", serde_json::json!({}));
+                        set_tray_state(app, runtime, TrayIconState::Recording).await;
+                    }
+                    Err(err) => {
+                        runtime.reset_fn_state().await;
+                        emit_recording_error(app, &err);
+                        set_tray_state(app, runtime, TrayIconState::Ready).await;
+                    }
+                }
             }
             GlobalRecordingEffect::StopRecording => {
                 unregister_escape(app, runtime);
                 let was_focused = is_main_window_focused(app);
-                let _ = app.emit(
-                    "recording-stop-and-paste",
-                    serde_json::json!({ "wasFocused": was_focused }),
-                );
+                let _ = app.emit("global-recording-stopped", serde_json::json!({}));
+                set_tray_state(app, runtime, TrayIconState::Processing).await;
                 if was_focused {
                     show_and_focus_main(app);
                 }
-                set_tray_state(app, runtime, TrayIconState::Processing).await;
+
+                let wav_result = if is_harness_e2e() {
+                    Ok(Vec::new())
+                } else {
+                    match runtime.capture.lock().unwrap().take() {
+                        Some(cap) => cap.stop(),
+                        None => Err("Recording was not active.".into()),
+                    }
+                };
+
+                let runtime_arc = runtime.clone();
+                let app_clone = app.clone();
+                match wav_result {
+                    Ok(wav) => {
+                        tauri::async_runtime::spawn(async move {
+                            run_stop_pipeline(app_clone, runtime_arc, was_focused, wav).await;
+                        });
+                    }
+                    Err(err) => {
+                        emit_recording_error(app, &err);
+                        set_tray_state(app, runtime, TrayIconState::Ready).await;
+                    }
+                }
             }
             GlobalRecordingEffect::CancelRecording => {
                 unregister_escape(app, runtime);
-                let _ = app.emit("recording-cancel", ());
+                if let Some(cap) = runtime.capture.lock().unwrap().take() {
+                    cap.cancel();
+                }
+                let _ = app.emit("global-recording-cancelled", serde_json::json!({}));
                 set_tray_state(app, runtime, TrayIconState::Ready).await;
             }
         }
@@ -130,7 +284,7 @@ pub fn register_escape_cancel(app: &AppHandle, runtime: &GlobalRecordingRuntime)
             if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
                 let app = app_for_handler.clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Some(state) = app.try_state::<std::sync::Arc<GlobalRecordingRuntime>>() {
+                    if let Some(state) = app.try_state::<Arc<GlobalRecordingRuntime>>() {
                         cancel_active_recording(&app, &state).await;
                     }
                 });

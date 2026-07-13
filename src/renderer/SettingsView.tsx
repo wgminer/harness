@@ -50,6 +50,9 @@ interface SettingsViewProps {
   initialTab?: SettingsTabId;
   /** Fires after debounced settings autosave completes. */
   onSettingsChanged?: () => void;
+  /** When true, "New note" opens a windowed note instead of the main Editor. */
+  openNoteInStickyWindow?: boolean;
+  onOpenNoteInStickyWindowChange?: (value: boolean) => void;
 }
 
 const SAVE_DEBOUNCE_MS = 500;
@@ -111,6 +114,8 @@ export function SettingsView({
   onSyncComplete,
   initialTab,
   onSettingsChanged,
+  openNoteInStickyWindow = false,
+  onOpenNoteInStickyWindowChange,
 }: SettingsViewProps) {
   const [apiKey, setApiKey] = useState(D.openai?.apiKey ?? "");
   const [switchAnimationsReady, setSwitchAnimationsReady] = useState(false);
@@ -1049,6 +1054,19 @@ export function SettingsView({
                 <option value="8">8px grid</option>
                 <option value="16">16px grid</option>
               </select>
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Notes"
+              description="How new notes open from the sidebar New menu."
+            >
+              <SettingsSwitch
+                id="openNoteInStickyWindowToggle"
+                testId="settings-open-note-in-window"
+                label="Open new notes in a window"
+                checked={openNoteInStickyWindow}
+                onChange={(e) => onOpenNoteInStickyWindowChange?.(e.target.checked)}
+              />
             </SettingsGroup>
 
             <SettingsGroup

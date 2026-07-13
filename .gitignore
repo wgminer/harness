@@ -80,3 +80,4 @@ ios/**/DerivedData/
 ios/.build/
 ios/.build-device/
 ios/**/.swiftpm/
+.worktrees/

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { MemoryInjectionStrategy } from "../../shared/memoryInjection";
 import { MEMORY_INJECTION_STRATEGY_OPTIONS } from "../../shared/memoryInjection";
 import type { SystemPromptPreview } from "../../shared/types";
-import { SettingsGroup, SettingsHint } from "./settings";
+import { SettingsGroup } from "./SettingsGroup";
+import { SettingsHint } from "./SettingsHint";
 
 type PreviewPlatform = "desktop" | "ios";
 

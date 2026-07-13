@@ -10,7 +10,10 @@ import type { Settings } from "../shared/types";
 const MAX_RECORDING_MS = 5 * 60 * 1000;
 
 export interface UseChatComposerOptions {
-  onSubmit: (text: string, opts?: { fromDictation?: boolean }) => void | boolean | Promise<void | boolean>;
+  onSubmit: (
+    text: string,
+    opts?: { fromDictation?: boolean; recordingPath?: string },
+  ) => void | boolean | Promise<void | boolean>;
   pendingHotkeyText?: string | null;
   pendingHotkeyDraftOnly?: boolean;
   onPendingHotkeyTextConsumed?: () => void;
@@ -63,7 +66,10 @@ export function useChatComposer({
   }, [focusComposerNonce, composerRef]);
 
   const submitMessage = useCallback(
-    async (text: string, opts?: { fromDictation?: boolean }): Promise<boolean> => {
+    async (
+      text: string,
+      opts?: { fromDictation?: boolean; recordingPath?: string },
+    ): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed || submitting || submitDisabled) return false;
       setSubmitting(true);
@@ -130,7 +136,10 @@ export function useChatComposer({
   });
 
   const applyTranscriptToComposer = useCallback(
-    async (text: string, result?: { cleanupSkipped?: "no_api_key" }): Promise<boolean> => {
+    async (
+      text: string,
+      result?: { cleanupSkipped?: "no_api_key"; recordingPath?: string },
+    ): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
       const settings = (await window.harness.settings.get()) as Settings;
@@ -138,7 +147,10 @@ export function useChatComposer({
       const autoSend = settings.recording?.autoSend ?? true;
       const canChat = credentialStatus.hasOpenAIApiKey;
       if (autoSend && canChat && !pendingHotkeyDraftOnly) {
-        return submitMessageRef.current(trimmed, { fromDictation: true });
+        return submitMessageRef.current(trimmed, {
+          fromDictation: true,
+          recordingPath: result?.recordingPath,
+        });
       }
       setInput((prev) => (prev ? `${prev} ${trimmed}` : trimmed));
       if (result?.cleanupSkipped === "no_api_key") {
@@ -185,6 +197,7 @@ export function useChatComposer({
       } else {
         await applyTranscriptToComposer(result.text, {
           cleanupSkipped: result.cleanupSkipped === "no_api_key" ? "no_api_key" : undefined,
+          recordingPath: result.path,
         });
       }
     } catch (err) {

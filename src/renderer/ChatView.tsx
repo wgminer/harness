@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Minimize2 } from "lucide-react";
+import { Layers, Minimize2 } from "lucide-react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import { HOME_HEADER_QUOTE } from "../shared/headerQuote";
 import { ChatTitleModal } from "./ChatTitleModal";
+import { ContextInspectorModal } from "./ContextInspectorModal";
 import { ChatSurface } from "./ChatSurface";
 import { ChatComposer } from "./ChatComposer";
 import { useChatComposer } from "./useChatComposer";
@@ -79,6 +80,7 @@ export function ChatView({
   /** After plain dictation, show polish next to reply (polish targets the dictated turn only). */
   const [polishHintAfterDictation, setPolishHintAfterDictation] = useState(false);
   const [titleModalOpen, setTitleModalOpen] = useState(false);
+  const [contextModalOpen, setContextModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [titleSaving, setTitleSaving] = useState(false);
 
@@ -585,7 +587,10 @@ export function ChatView({
   );
 
   const ensureConversationAndSend = useCallback(
-    async (text: string, opts?: { fromDictation?: boolean }): Promise<boolean> => {
+    async (
+      text: string,
+      opts?: { fromDictation?: boolean; recordingPath?: string },
+    ): Promise<boolean> => {
       if (!openAIConfigured) {
         return blockLlmAction();
       }
@@ -598,6 +603,11 @@ export function ChatView({
         onAssignConversationId(convId);
       }
       await sendText(text, opts, convId);
+      if (opts?.recordingPath) {
+        void window.harness.memory
+          .linkDictationRecording(convId, opts.recordingPath)
+          .catch(() => {});
+      }
       return true;
     },
     [blockLlmAction, effectiveConversationId, onAssignConversationId, openAIConfigured, sendText]
@@ -773,20 +783,34 @@ export function ChatView({
     inputRef: composer.inputRef,
   };
 
+  const cornerControls = (
+    <div className="chat-pane-corner-control">
+      <button
+        type="button"
+        className="btn btn-icon chat-pane-corner-btn"
+        onClick={() => setContextModalOpen(true)}
+        aria-label="View context"
+        title="View context"
+      >
+        <Layers size={14} />
+      </button>
+      <button
+        type="button"
+        className="btn btn-icon chat-pane-corner-btn"
+        onClick={onWindowSizeToggle}
+        aria-label="Shrink window"
+        title="Shrink window"
+      >
+        <Minimize2 size={14} />
+      </button>
+    </div>
+  );
+
   if (isComposeMode) {
     return (
-      <div className="new-chat-pane">
-        <div className="chat-pane-corner-control">
-          <button
-            type="button"
-            className="btn btn-icon chat-pane-window-toggle"
-            onClick={onWindowSizeToggle}
-            aria-label="Shrink window"
-            title="Shrink window"
-          >
-            <Minimize2 size={14} />
-          </button>
-        </div>
+      <>
+        <div className="new-chat-pane">
+          {cornerControls}
         <div className="new-chat-center">
           <p className="new-chat-quote">{HOME_HEADER_QUOTE}</p>
           <div
@@ -799,7 +823,13 @@ export function ChatView({
             <ChatComposer {...composerProps} />
           </div>
         </div>
-      </div>
+        </div>
+        <ContextInspectorModal
+          open={contextModalOpen}
+          onClose={() => setContextModalOpen(false)}
+          conversationId={effectiveConversationId}
+        />
+      </>
     );
   }
 
@@ -823,17 +853,7 @@ export function ChatView({
             )}
           </button>
         )}
-        headerCornerControl={(
-          <button
-            type="button"
-            className="btn btn-icon chat-pane-window-toggle"
-            onClick={onWindowSizeToggle}
-            aria-label="Shrink window"
-            title="Shrink window"
-          >
-            <Minimize2 size={14} />
-          </button>
-        )}
+        headerCornerControl={cornerControls}
         displayMessages={messages}
         copiedId={copiedId}
         savedToNotesId={savedToNotesId}
@@ -859,6 +879,11 @@ export function ChatView({
         onTitleDraftChange={setTitleDraft}
         onSave={() => void saveConversationTitle()}
         saving={titleSaving}
+      />
+      <ContextInspectorModal
+        open={contextModalOpen}
+        onClose={() => setContextModalOpen(false)}
+        conversationId={effectiveConversationId}
       />
     </>
   );

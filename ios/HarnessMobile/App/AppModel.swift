@@ -88,9 +88,9 @@ final class AppModel: ObservableObject {
         setupNoticeDismissed = UserDefaults.standard.bool(forKey: Self.setupNoticeDismissedKey)
         composeDraft = ComposerDraftStorage.loadComposeDraft()
         composerDraftCache = ComposerDraftStorage.loadThreadDrafts()
+        // Store publishes still fan into AppModel for settings/sync chrome.
+        // Chat threads observe ChatService; tasks/dictation observe their own stores.
         forwardObjectWillChange(from: store)
-        forwardObjectWillChange(from: tasksStore)
-        forwardObjectWillChange(from: recordingSession)
         wireContentChangeHandlers()
     }
 
@@ -266,13 +266,15 @@ final class AppModel: ObservableObject {
     }
 
     func bootstrap() async {
-        try? LocalDataLayout.ensureDirectories(at: localDataDir)
-        try? LocalDataLayout.ensureConversationsFile(at: localDataDir)
+        let dir = localDataDir
+        try? LocalDataLayout.ensureDirectories(at: dir)
+        try? LocalDataLayout.ensureConversationsFile(at: dir)
         do {
-            try store.pruneEmptyConversations()
-            try store.reload()
+            let sidebar = try await Task.detached(priority: .userInitiated) {
+                try ConversationStore.bootstrapSidebar(localDataDir: dir, pruningEmpty: true)
+            }.value
+            store.applyBootstrapConversations(sidebar.conversations)
             try tasksStore.reload()
-            try store.refreshPendingSyncState()
         } catch {
             syncStatus = SyncStatusSnapshot(
                 kind: .error,
@@ -285,6 +287,11 @@ final class AppModel: ObservableObject {
         chatService.refreshClient()
         refreshSetupFlags()
         maybePresentSetupNotice()
+
+        Task(priority: .utility) { [weak self] in
+            try? self?.store.refreshPendingSyncState()
+        }
+
         if R2SettingsStore.isConfigured {
             await syncOnForeground()
         }

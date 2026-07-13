@@ -6,7 +6,7 @@ export interface UiSession {
   notesOpenNoteId: string | null;
   /** When true, the first-run setup notice is not shown again. */
   setupNoticeDismissed?: boolean;
-  /** When true, "New note" opens a sticky window instead of the main Editor. */
+  /** When true, "New note" opens a windowed note instead of the main Editor. */
   openNoteInStickyWindow?: boolean;
 }
 

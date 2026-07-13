@@ -16,32 +16,76 @@ final class ConversationStore: ObservableObject {
 
     func reload() throws {
         let map = try loadConversationMapRaw()
-        conversations = map
-            .compactMap { id, meta -> ConversationListItem? in
-                let messageCount = (try? loadMessages(conversationId: id).count) ?? 0
-                guard ConversationListItem.isSidebarVisible(meta: meta, messageCount: messageCount) else {
-                    return nil
-                }
-                return ConversationListItem(
-                    id: id,
-                    title: meta.title,
-                    createdAt: meta.createdAt,
-                    hasAssistantReply: meta.hasAssistantReply ?? false,
-                    hasMessages: meta.hasMessages == true || messageCount > 0
-                )
-            }
-            .sorted { $0.createdAt > $1.createdAt }
+        conversations = Self.sidebarItems(from: map) { id in
+            (try? loadMessages(conversationId: id).count) ?? 0
+        }
+    }
+
+    /// Single-pass bootstrap: optionally prune empties / backfill `hasMessages`, then publish sidebar.
+    func loadSidebarConversations(pruningEmpty: Bool) throws {
+        var map = try loadConversationMapRaw()
+        if pruningEmpty {
+            map = try pruneMapInPlace(map)
+        }
+        conversations = Self.sidebarItems(from: map) { id in
+            (try? loadMessages(conversationId: id).count) ?? 0
+        }
     }
 
     /// Deletes message-less conversations and backfills `hasMessages` for existing threads.
     @discardableResult
     func pruneEmptyConversations() throws -> Int {
-        var map = try loadConversationMapRaw()
+        let before = try loadConversationMapRaw()
+        let after = try pruneMapInPlace(before)
+        return before.count - after.count
+    }
+
+    /// Disk-only sidebar load for off-main bootstrap. Returns items and whether the map was rewritten.
+    nonisolated static func bootstrapSidebar(
+        localDataDir: URL,
+        pruningEmpty: Bool
+    ) throws -> (conversations: [ConversationListItem], removedEmptyCount: Int) {
+        var map = try loadConversationMapRaw(localDataDir: localDataDir)
+        var removed = 0
+        if pruningEmpty {
+            let result = try pruneConversationMap(map, localDataDir: localDataDir)
+            map = result.map
+            removed = result.removed
+            if result.changed {
+                try saveConversationMap(map, localDataDir: localDataDir)
+            }
+        }
+        let items = sidebarItems(from: map) { id in
+            (try? loadMessages(localDataDir: localDataDir, conversationId: id).count) ?? 0
+        }
+        return (items, removed)
+    }
+
+    func applyBootstrapConversations(_ items: [ConversationListItem]) {
+        conversations = items
+    }
+
+    private func pruneMapInPlace(_ map: [String: ConversationMeta]) throws -> [String: ConversationMeta] {
+        let result = try Self.pruneConversationMap(map, localDataDir: localDataDir)
+        if result.changed {
+            try saveConversationMap(result.map)
+        }
+        return result.map
+    }
+
+    private nonisolated static func pruneConversationMap(
+        _ map: [String: ConversationMeta],
+        localDataDir: URL
+    ) throws -> (map: [String: ConversationMeta], changed: Bool, removed: Int) {
+        var map = map
         var removed = 0
         var changed = false
 
         for (id, meta) in map {
-            let messages = try loadMessages(conversationId: id)
+            if meta.hasMessages == true {
+                continue
+            }
+            let messages = try loadMessages(localDataDir: localDataDir, conversationId: id)
             if messages.isEmpty {
                 map.removeValue(forKey: id)
                 let messagesPath = LocalDataLayout.fileURL(
@@ -64,10 +108,37 @@ final class ConversationStore: ObservableObject {
             }
         }
 
-        if changed {
-            try saveConversationMap(map)
-        }
-        return removed
+        return (map, changed, removed)
+    }
+
+    private nonisolated static func sidebarItems(
+        from map: [String: ConversationMeta],
+        messageCount: (String) -> Int
+    ) -> [ConversationListItem] {
+        map
+            .compactMap { id, meta -> ConversationListItem? in
+                if meta.hasMessages == true {
+                    return ConversationListItem(
+                        id: id,
+                        title: meta.title,
+                        createdAt: meta.createdAt,
+                        hasAssistantReply: meta.hasAssistantReply ?? false,
+                        hasMessages: true
+                    )
+                }
+                let count = messageCount(id)
+                guard ConversationListItem.isSidebarVisible(meta: meta, messageCount: count) else {
+                    return nil
+                }
+                return ConversationListItem(
+                    id: id,
+                    title: meta.title,
+                    createdAt: meta.createdAt,
+                    hasAssistantReply: meta.hasAssistantReply ?? false,
+                    hasMessages: count > 0
+                )
+            }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     func loadConversationMeta(conversationId: String) throws -> ConversationMeta? {
@@ -75,6 +146,10 @@ final class ConversationStore: ObservableObject {
     }
 
     func loadMessages(conversationId: String) throws -> [MessageRecord] {
+        try Self.loadMessages(localDataDir: localDataDir, conversationId: conversationId)
+    }
+
+    nonisolated static func loadMessages(localDataDir: URL, conversationId: String) throws -> [MessageRecord] {
         let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.messagesPath(conversationId: conversationId))
         guard FileManager.default.fileExists(atPath: path.path) else { return [] }
         let data = try LocalDataLayout.readRegularFileData(at: path)
@@ -296,6 +371,10 @@ final class ConversationStore: ObservableObject {
     // MARK: - Private
 
     func loadConversationMapRaw() throws -> [String: ConversationMeta] {
+        try Self.loadConversationMapRaw(localDataDir: localDataDir)
+    }
+
+    nonisolated static func loadConversationMapRaw(localDataDir: URL) throws -> [String: ConversationMeta] {
         let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.conversationsFile)
         guard FileManager.default.fileExists(atPath: path.path) else { return [:] }
         let data: Data
@@ -325,11 +404,15 @@ final class ConversationStore: ObservableObject {
     }
 
     private func saveConversationMap(_ map: [String: ConversationMeta]) throws {
+        try Self.saveConversationMap(map, localDataDir: localDataDir)
+        notifyContentChanged()
+    }
+
+    private nonisolated static func saveConversationMap(_ map: [String: ConversationMeta], localDataDir: URL) throws {
         try LocalDataLayout.ensureDirectories(at: localDataDir)
         let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.conversationsFile)
         let data = try JSONEncoder().encode(map)
         try data.write(to: path, options: .atomic)
-        notifyContentChanged()
     }
 
     private func generateId(prefix: String) -> String {

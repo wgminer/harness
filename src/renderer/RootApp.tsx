@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import App from "./App";
-import { StickyNoteView } from "./StickyNoteView";
+import { WindowedNoteView } from "./WindowedNoteView";
 import { getCurrentWindowLabel, noteIdFromStickyWindowLabel } from "./stickyWindow";
 
 type RootRoute =
@@ -33,7 +33,7 @@ export function RootApp() {
     return null;
   }
   if (route.kind === "sticky") {
-    return <StickyNoteView noteId={route.noteId} />;
+    return <WindowedNoteView noteId={route.noteId} />;
   }
   return <App />;
 }
