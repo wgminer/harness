@@ -19,6 +19,7 @@ describe("normalizeUiSession", () => {
       view: "tasks",
       conversationId: "abc",
       notesOpenNoteId: "note-1",
+      imagesOpenImageId: null,
       setupNoticeDismissed: true,
       openNoteInStickyWindow: false,
     });
@@ -35,6 +36,23 @@ describe("normalizeUiSession", () => {
       view: "chat",
       conversationId: null,
       notesOpenNoteId: null,
+      imagesOpenImageId: null,
+      setupNoticeDismissed: false,
+      openNoteInStickyWindow: false,
+    });
+  });
+
+  it("keeps images view and image id", () => {
+    expect(
+      normalizeUiSession({
+        view: "images",
+        imagesOpenImageId: " img-1 ",
+      })
+    ).toEqual({
+      view: "images",
+      conversationId: null,
+      notesOpenNoteId: null,
+      imagesOpenImageId: "img-1",
       setupNoticeDismissed: false,
       openNoteInStickyWindow: false,
     });

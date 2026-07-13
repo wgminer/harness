@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "private": false,
   "license": "MIT",
   "author": "Will Miner",
@@ -29,8 +29,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.renderer.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "grid:audit": "node scripts/grid-audit.js"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

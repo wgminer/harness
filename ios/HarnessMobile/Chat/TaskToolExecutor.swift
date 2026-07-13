@@ -198,13 +198,7 @@ final class TaskToolExecutor {
     }
 
     private func encodeJSON(_ object: [String: Any]) -> String {
-        guard JSONSerialization.isValidJSONObject(object),
-              let data = try? JSONSerialization.data(withJSONObject: object),
-              let string = String(data: data, encoding: .utf8)
-        else {
-            return #"{"error":"Failed to encode tool result"}"#
-        }
-        return string
+        ToolResultJSON.encode(object)
     }
 }
 

@@ -7,16 +7,17 @@ import {
   MEMORY_INJECTION_STRATEGY_OPTIONS,
   type MemoryInjectionStrategy,
 } from "../shared/memoryInjection";
-import { DEFAULT_LAYOUT, DEFAULT_SETTINGS } from "../shared/types";
-import type { LayoutOptions, Settings, TranscriptDictionaryEntry } from "../shared/types";
+import { DEFAULT_SETTINGS } from "../shared/types";
+import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
 import { appDataFolderButtonLabel } from "../shared/dataStorageLayout";
 import type { SyncStatus } from "../shared/sync";
 import { syncResultChangedLocalData, syncNowButtonTooltip, syncInlineStatusLine } from "../shared/sync";
 import {
+  DEFAULT_NOTE_TEMPLATE_ID,
   DEFAULT_NOTE_TEMPLATES,
   NOTE_TEMPLATE_CURSOR_TOKEN,
   NOTE_TEMPLATE_TODAY_TOKEN,
-  normalizeNoteTemplateDescription,
+  normalizeDefaultNoteTemplateId,
   normalizeNoteTemplates,
   type NoteTemplateConfig,
 } from "../shared/writing";
@@ -134,11 +135,12 @@ export function SettingsView({
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
     DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
   );
+  const [defaultNoteTemplateId, setDefaultNoteTemplateId] = useState(DEFAULT_NOTE_TEMPLATE_ID);
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateTitleDraft, setTemplateTitleDraft] = useState("");
-  const [templateDescriptionDraft, setTemplateDescriptionDraft] = useState("");
   const [templateContentDraft, setTemplateContentDraft] = useState("");
+  const [templateIsDefaultDraft, setTemplateIsDefaultDraft] = useState(false);
 
   const [autoSend, setAutoSend] = useState(true);
   const [globalFnHotkey, setGlobalFnHotkey] = useState(D.recording!.globalFnHotkey);
@@ -208,7 +210,6 @@ export function SettingsView({
   const [globalRecordingStatus, setGlobalRecordingStatus] = useState<GlobalRecordingStatus | null>(
     null,
   );
-  const [layoutOptions, setLayoutOptions] = useState<LayoutOptions>(DEFAULT_LAYOUT);
   const settingsHydratedRef = useRef(false);
   const skipAutosaveRef = useRef(false);
   const lastPersistedRef = useRef("");
@@ -283,6 +284,9 @@ export function SettingsView({
         setR2AccessKeyId(hydrated.r2AccessKeyId);
         setMemoryInjectionStrategy(hydrated.memoryInjectionStrategy);
         setNoteTemplates(normalizeNoteTemplates(S.notes?.templates));
+        setDefaultNoteTemplateId(
+          normalizeDefaultNoteTemplateId(S.notes?.defaultTemplateId, normalizeNoteTemplates(S.notes?.templates)),
+        );
         lastPersistedRef.current = serializeFormState(hydrated);
       })
       .finally(() => {
@@ -290,7 +294,6 @@ export function SettingsView({
         enableSwitchAnimations();
       });
     window.harness.memory.getUserMemory().then(setUserMemory);
-    window.harness.customization.getLayoutOptions().then(setLayoutOptions);
     return () => {
       cancelled = true;
     };
@@ -338,15 +341,6 @@ export function SettingsView({
     if (activeTab !== "memory") return;
     void refreshCompileStatus();
   }, [activeTab]);
-
-  useEffect(() => {
-    const unsub = window.harness.customization.onUpdated((payload) => {
-      if (payload.type === "layout") {
-        void window.harness.customization.getLayoutOptions().then(setLayoutOptions);
-      }
-    });
-    return unsub;
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -618,36 +612,41 @@ export function SettingsView({
     setTemplatesModalOpen(false);
     setEditingTemplateId(null);
     setTemplateTitleDraft("");
-    setTemplateDescriptionDraft("");
     setTemplateContentDraft("");
+    setTemplateIsDefaultDraft(false);
   };
 
   const openTemplateModal = (template: NoteTemplateConfig) => {
     setEditingTemplateId(template.id);
     setTemplateTitleDraft(template.title);
-    setTemplateDescriptionDraft(template.description);
     setTemplateContentDraft(template.content);
+    setTemplateIsDefaultDraft(template.id === defaultNoteTemplateId);
     setTemplatesModalOpen(true);
   };
 
   const saveTemplate = async () => {
     if (!editingTemplateId) return;
     const nextTitle = templateTitleDraft.trim();
-    const nextDescription = normalizeNoteTemplateDescription(templateDescriptionDraft);
-    if (!nextTitle || !nextDescription) return;
+    if (!nextTitle) return;
     const nextTemplates = noteTemplates.map((template) =>
       template.id === editingTemplateId
         ? {
             ...template,
             title: nextTitle,
-            description: nextDescription,
             content: templateContentDraft,
           }
         : template,
     );
     const normalized = normalizeNoteTemplates(nextTemplates);
+    const nextDefaultId = normalizeDefaultNoteTemplateId(
+      templateIsDefaultDraft ? editingTemplateId : defaultNoteTemplateId,
+      normalized,
+    );
     setNoteTemplates(normalized);
-    await window.harness.settings.set({ notes: { templates: normalized } });
+    setDefaultNoteTemplateId(nextDefaultId);
+    await window.harness.settings.set({
+      notes: { templates: normalized, defaultTemplateId: nextDefaultId },
+    });
     window.dispatchEvent(new CustomEvent("notes:templatesUpdated", { detail: normalized }));
     closeTemplatesModal();
   };
@@ -842,11 +841,6 @@ export function SettingsView({
     }
   };
 
-  const updateLayoutOptions = (patch: Partial<LayoutOptions>) => {
-    setLayoutOptions((prev) => ({ ...prev, ...patch }));
-    void window.harness.customization.setLayout(patch);
-  };
-
   const switchTab = (id: SettingsTabId) => {
     setActiveTab(id);
     if (scrollRef.current) {
@@ -1035,28 +1029,6 @@ export function SettingsView({
 
           {activeTab === "appearance" && <SettingsTabPanel id="appearance">
             <SettingsGroup
-              title="Grid overlay"
-              description="Optional visual grid for alignment checks while designing screens. Overlay is visual only and does not capture clicks."
-            >
-              <select
-                id="settings-grid-overlay"
-                data-testid="settings-grid-overlay"
-                value={layoutOptions.gridOverlay}
-                onChange={(e) =>
-                  updateLayoutOptions({
-                    gridOverlay: e.target.value as LayoutOptions["gridOverlay"],
-                  })
-                }
-                aria-label="Grid overlay"
-              >
-                <option value="off">Off</option>
-                <option value="4">4px grid</option>
-                <option value="8">8px grid</option>
-                <option value="16">16px grid</option>
-              </select>
-            </SettingsGroup>
-
-            <SettingsGroup
               title="Notes"
               description="How new notes open from the sidebar New menu."
             >
@@ -1071,14 +1043,14 @@ export function SettingsView({
 
             <SettingsGroup
               title="Editor templates"
-              description="Edit the three note templates shown on the Editor overview page."
+              description="Edit note templates. The default is applied when you create a new note; all templates appear in the picker on a fresh note."
             >
               <div className="settings-entry-list">
                 {noteTemplates.map((template) => (
                   <SettingsEntryRow
                     key={template.id}
                     title={template.title}
-                    detail={template.description}
+                    badge={template.id === defaultNoteTemplateId ? "Default" : undefined}
                     onEdit={() => openTemplateModal(template)}
                     editAriaLabel={`Edit ${template.title} template`}
                     editButtonTitle="Edit template"
@@ -1533,7 +1505,7 @@ export function SettingsView({
                   type="button"
                   className="btn btn-primary"
                   onClick={() => void saveTemplate()}
-                  disabled={!templateTitleDraft.trim() || !templateDescriptionDraft.trim()}
+                  disabled={!templateTitleDraft.trim()}
                 >
                   Save
                 </button>
@@ -1551,15 +1523,16 @@ export function SettingsView({
                   autoComplete="off"
                 />
               </label>
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Description</span>
+              <label className="app-modal-check">
                 <input
-                  type="text"
-                  value={templateDescriptionDraft}
-                  onChange={(e) => setTemplateDescriptionDraft(e.target.value)}
-                  className="app-modal-input"
-                  autoComplete="off"
+                  type="checkbox"
+                  className="app-modal-check__input"
+                  checked={templateIsDefaultDraft}
+                  disabled={templateIsDefaultDraft && editingTemplateId === defaultNoteTemplateId}
+                  onChange={(e) => setTemplateIsDefaultDraft(e.target.checked)}
+                  data-testid="settings-notes-template-default"
                 />
+                <span className="app-modal-check__text">Default for new notes</span>
               </label>
               <label className="app-modal-field">
                 <span className="app-modal-field__label">Template body</span>

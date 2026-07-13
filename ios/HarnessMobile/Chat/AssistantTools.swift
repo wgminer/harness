@@ -35,6 +35,12 @@ enum AssistantTools {
     }
 
     private static func encodeJSON(_ object: [String: Any]) -> String {
+        ToolResultJSON.encode(object)
+    }
+}
+
+enum ToolResultJSON {
+    static func encode(_ object: [String: Any]) -> String {
         guard JSONSerialization.isValidJSONObject(object),
               let data = try? JSONSerialization.data(withJSONObject: object),
               let string = String(data: data, encoding: .utf8)

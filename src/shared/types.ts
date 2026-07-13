@@ -1,5 +1,5 @@
 import type { MemoryInjectionStrategy } from "./memoryInjection";
-import { DEFAULT_NOTE_TEMPLATES } from "./writing";
+import { DEFAULT_NOTE_TEMPLATES, DEFAULT_NOTE_TEMPLATE_ID } from "./writing";
 import { DEFAULT_SYSTEM_PROMPT, type SystemPromptSettings } from "./systemPromptDefaults";
 
 export type MessageRole = "user" | "assistant" | "system";
@@ -116,6 +116,8 @@ export interface Settings {
   };
   notes?: {
     templates: import("./writing").NoteTemplateConfig[];
+    /** Template id applied when creating a new note. Defaults to Blank. */
+    defaultTemplateId?: string;
   };
   /** Cloudflare R2 remote backup (S3-compatible). Non-secret fields only — secret access key lives in the OS credential store. */
   sync?: {
@@ -157,12 +159,10 @@ export interface Plan {
 
 export interface LayoutOptions {
   sidebar: "left" | "right";
-  gridOverlay: "off" | "4" | "8" | "16";
 }
 
 export const DEFAULT_LAYOUT: LayoutOptions = {
   sidebar: "left",
-  gridOverlay: "off",
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -190,6 +190,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   notes: {
     templates: DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
+    defaultTemplateId: DEFAULT_NOTE_TEMPLATE_ID,
   },
   sync: {
     accountId: "",

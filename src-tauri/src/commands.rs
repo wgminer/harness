@@ -23,7 +23,13 @@ use crate::memory::{
 };
 use crate::memory_compile::{get_memory_compile_status, run_memory_compile_now};
 use crate::memory_import::run_llm_context_import_now;
-use crate::notes::{create_note, delete_note, list_notes, propose_note_edit, propose_note_spell_check, read_note, save_note, show_note_in_folder};
+use crate::images::{
+    create_image, delete_image, generate_image, list_images, read_image, ImageGenerateInput,
+};
+use crate::notes::{
+    create_note, delete_note, list_notes, propose_note_edit, propose_note_spell_check, read_note,
+    save_note, show_note_in_folder,
+};
 use crate::plans::{
     add_conversation_to_plan, create_plan, delete_plan, list_plans, remove_conversation_from_plan,
     update_plan, PlanUpdates,
@@ -581,6 +587,40 @@ pub async fn notes_propose_edit(input: Value) -> Result<Value, String> {
 pub async fn notes_spell_check(input: Value) -> Result<Value, String> {
     let proposal = propose_note_spell_check(&input).await.map_err(map_err)?;
     serde_json::to_value(proposal).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_list(state: State<'_, AppState>) -> Result<Value, String> {
+    let images = list_images(&state).await.map_err(map_err)?;
+    serde_json::to_value(images).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_create(state: State<'_, AppState>) -> Result<Value, String> {
+    let image = create_image(&state).await.map_err(map_err)?;
+    serde_json::to_value(image).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_read(state: State<'_, AppState>, id: String) -> Result<Value, String> {
+    let image = read_image(&state, &id).await.map_err(map_err)?;
+    serde_json::to_value(image).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_delete(state: State<'_, AppState>, id: String) -> Result<Value, String> {
+    let list = delete_image(&state, &id).await.map_err(map_err)?;
+    serde_json::to_value(list).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_generate(
+    state: State<'_, AppState>,
+    input: Value,
+) -> Result<Value, String> {
+    let parsed: ImageGenerateInput = serde_json::from_value(input).map_err(map_err)?;
+    let result = generate_image(&state, parsed).await.map_err(map_err)?;
+    serde_json::to_value(result).map_err(map_err)
 }
 
 #[command(rename_all = "camelCase")]

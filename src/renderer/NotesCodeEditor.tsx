@@ -7,6 +7,7 @@ export interface NotesCodeEditorHandle {
   focus: () => void;
   setSelection: (from: number, to?: number) => void;
   getView: () => EditorView | null;
+  insertAtCursor: (text: string) => void;
 }
 
 interface NotesCodeEditorProps {
@@ -72,6 +73,17 @@ export const NotesCodeEditor = forwardRef<NotesCodeEditorHandle, NotesCodeEditor
         });
       },
       getView: () => viewRef.current,
+      insertAtCursor: (text: string) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const { from, to } = view.state.selection.main;
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + text.length },
+          scrollIntoView: true,
+        });
+        view.focus();
+      },
     }),
     [],
   );

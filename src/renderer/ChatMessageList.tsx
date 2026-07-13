@@ -285,7 +285,7 @@ export function ChatMessageList({
           {showPolishInStrip && (
             <button
               type="button"
-              className="btn btn-chat-secondary chat-pane-btn"
+              className="btn btn-compact chat-pane-btn"
               onClick={onPolish}
               disabled={!llmActionsEnabled}
             >
@@ -294,7 +294,7 @@ export function ChatMessageList({
           )}
           <button
             type="button"
-            className="btn btn-outline btn-chat-secondary chat-pane-btn"
+            className="btn btn-outline btn-compact chat-pane-btn"
             onClick={onGenerateReply}
             data-testid="chat-generate-reply"
             disabled={!llmActionsEnabled}

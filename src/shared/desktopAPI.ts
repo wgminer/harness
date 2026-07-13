@@ -8,7 +8,14 @@ import type {
   Settings,
   SystemPromptPreview,
 } from "./types";
-import type { Note, NoteEditProposal, NoteEditProposalInput, NoteSpellCheckInput, NoteSummary } from "./writing";
+import type {
+  Note,
+  NoteEditProposal,
+  NoteEditProposalInput,
+  NoteSpellCheckInput,
+  NoteSummary,
+} from "./writing";
+import type { GeneratedImage, ImageGenerateInput } from "./images";
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
@@ -221,6 +228,14 @@ export interface HarnessAPI {
     setStickyTitle: (noteId: string, title: string) => Promise<void>;
     popInSticky: (noteId: string) => Promise<void>;
     onOpenInMain: (cb: (noteId: string) => void) => () => void;
+  };
+  /** Generated image library objects (peer to notes/chats). */
+  images: {
+    list: () => Promise<GeneratedImage[]>;
+    create: () => Promise<GeneratedImage>;
+    read: (id: string) => Promise<GeneratedImage | null>;
+    delete: (id: string) => Promise<GeneratedImage[]>;
+    generate: (input: ImageGenerateInput) => Promise<GeneratedImage>;
   };
   recording: {
     /** Call once after IPC listeners are registered so Fn monitor can start. */

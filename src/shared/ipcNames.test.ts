@@ -15,6 +15,9 @@ describe("legacyIpcCommand", () => {
     expect(legacyIpcCommand("notes:openSticky")).toBe("notes_open_sticky");
     expect(legacyIpcCommand("notes:setStickyPinned")).toBe("notes_set_sticky_pinned");
     expect(legacyIpcCommand("notes:popInSticky")).toBe("notes_pop_in_sticky");
+    expect(legacyIpcCommand("images:list")).toBe("images_list");
+    expect(legacyIpcCommand("images:create")).toBe("images_create");
+    expect(legacyIpcCommand("images:generate")).toBe("images_generate");
     expect(legacyIpcCommand("chat:getContextPreview")).toBe("chat_get_context_preview");
     expect(legacyIpcCommand("memory:linkDictationRecording")).toBe("memory_link_dictation_recording");
     expect(legacyIpcCommand("memory:getConversationRecordings")).toBe(

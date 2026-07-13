@@ -7,6 +7,8 @@ function collapseToSingleLine(text: string): string {
 interface SettingsEntryRowProps {
   title: string;
   detail?: string;
+  /** Small label shown next to the title (e.g. "Default"). */
+  badge?: string;
   onEdit: () => void;
   onDelete?: () => void;
   editAriaLabel: string;
@@ -22,6 +24,7 @@ interface SettingsEntryRowProps {
 export function SettingsEntryRow({
   title,
   detail,
+  badge,
   onEdit,
   onDelete,
   editAriaLabel,
@@ -50,7 +53,10 @@ export function SettingsEntryRow({
   return (
     <div className={rowClass}>
       <div className="settings-entry-row__body">
-        <div className="settings-entry-row__title">{title}</div>
+        <div className="settings-entry-row__title-row">
+          <div className="settings-entry-row__title">{title}</div>
+          {badge ? <span className="settings-entry-row__badge">{badge}</span> : null}
+        </div>
         {detailText !== undefined ? (
           <div
             className={detailClass}

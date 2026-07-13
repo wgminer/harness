@@ -3,6 +3,7 @@ import { ChatView } from "./ChatView";
 import { SettingsView } from "./SettingsView";
 import { TasksView } from "./TasksView";
 import { NotesView } from "./WritingSurfaceView";
+import { ImageCanvasView } from "./ImageCanvasView";
 import { Sidebar } from "./Sidebar";
 import { SetupNoticeModal } from "./SetupNoticeModal";
 import { HotkeyRecordingOverlay } from "./HotkeyRecordingOverlay";
@@ -11,6 +12,13 @@ import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan, type S
 import { DEFAULT_UI_SESSION } from "../shared/uiSession";
 import type {} from "../shared/desktopAPI";
 import { isSidebarVisibleConversation } from "../shared/conversationSession";
+import {
+  getDefaultNoteTemplate,
+  normalizeDefaultNoteTemplateId,
+  normalizeNoteTemplates,
+  type NoteSummary,
+} from "../shared/writing";
+import type { GeneratedImage } from "../shared/images";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
 import type { Conversation, View } from "./sidebarUtils";
 import { useViewportLayout } from "./useViewportLayout";
@@ -26,6 +34,8 @@ export default function App() {
   const [view, setView] = useState<View>("chat");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [notes, setNotes] = useState<NoteSummary[]>([]);
+  const [images, setImages] = useState<GeneratedImage[]>([]);
   const [layout, setLayout] = useState<LayoutOptions>(DEFAULT_LAYOUT);
   const { presetSmall } = useViewportLayout();
   /** Incremented when entering small window on chat so ChatView focuses the composer. */
@@ -38,14 +48,14 @@ export default function App() {
   const [activeChatProcessing, setActiveChatProcessing] = useState(false);
   /** Per-conversation refcount for async LLM thread title generation after a reply. */
   const [titleGenInFlight, setTitleGenInFlight] = useState<Record<string, number>>({});
-  /** Note id to open when entering Notes from chat message action. */
+  /** Note id to open when entering Notes from chat message action, sidebar selection, or creation. */
   const [pendingOpenNoteRequest, setPendingOpenNoteRequest] = useState<{
     id: string;
     nonce: number;
+    isNew?: boolean;
   } | null>(null);
-  const [notesScreen, setNotesScreen] = useState<"list" | "detail">("list");
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
-  const [notesOverviewNonce, setNotesOverviewNonce] = useState(0);
+  const [activeImageId, setActiveImageId] = useState<string | null>(null);
   const [uiSessionReady, setUiSessionReady] = useState(false);
   const [setupGaps, setSetupGaps] = useState<SetupGap[]>([]);
   const [setupNoticeOpen, setSetupNoticeOpen] = useState(false);
@@ -145,6 +155,9 @@ export default function App() {
       if (session.notesOpenNoteId) {
         setPendingOpenNoteRequest({ id: session.notesOpenNoteId, nonce: Date.now() });
       }
+      if (session.imagesOpenImageId) {
+        setActiveImageId(session.imagesOpenImageId);
+      }
       setOpenNoteInStickyWindow(session.openNoteInStickyWindow === true);
     }
     setUiSessionReady(true);
@@ -156,6 +169,38 @@ export default function App() {
     setConversations(list);
     setConversationId((current) => resolveConversationId(list, current));
   }, [resolveConversationId]);
+
+  const loadNotesList = useCallback(async () => {
+    const list = await window.harness.notes.list();
+    setNotes(list);
+  }, []);
+
+  const loadImagesList = useCallback(async () => {
+    const list = await window.harness.images.list();
+    setImages(list);
+  }, []);
+
+  useEffect(() => {
+    void loadNotesList();
+  }, [loadNotesList]);
+
+  useEffect(() => {
+    void loadImagesList();
+  }, [loadImagesList]);
+
+  /** Opens a note in the main pane's Notes view (from chat, sidebar, or another window). */
+  const openNoteInMain = useCallback((noteId: string, opts?: { isNew?: boolean }) => {
+    setPendingOpenNoteRequest({ id: noteId, nonce: Date.now(), isNew: opts?.isNew ?? false });
+    setView("notes");
+    // Chat (and other surfaces) may create notes outside App state — refresh so the row appears.
+    void loadNotesList();
+  }, [loadNotesList]);
+
+  const openImageInMain = useCallback((imageId: string) => {
+    setActiveImageId(imageId);
+    setView("images");
+    void loadImagesList();
+  }, [loadImagesList]);
 
   useEffect(() => {
     void loadConversations();
@@ -206,11 +251,10 @@ export default function App() {
 
   useEffect(() => {
     const unsub = window.harness.notes.onOpenInMain((noteId) => {
-      setPendingOpenNoteRequest({ id: noteId, nonce: Date.now() });
-      setView("notes");
+      openNoteInMain(noteId);
     });
     return unsub;
-  }, []);
+  }, [openNoteInMain]);
 
   useEffect(() => {
     if (!uiSessionReady) return;
@@ -218,12 +262,13 @@ export default function App() {
       void window.harness.uiSession.set({
         view,
         conversationId,
-        notesOpenNoteId: view === "notes" && notesScreen === "detail" ? activeNoteId : null,
+        notesOpenNoteId: view === "notes" ? activeNoteId : null,
+        imagesOpenImageId: view === "images" ? activeImageId : null,
         openNoteInStickyWindow,
       });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [uiSessionReady, view, conversationId, notesScreen, activeNoteId, openNoteInStickyWindow]);
+  }, [uiSessionReady, view, conversationId, activeNoteId, activeImageId, openNoteInStickyWindow]);
 
   useEffect(() => {
     const unsub = window.harness.chat.onConversationTitleUpdated(() => {
@@ -295,17 +340,48 @@ export default function App() {
 
   const createNewNote = useCallback(async () => {
     try {
-      const note = await window.harness.notes.create(undefined, "# Note\n");
+      let templates = normalizeNoteTemplates(undefined);
+      let defaultTemplateId = normalizeDefaultNoteTemplateId(undefined, templates);
+      try {
+        const settings = await window.harness.settings.get();
+        templates = normalizeNoteTemplates(settings.notes?.templates);
+        defaultTemplateId = normalizeDefaultNoteTemplateId(settings.notes?.defaultTemplateId, templates);
+      } catch {
+        // Fall back to built-in defaults when settings are unavailable.
+      }
+      const note = await window.harness.notes.create(
+        undefined,
+        getDefaultNoteTemplate(templates, defaultTemplateId).content,
+      );
+      setNotes((prev) =>
+        [
+          { id: note.id, title: note.title, updatedAt: note.updatedAt, createdAt: note.createdAt, wordCount: note.wordCount },
+          ...prev,
+        ].sort((a, b) => b.updatedAt - a.updatedAt)
+      );
       if (openNoteInStickyWindow) {
         await window.harness.notes.openSticky(note.id);
         return;
       }
-      setPendingOpenNoteRequest({ id: note.id, nonce: Date.now() });
-      setView("notes");
+      openNoteInMain(note.id, { isNew: true });
     } catch (e) {
       console.error("Failed to create note", e);
     }
-  }, [openNoteInStickyWindow]);
+  }, [openNoteInStickyWindow, openNoteInMain]);
+
+  const createNewImage = useCallback(async () => {
+    try {
+      const image = await window.harness.images.create();
+      setImages((prev) =>
+        [image, ...prev.filter((item) => item.id !== image.id)].sort(
+          (a, b) => b.updatedAt - a.updatedAt,
+        ),
+      );
+      openImageInMain(image.id);
+    } catch (e) {
+      console.error("Failed to create image", e);
+    }
+  }, [openImageInMain]);
 
   const handleAssignConversationId = useCallback((id: string) => {
     setConversationId(id);
@@ -347,12 +423,34 @@ export default function App() {
     }
   }, [conversationId, conversations]);
 
-  const handleNotesClick = useCallback(() => {
-    setPendingOpenNoteRequest(null);
-    setActiveNoteId(null);
-    setNotesOverviewNonce((n) => n + 1);
-    setView("notes");
+  const handleNoteDelete = useCallback(async (id: string) => {
+    const remaining = await window.harness.notes.delete(id);
+    setNotes(remaining);
+    if (activeNoteId === id) {
+      setActiveNoteId(null);
+      setPendingOpenNoteRequest(null);
+    }
+  }, [activeNoteId]);
+
+  const handleImageDelete = useCallback(async (id: string) => {
+    const remaining = await window.harness.images.delete(id);
+    setImages(remaining);
+    if (activeImageId === id) {
+      setActiveImageId(null);
+    }
+  }, [activeImageId]);
+
+  const handleImageUpdated = useCallback((image: GeneratedImage) => {
+    setImages((prev) =>
+      [image, ...prev.filter((item) => item.id !== image.id)].sort(
+        (a, b) => b.updatedAt - a.updatedAt,
+      ),
+    );
   }, []);
+
+  const refreshLibraryAfterSync = useCallback(async () => {
+    await Promise.all([refreshConversations(), loadNotesList(), loadImagesList()]);
+  }, [refreshConversations, loadNotesList, loadImagesList]);
 
   useEffect(() => {
     wireGlobalHotkeyActions({
@@ -399,21 +497,28 @@ export default function App() {
     <div className="app" data-sidebar={layout.sidebar}>
       <Sidebar
         conversations={sidebarConversations}
+        notes={notes}
+        images={images}
         conversationId={conversationId}
+        activeNoteId={activeNoteId}
+        activeImageId={activeImageId}
         view={view}
         onViewChange={setView}
         onConversationSelect={setConversationId}
         onConversationDelete={handleConversationDelete}
+        onSelectNote={openNoteInMain}
+        onNoteDelete={handleNoteDelete}
+        onSelectImage={openImageInMain}
+        onImageDelete={handleImageDelete}
         onNewChat={createNew}
         onNewNote={() => void createNewNote()}
+        onNewImage={() => void createNewImage()}
         activeChatProcessing={activeChatProcessing}
         titleGenInFlight={titleGenInFlight}
         appVersion={appVersion}
         updateStatus={updateStatus}
         onUpdateClick={handleUpdateClick}
-        notesItemActive={view === "notes" && notesScreen === "list"}
-        onNotesClick={handleNotesClick}
-        onSyncComplete={refreshConversations}
+        onSyncComplete={refreshLibraryAfterSync}
       />
       <main className="main">
         {(view === "chat" || activeChatProcessing) && (
@@ -446,10 +551,7 @@ export default function App() {
               onChatActivityChange={handleChatActivityChange}
               focusComposerNonce={focusComposerNonce}
               onWindowSizeToggle={handleWindowSizeToggle}
-              onOpenNotesView={(noteId) => {
-                setPendingOpenNoteRequest({ id: noteId, nonce: Date.now() });
-                setView("notes");
-              }}
+              onOpenNotesView={(noteId) => openNoteInMain(noteId)}
               openAIConfigured={!setupStateLoaded || openAIConfigured}
             />
           </div>
@@ -463,29 +565,25 @@ export default function App() {
               void refreshSetupState();
             }}
             onImportComplete={loadConversations}
-            onSyncComplete={refreshConversations}
+            onSyncComplete={refreshLibraryAfterSync}
           />
         )}
         {view === "tasks" && <TasksView />}
         {view === "notes" && (
           <NotesView
+            notes={notes}
+            onNotesChange={setNotes}
             initialOpenNoteId={pendingOpenNoteRequest?.id ?? null}
             initialOpenNoteRequestNonce={pendingOpenNoteRequest?.nonce}
+            initialOpenNoteIsNew={pendingOpenNoteRequest?.isNew}
             onInitialOpenNoteHandled={() => setPendingOpenNoteRequest(null)}
-            resetToOverviewNonce={notesOverviewNonce}
-            onScreenChange={setNotesScreen}
             onActiveNoteChange={setActiveNoteId}
           />
         )}
+        {view === "images" && (
+          <ImageCanvasView imageId={activeImageId} onImageUpdated={handleImageUpdated} />
+        )}
       </main>
-      {layout.gridOverlay !== "off" && (
-        <div
-          className="app-grid-overlay"
-          data-grid-overlay={layout.gridOverlay}
-          data-testid="app-grid-overlay"
-          aria-hidden
-        />
-      )}
       <SetupNoticeModal
         open={setupNoticeOpen && setupGaps.length > 0}
         gaps={setupGaps}

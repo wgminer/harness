@@ -1,4 +1,10 @@
-/* Shared modal shell — use with Modal.tsx */
+/* Shared modal shell — use with Modal.tsx
+ *
+ * Footer button conventions:
+ *   Dismiss / secondary = .btn
+ *   Affirm / save       = .btn-primary
+ *   Destroy / delete    = .btn-danger
+ */
 
 .app-modal-backdrop {
   position: fixed;
@@ -24,6 +30,10 @@
   box-shadow: var(--shadow);
 }
 
+.app-modal--lg {
+  max-width: min(720px, 96vw);
+}
+
 .app-modal--scrollable {
   max-height: min(90vh, 560px);
 }
@@ -47,9 +57,6 @@
 
 .app-modal-close {
   flex-shrink: 0;
-  width: var(--space-6);
-  height: var(--space-6);
-  min-height: var(--space-6);
 }
 
 .app-modal-close svg {
@@ -92,6 +99,27 @@
 
 .app-modal-field__hint code {
   font-size: inherit;
+}
+
+.app-modal-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  cursor: pointer;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--font-size);
+  line-height: var(--line-height-normal);
+}
+
+.app-modal-check__input {
+  margin: 0.2em 0 0;
+  flex-shrink: 0;
+}
+
+.app-modal-check__text {
+  min-width: 0;
 }
 
 .app-modal-body select {
@@ -157,68 +185,6 @@
   margin-left: auto;
 }
 
-.app-modal-footer .btn-cancel {
+.app-modal-footer .btn-danger {
   gap: var(--space-2);
-}
-
-.setup-notice-lead {
-  margin: 0;
-  color: var(--fg-muted);
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-normal);
-}
-
-.setup-notice-section + .setup-notice-section {
-  margin-top: var(--space-3);
-}
-
-.setup-notice-heading {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size-caption);
-  font-weight: 600;
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.setup-notice-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.setup-notice-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-edge);
-}
-
-.setup-notice-item__body {
-  min-width: 0;
-}
-
-.setup-notice-item__body strong {
-  display: block;
-  margin-bottom: var(--space-1);
-  font-size: var(--font-size-caption);
-}
-
-.setup-notice-item__body p {
-  margin: 0;
-  color: var(--fg-muted);
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-snug);
-}
-
-.setup-notice-item > .btn {
-  flex-shrink: 0;
-  white-space: nowrap;
 }

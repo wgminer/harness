@@ -39,7 +39,7 @@ export function SetupNoticeModal({ open, gaps, onConfigure, onDismiss }: SetupNo
                   <strong>{gap.title}</strong>
                   <p>{gap.detail}</p>
                 </div>
-                <button type="button" className="btn btn-chat-secondary" onClick={() => onConfigure(gap)}>
+                <button type="button" className="btn btn-compact" onClick={() => onConfigure(gap)}>
                   Set up
                 </button>
               </li>
@@ -57,7 +57,7 @@ export function SetupNoticeModal({ open, gaps, onConfigure, onDismiss }: SetupNo
                   <strong>{gap.title}</strong>
                   <p>{gap.detail}</p>
                 </div>
-                <button type="button" className="btn btn-chat-secondary" onClick={() => onConfigure(gap)}>
+                <button type="button" className="btn btn-compact" onClick={() => onConfigure(gap)}>
                   Set up
                 </button>
               </li>

@@ -16,14 +16,13 @@ use crate::env_util::{app_display_name, is_global_hotkey_disabled, is_harness_e2
 use crate::fn_monitor::{resolve_fn_monitor_path, FnMonitorCallbacks, FnMonitorProcess};
 use crate::global_recording_capture::NativeCapture;
 use crate::global_recording_effects::{
-    run_recording_effects, show_and_focus_main, unregister_escape,
+    load_tray_image, run_recording_effects, show_and_focus_main, unregister_escape,
 };
 use crate::global_recording_session::{
     create_initial_fn_recording_state, reduce_escape, reduce_fn_edge, FnEdge, FnRecordingState,
     SessionMode,
 };
 use crate::memory::AppState;
-use crate::paths::resolve_bundled_resource;
 use crate::settings::get_settings;
 use crate::storage::WriteChains;
 
@@ -79,11 +78,6 @@ impl GlobalRecordingRuntime {
             _ => "idle",
         }
     }
-}
-
-fn load_tray_image(file_name: &str) -> Option<Image<'static>> {
-    let path = resolve_bundled_resource(file_name)?;
-    Image::from_path(&path).ok()
 }
 
 pub(crate) async fn dispatch_fn_edge(

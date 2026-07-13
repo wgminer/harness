@@ -429,7 +429,7 @@
 
 .sidebar .sidebar-workspace__btn:hover:not(:disabled) {
   color: var(--fg);
-  background: var(--overlay-subtle);
+  background: #181a1d;
   border-color: transparent;
 }
 

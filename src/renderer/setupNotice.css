@@ -1,0 +1,63 @@
+/* Setup notice modal content — used with SetupNoticeModal + Modal shell */
+
+.setup-notice-lead {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-normal);
+}
+
+.setup-notice-section + .setup-notice-section {
+  margin-top: var(--space-3);
+}
+
+.setup-notice-heading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.setup-notice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.setup-notice-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-edge);
+}
+
+.setup-notice-item__body {
+  min-width: 0;
+}
+
+.setup-notice-item__body strong {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: var(--font-size-caption);
+}
+
+.setup-notice-item__body p {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-snug);
+}
+
+.setup-notice-item > .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

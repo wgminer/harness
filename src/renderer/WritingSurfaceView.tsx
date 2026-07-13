@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  ArrowLeft,
   ArrowRightLeft,
   Check,
   PaintBucket,
@@ -11,14 +10,14 @@ import {
   RefreshCw,
   SpellCheck,
   SquareArrowOutUpRight,
-  SquarePen,
   Trash2,
   X,
 } from "lucide-react";
 import {
   DEFAULT_NOTE_TEMPLATES,
+  getDisplayNoteTitle,
   normalizeNoteTemplates,
-  stripLeadingMarkdownHeading,
+  resolveNoteTemplateContent,
   type NoteSummary,
   type NoteTemplateConfig,
 } from "../shared/writing";
@@ -29,13 +28,10 @@ import {
   measureNotesEditorLineWidth,
 } from "./notesEditorExtensions";
 import { useScrolledHeader } from "./useScrolledHeader";
-import { WorkspaceHeader } from "./WorkspaceHeader";
-import { WorkspaceListSearch } from "./WorkspaceListSearch";
 
 type Status =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "creating" }
   | { kind: "saving" }
   | { kind: "deleting" }
   | { kind: "saved" }
@@ -76,73 +72,32 @@ function measureLongestSelectedLineWidth(view: NonNullable<ReturnType<NotesCodeE
   return maxWidth;
 }
 
-const noteRelativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-
-function formatTimeAgo(ms: number): string {
-  if (!ms || !Number.isFinite(ms)) return "Never";
-  const deltaMs = ms - Date.now();
-  const minuteMs = 60_000;
-  const hourMs = 60 * minuteMs;
-  const dayMs = 24 * hourMs;
-  const weekMs = 7 * dayMs;
-  const monthMs = 30 * dayMs;
-  const yearMs = 365 * dayMs;
-
-  if (Math.abs(deltaMs) < hourMs) {
-    const minutes = Math.round(deltaMs / minuteMs);
-    return noteRelativeTimeFormatter.format(minutes, "minute");
-  }
-  if (Math.abs(deltaMs) < dayMs) {
-    const hours = Math.round(deltaMs / hourMs);
-    return noteRelativeTimeFormatter.format(hours, "hour");
-  }
-  if (Math.abs(deltaMs) < weekMs) {
-    const days = Math.round(deltaMs / dayMs);
-    return noteRelativeTimeFormatter.format(days, "day");
-  }
-  if (Math.abs(deltaMs) < yearMs) {
-    const months = Math.round(deltaMs / monthMs);
-    return noteRelativeTimeFormatter.format(months, "month");
-  }
-  const years = Math.round(deltaMs / yearMs);
-  return noteRelativeTimeFormatter.format(years, "year");
-}
-
-function formatWordCount(count: number): string {
-  const normalized = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
-  return `${normalized.toLocaleString()} ${normalized === 1 ? "word" : "words"}`;
-}
-
-function getDisplayNoteTitle(title: string): string {
-  const stripped = stripLeadingMarkdownHeading(title);
-  return stripped || title;
-}
-
 interface NotesViewProps {
+  notes: NoteSummary[];
+  onNotesChange: Dispatch<SetStateAction<NoteSummary[]>>;
   initialOpenNoteId?: string | null;
   initialOpenNoteRequestNonce?: number;
+  /** True when initialOpenNoteId is a just-created, untouched note — shows the inline template picker. */
+  initialOpenNoteIsNew?: boolean;
   onInitialOpenNoteHandled?: () => void;
-  resetToOverviewNonce?: number;
-  onScreenChange?: (screen: "list" | "detail") => void;
   onActiveNoteChange?: (noteId: string | null) => void;
 }
 
 export function NotesView({
+  notes,
+  onNotesChange: setNotes,
   initialOpenNoteId,
   initialOpenNoteRequestNonce,
+  initialOpenNoteIsNew,
   onInitialOpenNoteHandled,
-  resetToOverviewNonce,
-  onScreenChange,
   onActiveNoteChange,
 }: NotesViewProps) {
-  const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
-  const [notes, setNotes] = useState<NoteSummary[]>([]);
-  const [listSearchQuery, setListSearchQuery] = useState("");
+  const { scrollRef, onScroll } = useScrolledHeader();
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
     DEFAULT_NOTE_TEMPLATES.map((template) => ({ ...template })),
   );
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [screen, setScreen] = useState<"list" | "detail">("list");
+  const [isFreshNote, setIsFreshNote] = useState(false);
   const [draft, setDraft] = useState<string>("");
   const [savedDraft, setSavedDraft] = useState<string>("");
   const [status, setStatus] = useState<Status>({ kind: "loading" });
@@ -172,7 +127,6 @@ export function NotesView({
   const asidePanelRef = useRef<HTMLElement | null>(null);
   const pendingEditorFocusRef = useRef(false);
   const pendingEditorCaretRef = useRef<number | null>(null);
-  const lastOverviewNonceRef = useRef(resetToOverviewNonce);
 
   const scheduleEditorFocus = useCallback((caret?: number) => {
     pendingEditorFocusRef.current = true;
@@ -183,12 +137,6 @@ export function NotesView({
     () => notes.find((note) => note.id === selectedNoteId) ?? null,
     [selectedNoteId, notes],
   );
-  const filteredNotes = useMemo(() => {
-    const q = listSearchQuery.trim().toLowerCase();
-    if (!q) return notes;
-    return notes.filter((note) => getDisplayNoteTitle(note.title).toLowerCase().includes(q));
-  }, [notes, listSearchQuery]);
-  const listSearching = listSearchQuery.trim().length > 0;
   const notesApi = window.harness.notes;
   const hasSelection = selection != null;
   const showSelectionToolbar = hasSelection && !asideExpanded;
@@ -206,6 +154,22 @@ export function NotesView({
       copyFeedbackTimerRef.current = null;
     }
   }, []);
+
+  const resetToEmptyState = useCallback(() => {
+    closeAsidePanel();
+    setSelectedNoteId(null);
+    setDraft("");
+    setSavedDraft("");
+    setIsFreshNote(false);
+  }, [closeAsidePanel]);
+
+  // Sidebar (or another surface) may delete the open note — clear the editor.
+  useEffect(() => {
+    if (!selectedNoteId) return;
+    if (notes.some((note) => note.id === selectedNoteId)) return;
+    resetToEmptyState();
+    setStatus({ kind: "idle" });
+  }, [notes, resetToEmptyState, selectedNoteId]);
 
   const updateAsidePosition = useCallback((range: SelectionRange | null) => {
     const view = editorRef.current?.getView();
@@ -290,18 +254,6 @@ export function NotesView({
     updateToolbarPosition(range);
   }, [closeAsidePanel, draft, selection, updateAsidePosition, updateToolbarPosition]);
 
-  const loadNotes = useCallback(async () => {
-    setStatus({ kind: "loading" });
-    try {
-      const list = await notesApi.list();
-      setNotes(list);
-      setSelectedNoteId((prev) => (prev != null && list.some((note) => note.id === prev) ? prev : null));
-      setStatus({ kind: "idle" });
-    } catch (e) {
-      setStatus({ kind: "error", message: String(e) });
-    }
-  }, [notesApi]);
-
   const loadActiveNote = useCallback(async (id: string) => {
     try {
       const note = await notesApi.read(id);
@@ -330,10 +282,9 @@ export function NotesView({
     } catch (e) {
       setStatus({ kind: "error", message: String(e) });
     }
-  }, [closeAsidePanel, notesApi]);
+  }, [closeAsidePanel, notesApi, setNotes]);
 
   useEffect(() => {
-    void loadNotes();
     void window.harness.settings
       .get()
       .then((settings) => {
@@ -353,7 +304,7 @@ export function NotesView({
         window.clearTimeout(copyFeedbackTimerRef.current);
       }
     };
-  }, [loadNotes]);
+  }, []);
 
   useEffect(() => {
     const onTemplatesUpdated = (event: Event) => {
@@ -369,10 +320,10 @@ export function NotesView({
     let cancelled = false;
     const openInitialNote = async () => {
       scheduleEditorFocus();
-      setScreen("detail");
       setStatus({ kind: "loading" });
       await loadActiveNote(initialOpenNoteId);
       if (!cancelled) {
+        setIsFreshNote(!!initialOpenNoteIsNew);
         onInitialOpenNoteHandled?.();
       }
     };
@@ -384,6 +335,7 @@ export function NotesView({
     };
   }, [
     initialOpenNoteId,
+    initialOpenNoteIsNew,
     initialOpenNoteRequestNonce,
     loadActiveNote,
     onInitialOpenNoteHandled,
@@ -391,24 +343,11 @@ export function NotesView({
   ]);
 
   useEffect(() => {
-    if (resetToOverviewNonce == null) return;
-    if (lastOverviewNonceRef.current === resetToOverviewNonce) return;
-    lastOverviewNonceRef.current = resetToOverviewNonce;
-    closeAsidePanel();
-    setScreen("list");
-  }, [closeAsidePanel, resetToOverviewNonce]);
-
-  useEffect(() => {
-    onScreenChange?.(screen);
-  }, [onScreenChange, screen]);
-
-  useEffect(() => {
-    onActiveNoteChange?.(screen === "detail" ? selectedNoteId : null);
-  }, [onActiveNoteChange, screen, selectedNoteId]);
+    onActiveNoteChange?.(selectedNoteId);
+  }, [onActiveNoteChange, selectedNoteId]);
 
   useEffect(() => {
     if (!pendingEditorFocusRef.current) return;
-    if (screen !== "detail") return;
     if (status.kind === "loading" || status.kind === "deleting") return;
     if (status.kind === "error") {
       pendingEditorFocusRef.current = false;
@@ -424,11 +363,7 @@ export function NotesView({
         editorRef.current?.setSelection(caret, caret);
       }
     });
-  }, [screen, selectedNoteId, status.kind]);
-
-  useEffect(() => {
-    if (screen !== "detail") setNoteToolbarMenuOpen(false);
-  }, [screen]);
+  }, [selectedNoteId, status.kind]);
 
   useEffect(() => {
     if (!noteToolbarMenuOpen) return;
@@ -448,6 +383,10 @@ export function NotesView({
   }, [noteToolbarMenuOpen]);
 
   const dirty = draft !== savedDraft;
+
+  useEffect(() => {
+    if (dirty) setIsFreshNote(false);
+  }, [dirty]);
 
   const save = useCallback(async () => {
     if (!dirty || !selectedNoteId) return;
@@ -473,33 +412,17 @@ export function NotesView({
     } catch (e) {
       setStatus({ kind: "error", message: String(e) });
     }
-  }, [selectedNoteId, dirty, draft, notesApi]);
+  }, [selectedNoteId, dirty, draft, notesApi, setNotes]);
 
-  const createNote = useCallback(async (template?: NoteTemplateConfig) => {
-    setStatus({ kind: "creating" });
-    try {
-      const note = await notesApi.create(template?.title, template?.content);
-      const summary = {
-        id: note.id,
-        title: note.title,
-        updatedAt: note.updatedAt,
-        createdAt: note.createdAt,
-        wordCount: note.wordCount,
-      };
-      setNotes((prev) => [summary, ...prev].sort((a, b) => b.updatedAt - a.updatedAt));
-      setSelectedNoteId(note.id);
-      setDraft(note.content);
-      setSavedDraft(note.content);
-      setScreen("detail");
-      closeAsidePanel();
-      setStatus({ kind: "idle" });
-      const initialCursorOffset = typeof note.initialCursorOffset === "number" ? note.initialCursorOffset : null;
-      const caret = Math.max(0, Math.min(initialCursorOffset ?? note.content.length, note.content.length));
+  const applyTemplate = useCallback(
+    (template: NoteTemplateConfig) => {
+      const { content, cursorOffset } = resolveNoteTemplateContent(template.content);
+      setDraft(content);
+      const caret = Math.max(0, Math.min(cursorOffset ?? content.length, content.length));
       scheduleEditorFocus(caret);
-    } catch (e) {
-      setStatus({ kind: "error", message: String(e) });
-    }
-  }, [closeAsidePanel, notesApi, scheduleEditorFocus]);
+    },
+    [scheduleEditorFocus],
+  );
 
   const deleteActiveNote = useCallback(async () => {
     if (!selectedNoteId) return;
@@ -507,31 +430,12 @@ export function NotesView({
     try {
       const next = await notesApi.delete(selectedNoteId);
       setNotes(next);
-      setSelectedNoteId(null);
-      setDraft("");
-      setSavedDraft("");
-      setScreen("list");
-      closeAsidePanel();
+      resetToEmptyState();
       setStatus({ kind: "idle" });
     } catch (e) {
       setStatus({ kind: "error", message: String(e) });
     }
-  }, [selectedNoteId, closeAsidePanel, notesApi]);
-
-  const openNote = useCallback(
-    async (id: string) => {
-      scheduleEditorFocus();
-      setScreen("detail");
-      setStatus({ kind: "loading" });
-      await loadActiveNote(id);
-    },
-    [loadActiveNote, scheduleEditorFocus],
-  );
-
-  const goBackToList = useCallback(() => {
-    closeAsidePanel();
-    setScreen("list");
-  }, [closeAsidePanel]);
+  }, [selectedNoteId, resetToEmptyState, notesApi, setNotes]);
 
   const openInNewWindow = useCallback(async () => {
     if (!selectedNoteId || status.kind === "deleting") return;
@@ -541,11 +445,11 @@ export function NotesView({
         await save();
       }
       await window.harness.notes.openSticky(selectedNoteId);
-      goBackToList();
+      resetToEmptyState();
     } catch (e) {
       setStatus({ kind: "error", message: String(e) });
     }
-  }, [dirty, goBackToList, save, selectedNoteId, status.kind]);
+  }, [dirty, resetToEmptyState, save, selectedNoteId, status.kind]);
 
   const cycleNoteWidthMode = useCallback(() => {
     setNoteWidthMode((prev) => {
@@ -700,7 +604,7 @@ export function NotesView({
       window.clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = null;
     }
-    if (!dirty || !selectedNoteId || screen !== "detail" || status.kind === "loading" || status.kind === "deleting") {
+    if (!dirty || !selectedNoteId || status.kind === "loading" || status.kind === "deleting") {
       return;
     }
     autoSaveTimerRef.current = window.setTimeout(() => {
@@ -713,7 +617,7 @@ export function NotesView({
         autoSaveTimerRef.current = null;
       }
     };
-  }, [dirty, save, screen, selectedNoteId, status.kind]);
+  }, [dirty, save, selectedNoteId, status.kind]);
 
   useEffect(() => {
     if (!selection) return;
@@ -746,359 +650,313 @@ export function NotesView({
     return () => window.removeEventListener("pointerdown", onPointerDown, true);
   }, [asideExpanded, dismissAside]);
 
+  const showInlineTemplates = isFreshNote && !dirty;
+
   return (
     <div className="workspace-page notes-surface">
-      {screen === "list" ? (
-        <WorkspaceHeader
-          title="Editor"
-          icon={<SquarePen size={16} />}
-          scrolled={headerScrolled}
-          titleRowClassName="notes-surface__header-title-row"
-        />
-      ) : null}
       <div
         ref={scrollRef}
-        className={`workspace-scroll notes-surface__scroll${screen === "detail" ? " notes-surface__scroll--detail" : ""}`}
+        className="workspace-scroll notes-surface__scroll notes-surface__scroll--detail"
         onScroll={onScroll}
       >
-        {screen === "list" ? (
-          <section className="workspace-content workspace-stack">
-            <WorkspaceListSearch
-              value={listSearchQuery}
-              onChange={setListSearchQuery}
-              placeholder="Search notes…"
-              aria-label="Search notes"
-            />
-            <div className="workspace-section" aria-labelledby="notes-templates-label">
-              <h3 id="notes-templates-label" className="workspace-section-label">
-                Templates
-              </h3>
-              <div className="notes-surface__templates" role="group" aria-labelledby="notes-templates-label">
-                {noteTemplates.map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    className={`notes-surface__template-btn notes-surface__template-btn--${template.id}`}
-                    onClick={() => void createNote(template)}
-                    disabled={status.kind === "creating" || status.kind === "saving" || status.kind === "deleting"}
-                  >
-                    <span className="notes-surface__template-title">{template.title}</span>
-                    <span className="notes-surface__template-description">{template.description}</span>
-                  </button>
-                ))}
-              </div>
+        <section className="notes-surface__detail">
+          {selectedNoteId == null && status.kind !== "loading" ? (
+            <div className="notes-surface__empty-state">
+              <p className="notes-surface__empty">Select a note from the sidebar.</p>
             </div>
-            <div className="workspace-section" aria-labelledby="notes-recent-label">
-              <h3 id="notes-recent-label" className="workspace-section-label">
-                Recent
-              </h3>
-              <ul className="notes-surface__notes" aria-labelledby="notes-recent-label">
-                {filteredNotes.map((note) => {
-                  const displayTitle = getDisplayNoteTitle(note.title);
-                  return (
-                    <li key={note.id}>
+          ) : (
+            <>
+              <div className="notes-surface__toolbar">
+                <div className="notes-surface__meta">
+                  <strong
+                    className="notes-surface__meta-title"
+                    title={activeNote ? getDisplayNoteTitle(activeNote.title) : "Note"}
+                  >
+                    {activeNote ? getDisplayNoteTitle(activeNote.title) : "Note"}
+                  </strong>
+                </div>
+                <div className="notes-surface__toolbar-menu-wrap" ref={noteToolbarMenuRef}>
+                  <button
+                    type="button"
+                    className="btn btn-icon"
+                    aria-expanded={noteToolbarMenuOpen}
+                    aria-haspopup="menu"
+                    aria-label="Note actions"
+                    title="More actions"
+                    onClick={() => setNoteToolbarMenuOpen((v) => !v)}
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+                  {noteToolbarMenuOpen ? (
+                    <div className="notes-surface__toolbar-menu" role="menu" aria-label="Note actions">
                       <button
                         type="button"
-                        className="notes-surface__note-item"
-                        onClick={() => void openNote(note.id)}
+                        className="notes-surface__toolbar-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          cycleNoteWidthMode();
+                          setNoteToolbarMenuOpen(false);
+                        }}
                       >
-                        <span className="notes-surface__note-title" title={displayTitle}>
-                          {displayTitle}
-                        </span>
-                        <span className="notes-surface__note-meta">
-                          <span className="notes-surface__note-word-count">{formatWordCount(note.wordCount)}</span>
-                          <span className="notes-surface__note-time">{formatTimeAgo(note.updatedAt)}</span>
-                        </span>
+                        <ArrowRightLeft size={16} aria-hidden />
+                        <span>Text width ({NOTE_WIDTH_LABELS[noteWidthMode]})</span>
                       </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              {filteredNotes.length === 0 ? (
-                <p className="notes-surface__empty">
-                  {listSearching ? "No notes match your search." : "No notes yet. Create one to get started."}
-                </p>
-              ) : null}
-            </div>
-          </section>
-        ) : (
-          <section className="notes-surface__detail">
-            <div className="notes-surface__toolbar">
-              <button
-                type="button"
-                className="btn btn-icon"
-                onClick={goBackToList}
-                aria-label="Back to editor"
-                title="Back"
-              >
-                <ArrowLeft size={16} />
-              </button>
-              <div className="notes-surface__meta">
-                <strong
-                  className="notes-surface__meta-title"
-                  title={activeNote ? getDisplayNoteTitle(activeNote.title) : "Note"}
-                >
-                  {activeNote ? getDisplayNoteTitle(activeNote.title) : "Note"}
-                </strong>
+                      <button
+                        type="button"
+                        className="notes-surface__toolbar-menu-item"
+                        role="menuitem"
+                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                        onClick={() => {
+                          const title = activeNote ? getDisplayNoteTitle(activeNote.title) : "Note";
+                          const html = buildNotePrintHtml(title, draft);
+                          void window.harness.notes.print(html, title);
+                          setNoteToolbarMenuOpen(false);
+                        }}
+                      >
+                        <Printer size={16} aria-hidden />
+                        <span>Print</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="notes-surface__toolbar-menu-item"
+                        role="menuitem"
+                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                        onClick={() => {
+                          const id = selectedNoteId;
+                          if (!id) return;
+                          void window.harness.notes.showInFolder(id);
+                          setNoteToolbarMenuOpen(false);
+                        }}
+                      >
+                        <FolderOpen size={16} aria-hidden />
+                        <span>Show file</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="notes-surface__toolbar-menu-item"
+                        role="menuitem"
+                        data-testid="notes-open-in-new-window"
+                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                        onClick={() => {
+                          void openInNewWindow();
+                        }}
+                      >
+                        <SquareArrowOutUpRight size={16} aria-hidden />
+                        <span>Open in new window</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="notes-surface__toolbar-menu-item notes-surface__toolbar-menu-item--danger"
+                        role="menuitem"
+                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                        onClick={() => {
+                          void deleteActiveNote();
+                          setNoteToolbarMenuOpen(false);
+                        }}
+                      >
+                        <Trash2 size={16} aria-hidden />
+                        <span>Delete note</span>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
-              <div className="notes-surface__toolbar-menu-wrap" ref={noteToolbarMenuRef}>
-                <button
-                  type="button"
-                  className="btn btn-icon"
-                  aria-expanded={noteToolbarMenuOpen}
-                  aria-haspopup="menu"
-                  aria-label="Note actions"
-                  title="More actions"
-                  onClick={() => setNoteToolbarMenuOpen((v) => !v)}
-                >
-                  <MoreVertical size={16} />
-                </button>
-                {noteToolbarMenuOpen ? (
-                  <div className="notes-surface__toolbar-menu" role="menu" aria-label="Note actions">
+              <div
+                ref={editorWrapRef}
+                className={`notes-surface__editor-wrap notes-surface__editor-wrap--${noteWidthMode}`}
+              >
+                <NotesCodeEditor
+                  ref={editorRef}
+                  className="notes-surface__editor notes-code-editor"
+                  data-testid="notes-editor"
+                  aria-label="Editor"
+                  placeholder={status.kind === "loading" ? "Loading..." : "Write your note here..."}
+                  value={draft}
+                  readOnly={status.kind === "loading" || status.kind === "deleting"}
+                  onChange={setDraft}
+                  onSelectionChange={updateSelectionState}
+                  onScroll={handleEditorScroll}
+                />
+                {showSelectionToolbar ? (
+                  <div
+                    ref={selectionToolbarRef}
+                    className="notes-selection-toolbar"
+                    role="toolbar"
+                    aria-label="Selection actions"
+                    style={{
+                      top: `${toolbarPosition.top}px`,
+                      left: `${toolbarPosition.left}px`,
+                    }}
+                  >
                     <button
                       type="button"
-                      className="notes-surface__toolbar-menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        cycleNoteWidthMode();
-                        setNoteToolbarMenuOpen(false);
-                      }}
+                      className="notes-selection-toolbar__btn"
+                      aria-label={copyFeedback ? "Copied" : "Copy"}
+                      title={copyFeedback ? "Copied!" : "Copy"}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => void handleCopySelection()}
                     >
-                      <ArrowRightLeft size={16} aria-hidden />
-                      <span>Text width ({NOTE_WIDTH_LABELS[noteWidthMode]})</span>
+                      {copyFeedback ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
                     </button>
                     <button
                       type="button"
-                      className="notes-surface__toolbar-menu-item"
-                      role="menuitem"
-                      disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                      onClick={() => {
-                        const title = activeNote ? getDisplayNoteTitle(activeNote.title) : "Note";
-                        const html = buildNotePrintHtml(title, draft);
-                        void window.harness.notes.print(html, title);
-                        setNoteToolbarMenuOpen(false);
-                      }}
+                      className="notes-selection-toolbar__btn"
+                      aria-label="Spell check"
+                      title="Spell check"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => void handleSpellCheckSelection()}
+                      disabled={spellCheckLoading}
                     >
-                      <Printer size={16} aria-hidden />
-                      <span>Print</span>
+                      {spellCheckLoading ? (
+                        <RefreshCw size={16} aria-hidden className="notes-aside-panel__regen-icon--spinning" />
+                      ) : (
+                        <SpellCheck size={16} aria-hidden />
+                      )}
                     </button>
                     <button
                       type="button"
-                      className="notes-surface__toolbar-menu-item"
-                      role="menuitem"
-                      disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                      onClick={() => {
-                        const id = selectedNoteId;
-                        if (!id) return;
-                        void window.harness.notes.showInFolder(id);
-                        setNoteToolbarMenuOpen(false);
-                      }}
+                      className="notes-selection-toolbar__btn"
+                      aria-label="AI edit"
+                      title="AI edit"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={openAiAside}
                     >
-                      <FolderOpen size={16} aria-hidden />
-                      <span>Show file</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="notes-surface__toolbar-menu-item"
-                      role="menuitem"
-                      data-testid="notes-open-in-new-window"
-                      disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                      onClick={() => {
-                        void openInNewWindow();
-                      }}
-                    >
-                      <SquareArrowOutUpRight size={16} aria-hidden />
-                      <span>Open in new window</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="notes-surface__toolbar-menu-item notes-surface__toolbar-menu-item--danger"
-                      role="menuitem"
-                      disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                      onClick={() => {
-                        void deleteActiveNote();
-                        setNoteToolbarMenuOpen(false);
-                      }}
-                    >
-                      <Trash2 size={16} aria-hidden />
-                      <span>Delete note</span>
+                      <PaintBucket size={16} aria-hidden />
                     </button>
                   </div>
                 ) : null}
-              </div>
-            </div>
-            <div
-              ref={editorWrapRef}
-              className={`notes-surface__editor-wrap notes-surface__editor-wrap--${noteWidthMode}`}
-            >
-              <NotesCodeEditor
-                ref={editorRef}
-                className="notes-surface__editor notes-code-editor"
-                data-testid="notes-editor"
-                aria-label="Editor"
-                placeholder={status.kind === "loading" ? "Loading..." : "Write your note here..."}
-                value={draft}
-                readOnly={status.kind === "loading" || status.kind === "deleting"}
-                onChange={setDraft}
-                onSelectionChange={updateSelectionState}
-                onScroll={handleEditorScroll}
-              />
-              {showSelectionToolbar ? (
-                <div
-                  ref={selectionToolbarRef}
-                  className="notes-selection-toolbar"
-                  role="toolbar"
-                  aria-label="Selection actions"
-                  style={{
-                    top: `${toolbarPosition.top}px`,
-                    left: `${toolbarPosition.left}px`,
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="notes-selection-toolbar__btn"
-                    aria-label={copyFeedback ? "Copied" : "Copy"}
-                    title={copyFeedback ? "Copied!" : "Copy"}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => void handleCopySelection()}
+                {showAsidePanel ? (
+                  <section
+                    ref={asidePanelRef}
+                    className="notes-aside-panel notes-aside-panel--floating"
+                    aria-label="Inline edit assistant"
+                    style={{
+                      top: `${asidePosition.top}px`,
+                      left: `${asidePosition.left}px`,
+                      width: `${asidePosition.width}px`,
+                    }}
                   >
-                    {copyFeedback ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
-                  </button>
-                  <button
-                    type="button"
-                    className="notes-selection-toolbar__btn"
-                    aria-label="Spell check"
-                    title="Spell check"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => void handleSpellCheckSelection()}
-                    disabled={spellCheckLoading}
-                  >
-                    {spellCheckLoading ? (
-                      <RefreshCw size={16} aria-hidden className="notes-aside-panel__regen-icon--spinning" />
-                    ) : (
-                      <SpellCheck size={16} aria-hidden />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    className="notes-selection-toolbar__btn"
-                    aria-label="AI edit"
-                    title="AI edit"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={openAiAside}
-                  >
-                    <PaintBucket size={16} aria-hidden />
-                  </button>
-                </div>
-              ) : null}
-              {showAsidePanel ? (
-                <section
-                  ref={asidePanelRef}
-                  className="notes-aside-panel notes-aside-panel--floating"
-                  aria-label="Inline edit assistant"
-                  style={{
-                    top: `${asidePosition.top}px`,
-                    left: `${asidePosition.left}px`,
-                    width: `${asidePosition.width}px`,
-                  }}
-                >
-                  <div className="notes-aside-panel__preview notes-aside-panel__input-wrap">
-                    <div className="notes-aside-panel__header">
-                      <button
-                        type="button"
-                        className="notes-aside-panel__cancel-btn"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={dismissAside}
-                        aria-label="Close edit assistant"
-                        title="Close"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                    <textarea
-                      id="notes-aside-output"
-                      className="notes-aside-panel__textarea notes-aside-panel__textarea--output"
-                      value={panelOutput}
-                      onChange={(e) => setPanelOutput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          e.preventDefault();
-                          dismissAside();
-                        }
-                      }}
-                      placeholder={selection?.text || "Generated rewrite appears here..."}
-                      rows={previewRows}
-                    />
-                    {panelOutput.trim() ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm notes-aside-panel__corner-btn notes-aside-panel__corner-btn--approve"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={approveAside}
-                      >
-                        <PaintBucket size={12} aria-hidden />
-                        Replace
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="notes-aside-panel__body">
-                    <div className="notes-aside-panel__field">
-                      <div className="notes-aside-panel__input-wrap">
-                        <textarea
-                          ref={promptRef}
-                          id="notes-aside-prompt"
-                          className="notes-aside-panel__textarea"
-                          value={panelPrompt}
-                          onChange={(e) => setPanelPrompt(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              e.preventDefault();
-                              dismissAside();
-                              return;
-                            }
-                            const nativeEvent = e.nativeEvent as KeyboardEvent;
-                            const isComposing = nativeEvent.isComposing;
-                            const hasModifier = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey;
-                            if (isComposing || e.repeat) {
-                              return;
-                            }
-                            if (e.key === "Enter" && !hasModifier) {
-                              e.preventDefault();
-                              if (asideStatus.kind !== "loading") {
-                                void regenerateAside();
-                              }
-                            }
-                          }}
-                          rows={3}
-                          placeholder="Describe your change"
-                        />
+                    <div className="notes-aside-panel__preview notes-aside-panel__input-wrap">
+                      <div className="notes-aside-panel__header">
                         <button
                           type="button"
-                          className="btn btn-sm notes-aside-panel__corner-btn"
+                          className="btn btn-icon-sm notes-aside-panel__close"
                           onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => void regenerateAside()}
-                          disabled={asideStatus.kind === "loading"}
+                          onClick={dismissAside}
+                          aria-label="Close edit assistant"
+                          title="Close"
                         >
-                          <RefreshCw
-                            size={12}
-                            className={
-                              asideStatus.kind === "loading" ? "notes-aside-panel__regen-icon--spinning" : undefined
-                            }
-                          />
-                          Generate
+                          <X size={12} />
                         </button>
                       </div>
+                      <textarea
+                        id="notes-aside-output"
+                        className="notes-aside-panel__textarea notes-aside-panel__textarea--output"
+                        value={panelOutput}
+                        onChange={(e) => setPanelOutput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            dismissAside();
+                          }
+                        }}
+                        placeholder={selection?.text || "Generated rewrite appears here..."}
+                        rows={previewRows}
+                      />
+                      {panelOutput.trim() ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm notes-aside-panel__corner-btn notes-aside-panel__corner-btn--approve"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={approveAside}
+                        >
+                          <PaintBucket size={12} aria-hidden />
+                          Replace
+                        </button>
+                      ) : null}
                     </div>
-                    {asideStatus.kind === "error" ? (
-                      <p className="notes-aside-panel__error">{asideStatus.message}</p>
-                    ) : null}
+                    <div className="notes-aside-panel__body">
+                      <div className="notes-aside-panel__field">
+                        <div className="notes-aside-panel__input-wrap">
+                          <textarea
+                            ref={promptRef}
+                            id="notes-aside-prompt"
+                            className="notes-aside-panel__textarea"
+                            value={panelPrompt}
+                            onChange={(e) => setPanelPrompt(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                e.preventDefault();
+                                dismissAside();
+                                return;
+                              }
+                              const nativeEvent = e.nativeEvent as KeyboardEvent;
+                              const isComposing = nativeEvent.isComposing;
+                              const hasModifier = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey;
+                              if (isComposing || e.repeat) {
+                                return;
+                              }
+                              if (e.key === "Enter" && !hasModifier) {
+                                e.preventDefault();
+                                if (asideStatus.kind !== "loading") {
+                                  void regenerateAside();
+                                }
+                              }
+                            }}
+                            rows={3}
+                            placeholder="Describe your change"
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-sm notes-aside-panel__corner-btn"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => void regenerateAside()}
+                            disabled={asideStatus.kind === "loading"}
+                          >
+                            <RefreshCw
+                              size={12}
+                              className={
+                                asideStatus.kind === "loading" ? "notes-aside-panel__regen-icon--spinning" : undefined
+                              }
+                            />
+                            Generate
+                          </button>
+                        </div>
+                      </div>
+                      {asideStatus.kind === "error" ? (
+                        <p className="notes-aside-panel__error">{asideStatus.message}</p>
+                      ) : null}
+                    </div>
+                  </section>
+                ) : null}
+                {showInlineTemplates ? (
+                  <div
+                    className="notes-surface__inline-templates workspace-section"
+                    aria-labelledby="notes-templates-label"
+                  >
+                    <h3 id="notes-templates-label" className="workspace-section-label">
+                      Start from a template
+                    </h3>
+                    <div className="notes-surface__templates" role="group" aria-labelledby="notes-templates-label">
+                      {noteTemplates.map((template) => (
+                        <button
+                          key={template.id}
+                          type="button"
+                          className={`notes-surface__template-btn notes-surface__template-btn--${template.id}`}
+                          onClick={() => applyTemplate(template)}
+                          disabled={status.kind === "saving" || status.kind === "deleting"}
+                        >
+                          <span className="notes-surface__template-title">{template.title}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </section>
-              ) : null}
-            </div>
-            {status.kind === "error" ? <p className="notes-surface__error">{status.message}</p> : null}
-          </section>
-        )}
+                ) : null}
+              </div>
+              {status.kind === "error" ? <p className="notes-surface__error">{status.message}</p> : null}
+            </>
+          )}
+        </section>
       </div>
     </div>
   );

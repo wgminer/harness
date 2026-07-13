@@ -342,7 +342,7 @@
   height: var(--icon-size-sm);
 }
 
-.app-modal-footer--spread .btn-cancel svg {
+.app-modal-footer--spread .btn-danger svg {
   width: var(--icon-size-compact);
   height: var(--icon-size-compact);
 }

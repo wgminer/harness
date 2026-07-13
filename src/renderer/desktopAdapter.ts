@@ -7,7 +7,11 @@ import type {
   RecordingLink,
   SystemPromptPreview,
 } from "../shared/types";
-import type { NoteEditProposalInput, NoteSpellCheckInput } from "../shared/writing";
+import type {
+  NoteEditProposalInput,
+  NoteSpellCheckInput,
+} from "../shared/writing";
+import type { ImageGenerateInput } from "../shared/images";
 import type { SyncResult, SyncStatus } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
 import { legacyIpcCommand, legacyIpcEvent } from "../shared/ipcNames";
@@ -235,6 +239,14 @@ export function createHarnessAdapter(): HarnessAPI {
         subscribeToWire<{ noteId: string }>(evt("notes:openInMain"), (payload) => {
           if (payload?.noteId) cb(payload.noteId);
         }),
+    },
+    images: {
+      list: () => invoke(cmd("images:list")),
+      create: () => invoke(cmd("images:create")),
+      read: (id: string) => invoke(cmd("images:read"), { id }),
+      delete: (id: string) => invoke(cmd("images:delete"), { id }),
+      generate: (input: ImageGenerateInput) =>
+        invoke(cmd("images:generate"), { input }),
     },
     recording: {
       signalFrontendReady: () => invoke(cmd("recording:signalFrontendReady")),

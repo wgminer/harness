@@ -6,8 +6,10 @@ import {
   getListContinuationPrefixForLine,
   getListSoftBreakPrefixForLine,
   isMarkdownListItemLine,
+  DEFAULT_NOTE_TEMPLATE_ID,
+  getDefaultNoteTemplate,
   interpolateNoteTemplateTitle,
-  normalizeNoteTemplateDescription,
+  normalizeDefaultNoteTemplateId,
   normalizeNoteTemplates,
   parseMarkdownHeadingLine,
   resolveNoteTemplateContent,
@@ -59,16 +61,6 @@ describe("interpolateNoteTemplateTitle", () => {
   });
 });
 
-describe("normalizeNoteTemplateDescription", () => {
-  it("keeps a single line unchanged", () => {
-    expect(normalizeNoteTemplateDescription("  Reflective  ")).toBe("Reflective");
-  });
-
-  it("drops text after the first newline", () => {
-    expect(normalizeNoteTemplateDescription("First line\nSecond line")).toBe("First line");
-  });
-});
-
 describe("normalizeNoteTemplates", () => {
   it("includes today token in default daily-log template content", () => {
     const templates = normalizeNoteTemplates(undefined);
@@ -76,14 +68,48 @@ describe("normalizeNoteTemplates", () => {
     expect(daily?.content).toContain(NOTE_TEMPLATE_TODAY_TOKEN);
   });
 
-  it("truncates multi-line descriptions to one line", () => {
+  it("drops legacy description fields", () => {
     const base = normalizeNoteTemplates(undefined);
     const templates = normalizeNoteTemplates(
-      base.map((t) =>
-        t.id === "blank" ? { ...t, description: "Line one\nLine two" } : t,
-      ),
+      base.map((t) => (t.id === "blank" ? { ...t, description: "Empty" } : t)),
     );
-    expect(templates.find((t) => t.id === "blank")?.description).toBe("Line one");
+    expect(templates.find((t) => t.id === "blank")).toEqual({
+      id: "blank",
+      title: "Blank",
+      content: "# Note\n",
+    });
+  });
+});
+
+describe("getDefaultNoteTemplate", () => {
+  it("returns the blank template by id", () => {
+    const template = getDefaultNoteTemplate();
+    expect(template.id).toBe(DEFAULT_NOTE_TEMPLATE_ID);
+    expect(template.content).toBe("# Note\n");
+  });
+
+  it("uses the configured blank template when settings override content", () => {
+    const base = normalizeNoteTemplates(undefined);
+    const templates = base.map((t) =>
+      t.id === DEFAULT_NOTE_TEMPLATE_ID ? { ...t, content: "# Custom\n" } : t,
+    );
+    expect(getDefaultNoteTemplate(templates).content).toBe("# Custom\n");
+  });
+
+  it("honors a non-blank default template id", () => {
+    const templates = normalizeNoteTemplates(undefined);
+    const daily = getDefaultNoteTemplate(templates, "daily-log");
+    expect(daily.id).toBe("daily-log");
+  });
+});
+
+describe("normalizeDefaultNoteTemplateId", () => {
+  it("falls back to blank for unknown ids", () => {
+    expect(normalizeDefaultNoteTemplateId("missing")).toBe(DEFAULT_NOTE_TEMPLATE_ID);
+  });
+
+  it("keeps a valid template id", () => {
+    expect(normalizeDefaultNoteTemplateId("one-on-one")).toBe("one-on-one");
   });
 });
 

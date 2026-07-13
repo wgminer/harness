@@ -62,11 +62,6 @@ function parseLegacyDocumentPayload(payload: unknown): InlineWriteupPayload | nu
   };
 }
 
-/** @deprecated use getInlineWriteup */
-export function getDocumentPanel(toolCalls?: ToolCallDisplay[]): InlineWriteupPayload | null {
-  return getInlineWriteup(toolCalls);
-}
-
 export function getInlineWriteup(toolCalls?: ToolCallDisplay[]): InlineWriteupPayload | null {
   if (!toolCalls?.length) return null;
 

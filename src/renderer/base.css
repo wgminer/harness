@@ -295,16 +295,18 @@ hr {
   color: var(--btn-primary-fg);
 }
 
-.btn-cancel {
+.btn-danger {
   padding: 0 var(--space-4);
   font-size: var(--font-size-body);
   background: var(--danger);
   color: #fff;
+  border-color: var(--danger);
 }
 
-.btn-cancel:hover:not(:disabled) {
+.btn-danger:hover:not(:disabled) {
   background: var(--danger-hover);
   color: #fff;
+  border-color: var(--danger-hover);
 }
 
 .btn-outline {
@@ -318,6 +320,20 @@ hr {
   color: var(--fg);
 }
 
+/* Compact quiet control (chat secondary row, setup notice) */
+.btn-compact {
+  font-size: var(--font-size-caption);
+  padding: 0 var(--space-3);
+  height: calc(var(--grid) * 8 - var(--space-1));
+}
+
+/* Small control (tool cards, notes aside) */
+.btn-sm {
+  font-size: var(--font-size-caption);
+  padding: var(--space-1) var(--space-2);
+  height: var(--space-6);
+}
+
 /* Single icon-only button: 36×36 */
 .btn-icon {
   width: var(--input-height);
@@ -326,6 +342,15 @@ hr {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Compact icon-only button: 24×24 */
+.btn-icon-sm {
+  width: var(--space-6);
+  height: var(--space-6);
+  min-height: var(--space-6);
+  flex-shrink: 0;
+  padding: 0;
 }
 
 /* Shared input base */
@@ -395,39 +420,6 @@ hr {
   width: 100%;
   /* Separates the native titlebar from the in-app header, which shares its background. */
   border-top: 1px solid var(--border-edge);
-}
-
-.app-grid-overlay {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2147483000;
-  opacity: 0.2;
-  --grid-overlay-cell: 16px;
-  --grid-overlay-major: calc(var(--grid-overlay-cell) * 4);
-  background-image:
-    linear-gradient(to right, var(--accent-tint) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--accent-tint) 1px, transparent 1px),
-    linear-gradient(to right, var(--accent-tint) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--accent-tint) 1px, transparent 1px);
-  background-size:
-    var(--grid-overlay-cell) var(--grid-overlay-cell),
-    var(--grid-overlay-cell) var(--grid-overlay-cell),
-    var(--grid-overlay-major) var(--grid-overlay-major),
-    var(--grid-overlay-major) var(--grid-overlay-major);
-  background-position: 0 0, 0 0, 0 0, 0 0;
-}
-
-.app-grid-overlay[data-grid-overlay="4"] {
-  --grid-overlay-cell: 4px;
-}
-
-.app-grid-overlay[data-grid-overlay="8"] {
-  --grid-overlay-cell: 8px;
-}
-
-.app-grid-overlay[data-grid-overlay="16"] {
-  --grid-overlay-cell: 16px;
 }
 
 /* Narrow viewport (768px): sidebar hidden; type and column width tighten. */

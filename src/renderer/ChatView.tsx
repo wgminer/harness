@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Layers, Minimize2 } from "lucide-react";
+import { Brain, Minimize2 } from "lucide-react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import { HOME_HEADER_QUOTE } from "../shared/headerQuote";
@@ -792,7 +792,7 @@ export function ChatView({
         aria-label="View context"
         title="View context"
       >
-        <Layers size={14} />
+        <Brain size={14} />
       </button>
       <button
         type="button"

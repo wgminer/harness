@@ -1,6 +1,6 @@
 [package]
 name = "harness"
-version = "0.7.5"
+version = "0.7.6"
 description = "Personal all-in-one desktop harness for LLMs"
 authors = ["Your Name"]
 edition = "2021"
@@ -13,7 +13,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-global-shortcut = "2"

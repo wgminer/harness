@@ -13,6 +13,7 @@ pub enum UiSessionView {
     Settings,
     Tasks,
     Notes,
+    Images,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +22,8 @@ pub struct UiSession {
     pub view: UiSessionView,
     pub conversation_id: Option<String>,
     pub notes_open_note_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images_open_image_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_notice_dismissed: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,6 +36,7 @@ impl Default for UiSession {
             view: UiSessionView::Chat,
             conversation_id: None,
             notes_open_note_id: None,
+            images_open_image_id: None,
             setup_notice_dismissed: Some(false),
             open_note_in_sticky_window: Some(false),
         }
@@ -59,6 +63,7 @@ fn normalize_ui_session_view(raw: Option<&str>) -> UiSessionView {
         Some("settings") => UiSessionView::Settings,
         Some("tasks") => UiSessionView::Tasks,
         Some("notes") => UiSessionView::Notes,
+        Some("images") => UiSessionView::Images,
         _ => UiSessionView::Chat,
     }
 }
@@ -72,6 +77,9 @@ pub fn normalize_ui_session(raw: &serde_json::Value) -> UiSession {
         conversation_id: normalize_optional_id(obj.get("conversationId").and_then(|v| v.as_str())),
         notes_open_note_id: normalize_optional_id(
             obj.get("notesOpenNoteId").and_then(|v| v.as_str()),
+        ),
+        images_open_image_id: normalize_optional_id(
+            obj.get("imagesOpenImageId").and_then(|v| v.as_str()),
         ),
         setup_notice_dismissed: Some(obj.get("setupNoticeDismissed").and_then(|v| v.as_bool()).unwrap_or(false)),
         open_note_in_sticky_window: Some(

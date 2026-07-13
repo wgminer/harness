@@ -1228,7 +1228,8 @@ mod context_preview_tests {
     fn build_system_prompt_includes_memory_and_temporal_blocks() {
         let memory = format_memory_context_block(&[("tone".into(), "concise".into())]);
         let temporal = format_temporal_context_block();
-        let prompt = build_system_prompt(&memory, &temporal);
+        let fields = fields_from_settings(&json!({}));
+        let prompt = build_system_prompt(&fields, "desktop", &memory, "", &temporal);
         assert!(prompt.contains("[CORE_INSTRUCTIONS]"));
         assert!(prompt.contains("[USER_MEMORY_CONTEXT]"));
         assert!(prompt.contains("[TEMPORAL_CONTEXT]"));

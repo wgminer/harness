@@ -39,7 +39,7 @@ fn tray_title(state: TrayIconState) -> Option<&'static str> {
     }
 }
 
-fn load_tray_image(file_name: &str) -> Option<Image<'static>> {
+pub(crate) fn load_tray_image(file_name: &str) -> Option<Image<'static>> {
     let path = resolve_bundled_resource(file_name)?;
     Image::from_path(&path).ok()
 }

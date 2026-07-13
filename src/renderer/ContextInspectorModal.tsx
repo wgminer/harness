@@ -77,6 +77,7 @@ export function ContextInspectorModal({
       onClose={onClose}
       title="Context inspector"
       variant="scrollable"
+      size="lg"
       data-testid="context-inspector-modal"
       footer={
         preview ? (
@@ -96,13 +97,14 @@ export function ContextInspectorModal({
               Strategy: <code>{preview.injectionStrategy}</code>
             </p>
             {preview.selectedFacts.length > 0 ? (
-              <ul className="context-inspector-facts">
+              <div className="context-inspector-facts">
                 {preview.selectedFacts.map((fact) => (
-                  <li key={fact.key}>
-                    <strong>{fact.key}</strong>: {fact.value}
-                  </li>
+                  <pre key={fact.key} className="context-inspector-pre">
+                    <span className="context-inspector-fact-key">{fact.key}: </span>
+                    {fact.value}
+                  </pre>
                 ))}
-              </ul>
+              </div>
             ) : (
               <p className="context-inspector-empty">No memory facts injected.</p>
             )}
@@ -115,13 +117,12 @@ export function ContextInspectorModal({
 
           <section className="context-inspector-section">
             <h4 className="context-inspector-heading">System prompt</h4>
-            <textarea
-              readOnly
-              value={preview.systemPrompt}
-              className="app-modal-input app-modal-input--multiline context-inspector-prompt"
-              rows={14}
+            <pre
+              className="context-inspector-pre context-inspector-pre--tall"
               aria-label="System prompt"
-            />
+            >
+              {preview.systemPrompt}
+            </pre>
           </section>
 
           <section className="context-inspector-section">
@@ -141,7 +142,7 @@ export function ContextInspectorModal({
           </section>
 
           <section className="context-inspector-section">
-            <h4 className="context-inspector-heading">Tools</h4>
+            <h4 className="context-inspector-heading">Available Tools</h4>
             <ul className="context-inspector-tools">
               {preview.tools.map((tool) => (
                 <li key={tool.name}>

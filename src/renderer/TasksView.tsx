@@ -486,7 +486,7 @@ export function TasksView() {
           <>
             <button
               type="button"
-              className="btn btn-cancel"
+              className="btn btn-danger"
               onClick={() => void deleteFromModal()}
               disabled={modalSaving}
             >

@@ -20,8 +20,8 @@ Harness should feel like a deliberate product: typography, spacing, motion, and 
 | | |
 |---|---|
 | **Success picture** | Someone opening the app notices craft: readable density, coherent theme, surfaces that scale with the window, chat/notes/settings that feel designed—not bolted on. |
-| **Signals today** | **4px layout grid** + `grid:audit`; theme type scale (font + icon + line-height tokens); Theme studio; `--accent-readable`; dedicated Notes/Config shells; session restore; sidebar sort modes + peek fade; chat single-message layout; motion audit doc; tray branding. |
-| **Gaps** | Deeper viewport breakpoints; sidebar focus traps; empty/loading/error polish; run `grid:audit` in CI. |
+| **Signals today** | **4px spacing tokens** (`src/shared/grid.ts`); theme type scale (font + icon + line-height tokens); Theme studio; `--accent-readable`; dedicated Notes/Config shells; session restore; sidebar sort modes + peek fade; chat single-message layout; motion audit doc; tray branding. |
+| **Gaps** | Deeper viewport breakpoints; sidebar focus traps; empty/loading/error polish. |
 | **Anti-goals** | Feature sprawl that ignores layout debt; one-off screens that don’t share tokens; “good enough” spacing in primary flows. |
 
 ### O2 — Replace paid AI subscriptions
@@ -53,8 +53,8 @@ Harness is where you practice the full stack: providers, tools, streaming, persi
 | | |
 |---|---|
 | **Success picture** | Each meaningful feature teaches something reusable: a new tool, IPC boundary, test pattern, or provider adapter you could lift into another project. |
-| **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; memory compile pipeline; import parsers; typed `window.harness`; unit tests; iOS sync codec tests; `docs/4PX_GRID.md` + motion audit. |
-| **Gaps** | CI on PRs (lint, tsc, Playwright, `grid:audit`) — **landed in 0.7**; plugin/tool registry; documented patterns for adding tools/providers. |
+| **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; memory compile pipeline; import parsers; typed `window.harness`; unit tests; iOS sync codec tests; motion audit. |
+| **Gaps** | CI on PRs (lint, tsc, Vitest) — **landed in 0.7**; plugin/tool registry; documented patterns for adding tools/providers; cross-language drift checks. |
 | **Anti-goals** | Opaque magic (no tests, no boundaries); one giant file per feature; skipping the “why” in favor of copy-paste. |
 
 ---
@@ -95,12 +95,12 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 - **Credential hygiene** `[O2][O4]` — OpenAI/Tavily/R2 secrets in OS credential stores (desktop `safeStorage`, iOS Keychain); secrets redacted from sync bundle; per-device keys (encrypted cross-device key sync deferred to 0.8).
 - **iOS composer fixes** `[O3]` — Draft persistence, live streaming auto-scroll, composer focus/inset fixes, setup-alert Settings action.
 - **Mobile system styling** `[O1][O3]` — Custom theming removed on iOS; standard system colors + SF fonts; `theme.json` remains desktop-only in the sync bundle.
-- **CI on PRs** `[O4]` — `.github/workflows/ci.yml`: lint, `tsc`, Vitest, Playwright, `grid:audit`.
+- **CI on PRs** `[O4]` — `.github/workflows/ci.yml`: lint, `tsc`, Vitest, Playwright (grid-audit later removed).
 - **Version** — Desktop package `0.7.0`; iOS `MARKETING_VERSION` `0.7.0`.
 
 ### 2026-05-24 — 4px grid, Harness Mobile iOS, v0.6 `[O1][O3][O4]`
 
-- **4px layout grid** `[O1]` — `src/shared/grid.ts` (`snapToGrid`, `space`, `lineHeightForFont`); theme `typeScaleCssVars` emits grid-aligned font, icon, and line-height tokens; renderer CSS normalized; `npm run grid:audit` (`scripts/grid-audit.js`); [docs/4PX_GRID.md](docs/4PX_GRID.md).
+- **4px layout grid** `[O1]` — `src/shared/grid.ts` (`snapToGrid`, `space`, `lineHeightForFont`); theme `typeScaleCssVars` emits grid-aligned font, icon, and line-height tokens; renderer CSS normalized (grid-audit tooling since removed).
 - **Layout cleanup** `[O1]` — Removed `compact` / `comfortable` layout density; spacing driven by theme font size + grid. Chat composer dock and tasks composer heights snap to grid.
 - **Chat & sidebar UX** `[O1]` — Single-message chat centers in scroll area; sidebar default sort “Recent” with date-bucket and calendar-day modes; progressive fade on peek rows 8–12.
 - **Harness Mobile (iOS)** `[O3][O4]` — Native SwiftUI app: conversation list + thread, OpenAI streaming, Keychain, iCloud backup-folder sync (`bundle.json.gz`, manifest), conflict sheet; [ios/README.md](ios/README.md). Xcode project via `project.yml` / XcodeGen.
@@ -203,7 +203,7 @@ Ordered loosely by outcome; not a commitment sequence.
 
 | Item | Outcomes |
 |------|----------|
-| ~~**CI hardening** (lint, tsc, Playwright, `grid:audit` on PR)~~ | O4 — **Done** (0.7) |
+| ~~**CI hardening** (lint, tsc, Playwright on PR)~~ | O4 — **Done** (0.7) |
 | **Chat providers** — Anthropic, Gemini APIs (≠ export import) | O2, O4 |
 | **Agent mode** with human-in-the-loop before destructive actions | O2, O4 |
 | **Semantic memory** (vectors + retrieval) | O2, O4 |

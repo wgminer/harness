@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   static:
-    name: Lint, typecheck, unit tests, grid audit
+    name: Lint, typecheck, unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -36,9 +36,6 @@ jobs:
 
       - name: Unit tests
         run: npm run test
-
-      - name: Grid audit
-        run: npm run grid:audit
 
   rust:
     name: Rust unit tests

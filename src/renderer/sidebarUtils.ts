@@ -2,7 +2,12 @@ import type { ConversationListRow } from "../shared/conversationSession";
 
 export type Conversation = ConversationListRow;
 
-export type View = "chat" | "settings" | "tasks" | "notes";
+export type View = "chat" | "settings" | "tasks" | "notes" | "images";
+
+export type LibraryItemKind = "conversation" | "note" | "image";
+
+/** A sidebar row — either a conversation or a note, sharing the same sort/group shape. */
+export type LibraryRow = ConversationListRow & { itemKind?: LibraryItemKind };
 
 /** Default number of conversations shown in the sidebar before "More". */
 export const SIDEBAR_INITIAL_VISIBLE_COUNT = 20;
@@ -74,7 +79,7 @@ function getDateGroupLabel(key: string): string {
   return key;
 }
 
-export type SidebarGroup = { key: string; label: string; items: Conversation[] };
+export type SidebarGroup = { key: string; label: string; items: LibraryRow[] };
 
 export type SidebarListSortMode = "date" | "recent" | "day";
 
@@ -96,8 +101,8 @@ function getCalendarDayLabel(key: string): string {
   return `${weekday}, ${numericDate}`;
 }
 
-function groupConversationsByCalendarDay(conversations: Conversation[]): { groups: SidebarGroup[] } {
-  const byKey = new Map<string, Conversation[]>();
+function groupConversationsByCalendarDay(conversations: LibraryRow[]): { groups: SidebarGroup[] } {
+  const byKey = new Map<string, LibraryRow[]>();
   for (const c of conversations) {
     const key = localDateKey(new Date(c.createdAt));
     if (!byKey.has(key)) byKey.set(key, []);
@@ -119,7 +124,7 @@ function groupConversationsByCalendarDay(conversations: Conversation[]): { group
 }
 
 export function groupConversations(
-  conversations: Conversation[],
+  conversations: LibraryRow[],
   sortMode: SidebarListSortMode = "recent"
 ): { groups: SidebarGroup[] } {
   if (sortMode === "recent") {
@@ -132,7 +137,7 @@ export function groupConversations(
     return groupConversationsByCalendarDay(conversations);
   }
 
-  const byKey = new Map<string, Conversation[]>();
+  const byKey = new Map<string, LibraryRow[]>();
   for (const c of conversations) {
     const key = getDateGroupKey(c.createdAt);
     if (!byKey.has(key)) byKey.set(key, []);
@@ -169,10 +174,10 @@ export function groupConversations(
 
 /** Sidebar list: newest N by default; always includes the active conversation when not showing all. */
 export function pickSidebarConversationsForList(
-  conversations: Conversation[],
+  conversations: LibraryRow[],
   activeId: string | null,
   previewCount: number
-): Conversation[] {
+): LibraryRow[] {
   if (conversations.length <= previewCount) {
     return conversations;
   }

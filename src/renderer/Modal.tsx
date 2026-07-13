@@ -11,6 +11,8 @@ export interface ModalProps {
   closeDisabled?: boolean;
   /** Scrollable body with max-height (e.g. task editor). */
   variant?: "default" | "scrollable";
+  /** Panel max-width: default 440px, lg ~720px. */
+  size?: "default" | "lg";
   footerClassName?: string;
   "data-testid"?: string;
 }
@@ -23,6 +25,7 @@ export function Modal({
   footer,
   closeDisabled = false,
   variant = "default",
+  size = "default",
   footerClassName,
   "data-testid": testId,
 }: ModalProps) {
@@ -43,6 +46,14 @@ export function Modal({
 
   if (!open) return null;
 
+  const panelClass = [
+    "app-modal",
+    size === "lg" ? "app-modal--lg" : null,
+    variant === "scrollable" ? "app-modal--scrollable" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div
       className="app-modal-backdrop"
@@ -53,7 +64,7 @@ export function Modal({
       }}
     >
       <div
-        className={`app-modal${variant === "scrollable" ? " app-modal--scrollable" : ""}`}
+        className={panelClass}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -65,7 +76,7 @@ export function Modal({
           </h3>
           <button
             type="button"
-            className="btn btn-icon app-modal-close"
+            className="btn btn-icon-sm app-modal-close"
             onClick={onClose}
             disabled={closeDisabled}
             aria-label="Close"

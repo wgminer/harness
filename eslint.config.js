@@ -27,7 +27,7 @@ export default [
     },
   },
   {
-    files: ['scripts/grid-audit.js', 'eslint.config.js'],
+    files: ['eslint.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       globals: globals.node,

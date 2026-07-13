@@ -1,9 +1,10 @@
-export type UiSessionView = "chat" | "settings" | "tasks" | "notes";
+export type UiSessionView = "chat" | "settings" | "tasks" | "notes" | "images";
 
 export interface UiSession {
   view: UiSessionView;
   conversationId: string | null;
   notesOpenNoteId: string | null;
+  imagesOpenImageId: string | null;
   /** When true, the first-run setup notice is not shown again. */
   setupNoticeDismissed?: boolean;
   /** When true, "New note" opens a windowed note instead of the main Editor. */
@@ -14,11 +15,12 @@ export const DEFAULT_UI_SESSION: UiSession = {
   view: "chat",
   conversationId: null,
   notesOpenNoteId: null,
+  imagesOpenImageId: null,
   setupNoticeDismissed: false,
   openNoteInStickyWindow: false,
 };
 
-const UI_SESSION_VIEWS: UiSessionView[] = ["chat", "settings", "tasks", "notes"];
+const UI_SESSION_VIEWS: UiSessionView[] = ["chat", "settings", "tasks", "notes", "images"];
 
 function isUiSessionView(value: unknown): value is UiSessionView {
   return typeof value === "string" && UI_SESSION_VIEWS.includes(value as UiSessionView);
@@ -42,6 +44,7 @@ export function normalizeUiSession(raw: unknown): UiSession {
     view: normalizeUiSessionView(data.view),
     conversationId: normalizeOptionalId(data.conversationId),
     notesOpenNoteId: normalizeOptionalId(data.notesOpenNoteId),
+    imagesOpenImageId: normalizeOptionalId(data.imagesOpenImageId),
     setupNoticeDismissed: data.setupNoticeDismissed === true,
     openNoteInStickyWindow: data.openNoteInStickyWindow === true,
   };

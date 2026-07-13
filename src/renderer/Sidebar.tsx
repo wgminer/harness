@@ -10,7 +10,8 @@ import {
   Settings,
   Plus,
   Search,
-  SquarePen,
+  StickyNote,
+  Image as ImageIcon,
   X,
   ListTodo,
   Loader2,
@@ -26,10 +27,13 @@ import {
   conversationSidebarIconKind,
   isConversationTitlePending,
 } from "../shared/conversationSession";
+import { getDisplayNoteTitle, type NoteSummary } from "../shared/writing";
+import { getDisplayImageTitle, type GeneratedImage } from "../shared/images";
 import { syncResultChangedLocalData } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
 import {
   type Conversation,
+  type LibraryRow,
   type View,
   type SidebarGroup,
   type SidebarListSortMode,
@@ -43,20 +47,27 @@ import { useScrollFadeEdges } from "./useScrollFadeEdges";
 
 interface SidebarProps {
   conversations: Conversation[];
+  notes: NoteSummary[];
+  images: GeneratedImage[];
   conversationId: string | null;
+  activeNoteId: string | null;
+  activeImageId: string | null;
   view: View;
   onViewChange: (v: View) => void;
   onConversationSelect: (id: string) => void;
   onConversationDelete: (id: string) => void;
+  onSelectNote: (id: string) => void;
+  onNoteDelete: (id: string) => void;
+  onSelectImage: (id: string) => void;
+  onImageDelete: (id: string) => void;
   onNewChat: () => void;
   onNewNote: () => void;
+  onNewImage: () => void;
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
   appVersion: string | null;
   updateStatus: UpdateStatus;
   onUpdateClick: () => void;
-  notesItemActive: boolean;
-  onNotesClick: () => void;
   /** Called after sync when local conversation data may have changed. */
   onSyncComplete?: () => void;
 }
@@ -78,20 +89,27 @@ function HighlightText({ text, range }: { text: string; range?: [number, number]
 
 export function Sidebar({
   conversations,
+  notes,
+  images,
   conversationId,
+  activeNoteId,
+  activeImageId,
   view,
   onViewChange,
   onConversationSelect,
   onConversationDelete,
+  onSelectNote,
+  onNoteDelete,
+  onSelectImage,
+  onImageDelete,
   onNewChat,
   onNewNote,
+  onNewImage,
   activeChatProcessing,
   titleGenInFlight,
   appVersion,
   updateStatus,
   onUpdateClick,
-  notesItemActive,
-  onNotesClick,
   onSyncComplete,
 }: SidebarProps) {
   const updateButtonLabel = (() => {
@@ -225,15 +243,42 @@ export function Sidebar({
     [onConversationSelect, onViewChange]
   );
 
-  const sidebarListConversations = useMemo(
+  const libraryRows = useMemo<LibraryRow[]>(
+    () => [
+      ...conversations.map((c): LibraryRow => ({ ...c, itemKind: "conversation" })),
+      ...notes.map(
+        (n): LibraryRow => ({
+          id: n.id,
+          title: n.title,
+          createdAt: n.updatedAt,
+          itemKind: "note",
+        })
+      ),
+      ...images.map(
+        (img): LibraryRow => ({
+          id: img.id,
+          title: img.title,
+          createdAt: img.updatedAt,
+          itemKind: "image",
+        })
+      ),
+    ],
+    [conversations, notes, images]
+  );
+
+  const sidebarListItems = useMemo(
     () =>
-      pickSidebarConversationsForList(conversations, conversationId, sidebarVisibleLimit),
-    [conversations, conversationId, sidebarVisibleLimit]
+      pickSidebarConversationsForList(
+        libraryRows,
+        conversationId ?? activeNoteId ?? activeImageId,
+        sidebarVisibleLimit,
+      ),
+    [libraryRows, conversationId, activeNoteId, activeImageId, sidebarVisibleLimit]
   );
 
   const { groups: sidebarGroups } = useMemo(
-    () => groupConversations(sidebarListConversations, listSortMode),
-    [sidebarListConversations, listSortMode]
+    () => groupConversations(sidebarListItems, listSortMode),
+    [sidebarListItems, listSortMode]
   );
 
   const toggleListSortMode = useCallback(() => {
@@ -247,14 +292,83 @@ export function Sidebar({
         ? { ariaLabel: "Switch to calendar day groups", title: "Group by calendar day" }
         : { ariaLabel: "Switch to time-ago groups", title: "Group by time ago" };
 
-  const showSidebarMoreControl = sidebarListConversations.length < conversations.length;
+  const showSidebarMoreControl = sidebarListItems.length < libraryRows.length;
 
   const onSidebarShowMore = useCallback(() => {
-    setSidebarVisibleLimit((n) => Math.min(conversations.length, n + SIDEBAR_MORE_INCREMENT));
-  }, [conversations.length]);
+    setSidebarVisibleLimit((n) => Math.min(libraryRows.length, n + SIDEBAR_MORE_INCREMENT));
+  }, [libraryRows.length]);
 
-  const renderConversationItem = useCallback(
-    (c: Conversation) => {
+  const noteSearchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return notes.filter((n) => getDisplayNoteTitle(n.title).toLowerCase().includes(q));
+  }, [notes, searchQuery]);
+
+  const imageSearchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return images.filter((img) => getDisplayImageTitle(img.title).toLowerCase().includes(q));
+  }, [images, searchQuery]);
+
+  const renderLibraryItem = useCallback(
+    (row: LibraryRow) => {
+      if (row.itemKind === "note") {
+        const isActive = view === "notes" && activeNoteId === row.id;
+        return (
+          <li
+            key={row.id}
+            className={["sidebar-item", isActive ? "active" : ""].filter(Boolean).join(" ")}
+            data-testid="sidebar-note"
+            data-note-id={row.id}
+            onClick={() => onSelectNote(row.id)}
+          >
+            <span className="sidebar-item-icon" aria-hidden title="Note">
+              <StickyNote size={16} className="sidebar-item-icon__svg" />
+            </span>
+            <span className="sidebar-item-title">{getDisplayNoteTitle(row.title ?? "")}</span>
+            <button
+              type="button"
+              className="sidebar-item-delete"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNoteDelete(row.id);
+              }}
+              aria-label="Delete note"
+            >
+              <X size={12} strokeWidth={2.5} aria-hidden />
+            </button>
+          </li>
+        );
+      }
+      if (row.itemKind === "image") {
+        const isActive = view === "images" && activeImageId === row.id;
+        return (
+          <li
+            key={row.id}
+            className={["sidebar-item", isActive ? "active" : ""].filter(Boolean).join(" ")}
+            data-testid="sidebar-image"
+            data-image-id={row.id}
+            onClick={() => onSelectImage(row.id)}
+          >
+            <span className="sidebar-item-icon" aria-hidden title="Image">
+              <ImageIcon size={16} className="sidebar-item-icon__svg" />
+            </span>
+            <span className="sidebar-item-title">{getDisplayImageTitle(row.title)}</span>
+            <button
+              type="button"
+              className="sidebar-item-delete"
+              onClick={(e) => {
+                e.stopPropagation();
+                onImageDelete(row.id);
+              }}
+              aria-label="Delete image"
+            >
+              <X size={12} strokeWidth={2.5} aria-hidden />
+            </button>
+          </li>
+        );
+      }
+      const c = row as Conversation;
       const isActive = conversationId === c.id && view === "chat";
       const titleGenerating = (titleGenInFlight[c.id] ?? 0) > 0;
       const titlePending = isConversationTitlePending(c.title, titleGenerating);
@@ -311,9 +425,15 @@ export function Sidebar({
     },
     [
       activeChatProcessing,
+      activeImageId,
+      activeNoteId,
       conversationId,
       onConversationDelete,
       onConversationSelect,
+      onImageDelete,
+      onNoteDelete,
+      onSelectImage,
+      onSelectNote,
       onViewChange,
       titleGenInFlight,
       view,
@@ -329,13 +449,13 @@ export function Sidebar({
               ref={searchInputRef}
               type="search"
               className="sidebar-search-input"
-              placeholder="Search conversations…"
+              placeholder="Search…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") closeSearch();
               }}
-              aria-label="Search conversations"
+              aria-label="Search"
             />
             <button
               type="button"
@@ -394,6 +514,18 @@ export function Sidebar({
                       ⇧{modKey}N
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    className="sidebar-new-menu-item"
+                    role="menuitem"
+                    data-testid="sidebar-new-image"
+                    onClick={() => {
+                      setNewMenuOpen(false);
+                      onNewImage();
+                    }}
+                  >
+                    <span>New image</span>
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -402,7 +534,7 @@ export function Sidebar({
               type="button"
               className="btn btn-icon"
               onClick={() => setSearchOpen(true)}
-              aria-label="Search conversations"
+              aria-label="Search"
             >
               <Search size={16} />
             </button>
@@ -419,17 +551,6 @@ export function Sidebar({
             >
               <ListTodo size={16} className="sidebar-workspace__icon" aria-hidden />
               <span className="sidebar-workspace__label">Tasks</span>
-            </button>
-            <button
-              type="button"
-              className={`btn list-item-base sidebar-workspace__btn${notesItemActive ? " active" : ""}`}
-              data-testid="sidebar-notes"
-              onClick={onNotesClick}
-              aria-label="Editor"
-              aria-current={notesItemActive ? "page" : undefined}
-            >
-              <SquarePen size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">Editor</span>
             </button>
             <button
               type="button"
@@ -456,35 +577,63 @@ export function Sidebar({
           <ul ref={sidebarListRef} className="sidebar-list" onScroll={onSidebarListScroll}>
           {searchOpen ? (
             searchQuery.trim() ? (
-              searchLoading ? (
+              searchLoading && noteSearchMatches.length === 0 && imageSearchMatches.length === 0 ? (
                 <li className="sidebar-search-empty">Searching…</li>
-              ) : searchResults.length === 0 ? (
+              ) : searchResults.length === 0 &&
+                noteSearchMatches.length === 0 &&
+                imageSearchMatches.length === 0 ? (
                 <li className="sidebar-search-empty">No results</li>
               ) : (
-                searchResults.map((r) => (
-                  <li
-                    key={r.id}
-                    className={`search-result-item ${conversationId === r.id && view === "chat" ? "active" : ""}`}
-                    onClick={() => handleSearchResultClick(r.id)}
-                  >
-                    <span className="search-result-title">
-                      <HighlightText
-                        text={conversationDisplayTitle(r.title, r.createdAt)}
-                        range={r.titleMatched ? r.titleMatchRange ?? undefined : undefined}
-                      />
-                    </span>
-                    <span className="search-result-snippet">
-                      <HighlightText
-                        text={r.snippet}
-                        range={
-                          r.snippetMatchRange[0] >= 0 && r.snippetMatchRange[1] > r.snippetMatchRange[0]
-                            ? r.snippetMatchRange
-                            : undefined
-                        }
-                      />
-                    </span>
-                  </li>
-                ))
+                <>
+                  {noteSearchMatches.map((n) => (
+                    <li
+                      key={n.id}
+                      className={`search-result-item ${view === "notes" && activeNoteId === n.id ? "active" : ""}`}
+                      onClick={() => {
+                        onSelectNote(n.id);
+                        closeSearch();
+                      }}
+                    >
+                      <span className="search-result-title">{getDisplayNoteTitle(n.title)}</span>
+                    </li>
+                  ))}
+                  {imageSearchMatches.map((img) => (
+                    <li
+                      key={img.id}
+                      className={`search-result-item ${view === "images" && activeImageId === img.id ? "active" : ""}`}
+                      onClick={() => {
+                        onSelectImage(img.id);
+                        closeSearch();
+                      }}
+                    >
+                      <span className="search-result-title">{getDisplayImageTitle(img.title)}</span>
+                    </li>
+                  ))}
+                  {searchResults.map((r) => (
+                    <li
+                      key={r.id}
+                      className={`search-result-item ${conversationId === r.id && view === "chat" ? "active" : ""}`}
+                      onClick={() => handleSearchResultClick(r.id)}
+                    >
+                      <span className="search-result-title">
+                        <HighlightText
+                          text={conversationDisplayTitle(r.title, r.createdAt)}
+                          range={r.titleMatched ? r.titleMatchRange ?? undefined : undefined}
+                        />
+                      </span>
+                      <span className="search-result-snippet">
+                        <HighlightText
+                          text={r.snippet}
+                          range={
+                            r.snippetMatchRange[0] >= 0 && r.snippetMatchRange[1] > r.snippetMatchRange[0]
+                              ? r.snippetMatchRange
+                              : undefined
+                          }
+                        />
+                      </span>
+                    </li>
+                  ))}
+                </>
               )
             ) : (
               <li className="sidebar-search-empty">Type to search</li>
@@ -494,7 +643,7 @@ export function Sidebar({
               {sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => {
                 const groupLabelTitle =
                   key === "recent"
-                    ? `${conversations.length} conversation${conversations.length === 1 ? "" : "s"}`
+                    ? `${libraryRows.length} item${libraryRows.length === 1 ? "" : "s"}`
                     : undefined;
                 return (
                 <li key={key} className="sidebar-group">
@@ -520,7 +669,7 @@ export function Sidebar({
                     </span>
                   )}
                   <ul className="sidebar-group-items">
-                    {items.map((c) => renderConversationItem(c))}
+                    {items.map((row) => renderLibraryItem(row))}
                   </ul>
                 </li>
                 );
@@ -532,7 +681,7 @@ export function Sidebar({
                       type="button"
                       className="btn sidebar-list-expand-btn"
                       data-testid="sidebar-conversations-show-more"
-                      aria-label={`Show ${SIDEBAR_MORE_INCREMENT} more conversations`}
+                      aria-label={`Show ${SIDEBAR_MORE_INCREMENT} more items`}
                       onClick={onSidebarShowMore}
                     >
                       More

@@ -164,7 +164,7 @@ export function ChatComposer({
           {voiceState !== "idle" && (
             <button
               type="button"
-              className="btn btn-icon chat-pane-btn chat-pane-btn--icon chat-pane-btn--danger"
+              className="btn btn-icon btn-danger chat-pane-btn chat-pane-btn--icon"
               onClick={onCancelRecording}
               title="Cancel recording"
               aria-label="Cancel recording"

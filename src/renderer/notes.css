@@ -16,6 +16,29 @@
   min-height: 0;
 }
 
+.notes-surface__empty-state {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+/* Footer of the editor column — must stay in normal flex flow so the
+   full-bleed CodeMirror surface (z-index: 1) cannot cover it. */
+.notes-surface__inline-templates {
+  flex-shrink: 0;
+  padding: var(--space-3);
+  background: var(--bg);
+  border-top: 1px solid var(--border-edge);
+  z-index: 2;
+}
+
+.notes-surface__inline-templates .workspace-section-label {
+  margin: 0 0 var(--space-2);
+}
+
 .notes-surface__notes {
   list-style: none;
   margin: 0 calc(-1 * var(--space-3));
@@ -40,11 +63,11 @@
 .notes-surface__template-btn {
   flex: 1 1 160px;
   min-width: 0;
-  min-height: calc(var(--grid) * 16);
+  min-height: calc(var(--grid) * 10);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  justify-content: center;
   padding: var(--space-3);
   border: 1px solid var(--border-input);
   border-radius: var(--radius-md);
@@ -85,16 +108,6 @@
   line-height: var(--line-height-snug);
   font-weight: 600;
   letter-spacing: -0.01em;
-}
-
-.notes-surface__template-description {
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-snug);
-  color: var(--fg-muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .notes-surface__new-note {
@@ -229,20 +242,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.notes-surface__toolbar .btn {
-  height: var(--input-height);
-}
-
-.notes-surface__toolbar .btn-icon {
-  width: var(--input-height);
-  min-width: var(--input-height);
-}
-
-.notes-surface__save-btn {
-  font-size: var(--font-size);
-  gap: var(--space-2);
 }
 
 .notes-surface__toolbar-menu-wrap {
@@ -555,28 +554,16 @@
   z-index: 1;
 }
 
-.notes-aside-panel__cancel-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 24px;
-  min-height: 20px;
-  padding: 0;
-  border-radius: var(--radius-md);
+.notes-aside-panel__close {
   background: transparent;
+  border-color: transparent;
   color: var(--fg-muted);
-  cursor: pointer;
 }
 
-.notes-aside-panel__cancel-btn:hover {
+.notes-aside-panel__close:hover:not(:disabled) {
   background: var(--bg-elevated);
+  border-color: transparent;
   color: var(--fg);
-}
-
-.notes-aside-panel__cancel-btn:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 1px;
 }
 
 .notes-aside-panel__input-wrap .notes-aside-panel__textarea {

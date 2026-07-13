@@ -40,21 +40,21 @@ export interface NoteSpellCheckInput {
 export interface NoteTemplateConfig {
   id: string;
   title: string;
-  description: string;
   content: string;
 }
 
+/** Built-in template applied when creating a new note (New note / ⇧⌘N). */
+export const DEFAULT_NOTE_TEMPLATE_ID = "blank";
+
 export const DEFAULT_NOTE_TEMPLATES: NoteTemplateConfig[] = [
   {
-    id: "blank",
+    id: DEFAULT_NOTE_TEMPLATE_ID,
     title: "Blank",
-    description: "Empty",
     content: "# Note\n",
   },
   {
     id: "one-on-one",
     title: "1:1",
-    description: "Sync",
     content: [
       "# 1:1",
       "",
@@ -77,7 +77,6 @@ export const DEFAULT_NOTE_TEMPLATES: NoteTemplateConfig[] = [
   {
     id: "daily-log",
     title: "Daily log",
-    description: "Reflective",
     content: [
       "# Daily Log",
       "",
@@ -102,12 +101,6 @@ export const DEFAULT_NOTE_TEMPLATES: NoteTemplateConfig[] = [
 export const NOTE_TEMPLATE_TODAY_TOKEN = "{{today}}";
 /** Inserted in template body; removed at create-time and used as initial caret position. */
 export const NOTE_TEMPLATE_CURSOR_TOKEN = "{{@cursor}}";
-
-/** Collapse stored template descriptions to a single trimmed line. */
-export function normalizeNoteTemplateDescription(raw: string): string {
-  const firstLine = raw.trim().split(/\r?\n/, 1)[0] ?? "";
-  return firstLine.trim();
-}
 
 export function formatNoteTemplateToday(options?: {
   now?: Date;
@@ -194,13 +187,9 @@ export function normalizeNoteTemplates(input: unknown): NoteTemplateConfig[] {
         const candidate = item as Record<string, unknown>;
         const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
         const title = typeof candidate.title === "string" ? candidate.title.trim() : "";
-        const description =
-          typeof candidate.description === "string"
-            ? normalizeNoteTemplateDescription(candidate.description)
-            : "";
         const content = typeof candidate.content === "string" ? candidate.content : "";
-        if (!id || !title || !description) return null;
-        return { id, title, description, content };
+        if (!id || !title) return null;
+        return { id, title, content };
       })
       .filter((entry): entry is NoteTemplateConfig => entry != null)
       .map((entry) => [entry.id, entry]),
@@ -209,6 +198,31 @@ export function normalizeNoteTemplates(input: unknown): NoteTemplateConfig[] {
     const match = byId.get(base.id);
     return match ? { ...match } : { ...base };
   });
+}
+
+/** Resolves a stored default-template id against the available templates. */
+export function normalizeDefaultNoteTemplateId(
+  input: unknown,
+  templates: readonly NoteTemplateConfig[] = DEFAULT_NOTE_TEMPLATES,
+): string {
+  const id = typeof input === "string" ? input.trim() : "";
+  if (id && templates.some((template) => template.id === id)) return id;
+  if (templates.some((template) => template.id === DEFAULT_NOTE_TEMPLATE_ID)) {
+    return DEFAULT_NOTE_TEMPLATE_ID;
+  }
+  return templates[0]?.id ?? DEFAULT_NOTE_TEMPLATE_ID;
+}
+
+/** Resolves the template used for newly created notes (defaults to Blank). */
+export function getDefaultNoteTemplate(
+  templates: readonly NoteTemplateConfig[] = DEFAULT_NOTE_TEMPLATES,
+  defaultTemplateId: unknown = DEFAULT_NOTE_TEMPLATE_ID,
+): NoteTemplateConfig {
+  const id = normalizeDefaultNoteTemplateId(defaultTemplateId, templates);
+  const match = templates.find((template) => template.id === id);
+  if (match) return { ...match };
+  const fallback = DEFAULT_NOTE_TEMPLATES.find((template) => template.id === DEFAULT_NOTE_TEMPLATE_ID);
+  return fallback ? { ...fallback } : { ...DEFAULT_NOTE_TEMPLATES[0] };
 }
 
 export const UNTITLED_NOTE_TITLE = "Untitled";
@@ -238,6 +252,12 @@ export function stripLeadingMarkdownHeading(text: string): string {
   const trimmed = String(text ?? "").trim();
   if (!trimmed) return "";
   return trimmed.replace(/^\s{0,3}#{1,6}\s*/, "").trim();
+}
+
+/** Display label for a note title: strips a leading markdown heading marker, falls back to the raw title. */
+export function getDisplayNoteTitle(title: string): string {
+  const stripped = stripLeadingMarkdownHeading(title);
+  return stripped || title;
 }
 
 export interface ParsedMarkdownHeadingLine {

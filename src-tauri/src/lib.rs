@@ -16,6 +16,7 @@ pub mod import;
 pub mod memory;
 pub mod memory_compile;
 pub mod memory_import;
+pub mod images;
 pub mod note_print;
 pub mod notes;
 pub mod sticky_notes;
@@ -160,6 +161,11 @@ pub fn run() {
             commands::notes_show_in_folder,
             commands::notes_propose_edit,
             commands::notes_spell_check,
+            commands::images_list,
+            commands::images_create,
+            commands::images_read,
+            commands::images_delete,
+            commands::images_generate,
             system::system_get_platform,
             system::system_macos_accessibility_trusted,
             system::system_request_accessibility_prompt,

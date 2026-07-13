@@ -7,9 +7,14 @@ use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
+const OPENAI_IMAGES_GENERATIONS_URL: &str = "https://api.openai.com/v1/images/generations";
 
 pub fn openai_chat_model() -> String {
     std::env::var("OPENAI_CHAT_MODEL").unwrap_or_else(|_| "gpt-5.4".into())
+}
+
+pub fn openai_image_model() -> String {
+    std::env::var("OPENAI_IMAGE_MODEL").unwrap_or_else(|_| "gpt-image-1".into())
 }
 
 pub fn openai_title_model() -> String {
@@ -147,12 +152,11 @@ pub fn tool_definitions() -> Value {
         "type": "function",
         "function": {
           "name": "set_layout",
-          "description": "Change app layout: sidebar position (left/right) and optional grid overlay (off/4/8/16).",
+          "description": "Change app layout: sidebar position (left/right).",
           "parameters": {
             "type": "object",
             "properties": {
-              "sidebar": { "type": "string", "enum": ["left", "right"], "description": "Sidebar position" },
-              "gridOverlay": { "type": "string", "enum": ["off", "4", "8", "16"], "description": "Design grid overlay spacing in px" }
+              "sidebar": { "type": "string", "enum": ["left", "right"], "description": "Sidebar position" }
             }
           }
         }
@@ -474,6 +478,80 @@ pub async fn chat_completion_json(
         .unwrap_or("")
         .trim()
         .to_string())
+}
+
+pub struct ImageGenerateOptions {
+    pub size: String,
+    pub quality: String,
+    pub background: String,
+    pub output_format: String,
+}
+
+fn build_image_request_body(model: &str, prompt: &str, options: &ImageGenerateOptions) -> Value {
+    json!({
+        "model": model,
+        "prompt": prompt,
+        "size": options.size,
+        "quality": options.quality,
+        "background": options.background,
+        "output_format": options.output_format,
+        "n": 1
+    })
+}
+
+pub async fn generate_image(
+    api_key: &str,
+    prompt: &str,
+    options: &ImageGenerateOptions,
+) -> Result<Vec<u8>, OpenAIError> {
+    let client = Client::builder().timeout(Duration::from_secs(120)).build()?;
+    let body = build_image_request_body(&openai_image_model(), prompt, options);
+
+    let response = client
+        .post(OPENAI_IMAGES_GENERATIONS_URL)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let detail = response.text().await.unwrap_or_default();
+        return Err(OpenAIError::Api(detail));
+    }
+
+    let parsed: Value = response.json().await?;
+    let b64 = parsed
+        .pointer("/data/0/b64_json")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| OpenAIError::Api("Missing image data in OpenAI response.".into()))?;
+
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .map_err(|e| OpenAIError::Api(format!("Failed to decode image data: {e}")))
+}
+
+#[cfg(test)]
+mod image_tests {
+    use super::*;
+
+    #[test]
+    fn builds_image_request_body_with_expected_fields() {
+        let options = ImageGenerateOptions {
+            size: "1024x1024".into(),
+            quality: "auto".into(),
+            background: "auto".into(),
+            output_format: "png".into(),
+        };
+        let body = build_image_request_body("gpt-image-1", "a cat", &options);
+        assert_eq!(body["model"], "gpt-image-1");
+        assert_eq!(body["prompt"], "a cat");
+        assert_eq!(body["size"], "1024x1024");
+        assert_eq!(body["quality"], "auto");
+        assert_eq!(body["background"], "auto");
+        assert_eq!(body["output_format"], "png");
+        assert_eq!(body["n"], 1);
+    }
 }
 
 #[derive(Default, Clone, serde::Serialize)]

@@ -145,15 +145,23 @@ final class OpenAIClient {
         let toolCalls: [AccumulatedToolCall]?
     }
 
+    private func makeChatRequest(timeout: TimeInterval? = nil) -> URLRequest {
+        var request = URLRequest(url: OpenAIEndpoint.chatCompletions)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let timeout {
+            request.timeoutInterval = timeout
+        }
+        return request
+    }
+
     private func streamSingleCompletion(
         messages: [ChatCompletionMessage],
         tools: [[String: Any]]?,
         onChunk: @escaping (String) -> Void
     ) async throws -> StreamIteration {
-        var request = URLRequest(url: OpenAIEndpoint.chatCompletions)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var request = makeChatRequest()
 
         var body: [String: Any] = [
             "model": OpenAIModel.chat,
@@ -195,11 +203,7 @@ final class OpenAIClient {
     }
 
     func generateThreadTitle(previousTitle: String?, context: String) async throws -> String? {
-        var request = URLRequest(url: OpenAIEndpoint.chatCompletions)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = OpenAIEndpoint.titleTimeout
+        var request = makeChatRequest(timeout: OpenAIEndpoint.titleTimeout)
 
         let system =
             "You name chat threads for a sidebar. Reply with a short, descriptive title (a few words). " +

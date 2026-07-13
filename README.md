@@ -31,7 +31,7 @@ Packaging: [BUILD.md](BUILD.md).
 - Models: OpenAI API or OpenAI-compatible locals (e.g. Ollama)
 - Storage: on disk; optional Cloudflare R2 sync
 - Speech: Apple Speech framework on macOS and iOS
-- Layout: 4px grid ([docs/4PX_GRID.md](docs/4PX_GRID.md), `npm run grid:audit`)
+- Spacing: 4px type/layout tokens via `src/shared/grid.ts`
 
 ## Repo
 

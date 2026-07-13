@@ -25,7 +25,8 @@ pub fn default_settings() -> Value {
         "search": { "tavilyApiKey": "" },
         "weather": { "defaultZip": "12528" },
         "notes": {
-            "templates": default_note_templates()
+            "templates": default_note_templates(),
+            "defaultTemplateId": "blank"
         },
         "sync": {
             "accountId": "",
@@ -48,19 +49,16 @@ fn default_note_templates() -> Value {
         {
             "id": "blank",
             "title": "Blank",
-            "description": "Empty",
             "content": "# Note\n"
         },
         {
             "id": "one-on-one",
             "title": "1:1",
-            "description": "Sync",
             "content": "# 1:1\n\n## Wins\n- \n\n## Updates\n- \n\n## Feedback\n- \n\n## Blockers\n- \n\n## Next steps\n- [ ] "
         },
         {
             "id": "daily-log",
             "title": "Daily log",
-            "description": "Reflective",
             "content": "# Daily Log\n\n{{today}}\n\n## Wins\n- \n\n## Focus\n- \n\n## Blockers\n- \n\n## Tomorrow\n- "
         }
     ])
@@ -74,15 +72,6 @@ fn parse_memory_injection_strategy(raw: Option<&Value>) -> &'static str {
         Some("none") => "none",
         _ => "all",
     }
-}
-
-fn normalize_note_template_description(raw: &str) -> String {
-    raw.trim()
-        .split('\n')
-        .next()
-        .unwrap_or("")
-        .trim()
-        .to_string()
 }
 
 pub fn normalize_note_templates(input: Option<&Value>) -> Value {
@@ -102,17 +91,12 @@ pub fn normalize_note_templates(input: Option<&Value>) -> Value {
         };
         let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("").trim();
         let title = obj.get("title").and_then(|v| v.as_str()).unwrap_or("").trim();
-        let description = obj
-            .get("description")
-            .and_then(|v| v.as_str())
-            .map(normalize_note_template_description)
-            .unwrap_or_default();
         let content = obj
             .get("content")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        if id.is_empty() || title.is_empty() || description.is_empty() {
+        if id.is_empty() || title.is_empty() {
             continue;
         }
         by_id.insert(
@@ -120,7 +104,6 @@ pub fn normalize_note_templates(input: Option<&Value>) -> Value {
             json!({
                 "id": id,
                 "title": title,
-                "description": description,
                 "content": content
             }),
         );
@@ -137,6 +120,23 @@ pub fn normalize_note_templates(input: Option<&Value>) -> Value {
         })
         .collect();
     Value::Array(merged)
+}
+
+fn normalize_default_note_template_id(input: Option<&Value>, templates: &Value) -> Value {
+    let blank = "blank";
+    let id = input.and_then(|v| v.as_str()).unwrap_or("").trim();
+    let valid = templates
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .any(|item| item.get("id").and_then(|v| v.as_str()) == Some(id))
+        })
+        .unwrap_or(false);
+    if !id.is_empty() && valid {
+        json!(id)
+    } else {
+        json!(blank)
+    }
 }
 
 fn parse_transcription(raw: Option<&Value>, defaults: &Value) -> Value {
@@ -312,15 +312,23 @@ pub fn parse_settings(data: &Value) -> Value {
                 .unwrap_or(true)
         });
 
+    let note_templates = normalize_note_templates(
+        obj.and_then(|o| o.get("notes")).and_then(|v| v.get("templates")),
+    );
+    let default_note_template_id = normalize_default_note_template_id(
+        obj.and_then(|o| o.get("notes"))
+            .and_then(|v| v.get("defaultTemplateId")),
+        &note_templates,
+    );
+
     json!({
         "version": defaults.get("version").cloned().unwrap_or(json!(1)),
         "openai": { "apiKey": "" },
         "search": { "tavilyApiKey": "" },
         "weather": { "defaultZip": default_zip },
         "notes": {
-            "templates": normalize_note_templates(
-                obj.and_then(|o| o.get("notes")).and_then(|v| v.get("templates"))
-            )
+            "templates": note_templates,
+            "defaultTemplateId": default_note_template_id
         },
         "recording": {
             "autoSend": obj
@@ -524,6 +532,19 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
         let mut merged = current_notes;
         if let Some(templates) = notes.get("templates") {
             merged["templates"] = normalize_note_templates(Some(templates));
+        }
+        let templates = merged
+            .get("templates")
+            .cloned()
+            .unwrap_or_else(default_note_templates);
+        if let Some(default_template_id) = notes.get("defaultTemplateId") {
+            merged["defaultTemplateId"] =
+                normalize_default_note_template_id(Some(default_template_id), &templates);
+        } else {
+            merged["defaultTemplateId"] = normalize_default_note_template_id(
+                merged.get("defaultTemplateId"),
+                &templates,
+            );
         }
         next["notes"] = merged;
     }

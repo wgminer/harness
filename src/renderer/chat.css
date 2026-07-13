@@ -498,12 +498,6 @@
   margin-bottom: var(--space-2);
 }
 
-.btn-sm {
-  font-size: var(--font-size-caption);
-  padding: var(--space-1) var(--space-2);
-  height: var(--space-6);
-}
-
 .chat-scroll-top {
   position: sticky;
   top: var(--space-1);
@@ -706,23 +700,6 @@
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-1) 0 var(--space-2);
-}
-
-.btn-chat-secondary {
-  font-size: var(--font-size-caption);
-  padding: 0 var(--space-3);
-  height: calc(var(--grid) * 8 - var(--space-1));
-}
-
-.chat-pane-btn.chat-pane-btn--danger {
-  background: var(--danger-muted);
-  color: #fff;
-  gap: var(--space-1);
-}
-
-.chat-pane-btn.chat-pane-btn--danger:hover:not(:disabled) {
-  background: var(--danger-hover);
-  color: #fff;
 }
 
 /* Chat composer dock — transparent shell; glass lives on `.chat-composer-inner`. */
@@ -1444,12 +1421,14 @@
   color: var(--danger-fg);
 }
 
+/* Full-bleed document expand — shares scrim/padding with .app-modal-backdrop; not the dialog shell. */
 .document-card-modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 2100;
   display: flex;
   flex-direction: column;
+  padding: var(--space-4);
   background: var(--scrim);
 }
 
@@ -1459,12 +1438,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  margin: var(--space-4);
   overflow: hidden;
-}
-
-[data-testid="context-inspector-modal"] .app-modal {
-  max-width: min(720px, 96vw);
 }
 
 .context-inspector-sections {
@@ -1476,14 +1450,19 @@
 .context-inspector-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-edge);
+  border-radius: var(--radius-md);
 }
 
 .context-inspector-heading {
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: 600;
-  color: var(--fg);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
 }
 
 .context-inspector-meta,
@@ -1500,7 +1479,6 @@
   color: var(--danger);
 }
 
-.context-inspector-facts,
 .context-inspector-tools,
 .context-inspector-recordings {
   margin: 0;
@@ -1523,16 +1501,23 @@
   word-break: break-all;
 }
 
-.context-inspector-prompt {
-  font-family: var(--font-mono, monospace);
-  font-size: var(--font-size-xs);
-  line-height: 1.45;
-}
-
+.context-inspector-facts,
 .context-inspector-messages {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.context-inspector-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.context-inspector-fact-key {
+  font-weight: 400;
+  color: var(--fg-muted);
+  opacity: 0.75;
 }
 
 .context-inspector-message-role {
@@ -1550,9 +1535,13 @@
   background: var(--bg);
   font-family: var(--font-mono, monospace);
   font-size: var(--font-size-xs);
-  line-height: 1.45;
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 12rem;
   overflow: auto;
+}
+
+.context-inspector-pre--tall {
+  max-height: 20rem;
 }
