@@ -13,7 +13,7 @@
 
 ## Sequencing
 
-1. [ ] Finish in-flight polish needed for the current release line (sidebar CSS unification WIP; ship/commit as appropriate).
+1. [x] Finish in-flight polish needed for the current release line (sidebar CSS unification WIP; ship/commit as appropriate).
 2. **A — Cull** (do first; shrinks contracts and Settings).
 3. **C — Dev process** (stops recurring ship friction).
 4. **B — Hardening** (execute the dedup plan on the post-cull surface).
