@@ -544,24 +544,28 @@ export function Sidebar({
           <nav className="sidebar-workspace" aria-label="Workspace">
             <button
               type="button"
-              className={`btn list-item-base sidebar-workspace__btn${view === "tasks" ? " active" : ""}`}
+              className={`sidebar-item${view === "tasks" ? " active" : ""}`}
               onClick={() => onViewChange("tasks")}
               aria-label="Tasks"
               aria-current={view === "tasks" ? "page" : undefined}
             >
-              <ListTodo size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">Tasks</span>
+              <span className="sidebar-item-icon" aria-hidden>
+                <ListTodo size={16} className="sidebar-item-icon__svg" />
+              </span>
+              <span className="sidebar-item-title">Tasks</span>
             </button>
             <button
               type="button"
-              className={`btn list-item-base sidebar-workspace__btn${view === "settings" ? " active" : ""}`}
+              className={`sidebar-item${view === "settings" ? " active" : ""}`}
               data-testid="sidebar-settings"
               onClick={() => onViewChange("settings")}
               aria-label={RIG_PAGE_TITLE}
               aria-current={view === "settings" ? "page" : undefined}
             >
-              <Settings size={16} className="sidebar-workspace__icon" aria-hidden />
-              <span className="sidebar-workspace__label">{RIG_PAGE_TITLE}</span>
+              <span className="sidebar-item-icon" aria-hidden>
+                <Settings size={16} className="sidebar-item-icon__svg" />
+              </span>
+              <span className="sidebar-item-title">{RIG_PAGE_TITLE}</span>
             </button>
           </nav>
         )}

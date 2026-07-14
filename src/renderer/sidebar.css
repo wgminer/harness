@@ -230,7 +230,22 @@
   align-items: center;
   gap: var(--space-2);
   position: relative;
+  width: 100%;
+  min-width: 0;
   padding-right: 8px;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+button.sidebar-item {
+  appearance: none;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 0;
 }
 
 .sidebar-item-spinner,
@@ -402,71 +417,13 @@
   flex-shrink: 0;
 }
 
-/* Workspace nav (Tasks / Notes / System): list-row look — same type as .sidebar-item */
+/* Workspace nav (Tasks / System): rows use shared .sidebar-item */
 .sidebar-workspace {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   padding: 8px 0 0;
   flex-shrink: 0;
-}
-
-.sidebar .sidebar-workspace__btn {
-  background: transparent;
-  border-color: transparent;
-  font-family: var(--font-family);
-  font-size: var(--font-size);
-  font-weight: 400;
-  line-height: var(--line-height);
-  height: auto;
-  min-height: 0;
-  padding: var(--space-2) var(--space-3);
-  gap: var(--space-2);
-  border-left: 2px solid transparent;
-  border-radius: 0;
-  color: var(--fg);
-}
-
-.sidebar .sidebar-workspace__btn:hover:not(:disabled) {
-  color: var(--fg);
-  background: #181a1d;
-  border-color: transparent;
-}
-
-.sidebar .sidebar-workspace__btn.active,
-.sidebar .sidebar-workspace__btn.active:hover:not(:disabled) {
-  background: var(--overlay-subtle);
-}
-
-.sidebar-workspace__btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--space-1);
-  width: 100%;
-  min-width: 0;
-  text-align: left;
-}
-
-.sidebar-workspace__icon {
-  flex-shrink: 0;
-  width: var(--icon-size-md);
-  height: var(--icon-size-md);
-  opacity: 0.9;
-}
-
-.sidebar-workspace__label {
-  display: inline-flex;
-  align-items: center;
-  font-family: var(--font-family);
-  font-size: inherit;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar-workspace__btn:hover:not(:disabled) .sidebar-workspace__icon {
-  opacity: 1;
 }
 
 .sidebar .sidebar-new-chat-icon {
