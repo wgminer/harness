@@ -116,19 +116,6 @@ export interface HarnessAPI {
         }
       | { ok: false; error: string }
     >;
-    /** Distill durable user-memory facts from recent conversations (auto-merge). */
-    runCompileNow: () => Promise<
-      | { ok: true; result: { ranAt: number; considered: number; added: number; updated: number; skipped: boolean } }
-      | { ok: false; error: string }
-    >;
-    getCompileStatus: () => Promise<{
-      lastRunAt: number | null;
-      lastRunDateLocal: string | null;
-      lastAddedCount: number;
-      lastUpdatedCount: number;
-      lastConsideredCount: number;
-      lastError: string | null;
-    }>;
     openAppDataFolder: () => Promise<void>;
     getDataStatus: () => Promise<{
       localDataDir: string;

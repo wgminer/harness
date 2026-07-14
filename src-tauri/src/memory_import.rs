@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::credentials::resolve_openai_api_key;
 use crate::memory::{get_memory_dir, AppState};
-use crate::memory_compile::{merge_facts, parse_facts_response, DistilledFact, MemoryCompileLlm};
+use crate::memory_facts::{merge_facts, parse_facts_response, DistilledFact, MemoryCompileLlm};
 use crate::openai::{chat_completion_json, openai_transcript_cleanup_model};
 
 pub const LLM_CONTEXT_IMPORT_CHAR_LIMIT: usize = 80_000;

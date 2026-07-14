@@ -158,16 +158,6 @@ export function SettingsView({
   const [importing, setImporting] = useState(false);
   const [claudeImportStatus, setClaudeImportStatus] = useState<{ imported: number; errors: string[] } | null>(null);
   const [claudeImporting, setClaudeImporting] = useState(false);
-  const [compileStatus, setCompileStatus] = useState<{
-    lastRunAt: number | null;
-    lastRunDateLocal: string | null;
-    lastAddedCount: number;
-    lastUpdatedCount: number;
-    lastConsideredCount: number;
-    lastError: string | null;
-  } | null>(null);
-  const [compileBusy, setCompileBusy] = useState(false);
-  const [compileMessage, setCompileMessage] = useState<string | null>(null);
   const [llmImportDraft, setLlmImportDraft] = useState("");
   const [llmImportBusy, setLlmImportBusy] = useState(false);
   const [llmImportMessage, setLlmImportMessage] = useState<string | null>(null);
@@ -333,10 +323,6 @@ export function SettingsView({
     return () => clearInterval(timer);
   }, [activeTab, dataStatus?.sync.configured]);
 
-  useEffect(() => {
-    if (activeTab !== "memory") return;
-    void refreshCompileStatus();
-  }, [activeTab]);
 
   useEffect(() => {
     return () => {
@@ -768,11 +754,6 @@ export function SettingsView({
     }
   };
 
-  const refreshCompileStatus = async () => {
-    const status = await window.harness.memory.getCompileStatus();
-    setCompileStatus(status);
-  };
-
   const copyExportPrompt = async () => {
     try {
       await navigator.clipboard.writeText(LLM_CONTEXT_EXPORT_PROMPT);
@@ -800,32 +781,6 @@ export function SettingsView({
       }
     } finally {
       setLlmImportBusy(false);
-    }
-  };
-
-  const runCompileNow = async () => {
-    setCompileBusy(true);
-    setCompileMessage(null);
-    try {
-      const response = await window.harness.memory.runCompileNow();
-      if (response.ok) {
-        const r = response.result;
-        if (r.skipped) {
-          setCompileMessage("No new conversations to compile yet.");
-        } else if (r.added === 0 && r.updated === 0) {
-          setCompileMessage(`Reviewed ${r.considered} conversation${r.considered === 1 ? "" : "s"}; nothing durable to add.`);
-        } else {
-          setCompileMessage(
-            `Reviewed ${r.considered} conversation${r.considered === 1 ? "" : "s"}: added ${r.added}, updated ${r.updated}.`
-          );
-        }
-      } else {
-        setCompileMessage(response.error);
-      }
-      await refreshCompileStatus();
-      setUserMemory(await window.harness.memory.getUserMemory());
-    } finally {
-      setCompileBusy(false);
     }
   };
 
@@ -1270,56 +1225,6 @@ export function SettingsView({
                 </button>
               </SettingsActions>
               {llmImportMessage && <SettingsHint flush>{llmImportMessage}</SettingsHint>}
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Learn from past chats"
-              description={
-                <>
-                  Reviews conversations updated since the last run and adds durable facts to your
-                  facts above. Uses your OpenAI API key. Auto-merges without asking — edit or remove
-                  entries any time. Manual-only for now; runs only when you press the button below.
-                </>
-              }
-            >
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="settings-run-memory-compile"
-                  onClick={() => void runCompileNow()}
-                  disabled={compileBusy}
-                >
-                  {compileBusy ? "Learning…" : "Learn Now"}
-                </button>
-              </SettingsActions>
-              {compileStatus && (
-                <div className="settings-data-status" role="status">
-                  <p>
-                    <strong>Last run:</strong>{" "}
-                    {compileStatus.lastRunAt
-                      ? new Date(compileStatus.lastRunAt).toLocaleString()
-                      : "never"}
-                  </p>
-                  {compileStatus.lastRunAt != null && (
-                    <p>
-                      <strong>Last result:</strong> reviewed{" "}
-                      {compileStatus.lastConsideredCount} conversation
-                      {compileStatus.lastConsideredCount === 1 ? "" : "s"}, added{" "}
-                      {compileStatus.lastAddedCount}, updated{" "}
-                      {compileStatus.lastUpdatedCount}
-                    </p>
-                  )}
-                  {compileStatus.lastError && (
-                    <p className="settings-import-status__errors">
-                      Last error: {compileStatus.lastError}
-                    </p>
-                  )}
-                </div>
-              )}
-              {compileMessage && (
-                <SettingsHint flush>{compileMessage}</SettingsHint>
-              )}
             </SettingsGroup>
           </SettingsTabPanel>}
 

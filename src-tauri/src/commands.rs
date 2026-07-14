@@ -21,7 +21,6 @@ use crate::memory::{
     list_conversations, open_app_data_folder,
     search_conversations, set_conversation_title, set_user_memory, AppState, AppendMessageMeta,
 };
-use crate::memory_compile::{get_memory_compile_status, run_memory_compile_now};
 use crate::memory_import::run_llm_context_import_now;
 use crate::images::{
     create_image, delete_image, generate_image, list_images, read_image, ImageGenerateInput,
@@ -266,21 +265,6 @@ pub async fn memory_import_llm_context(
         Ok(Err(error)) => Ok(serde_json::json!({ "ok": false, "error": error })),
         Err(e) => Err(map_err(e)),
     }
-}
-
-#[command(rename_all = "camelCase")]
-pub async fn memory_run_compile_now(state: State<'_, AppState>) -> Result<Value, String> {
-    match run_memory_compile_now(&state).await {
-        Ok(Ok(result)) => Ok(serde_json::json!({ "ok": true, "result": result })),
-        Ok(Err(error)) => Ok(serde_json::json!({ "ok": false, "error": error })),
-        Err(e) => Err(map_err(e)),
-    }
-}
-
-#[command(rename_all = "camelCase")]
-pub async fn memory_get_compile_status(state: State<'_, AppState>) -> Result<Value, String> {
-    let status = get_memory_compile_status(&state).await;
-    serde_json::to_value(status).map_err(map_err)
 }
 
 #[command(rename_all = "camelCase")]

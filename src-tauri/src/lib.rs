@@ -14,7 +14,7 @@ pub mod global_recording_effects;
 pub mod global_recording_session;
 pub mod import;
 pub mod memory;
-pub mod memory_compile;
+pub mod memory_facts;
 pub mod memory_import;
 pub mod images;
 pub mod note_print;
@@ -121,8 +121,6 @@ pub fn run() {
             commands::memory_import_from_chat_gpt_folder,
             commands::memory_import_from_claude_folder,
             commands::memory_import_llm_context,
-            commands::memory_run_compile_now,
-            commands::memory_get_compile_status,
             commands::memory_open_app_data_folder,
             commands::memory_get_data_status,
             commands::memory_cleanup_legacy_memory,

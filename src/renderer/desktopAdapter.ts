@@ -99,8 +99,6 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("memory:importFromClaudeFolder")),
       importLlmContext: (exportText: string) =>
         invoke(cmd("memory:importLlmContext"), { exportText }),
-      runCompileNow: () => invoke(cmd("memory:runCompileNow")),
-      getCompileStatus: () => invoke(cmd("memory:getCompileStatus")),
       openAppDataFolder: () => invoke(cmd("memory:openAppDataFolder")),
       getDataStatus: () => invoke(cmd("memory:getDataStatus")),
       cleanupLegacyMemory: () => invoke(cmd("memory:cleanupLegacyMemory")),

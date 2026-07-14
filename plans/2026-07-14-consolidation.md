@@ -62,14 +62,14 @@ Do **not** start Frozen-backlog features (new providers, agent mode, semantic me
 
 **Why:** Unused automatic distill + Settings “Compile now”.
 
-**Important:** [`memory_import.rs`](../src-tauri/src/memory_import.rs) imports `merge_facts` / `parse_facts_response` / `DistilledFact` / `MemoryCompileLlm` from [`memory_compile.rs`](../src-tauri/src/memory_compile.rs). Do **not** delete the whole module blindly.
+**Important:** shared distill helpers used by import live in [`memory_facts.rs`](../src-tauri/src/memory_facts.rs) (`merge_facts` / `parse_facts_response` / `DistilledFact` / `MemoryCompileLlm`). ChatGPT/Claude import keeps working.
 
-- [ ] Extract shared distill helpers used by import into a small module (e.g. `memory_facts.rs`) **or** move them into `memory_import.rs`; keep ChatGPT/Claude import working.
-- [ ] Delete compile-only surface: `run_memory_compile_if_due` / `run_memory_compile_now` / `get_memory_compile_status`, `memory_compile_state.json`, launch deferred compile hook (wherever scheduled in app setup).
-- [ ] Drop commands + `mod memory_compile` wiring from `commands.rs` / `lib.rs`.
-- [ ] Remove `memory.runCompileNow` / `memory.getCompileStatus` from `desktopAPI` / `desktopAdapter`.
-- [ ] Remove Compile UI/status from `SettingsView.tsx`; clean nav keywords in `settingsNavConfig.ts`.
-- [ ] Leave manual `user_memory.json` + memory tools (`memory_set_fact`, etc.) intact.
+- [x] Extract shared distill helpers used by import into a small module (e.g. `memory_facts.rs`) **or** move them into `memory_import.rs`; keep ChatGPT/Claude import working.
+- [x] Delete compile-only surface: `run_memory_compile_if_due` / `run_memory_compile_now` / `get_memory_compile_status`, `memory_compile_state.json`, launch deferred compile hook (wherever scheduled in app setup).
+- [x] Drop commands + `mod memory_compile` wiring from `commands.rs` / `lib.rs`.
+- [x] Remove `memory.runCompileNow` / `memory.getCompileStatus` from `desktopAPI` / `desktopAdapter`.
+- [x] Remove Compile UI/status from `SettingsView.tsx`; clean nav keywords in `settingsNavConfig.ts`.
+- [x] Leave manual `user_memory.json` + memory tools (`memory_set_fact`, etc.) intact.
 
 ### A4 — Theme studio / stale docs (docs-only)
 
@@ -81,10 +81,10 @@ Code is already fixed dark; no Theme studio UI left to delete.
 
 ### A — Verify
 
-- [ ] `npm run typecheck` + `npm test`
-- [ ] `cargo test --lib` (in `src-tauri`)
-- [ ] Smoke: chat still streams; Settings saves without weather/compile; sync merge of a fixture bundle that includes `plans.json` does not crash
-- [ ] Grep clean for `get_weather`, `plans_list`, `runCompileNow`, `memory_compile` product references
+- [x] `npm run typecheck` + `npm test`
+- [x] `cargo test --lib` (in `src-tauri`)
+- [x] Smoke: chat still streams; Settings saves without weather/compile; sync merge of a fixture bundle that includes `plans.json` does not crash
+- [x] Grep clean for `get_weather`, `plans_list`, `runCompileNow`, `memory_compile` product references
 
 ---
 
