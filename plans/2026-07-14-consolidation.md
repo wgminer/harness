@@ -47,16 +47,16 @@ Do **not** start Frozen-backlog features (new providers, agent mode, semantic me
 
 **Why:** Low-use Open-Meteo tool + Settings default ZIP.
 
-- [ ] Remove `get_weather` tool definition from [`openai.rs`](../src-tauri/src/openai.rs).
-- [ ] Remove `get_weather` / Open-Meteo client from [`assistant_tools.rs`](../src-tauri/src/assistant_tools.rs).
-- [ ] Remove `weather.defaultZip` from settings defaults + normalize/save in [`settings.rs`](../src-tauri/src/settings.rs) and [`types.ts`](../src/shared/types.ts).
-- [ ] Remove weather ZIP UI + save wiring from [`SettingsView.tsx`](../src/renderer/SettingsView.tsx); drop `"weather"` from [`settingsNavConfig.ts`](../src/renderer/settings/settingsNavConfig.ts).
-- [ ] Strip `get_weather` prose from all three system-prompt defaults:
+- [x] Remove `get_weather` tool definition from [`openai.rs`](../src-tauri/src/openai.rs).
+- [x] Remove `get_weather` / Open-Meteo client from [`assistant_tools.rs`](../src-tauri/src/assistant_tools.rs).
+- [x] Remove `weather.defaultZip` from settings defaults + normalize/save in [`settings.rs`](../src-tauri/src/settings.rs) and [`types.ts`](../src/shared/types.ts).
+- [x] Remove weather ZIP UI + save wiring from [`SettingsView.tsx`](../src/renderer/SettingsView.tsx); drop `"weather"` from [`settingsNavConfig.ts`](../src/renderer/settings/settingsNavConfig.ts).
+- [x] Strip `get_weather` prose from all three system-prompt defaults:
   - [`src/shared/systemPromptDefaults.ts`](../src/shared/systemPromptDefaults.ts)
   - [`src-tauri/src/system_prompt.rs`](../src-tauri/src/system_prompt.rs)
   - [`ios/HarnessMobile/Chat/SystemPromptSettings.swift`](../ios/HarnessMobile/Chat/SystemPromptSettings.swift)
-- [ ] Update secrets/redaction tests that mention `weather.defaultZip` ([`settingsSecrets.test.ts`](../src/shared/settingsSecrets.test.ts)).
-- [ ] Tolerant-read: old `settings.json` may still contain `weather` — ignore rather than error.
+- [x] Update secrets/redaction tests that mention `weather.defaultZip` ([`settingsSecrets.test.ts`](../src/shared/settingsSecrets.test.ts)).
+- [x] Tolerant-read: old `settings.json` may still contain `weather` — ignore rather than error.
 
 ### A3 — Nightly memory compile
 

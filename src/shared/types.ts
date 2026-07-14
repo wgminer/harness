@@ -109,11 +109,6 @@ export interface Settings {
   search?: {
     tavilyApiKey?: string;
   };
-  /** Defaults for the `get_weather` assistant tool. */
-  weather?: {
-    /** US ZIP used when the model does not pass one explicitly. */
-    defaultZip: string;
-  };
   notes?: {
     templates: import("./writing").NoteTemplateConfig[];
     /** Template id applied when creating a new note. Defaults to Blank. */
@@ -176,9 +171,6 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   search: {
     tavilyApiKey: "",
-  },
-  weather: {
-    defaultZip: "12528",
   },
   notes: {
     templates: DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),

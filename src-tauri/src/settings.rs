@@ -23,7 +23,6 @@ pub fn default_settings() -> Value {
             "dictionary": []
         },
         "search": { "tavilyApiKey": "" },
-        "weather": { "defaultZip": "12528" },
         "notes": {
             "templates": default_note_templates(),
             "defaultTemplateId": "blank"
@@ -282,18 +281,6 @@ pub fn parse_settings(data: &Value) -> Value {
     let defaults = default_settings();
     let obj = data.as_object();
 
-    let default_zip = obj
-        .and_then(|o| o.get("weather"))
-        .and_then(|v| v.get("defaultZip"))
-        .and_then(|v| v.as_str())
-        .unwrap_or_else(|| {
-            defaults
-                .get("weather")
-                .and_then(|v| v.get("defaultZip"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("12528")
-        });
-
     let injection_strategy = parse_memory_injection_strategy(
         obj.and_then(|o| o.get("memory"))
             .and_then(|v| v.get("injectionStrategy")),
@@ -325,7 +312,6 @@ pub fn parse_settings(data: &Value) -> Value {
         "version": defaults.get("version").cloned().unwrap_or(json!(1)),
         "openai": { "apiKey": "" },
         "search": { "tavilyApiKey": "" },
-        "weather": { "defaultZip": default_zip },
         "notes": {
             "templates": note_templates,
             "defaultTemplateId": default_note_template_id
@@ -489,14 +475,6 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
     let defaults = default_settings();
 
     let mut next = current.clone();
-
-    if let Some(weather) = partial.get("weather") {
-        next["weather"] = merge_object_fields(
-            current.get("weather").unwrap_or(&json!({})),
-            weather,
-            &["defaultZip"],
-        );
-    }
 
     if let Some(recording) = partial.get("recording") {
         next["recording"] = merge_object_fields(

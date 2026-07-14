@@ -70,7 +70,6 @@ type PersistedFormState = {
   cleanupEnabled: boolean;
   cleanupPrompt: string;
   transcriptDictionary: TranscriptDictionaryEntry[];
-  weatherZip: string;
   memoryInjectionStrategy: MemoryInjectionStrategy;
   r2AccountId: string;
   r2Bucket: string;
@@ -145,7 +144,6 @@ export function SettingsView({
   const [autoSend, setAutoSend] = useState(true);
   const [globalFnHotkey, setGlobalFnHotkey] = useState(D.recording!.globalFnHotkey);
   const [openToComposeOnLaunch, setOpenToComposeOnLaunch] = useState(D.chat!.openToComposeOnLaunch);
-  const [weatherZip, setWeatherZip] = useState(D.weather!.defaultZip);
   const [tavilyApiKey, setTavilyApiKey] = useState(D.search?.tavilyApiKey ?? "");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [memoryInjectionStrategy, setMemoryInjectionStrategy] = useState<MemoryInjectionStrategy>(
@@ -260,7 +258,6 @@ export function SettingsView({
           cleanupEnabled: S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false,
           cleanupPrompt: S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "",
           transcriptDictionary: S.transcription?.dictionary ?? D.transcription?.dictionary ?? [],
-          weatherZip: S.weather?.defaultZip ?? D.weather!.defaultZip,
           memoryInjectionStrategy: S.memory?.injectionStrategy ?? D.memory!.injectionStrategy,
           r2AccountId: S.sync?.accountId ?? D.sync!.accountId,
           r2Bucket: S.sync?.bucket ?? D.sync!.bucket,
@@ -277,7 +274,6 @@ export function SettingsView({
         setCleanupPrompt(hydrated.cleanupPrompt);
         setCleanupPromptDraft(hydrated.cleanupPrompt);
         setTranscriptDictionary(hydrated.transcriptDictionary);
-        setWeatherZip(hydrated.weatherZip);
         setR2AccountId(hydrated.r2AccountId);
         setR2Bucket(hydrated.r2Bucket);
         setR2Prefix(hydrated.r2Prefix);
@@ -359,7 +355,6 @@ export function SettingsView({
       cleanupEnabled,
       cleanupPrompt,
       transcriptDictionary,
-      weatherZip,
       memoryInjectionStrategy,
       r2AccountId,
       r2Bucket,
@@ -401,9 +396,6 @@ export function SettingsView({
             prompt: next.cleanupPrompt,
           },
           dictionary: next.transcriptDictionary,
-        },
-        weather: {
-          defaultZip: next.weatherZip.trim(),
         },
         memory: {
           injectionStrategy: next.memoryInjectionStrategy,
@@ -447,7 +439,6 @@ export function SettingsView({
     cleanupEnabled,
     cleanupPrompt,
     transcriptDictionary,
-    weatherZip,
     tavilyApiKey,
     memoryInjectionStrategy,
     r2AccountId,
@@ -486,7 +477,6 @@ export function SettingsView({
       cleanupEnabled,
       cleanupPrompt,
       transcriptDictionary,
-      weatherZip,
       memoryInjectionStrategy,
       r2AccountId,
       r2Bucket,
@@ -520,7 +510,6 @@ export function SettingsView({
       cleanupEnabled,
       cleanupPrompt,
       transcriptDictionary,
-      weatherZip,
       memoryInjectionStrategy,
       r2AccountId,
       r2Bucket,
@@ -541,7 +530,6 @@ export function SettingsView({
     cleanupEnabled,
     cleanupPrompt,
     transcriptDictionary,
-    weatherZip,
     memoryInjectionStrategy,
     r2AccountId,
     r2Bucket,
@@ -950,31 +938,6 @@ export function SettingsView({
                   onBlur={() => void persistSettings()}
                   placeholder="tvly-…"
                   ariaLabel="Tavily API key"
-                />
-              </SettingsField>
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Weather tool"
-              description={
-                <>
-                  Default US ZIP used by the <code>get_weather</code> tool when the assistant does not specify a location.
-                  Powered by Open-Meteo (no API key).
-                </>
-              }
-            >
-              <SettingsField label="Default ZIP" htmlFor="settings-weather-zip">
-                <input
-                  id="settings-weather-zip"
-                  data-testid="settings-weather-zip"
-                  type="text"
-                  value={weatherZip}
-                  onChange={(e) => setWeatherZip(e.target.value)}
-                  placeholder="12528"
-                  inputMode="numeric"
-                  autoComplete="postal-code"
-                  spellCheck={false}
-                  maxLength={5}
                 />
               </SettingsField>
             </SettingsGroup>

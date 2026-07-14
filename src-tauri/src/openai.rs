@@ -275,20 +275,6 @@ pub fn tool_definitions() -> Value {
       {
         "type": "function",
         "function": {
-          "name": "get_weather",
-          "description": "Get current conditions and a short daily forecast for a US ZIP code.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "zip": { "type": "string" },
-              "days": { "type": "number" }
-            }
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
           "name": "web_search",
           "description": "Search the web for current information via Tavily.",
           "parameters": {

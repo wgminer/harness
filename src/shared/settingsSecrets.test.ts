@@ -16,11 +16,11 @@ describe("settingsSecrets", () => {
 
   it("redacts secrets from settings.json bytes", () => {
     const raw = Buffer.from(
-      JSON.stringify({ openai: { apiKey: "secret" }, weather: { defaultZip: "12528" } }),
+      JSON.stringify({ openai: { apiKey: "secret" }, recording: { autoSend: true } }),
       "utf-8",
     );
     const redacted = JSON.parse(redactSettingsJsonBytes(raw).toString("utf-8")) as Record<string, unknown>;
     expect((redacted.openai as Record<string, unknown> | undefined)?.apiKey).toBeUndefined();
-    expect((redacted.weather as { defaultZip: string }).defaultZip).toBe("12528");
+    expect((redacted.recording as { autoSend: boolean }).autoSend).toBe(true);
   });
 });

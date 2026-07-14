@@ -10,14 +10,11 @@ use serde_json::{json, Value};
 use crate::credentials::resolve_tavily_api_key;
 use crate::memory::{AppState, SearchResult};
 use crate::notes;
-use crate::settings;
 use crate::tasks::{
     clear_completed_tasks, create_task, delete_task, list_tasks, update_task, TasksPayload,
 };
 
 const TAVILY_SEARCH_URL: &str = "https://api.tavily.com/search";
-const ZIPPOPOTAM_URL: &str = "https://api.zippopotam.us/us";
-const OPEN_METEO_FORECAST_URL: &str = "https://api.open-meteo.com/v1/forecast";
 const RIG_SECTION_GENERAL: &str = "System → General";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,43 +53,6 @@ struct WebSearchResultPayload {
     error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct WeatherLocation {
-    zip: String,
-    place: String,
-    state: String,
-    lat: f64,
-    lon: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct WeatherCurrent {
-    time: String,
-    temp_f: f64,
-    apparent_f: f64,
-    humidity_pct: f64,
-    wind_mph: f64,
-    wind_gusts_mph: f64,
-    precipitation_in: f64,
-    weather: String,
-    is_day: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct WeatherDaily {
-    date: String,
-    weather: String,
-    high_f: f64,
-    low_f: f64,
-    precip_chance_pct: f64,
-    precip_sum_in: f64,
-    sunrise: String,
-    sunset: String,
-}
-
 pub fn is_assistant_tool_name(name: &str) -> bool {
     matches!(
         name,
@@ -105,7 +65,6 @@ pub fn is_assistant_tool_name(name: &str) -> bool {
             | "memory_list_facts"
             | "memory_search_conversations"
             | "get_datetime"
-            | "get_weather"
             | "web_search"
             | "note_list"
             | "note_create"
@@ -213,271 +172,6 @@ fn get_datetime(args: &Value) -> Value {
         "local_iso": local_iso,
         "formatted": formatted
     })
-}
-
-fn normalize_zip(raw: &str) -> Option<String> {
-    let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
-    if digits.len() < 5 {
-        return None;
-    }
-    Some(digits.chars().take(5).collect())
-}
-
-fn describe_weather_code(code: i64) -> String {
-    match code {
-        0 => "Clear sky".into(),
-        1 => "Mainly clear".into(),
-        2 => "Partly cloudy".into(),
-        3 => "Overcast".into(),
-        45 => "Fog".into(),
-        48 => "Depositing rime fog".into(),
-        51 => "Light drizzle".into(),
-        53 => "Drizzle".into(),
-        55 => "Heavy drizzle".into(),
-        56 => "Light freezing drizzle".into(),
-        57 => "Freezing drizzle".into(),
-        61 => "Light rain".into(),
-        63 => "Rain".into(),
-        65 => "Heavy rain".into(),
-        66 => "Light freezing rain".into(),
-        67 => "Freezing rain".into(),
-        71 => "Light snow".into(),
-        73 => "Snow".into(),
-        75 => "Heavy snow".into(),
-        77 => "Snow grains".into(),
-        80 => "Rain showers".into(),
-        81 => "Heavy rain showers".into(),
-        82 => "Violent rain showers".into(),
-        85 => "Snow showers".into(),
-        86 => "Heavy snow showers".into(),
-        95 => "Thunderstorm".into(),
-        96 => "Thunderstorm with hail".into(),
-        99 => "Thunderstorm with heavy hail".into(),
-        other => format!("Weather code {other}"),
-    }
-}
-
-async fn fetch_json(client: &Client, url: &str) -> Result<Value, String> {
-    let response = client
-        .get(url)
-        .timeout(Duration::from_secs(15))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "HTTP {} {}",
-            response.status(),
-            response.status().canonical_reason().unwrap_or("error")
-        ));
-    }
-    response.json().await.map_err(|e| e.to_string())
-}
-
-async fn geocode_zip(client: &Client, zip: &str) -> Result<WeatherLocation, String> {
-    let data = fetch_json(client, &format!("{ZIPPOPOTAM_URL}/{zip}")).await?;
-    let place = data
-        .get("places")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .ok_or_else(|| format!("Could not resolve ZIP {zip}"))?;
-    let lat = place
-        .get("latitude")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.parse::<f64>().ok())
-        .ok_or_else(|| format!("Could not resolve ZIP {zip}"))?;
-    let lon = place
-        .get("longitude")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.parse::<f64>().ok())
-        .ok_or_else(|| format!("Could not resolve ZIP {zip}"))?;
-    Ok(WeatherLocation {
-        zip: data
-            .get("post code")
-            .and_then(|v| v.as_str())
-            .unwrap_or(zip)
-            .to_string(),
-        place: place
-            .get("place name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string(),
-        state: place
-            .get("state abbreviation")
-            .or_else(|| place.get("state"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string(),
-        lat,
-        lon,
-    })
-}
-
-async fn fetch_forecast(
-    client: &Client,
-    location: &WeatherLocation,
-    days: i64,
-) -> Result<(WeatherCurrent, Vec<WeatherDaily>), String> {
-    let days = days.clamp(1, 7);
-    let url = format!(
-        "{OPEN_METEO_FORECAST_URL}?latitude={}&longitude={}&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_gusts_10m,precipitation,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset&forecast_days={days}",
-        location.lat, location.lon
-    );
-    let data = fetch_json(client, &url).await?;
-    let current_raw = data.get("current").cloned().unwrap_or_else(|| json!({}));
-    let current = WeatherCurrent {
-        time: current_raw
-            .get("time")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string(),
-        temp_f: current_raw
-            .get("temperature_2m")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(f64::NAN),
-        apparent_f: current_raw
-            .get("apparent_temperature")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(f64::NAN),
-        humidity_pct: current_raw
-            .get("relative_humidity_2m")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(f64::NAN),
-        wind_mph: current_raw
-            .get("wind_speed_10m")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(f64::NAN),
-        wind_gusts_mph: current_raw
-            .get("wind_gusts_10m")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(f64::NAN),
-        precipitation_in: current_raw
-            .get("precipitation")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0),
-        weather: describe_weather_code(
-            current_raw
-                .get("weather_code")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(-1),
-        ),
-        is_day: current_raw.get("is_day").and_then(|v| v.as_i64()) == Some(1),
-    };
-
-    let daily_raw = data.get("daily").cloned().unwrap_or_else(|| json!({}));
-    let times = daily_raw
-        .get("time")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    let mut daily = Vec::new();
-    for (i, date) in times.iter().enumerate() {
-        let date = date.as_str().unwrap_or("").to_string();
-        daily.push(WeatherDaily {
-            date,
-            weather: describe_weather_code(
-                daily_raw
-                    .get("weather_code")
-                    .and_then(|v| v.as_array())
-                    .and_then(|arr| arr.get(i))
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(-1),
-            ),
-            high_f: daily_raw
-                .get("temperature_2m_max")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(i))
-                .and_then(|v| v.as_f64())
-                .unwrap_or(f64::NAN),
-            low_f: daily_raw
-                .get("temperature_2m_min")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(i))
-                .and_then(|v| v.as_f64())
-                .unwrap_or(f64::NAN),
-            precip_chance_pct: daily_raw
-                .get("precipitation_probability_max")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(i))
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0),
-            precip_sum_in: daily_raw
-                .get("precipitation_sum")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(i))
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0),
-            sunrise: daily_raw
-                .get("sunrise")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(i))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
-            sunset: daily_raw
-                .get("sunset")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(i))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
-        });
-    }
-
-    Ok((current, daily))
-}
-
-async fn get_weather_for_zip(zip: &str, days: i64) -> Value {
-    let Some(normalized) = normalize_zip(zip) else {
-        return json!({ "error": "Invalid ZIP code (expected 5 US digits)", "zip": zip });
-    };
-    let client = Client::new();
-    match geocode_zip(&client, &normalized).await {
-        Ok(location) => match fetch_forecast(&client, &location, days).await {
-            Ok((current, daily)) => json!({
-                "units": "imperial",
-                "location": location,
-                "current": current,
-                "daily": daily
-            }),
-            Err(err) => json!({ "error": err, "zip": normalized }),
-        },
-        Err(err) => json!({ "error": err, "zip": normalized }),
-    }
-}
-
-async fn fetch_weather(state: &AppState, args: &Value) -> Value {
-    let arg_zip = args
-        .get("zip")
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .unwrap_or("");
-    let mut zip = arg_zip.to_string();
-    if zip.is_empty() {
-        let settings = settings::get_settings(&state.write_chains).await;
-        zip = settings
-            .get("weather")
-            .and_then(|v| v.get("defaultZip"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-    }
-    if zip.is_empty() {
-        return json!({
-            "error": format!("No ZIP provided and no default ZIP is set. Add one in {RIG_SECTION_GENERAL}.")
-        });
-    }
-    let days_raw = args
-        .get("days")
-        .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|n| n as f64)))
-        .unwrap_or(3.0);
-    let days = if days_raw > 0.0 {
-        days_raw.floor().min(7.0) as i64
-    } else {
-        3
-    };
-    get_weather_for_zip(&zip, days).await
 }
 
 async fn search_web_tavily(api_key: &str, query: &str, max_results: i64) -> WebSearchResultPayload {
@@ -688,7 +382,6 @@ pub async fn execute_assistant_tool(
             serde_json::to_value(search_memory_conversations(state, &args).await?)?.into()
         }
         "get_datetime" => get_datetime(&args),
-        "get_weather" => fetch_weather(state, &args).await,
         "web_search" => serde_json::to_value(fetch_web_search(&args).await)?.into(),
         "note_list" | "note_create" | "note_read" | "note_save" | "note_delete" => {
             execute_note_tool(state, name, &args).await

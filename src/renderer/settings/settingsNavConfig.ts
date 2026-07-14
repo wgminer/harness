@@ -33,8 +33,6 @@ export const SETTINGS_NAV: Array<{
       "launch",
       "compose",
       "tavily",
-      "weather",
-      "zip",
       "web search",
       "auto-send",
       "facts",
