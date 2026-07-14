@@ -38,6 +38,7 @@ lerna-debug.log*
 *.sw?
 
 # Local scratch / imports (not part of the repo)
+tmp/
 import/
 import_v2/
 backlog/
