@@ -1,6 +1,8 @@
 # Plan: Sidebar object-library IA
 
-**Status:** Ready for implementation  
+> **Archived (shipped).** Object-library sidebar IA landed (notes/images in list; Editor tab removed). Remaining Phase 2 CSS polish (Tasks/System → shared `.sidebar-item`) tracked under v0.8 workstream D in [plans/2026-07-14-consolidation.md](../2026-07-14-consolidation.md).
+
+**Status:** Shipped / archived  
 **Created:** 2026-07-12  
 **Audience:** Implementing LLM / engineer (handoff doc)  
 **Product:** Harness desktop (`src/renderer`)
@@ -198,7 +200,7 @@ Document only for handoff continuity:
 
 #### Generated images
 
-- Implemented as peer library objects — see `plans/2026-07-12-image-objects.md`.
+- Implemented as peer library objects — see `2026-07-12-image-objects.md` (this archive folder).
 - `kind: "image"` in library, New → New image, canvas + right controls panel.
 
 #### Plans

@@ -1,8 +1,10 @@
 # Plan: Generated images as library objects
 
-**Status:** Implementing  
+> **Archived (shipped).** Landed ~2026-07-12 as v0.7.6 image library. Path updated: companion supersede note now lives beside this file in `plans/archive/`.
+
+**Status:** Shipped / archived  
 **Created:** 2026-07-12  
-**Supersedes:** `plans/2026-07-09-editor-image-generation.md` (note Insert → Image flow)
+**Supersedes:** `plans/archive/2026-07-09-editor-image-generation.md` (note Insert → Image flow)
 
 ---
 

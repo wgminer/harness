@@ -1,5 +1,7 @@
 # UI Transition Audit
 
+> **Archived (stale).** Written for the Electron-era renderer; references paths and theme/motion surfaces that no longer match the Tauri app. Kept for historical motion notes only — do not treat as current guidance. Active UI polish lives in [ROADMAP.md](../../ROADMAP.md) v0.8 workstream D and [plans/2026-07-14-consolidation.md](../../plans/2026-07-14-consolidation.md).
+
 **Date:** 2026-05-22  
 **Scope:** Electron renderer UI/visual transitions (CSS transitions/animations, React-driven show/hide, scroll behavior, `prefers-reduced-motion`).  
 **Out of scope:** State/data transitions, navigation/session persistence (`uiSession`), legacy `src/components/*.scss` (not loaded by renderer).

@@ -3,15 +3,17 @@
 Living document with two layers:
 
 1. **Outcomes** — what the project is *for* (steer ideas and compare work here first).
-2. **Execution** — what shipped (**Completed**), what’s active (**v0.7**), and what’s queued (**Post v0.7**).
+2. **Execution** — what shipped (**Completed**), what’s active (**v0.8 Consolidation**), and what’s **Frozen** until consolidation lands.
 
-When considering a feature, ask: *which outcome does it serve, and does anything already on the execution track do it better?*
+**Strategy for this phase:** rebuild in place — cull unused/unfinished features, harden what remains, fix the dev/release process, and clear paper cuts. No greenfield rewrite. No new product features until v0.8 ships.
+
+When considering work, ask: *does this serve consolidation first, or does it belong in the Frozen backlog?*
 
 ---
 
 ## Project outcomes
 
-Four concrete outcomes. Each has a **success picture** (how you know it’s working) and **signals** (things we can point at in the product today).
+Five concrete outcomes. Each has a **success picture** (how you know it’s working) and **signals** (things we can point at in the product today).
 
 ### O1 — Showcase-grade layout and UI
 
@@ -19,9 +21,9 @@ Harness should feel like a deliberate product: typography, spacing, motion, and 
 
 | | |
 |---|---|
-| **Success picture** | Someone opening the app notices craft: readable density, coherent theme, surfaces that scale with the window, chat/notes/settings that feel designed—not bolted on. |
-| **Signals today** | **4px spacing tokens** (`src/shared/grid.ts`); theme type scale (font + icon + line-height tokens); Theme studio; `--accent-readable`; dedicated Notes/Config shells; session restore; sidebar sort modes + peek fade; chat single-message layout; motion audit doc; tray branding. |
-| **Gaps** | Deeper viewport breakpoints; sidebar focus traps; empty/loading/error polish. |
+| **Success picture** | Someone opening the app notices craft: readable density, coherent fixed dark theme, surfaces that scale with the window, chat/notes/settings that feel designed—not bolted on. |
+| **Signals today** | Fixed dark theme; **4px spacing tokens** (`src/shared/grid.ts`); type/icon/line-height tokens; `--accent-readable`; object-library sidebar (chats, notes, images); dedicated Notes/System shells; session restore; sidebar sort modes + peek fade; chat single-message layout; tray branding. |
+| **Gaps** | Deeper viewport breakpoints; sidebar focus traps; empty/loading/error polish; CSS consolidation (~4.9k lines for a fixed theme). |
 | **Anti-goals** | Feature sprawl that ignores layout debt; one-off screens that don’t share tokens; “good enough” spacing in primary flows. |
 
 ### O2 — Replace paid AI subscriptions
@@ -31,20 +33,20 @@ One personal harness should absorb daily workflows currently spread across chat 
 | | |
 |---|---|
 | **Success picture** | You reach for Harness first for chat, memory, notes, tasks, and imports; fewer standalone AI SaaS tabs; data lives locally with clear sync/backup. |
-| **Signals today** | Chat + tools + memory; tasks & plans; Notes + `proposeEdit`; ChatGPT + Claude import; nightly memory compile; **Cloudflare R2 sync** with per-file conflict review; conversation search; weather tool; provider picker (OpenAI / Ollama); dictation sessions. |
-| **Gaps** | More chat providers (Claude/Gemini APIs); backlog/inbox primitive; richer notes (metadata, search, guided actions); semantic memory; agent mode with guardrails. |
+| **Signals today** | Chat + tools + memory; tasks; Notes + `proposeEdit`; sticky notes; image library; ChatGPT + Claude import; **Cloudflare R2 sync** with per-file conflict review; conversation search; provider picker (OpenAI / Ollama); dictation sessions. |
+| **Gaps** | Sync onboarding tax (R2 credentials); more chat providers (Claude/Gemini APIs); backlog/inbox primitive; richer notes; semantic memory; agent mode with guardrails — **feature gaps are Frozen until v0.8**. |
 | **Anti-goals** | Thin wrappers that still require the original app; black-box memory; importing without a path to *use* data inside Harness. |
 
-### O3 — Mobile companion (later)
+### O3 — Mobile companion
 
 A small mobile surface for capture and Q&A—not desktop parity.
 
 | | |
 |---|---|
-| **Success picture** | Capture ideas on the go (voice/text → inbox); ask Harness a question; optional Telegram-style bridge before a full app. |
-| **Signals today** | **Harness Mobile (iOS)** — SwiftUI chat, OpenAI streaming, **R2 remote backup** (`bundle.json.gz` / `manifest.json`); conflict sheet on phone; Keychain API keys; system/HIG styling. Desktop sync/conflict UI for thorough merges. |
-| **Gaps** | Capture-first inbox on mobile; voice capture; Android; parity only where it reduces friction. |
-| **Anti-goals** | Rebuilding desktop recording/transcription on phone v1; feature parity that doubles maintenance. |
+| **Success picture** | Capture ideas on the go (voice/text); ask Harness a question; sync cleanly with desktop via R2. |
+| **Signals today** | **Harness Mobile (iOS)** — SwiftUI chat, OpenAI streaming, dictation, **R2 remote backup**; conflict sheet; Keychain API keys; system/HIG styling. Desktop sync/conflict UI for thorough merges. |
+| **Gaps** | Capture-first inbox; R2 setup parity with desktop; Android; parity only where it reduces friction. |
+| **Anti-goals** | Rebuilding desktop recording/transcription on phone; feature parity that doubles maintenance. |
 
 ### O4 — Learning lab for building AI tools
 
@@ -52,29 +54,41 @@ Harness is where you practice the full stack: providers, tools, streaming, persi
 
 | | |
 |---|---|
-| **Success picture** | Each meaningful feature teaches something reusable: a new tool, IPC boundary, test pattern, or provider adapter you could lift into another project. |
-| **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; memory compile pipeline; import parsers; typed `window.harness`; unit tests; iOS sync codec tests; motion audit. |
-| **Gaps** | CI on PRs (lint, tsc, Vitest) — **landed in 0.7**; plugin/tool registry; documented patterns for adding tools/providers; cross-language drift checks. |
-| **Anti-goals** | Opaque magic (no tests, no boundaries); one giant file per feature; skipping the “why” in favor of copy-paste. |
+| **Success picture** | Each meaningful change teaches something reusable: a new tool, IPC boundary, test pattern, or provider adapter you could lift into another project — without triplicating contracts by hand. |
+| **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; import parsers; typed `window.harness`; unit tests; iOS sync codec tests; CI on PRs (lint, tsc, Vitest, Rust, iOS). |
+| **Gaps** | Cross-language drift checks (shared contracts + parity tests); plugin/tool registry; documented patterns for adding tools/providers; ESLint covering `src/`. |
+| **Anti-goals** | Opaque magic (no tests, no boundaries); one giant file per feature; hand-copied contracts guarded only by comments. |
+
+### O5 — Low-friction development
+
+Building, shipping, and switching machines should not be a second project.
+
+| | |
+|---|---|
+| **Success picture** | One-command release that never hangs on a password prompt; obvious which binary/data dir you are in (dev vs installed); bootstrap a second Mac without re-deriving tribal knowledge; sync credentials have a low-pain path. |
+| **Signals today** | `HARNESS_DEV` / **Harness Dev** separate Application Support dir; dist runner with timed steps; Tauri updater + GitHub `latest.json`; BUILD.md signing docs. |
+| **Gaps** | Non-interactive signing (env/keychain); single-source version bump; cross-machine bootstrap script/docs; **one sync QR** desktop→iOS pairing ([plan](plans/2026-07-14-sync-qr-pairing.md)); clearer dev-vs-prod affordances in UI. |
+| **Anti-goals** | Manual version edits across three manifests; hanging `dist` on interactive prompts; undocumented credential/signing setup. |
 
 ---
 
 ## Outcome scorecard (snapshot)
 
-Quick read on **May 2026**—refresh when major work lands.
+Quick read on **July 2026**—refresh when major work lands.
 
 | Outcome | Posture | Notes |
 |---------|---------|--------|
-| **O1** UI craft | **Building** | 4px grid + type scale landed; shell/session/motion improved; chat column still has room for breakpoint work. |
-| **O2** Subscription cannibal | **Building** | Core harness + imports + sync conflict review; providers and backlog still open. |
-| **O3** Mobile | **Started** | iOS chat companion ships; capture/inbox still desktop-first. |
-| **O4** Learning lab | **Building** | Good architecture and tests; CI on PRs landed in 0.7; pattern docs still thin. |
+| **O1** UI craft | **Building** | Object library + fixed dark theme landed; CSS/god-view debt and empty-state polish remain. |
+| **O2** Subscription cannibal | **Hardening** | Core loops work; cull unfinished surface (plans, weather, memory compile); sync onboarding still painful. |
+| **O3** Mobile | **Building** | iOS companion ships with chat + dictation + R2; setup and capture gaps remain. |
+| **O4** Learning lab | **Hardening** | CI exists; dedup/drift-proofing is the next durable pattern. |
+| **O5** Dev friction | **Started** | Dev data dir split exists; release/signing and cross-machine setup are recurring tax. |
 
 ---
 
 ## How to test an idea
 
-Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 = no impact, 1 = indirect, 2 = direct*). If every outcome is 0, deprioritize unless it’s pure hygiene.
+Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 = no impact, 1 = indirect, 2 = direct*). During v0.8, prefer work that scores high on **O4/O5** or consolidates O1–O3 without adding net surface. If every outcome is 0, deprioritize unless it’s pure hygiene.
 
 | Question | Outcome |
 |----------|---------|
@@ -82,154 +96,169 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 | Does it replace a workflow you still pay for or open another app for? | O2 |
 | Does it only matter on phone? (If yes, is O3 actually unlocked?) | O3 |
 | Will you learn something durable about AI product engineering? | O4 |
+| Does it make build / ship / multi-machine work less painful? | O5 |
 
-**Outcome tags in execution sections:** items marked `[O1]` … `[O4]` map to the list above (multiple tags allowed).
+**Outcome tags in execution sections:** items marked `[O1]` … `[O5]` map to the list above (multiple tags allowed).
 
 ---
 
 ## Completed
 
+### 2026-07 — image library, sidebar IA, releases `[O1][O2]`
+
+- **Generated images as library objects** `[O1][O2]` — First-class peers to chats/notes; New → New image; canvas + right controls panel; `images` Rust module + `app-state/images/`.
+- **Sidebar object-library IA** `[O1]` — Unified library list (chats, dictations, notes, images); meta row Tasks · System; Editor-as-tab removed.
+- **Release line** — Desktop through **v0.7.10** region (see package / tauri / Cargo manifests).
+
 ### 2026-06 — v0.7.0 — R2 sync, credentials, iOS polish, CI `[O1][O2][O3][O4]`
 
-- **Cloudflare R2 remote backup** `[O2][O3]` — R2 is the **only** sync transport; `RemoteBackupStore` on desktop (`@aws-sdk/client-s3`) and iOS (URLSession + SigV4); same `bundle.json.gz` + `manifest.json` format; active polling on focus + ~30s interval; iCloud/folder backup removed.
-- **Credential hygiene** `[O2][O4]` — OpenAI/Tavily/R2 secrets in OS credential stores (desktop `safeStorage`, iOS Keychain); secrets redacted from sync bundle; per-device keys (encrypted cross-device key sync deferred to 0.8).
+- **Cloudflare R2 remote backup** `[O2][O3]` — R2 is the **only** sync transport; `RemoteBackupStore` on desktop and iOS; same `bundle.json.gz` + `manifest.json` format; active polling on focus + ~30s interval; iCloud/folder backup removed.
+- **Credential hygiene** `[O2][O4]` — OpenAI/Tavily/R2 secrets in OS credential stores; secrets redacted from sync bundle; per-device keys (encrypted cross-device key sync in Frozen backlog).
 - **iOS composer fixes** `[O3]` — Draft persistence, live streaming auto-scroll, composer focus/inset fixes, setup-alert Settings action.
-- **Mobile system styling** `[O1][O3]` — Custom theming removed on iOS; standard system colors + SF fonts; `theme.json` remains desktop-only in the sync bundle.
-- **CI on PRs** `[O4]` — `.github/workflows/ci.yml`: lint, `tsc`, Vitest, Playwright (grid-audit later removed).
+- **Mobile system styling** `[O1][O3]` — Custom theming removed on iOS; standard system colors + SF fonts.
+- **CI on PRs** `[O4]` — `.github/workflows/ci.yml`: lint, `tsc`, Vitest; Rust and iOS jobs (grid-audit later removed).
 - **Version** — Desktop package `0.7.0`; iOS `MARKETING_VERSION` `0.7.0`.
 
 ### 2026-05-24 — 4px grid, Harness Mobile iOS, v0.6 `[O1][O3][O4]`
 
-- **4px layout grid** `[O1]` — `src/shared/grid.ts` (`snapToGrid`, `space`, `lineHeightForFont`); theme `typeScaleCssVars` emits grid-aligned font, icon, and line-height tokens; renderer CSS normalized (grid-audit tooling since removed).
-- **Layout cleanup** `[O1]` — Removed `compact` / `comfortable` layout density; spacing driven by theme font size + grid. Chat composer dock and tasks composer heights snap to grid.
-- **Chat & sidebar UX** `[O1]` — Single-message chat centers in scroll area; sidebar default sort “Recent” with date-bucket and calendar-day modes; progressive fade on peek rows 8–12.
-- **Harness Mobile (iOS)** `[O3][O4]` — Native SwiftUI app: conversation list + thread, OpenAI streaming, Keychain, iCloud backup-folder sync (`bundle.json.gz`, manifest), conflict sheet; [ios/README.md](ios/README.md). Xcode project via `project.yml` / XcodeGen.
+- **4px layout grid** `[O1]` — `src/shared/grid.ts` (`snapToGrid`, `space`, `lineHeightForFont`); type scale tokens; renderer CSS normalized (grid-audit tooling since removed).
+- **Layout cleanup** `[O1]` — Removed `compact` / `comfortable` layout density.
+- **Chat & sidebar UX** `[O1]` — Single-message chat centers in scroll area; sidebar date-bucket sort modes; peek fade.
+- **Harness Mobile (iOS)** `[O3][O4]` — Native SwiftUI app: conversation list + thread, OpenAI streaming, Keychain; later moved from iCloud folder sync to R2. See [ios/README.md](ios/README.md).
 - **Version** — Desktop package `0.6.0`.
 
 ### 2026-05 (shell line) — Session restore, sync review, motion, dictation `[O1][O2][O4]`
 
 - **UI session persistence** — `ui-session.json` restores last view, conversation, and open note across restarts.
-- **Sync conflict review** — Per-file local / remote / merged choice when backup folder diverges; explicit pull/push/conflict paths.
-- **Shell polish** — Settings renamed to Config; task completion animation; code block highlighting in chat; sidebar/theme CSS refresh; [docs/UI_TRANSITION_AUDIT.md](docs/UI_TRANSITION_AUDIT.md).
-- **Dictation sessions** — Conversation `kind` for dictation vs chat; title policy for user-only dictation threads; Fn recording gated to chat view.
-- **Release tooling** — `dist` runner with timed steps and patch bump (`8d501a2`).
+- **Sync conflict review** — Per-file local / remote / merged choice when backups diverge.
+- **Shell polish** — Settings labeled System; task completion animation; code block highlighting; sidebar CSS refresh.
+- **Dictation sessions** — Conversation `kind` for dictation vs chat; Fn recording gated to chat view.
+- **Release tooling** — `dist` runner with timed steps and patch bump.
 
 ### 2026-05-17 — Claude import, memory compile, note print, settings & data UX `[O2][O4]`
 
-- **Claude.ai conversation import** — Parse official export archives (`conversations.json` and per-file variants); map `human`/`assistant` and structured content blocks; dedupe by `claudeId`; Settings → Data import flow and `memory:importFromClaudeFolder` IPC (parallel to ChatGPT import).
-- **Nightly memory compile** — Once-per-day (plus manual “Compile now”) OpenAI distill of recent user messages into `user_memory.json`; char/conversation budgets; merge rules with case-insensitive key matching; `memory_compile_state.json` for last-run status; deferred run on app launch (skipped in E2E).
-- **Note printing** — `buildNotePrintHtml` + hidden-window system print dialog from the Notes toolbar menu.
-- **Theme studio refresh** `[O1]` — Color-only presets (night, paper, matcha, ik blue, bloomberg); typography (fonts, stepped font size) separate from palette; `applyThemeColors` / `themeMatchesColorPreset` helpers.
-- **Settings & data UX** `[O2]` — ASCII storage-layout diagram on Data tab; “Show app data folder” opens full app userData; backup-folder picker with iCloud default suggestion; removed “erase all stored data” from UI/API; note template descriptions normalized to first line.
+- **Claude.ai conversation import** — Parse official export archives; Settings → Data import flow.
+- **Nightly memory compile** — Once-per-day (plus manual “Compile now”) distill into `user_memory.json` — **scheduled for removal in v0.8 cull**.
+- **Note printing** — System print dialog from the Notes toolbar menu.
+- **Theme studio** (historical) — Multi-preset theming; later replaced by fixed dark theme; studio UI removed.
+- **Settings & data UX** — Storage-layout diagram; “Show app data folder”; removed “erase all stored data” from UI/API.
 
 ### 2026-05 — Writing surface, theme-linked shell scaling, weather & folder sync `[O1][O2][O4]`
 
-- **Notes / writing surface** — Dedicated Notes view with templates (`{{today}}`), overview, save/delete, show-in-folder, and LLM `notes:proposeEdit` for guided edits (preview before apply).
-- **Theme-linked UI scaling** — Surfaces (chat, notes, settings, tasks, sidebar) use `calc(var(--font-size) * …)` and shared icon-size tokens so typography scales with Theme studio base size.
-- **Readable accent token** — `--accent-readable` (oklab mix toward foreground) for links and accent text on dark backgrounds; vivid accents unchanged for borders/backgrounds.
-- **Weather tool** — `get_weather` assistant tool via [Open-Meteo](https://open-meteo.com/) (US ZIP, °F); default ZIP in Settings.
-- **Folder backup sync** — Provider-agnostic backup folder (push/pull bundle + manifest), sync status in Settings, cloud-folder suggestions (e.g. iCloud Drive), conflict-copy detection.
+- **Notes / writing surface** — Notes view with templates, LLM `notes:proposeEdit`, sticky/pop-out windows.
+- **Theme-linked UI scaling** — Shared font/icon tokens.
+- **Readable accent token** — `--accent-readable`.
+- **Weather tool** — `get_weather` via Open-Meteo — **scheduled for removal in v0.8 cull**.
+- **Folder backup sync** — Later replaced by R2-only sync.
 
 ### 2026-04-21 — Test coverage expansion (unit + e2e) `[O4]`
 
-- **Unit coverage upgrade** — Broad Vitest coverage for persistence and data-loss-sensitive modules plus renderer/shared utility tests.
-- **E2E flow coverage upgrade** — Playwright: chat persistence, delete safety, settings/tasks, stream abort, notes, ChatGPT import dedupe.
-- **Testability refactors** — `*In(dir)` pure-storage entry points for temp-dir tests without launching the desktop shell.
+- **Unit coverage upgrade** — Broad Vitest coverage for persistence-sensitive modules.
+- **E2E** — Playwright flows (historical; current CI focuses on unit + Rust + iOS).
+- **Testability refactors** — `*In(dir)` pure-storage entry points.
 
 ### 2026-03-22 — Tray assets, recorder UX & typed bridge `[O1][O4]`
 
 - **Tray & app icon** — Menu bar + Dock branding.
-- **Renderer recording stack** — `useRecorder`, PCM → WAV, chimes; shared save/export/transcribe flow.
+- **Renderer recording stack** — Capture → WAV → on-device speech helpers.
 - **Typed `window.harness`** — Desktop API contract in `src/shared/desktopAPI.ts`.
 
 ### 2026-03-21 — Providers, Recording & Search `[O2][O4]`
 
-- **Multi-provider architecture** — `LLMProvider` registry; streaming + tools + titles through one interface.
-- **Ollama / local model support** — OpenAI-compatible local servers.
-- **Recording & transcription** — In-app capture; on-device Apple Speech on macOS; tray recording state.
-- **Conversation search** — Full-text search + `memory_search_conversations` tool.
-- **Settings v2** — Provider and transcription pickers, recording auto-send.
+- **Multi-provider architecture** — OpenAI + Ollama-compatible locals.
+- **Recording & transcription** — In-app + global Fn; Apple Speech helpers.
+- **Conversation search** — Full-text + `memory_search_conversations` tool.
+- **Settings v2** — Provider and transcription pickers.
 
 ### 2026-03-21 — Foundation `[O2][O4]`
 
-- Desktop harness: streaming chat, tools, local memory, file tools, theme/layout tools, tasks & plans, ChatGPT import, Settings, signed macOS builds.
+- Desktop harness: streaming chat, tools, local memory, tasks & plans, ChatGPT import, Settings, signed macOS builds. (**Plans** objects never shipped a durable UI — **scheduled for removal in v0.8 cull**.)
 
 ---
 
-## v0.7.0 — release line (shipped)
+## v0.8 — Consolidation (active)
 
-Shipped in **Completed (2026-06 — v0.7.0)** above. Remaining items below roll into **Post v0.7**.
+Execution plan: [plans/2026-07-14-consolidation.md](plans/2026-07-14-consolidation.md). Dedup mechanics: [plans/2026-07-12-deduplication-drift-proofing.md](plans/2026-07-12-deduplication-drift-proofing.md) (run **after** the cull). Sync QR pairing (C4): [plans/2026-07-14-sync-qr-pairing.md](plans/2026-07-14-sync-qr-pairing.md).
 
-### Layout, scaling, and shell `[O1]` — remaining
+### Sequencing
 
-- **Viewport-aware UI scaling (deeper pass)** — Fluid max-width, breakpoints, chat layout that uses large windows well.
-- **Sidebar behavior** — Focus traps, keyboard nav; motion items from [UI_TRANSITION_AUDIT.md](docs/UI_TRANSITION_AUDIT.md).
-- ~~**Grid in CI**~~ — **Done** (0.7).
+1. Finish in-flight polish / release (sidebar CSS unification, v0.7.x ship as needed).
+2. **A — Cull** (biggest leverage, smallest risk).
+3. **C — Dev process** (stops recurring ship friction).
+4. **B — Hardening** (dedup on the smaller surface).
+5. **D — Paper cuts** (ongoing, interleaved).
 
-### Tools
+### Workstream A — Cull `[O2][O4]`
 
-- ~~**Weather**~~ — **Done** `[O2]`.
+Remove unfinished or unused surface so everything downstream is smaller:
 
-### Mobile direction `[O3]`
+| Cull | Why |
+|------|-----|
+| **Plans objects** | Data + API existed; UI suppressed (`void plans` in App). No durable product. |
+| **Weather tool** | Low-use Open-Meteo tool + default ZIP settings. |
+| **Nightly memory compile** | Unused automatic distill + Settings “Compile now”. |
+| **Theme studio remnants** | Code already fixed-dark; scrub docs/stale references only. |
 
-- ~~**iOS chat companion**~~ — **Done** (v0.6); see [ios/README.md](ios/README.md).
-- **Capture-first UX** — One-tap capture → backlog inbox (depends on backlog primitive `[O2]`).
-- **Audio on mobile** — OS dictation into chat; avoid duplicating desktop recording unless trivial.
+Sync note: dropping `plans.json` from scopes must tolerate old bundles that still contain it.
 
-### Trust & consolidation (cross-cutting) `[O2]`
+### Workstream B — Hardening `[O1][O4]`
 
-- **Trust-first control** — Explicit provider routing, local-first defaults, clear data-leave-device boundaries.
-- **Backlog as center** — Shared inbox across surfaces; triage into tasks, conversations, plans.
-- **Backburner continuity** — Capture/backlog mode naming and mental-model fit.
+- Shared contracts + parity/drift guards (dedup plan W1–W5), including ipcNames ↔ `generate_handler!` parity.
+- Break up god-files: `SettingsView.tsx`, `chat.rs`, `sync.rs`; extract `App.tsx` state.
+- Extend ESLint to cover `src/`.
+- Retire cheap legacy naming (`legacyIpc*` bridge noise, `clippings` constants); keep data migrations.
 
-### LLM-Assisted Notes `[O2][O4]`
+### Workstream C — Dev process `[O5]`
 
-- **Phase 1 (MVP+)** — Note metadata, list/search/sort, `note_suggest_outline` / `note_rewrite_section`. *Partial:* `notes:proposeEdit`.
-- **Phase 2** — Guided actions (“brainstorm”, “tighten”, …), diff/preview, snapshots. *Partial:* edit proposals.
-- **Phase 3** — Co-author side panel, block-level intents, provenance timeline.
-- **Conversation links + memory** — Cross-conversation references; memory refresh rules. *Partial:* nightly memory compile + manual run.
+- **Dev vs installed clarity** — document `Harness Dev` vs `Harness` data dirs; stronger in-app/dev indicators; optional prod→dev data copy script.
+- **Release pipeline** — non-interactive signing; single-source version bump; one-command release that doesn’t hang.
+- **Cross-machine bootstrap** — scripted/docs path for signing keys, `TAURI_SIGNING_PRIVATE_KEY`, credentials, native helpers.
+- **Sync onboarding** — one Mac **Show sync QR** / phone **Set up sync** (R2 under the hood; no OpenAI-vs-R2 UX split). Plan: [plans/2026-07-14-sync-qr-pairing.md](plans/2026-07-14-sync-qr-pairing.md).
 
-### Explicitly not in this doc
+### Workstream D — Paper cuts `[O1][O3]`
 
-- **Multi-location dev workflows** — Tracked with **Devon LLM** setup separately.
+Running checklist in the consolidation plan. Seeds:
+
+- Sidebar CSS unification (Tasks/System → shared `.sidebar-item`).
+- CSS consolidation for fixed dark theme.
+- iOS message tap-to-expand / overflow.
+- Empty / loading / error polish on primary surfaces.
 
 ---
 
-## Post v0.7 — backlog
+## Frozen backlog (post–v0.8)
 
-Ordered loosely by outcome; not a commitment sequence.
+Nothing below starts until Consolidation ships. Ordered loosely by outcome; not a commitment sequence.
 
-### Near-term
+### Product / platform
 
 | Item | Outcomes |
 |------|----------|
-| ~~**CI hardening** (lint, tsc, Playwright on PR)~~ | O4 — **Done** (0.7) |
 | **Chat providers** — Anthropic, Gemini APIs (≠ export import) | O2, O4 |
 | **Agent mode** with human-in-the-loop before destructive actions | O2, O4 |
 | **Semantic memory** (vectors + retrieval) | O2, O4 |
 | **Backlog pipeline** (inbox, triage, promote) | O2, O3 |
+| **Capture-first mobile UX** — one-tap capture → inbox | O3 |
 | **Workflow automation** (minimal rules/triggers) | O2, O4 |
-| **Real-time sync** — sub-second push-triggered wake (Firebase-style); deferred from 0.7 | O2, O3 |
+| **Real-time sync** — sub-second push-triggered wake | O2, O3 |
 | **Encrypted cross-device key sync** — opt-in sync passphrase for API keys | O2, O4 |
-
-### Medium-term
-
-| Item | Outcomes |
-|------|----------|
-| **Telegram** (or similar) as mobile bridge | O3 |
-| **Backup / sync (deeper)** — scheduled sync, richer conflict rules on R2 | O2, O3 |
+| **LLM-assisted notes** — metadata, guided actions, co-author panel (beyond `proposeEdit`) | O2, O4 |
+| **Viewport-aware UI scaling** — deeper breakpoints | O1 |
 | **Richer tasks** — due dates, priority, conversation links | O2 |
 | **Model params in Settings** — temperature, max tokens, top-p | O4 |
-| **Auto-update** — `autoUpdater` for shipped builds (deferred from 0.7) | O2 |
-
-### Longer-term
-
-| Item | Outcomes |
-|------|----------|
+| **Telegram** (or similar) as mobile bridge | O3 |
+| **Backup / sync (deeper)** — scheduled sync, richer conflict rules | O2, O3 |
 | **Plugin / tool registry** | O4 |
 | **Windows & Linux builds** | O2 |
 | **Conversation export / share** | O2 |
 
+### Already shipped (do not re-open as backlog)
+
+- ~~CI on PRs~~ — Done (0.7).
+- ~~Auto-update for shipped builds~~ — Done (Tauri updater + GitHub releases).
+- ~~iOS chat companion~~ — Done (v0.6+).
+- ~~R2 remote backup~~ — Done (0.7).
+
 ---
 
-*Last updated: 2026-06-14*
+*Last updated: 2026-07-14*

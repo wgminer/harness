@@ -1,4 +1,4 @@
-> **Superseded** by [`plans/2026-07-12-image-objects.md`](./2026-07-12-image-objects.md): images are first-class library objects (New menu + canvas view), not note Insert → markdown assets.
+> **Archived / superseded** by [`2026-07-12-image-objects.md`](./2026-07-12-image-objects.md) (also archived; shipped as first-class image library). Images are library objects (New menu + canvas), not note Insert → markdown assets.
 >
 > Kept for history of the abandoned note-embedded approach.
 

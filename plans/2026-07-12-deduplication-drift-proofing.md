@@ -2,9 +2,11 @@
 
 > **For agentic workers:** Implement task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Prefer small commits per task group unless the user asks otherwise.
 >
-> **Status:** DRAFT — assembled from exploration; approach and verification still to be finalized.
+> **Status:** ACTIVE — parented under v0.8 Consolidation as **workstream B**. See [ROADMAP.md](../ROADMAP.md) and [2026-07-14-consolidation.md](./2026-07-14-consolidation.md).
 >
-> **Source:** Filed from Cursor chat draft on 2026-07-12.
+> **Prerequisite:** Finish **workstream A (Cull)** first. Removing plans objects, weather, and memory compile shrinks the contract surface before shared JSON / parity work. Strike weather/plans-related items from the inventories below once the cull lands (do not re-add `get_weather` to iOS tool expansion; drop `plans.json` sync-scope mirrors rather than “sharing” them).
+>
+> **Source:** Filed from Cursor chat draft on 2026-07-12; sequencing updated 2026-07-14.
 
 **Goal:** (1) Inventory all duplication/drift across the three-language codebase, (2) consolidate to single sources of truth where practical, (3) add automated parity checks so a forgetful developer cannot silently reintroduce drift — enforcement by failing tests, not by memory or comments.
 
@@ -53,7 +55,7 @@ Harness is a three-language codebase (TypeScript renderer + shared, Rust Tauri b
 
 - Tool execution errors abort the whole chat turn on both platforms (should return `{"error": ...}` as tool result).
 - No cap on the tool-call loop on either platform.
-- iOS tool expansion approved: `get_datetime`, `get_weather` (Open-Meteo, keyless; default ZIP from synced settings), `memory_set_fact`/`memory_list_facts` (`user_memory.json` already syncs). `web_search` requires a Tavily key which is redacted from sync — needs iOS-side key entry; defer or gate on key presence. Note tools stay desktop-only (iOS is chat-only, no notes UI).
+- iOS tool expansion approved: `get_datetime`, `memory_set_fact`/`memory_list_facts` (`user_memory.json` already syncs). ~~`get_weather`~~ — **struck by v0.8 cull** (weather removed on desktop too). `web_search` requires a Tavily key which is redacted from sync — needs iOS-side key entry; defer or gate on key presence. Note tools stay desktop-only (iOS is chat-only, no notes UI).
 
 ### Environment facts
 
@@ -75,7 +77,7 @@ Ranked; consolidation safety noted.
 
 ### Tier 1 (do)
 
-- [ ] **Rust JSON persistence scaffolding**: `storage.rs` helpers exist (`read_json_object_file`, `atomic_write_utf8`, `storage.rs:103-130`) but `notes.rs:112-165`, `tasks.rs:229-270`, `sticky_notes.rs:57-64`, `ui_session.rs:90-98`, `memory_compile.rs:117-149`, and 6+ write sites in `memory.rs` hand-roll the same read→parse→pretty-print→write cycle, each with its own fallback literal. Extract the IO envelope (e.g. `write_json_pretty`) only — leave interleaved per-module row migrations (tasks status migration, notes field validation) in place.
+- [ ] **Rust JSON persistence scaffolding**: `storage.rs` helpers exist (`read_json_object_file`, `atomic_write_utf8`, `storage.rs:103-130`) but `notes.rs:112-165`, `tasks.rs:229-270`, `sticky_notes.rs:57-64`, `ui_session.rs:90-98`, ~~`memory_compile.rs`~~ (**struck by v0.8 cull**), and 6+ write sites in `memory.rs` hand-roll the same read→parse→pretty-print→write cycle, each with its own fallback literal. Extract the IO envelope (e.g. `write_json_pretty`) only — leave interleaved per-module row migrations (tasks status migration, notes field validation) in place. After cull, also drop plans persistence sites rather than consolidating them.
 - [ ] **iOS ChatService triplication** (bigger than first flagged): byte-identical `executeTool` closures ×3 (`ChatService.swift:120-147, 176-201, 237-262`) AND identical trailing append+title-refinement blocks ×3 (`:152-159, 206-213, 267-274`). Extract `makeToolExecutor(onToolCall:)` + `finishAssistantTurn(...)`.
 
 ### Tier 2 (quick safe wins)
@@ -161,7 +163,7 @@ Three workstreams, roughly in order:
 
 - [ ] Tool execution errors return `{"error": ...}` as tool result (both platforms); do not abort the turn.
 - [ ] Cap the tool-call loop on both platforms.
-- [ ] iOS tool expansion: `get_datetime`, `get_weather`, `memory_set_fact` / `memory_list_facts`; gate or defer `web_search` on Tavily key presence.
+- [ ] iOS tool expansion: `get_datetime`, `memory_set_fact` / `memory_list_facts`; gate or defer `web_search` on Tavily key presence. (**Do not** add `get_weather` — removed in v0.8 cull.)
 - [ ] Fix already-drifted bugs (empty-title label, sync-merge serialization, tool-label fallback/map, memory selection).
 
 ### W5 — Developer guardrails
