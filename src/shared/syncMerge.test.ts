@@ -109,4 +109,33 @@ describe("buildMergedFileMap", () => {
     expect(merged["app-state/remote-only.json"]?.toString("utf-8")).toBe('{"remote":true}');
     expect(merged["app-state/conflict.json"]?.toString("utf-8")).toBe('{"from":"remote"}');
   });
+
+  it("ignores legacy plans.json without failing", () => {
+    const review = buildSyncConflictReview(
+      {
+        "app-state/tasks.json": Buffer.from('{"tasks":[]}'),
+        "app-state/plans.json": Buffer.from('{"old":true}'),
+      },
+      {
+        "app-state/tasks.json": Buffer.from('{"tasks":[]}'),
+        "app-state/plans.json": Buffer.from('{"old":"remote"}'),
+      },
+    );
+    expect(review.files.find((f) => f.path === "app-state/plans.json")).toBeUndefined();
+    expect(review.summary.conflict).toBe(0);
+
+    const merged = buildMergedFileMap(
+      {
+        "app-state/tasks.json": Buffer.from('{"tasks":[]}'),
+        "app-state/plans.json": Buffer.from('{"old":true}'),
+      },
+      {
+        "app-state/tasks.json": Buffer.from('{"tasks":[]}'),
+        "app-state/plans.json": Buffer.from('{"old":"remote"}'),
+      },
+      buildDefaultMergeChoices(review),
+    );
+    expect(merged["app-state/plans.json"]).toBeUndefined();
+    expect(merged["app-state/tasks.json"]?.toString("utf-8")).toBe('{"tasks":[]}');
+  });
 });

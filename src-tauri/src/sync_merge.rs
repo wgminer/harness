@@ -57,10 +57,16 @@ pub struct SyncConflictReview {
 const MERGEABLE_PATHS: &[&str] = &[
     "app-state/conversations.json",
     "app-state/tasks.json",
-    "app-state/plans.json",
     "app-state/user_memory.json",
     "settings/settings.json",
 ];
+
+/// Legacy paths that may appear in old sync bundles; ignore rather than fail.
+const IGNORED_SYNC_PATHS: &[&str] = &["app-state/plans.json"];
+
+fn is_ignored_sync_path(path: &str) -> bool {
+    IGNORED_SYNC_PATHS.contains(&path)
+}
 
 fn file_bytes_equal(a: &[u8], b: &[u8]) -> bool {
     a == b
@@ -108,7 +114,6 @@ fn label_for_path(path: &str) -> String {
     match path {
         "app-state/conversations.json" => "Conversation list".into(),
         "app-state/tasks.json" => "Tasks".into(),
-        "app-state/plans.json" => "Plans".into(),
         "app-state/user_memory.json" => "User context".into(),
         "app-state/writing.md" => "Writing surface".into(),
         "settings/settings.json" => "App preferences".into(),
@@ -160,6 +165,9 @@ pub fn build_sync_conflict_review(
     let mut files = Vec::new();
 
     for path in paths {
+        if is_ignored_sync_path(&path) {
+            continue;
+        }
         let local = local_files.get(&path).map(|b| b.as_slice());
         let remote = remote_files.get(&path).map(|b| b.as_slice());
         let kind = match (local, remote) {
@@ -386,6 +394,9 @@ pub fn build_merged_file_map(
 
     let mut merged = HashMap::new();
     for path in paths {
+        if is_ignored_sync_path(&path) {
+            continue;
+        }
         let kind = match (local_files.get(&path), remote_files.get(&path)) {
             (Some(_), Some(_)) => SyncFileChangeKind::Conflict,
             (Some(_), None) => SyncFileChangeKind::LocalOnly,
@@ -555,6 +566,41 @@ mod tests {
         assert_eq!(
             String::from_utf8_lossy(merged.get("app-state/conflict.json").unwrap()),
             r#"{"from":"remote"}"#
+        );
+    }
+
+    #[test]
+    fn ignores_legacy_plans_json_without_failing() {
+        let local = HashMap::from([
+            (
+                "app-state/tasks.json".into(),
+                br#"{"tasks":[]}"#.to_vec(),
+            ),
+            (
+                "app-state/plans.json".into(),
+                br#"{"old":true}"#.to_vec(),
+            ),
+        ]);
+        let remote = HashMap::from([
+            (
+                "app-state/tasks.json".into(),
+                br#"{"tasks":[]}"#.to_vec(),
+            ),
+            (
+                "app-state/plans.json".into(),
+                br#"{"old":"remote"}"#.to_vec(),
+            ),
+        ]);
+        let review = build_sync_conflict_review(&local, &remote);
+        assert!(review.files.iter().all(|f| f.path != "app-state/plans.json"));
+        assert_eq!(review.summary.conflict, 0);
+
+        let choices = build_default_merge_choices(&review);
+        let merged = build_merged_file_map(&local, &remote, &choices);
+        assert!(!merged.contains_key("app-state/plans.json"));
+        assert_eq!(
+            String::from_utf8_lossy(merged.get("app-state/tasks.json").unwrap()),
+            r#"{"tasks":[]}"#
         );
     }
 }

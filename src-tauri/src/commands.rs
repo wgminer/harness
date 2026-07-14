@@ -30,10 +30,6 @@ use crate::notes::{
     create_note, delete_note, list_notes, propose_note_edit, propose_note_spell_check, read_note,
     save_note, show_note_in_folder,
 };
-use crate::plans::{
-    add_conversation_to_plan, create_plan, delete_plan, list_plans, remove_conversation_from_plan,
-    update_plan, PlanUpdates,
-};
 use crate::settings::{get_settings, set_settings};
 use crate::sticky_notes::{
     open_sticky_window, pop_in_sticky, set_sticky_pinned, set_sticky_title, StickyWindowEntry,
@@ -344,65 +340,6 @@ pub async fn memory_get_conversation_recordings(
 ) -> Result<Value, String> {
     let recordings = dictation_recording_index::list_links(&conversation_id);
     serde_json::to_value(serde_json::json!({ "recordings": recordings })).map_err(map_err)
-}
-
-#[command(rename_all = "camelCase")]
-pub async fn plans_list(state: State<'_, AppState>) -> Result<Value, String> {
-    let plans = list_plans(&state).await.map_err(map_err)?;
-    serde_json::to_value(plans).map_err(map_err)
-}
-
-#[command(rename_all = "camelCase")]
-pub async fn plans_create(
-    state: State<'_, AppState>,
-    title: String,
-    description: String,
-) -> Result<Value, String> {
-    let plan = create_plan(&state, &title, &description)
-        .await
-        .map_err(map_err)?;
-    serde_json::to_value(plan).map_err(map_err)
-}
-
-#[command(rename_all = "camelCase")]
-pub async fn plans_update(
-    state: State<'_, AppState>,
-    plan_id: String,
-    updates: PlanUpdates,
-) -> Result<Value, String> {
-    let plan = update_plan(&state, &plan_id, updates)
-        .await
-        .map_err(map_err)?;
-    serde_json::to_value(plan).map_err(map_err)
-}
-
-#[command(rename_all = "camelCase")]
-pub async fn plans_delete(state: State<'_, AppState>, plan_id: String) -> Result<(), String> {
-    delete_plan(&state, &plan_id).await.map_err(map_err)
-}
-
-#[command(rename_all = "camelCase")]
-pub async fn plans_add_conversation(
-    state: State<'_, AppState>,
-    plan_id: String,
-    conversation_id: String,
-) -> Result<Value, String> {
-    let plan = add_conversation_to_plan(&state, &plan_id, &conversation_id)
-        .await
-        .map_err(map_err)?;
-    serde_json::to_value(plan).map_err(map_err)
-}
-
-#[command(rename_all = "camelCase")]
-pub async fn plans_remove_conversation(
-    state: State<'_, AppState>,
-    plan_id: String,
-    conversation_id: String,
-) -> Result<Value, String> {
-    let plan = remove_conversation_from_plan(&state, &plan_id, &conversation_id)
-        .await
-        .map_err(map_err)?;
-    serde_json::to_value(plan).map_err(map_err)
 }
 
 #[command(rename_all = "camelCase")]

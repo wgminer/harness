@@ -2,7 +2,6 @@ import type {
   AppendMessageMeta,
   ContextPreview,
   LayoutOptions,
-  Plan,
   RecordingLink,
   SearchResult,
   Settings,
@@ -150,14 +149,6 @@ export interface HarnessAPI {
     markVoiceDictationSession: (conversationId: string) => Promise<string>;
     linkDictationRecording: (conversationId: string, path: string) => Promise<void>;
     getConversationRecordings: (conversationId: string) => Promise<{ recordings: RecordingLink[] }>;
-  };
-  plans: {
-    list: () => Promise<Plan[]>;
-    create: (title: string, description: string) => Promise<Plan>;
-    update: (planId: string, updates: { title?: string; description?: string }) => Promise<Plan | null>;
-    delete: (planId: string) => Promise<void>;
-    addConversation: (planId: string, conversationId: string) => Promise<Plan | null>;
-    removeConversation: (planId: string, conversationId: string) => Promise<Plan | null>;
   };
   tasks: {
     list: () => Promise<TasksPayload>;

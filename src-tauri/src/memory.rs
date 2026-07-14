@@ -17,7 +17,6 @@ use crate::storage::{
 
 pub const TASKS_FILE: &str = "tasks.json";
 pub const CLIPPINGS_FILE: &str = "clippings.json";
-pub const PLANS_FILE: &str = "plans.json";
 
 const CONVERSATIONS_FILE: &str = "conversations.json";
 const USER_MEMORY_FILE: &str = "user_memory.json";

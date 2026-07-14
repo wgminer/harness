@@ -115,18 +115,6 @@ export function createHarnessAdapter(): HarnessAPI {
           conversationId,
         }),
     },
-    plans: {
-      list: () => invoke(cmd("plans:list")),
-      create: (title: string, description: string) =>
-        invoke(cmd("plans:create"), { title, description }),
-      update: (planId: string, updates: { title?: string; description?: string }) =>
-        invoke(cmd("plans:update"), { planId, updates }),
-      delete: (planId: string) => invoke(cmd("plans:delete"), { planId }),
-      addConversation: (planId: string, conversationId: string) =>
-        invoke(cmd("plans:addConversation"), { planId, conversationId }),
-      removeConversation: (planId: string, conversationId: string) =>
-        invoke(cmd("plans:removeConversation"), { planId, conversationId }),
-    },
     tasks: {
       list: () => invoke(cmd("tasks:list")),
       create: (title: string, tags?: string[], status?: string) =>

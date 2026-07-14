@@ -27,10 +27,12 @@ export interface SyncConflictReview {
 const MERGEABLE_PATHS = new Set([
   "app-state/conversations.json",
   "app-state/tasks.json",
-  "app-state/plans.json",
   "app-state/user_memory.json",
   "settings/settings.json",
 ]);
+
+/** Legacy paths that may appear in old sync bundles; ignore rather than fail. */
+const IGNORED_SYNC_PATHS = new Set(["app-state/plans.json"]);
 
 function fileBytesEqual(a: Buffer, b: Buffer): boolean {
   return a.byteLength === b.byteLength && a.equals(b);
@@ -53,7 +55,6 @@ function labelForPath(path: string, bytes: Buffer | undefined): string {
   }
   if (path === "app-state/conversations.json") return "Conversation list";
   if (path === "app-state/tasks.json") return "Tasks";
-  if (path === "app-state/plans.json") return "Plans";
   if (path === "app-state/user_memory.json") return "User context";
   if (path === "app-state/writing.md") return "Writing surface";
   if (path === "settings/settings.json") return "App preferences";
@@ -82,6 +83,7 @@ export function buildSyncConflictReview(
   const summary = { unchanged: 0, localOnly: 0, remoteOnly: 0, conflict: 0 };
 
   for (const path of paths) {
+    if (IGNORED_SYNC_PATHS.has(path)) continue;
     const local = localFiles[path];
     const remote = remoteFiles[path];
     let kind: SyncFileChangeKind;
@@ -251,6 +253,7 @@ export function buildMergedFileMap(
   const paths = [...new Set([...Object.keys(localFiles), ...Object.keys(remoteFiles)])].sort();
   const merged: Record<string, Buffer> = {};
   for (const path of paths) {
+    if (IGNORED_SYNC_PATHS.has(path)) continue;
     const choice = choices[path] ?? defaultChoiceForKind(
       !localFiles[path] ? "remote-only" : !remoteFiles[path] ? "local-only" : "conflict",
       path,

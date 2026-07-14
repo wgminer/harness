@@ -8,7 +8,7 @@ import { Sidebar } from "./Sidebar";
 import { SetupNoticeModal } from "./SetupNoticeModal";
 import { HotkeyRecordingOverlay } from "./HotkeyRecordingOverlay";
 import { wireGlobalHotkeyActions } from "./globalHotkeyController";
-import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Plan, type Settings } from "../shared/types";
+import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Settings } from "../shared/types";
 import { DEFAULT_UI_SESSION } from "../shared/uiSession";
 import type {} from "../shared/desktopAPI";
 import { isSidebarVisibleConversation } from "../shared/conversationSession";
@@ -40,8 +40,6 @@ export default function App() {
   const { presetSmall } = useViewportLayout();
   /** Incremented when entering small window on chat so ChatView focuses the composer. */
   const [focusComposerNonce, setFocusComposerNonce] = useState(0);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(IDLE_UPDATE_STATUS);
   /** True while the open chat is waiting on / streaming from the chat model (not composer voice). */
@@ -131,11 +129,6 @@ export default function App() {
     },
     []
   );
-
-  const loadPlans = useCallback(async () => {
-    const list = await window.harness.plans.list();
-    setPlans(list);
-  }, []);
 
   const loadConversations = useCallback(async () => {
     const [list, session, settings] = await Promise.all([
@@ -295,10 +288,6 @@ export default function App() {
       unsubEnd();
     };
   }, [bumpTitleGen]);
-
-  useEffect(() => {
-    loadPlans();
-  }, [loadPlans]);
 
   /** Initial window focus should land in the chat composer, not the sidebar search toggle. */
   useEffect(() => {
@@ -488,9 +477,6 @@ export default function App() {
     setActiveChatProcessing(active);
   }, []);
 
-  // Suppress unused variable warning for plans/expandedPlanId until plan UI is added
-  void plans;
-  void expandedPlanId;
   void presetSmall;
 
   return (

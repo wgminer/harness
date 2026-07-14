@@ -22,7 +22,6 @@ pub mod notes;
 pub mod sticky_notes;
 pub mod openai;
 pub mod paths;
-pub mod plans;
 pub mod recent_conversations;
 pub mod recording;
 pub mod remote_store;
@@ -131,12 +130,6 @@ pub fn run() {
             commands::memory_mark_voice_dictation_session,
             commands::memory_link_dictation_recording,
             commands::memory_get_conversation_recordings,
-            commands::plans_list,
-            commands::plans_create,
-            commands::plans_update,
-            commands::plans_delete,
-            commands::plans_add_conversation,
-            commands::plans_remove_conversation,
             commands::tasks_list,
             commands::tasks_create,
             commands::tasks_update,

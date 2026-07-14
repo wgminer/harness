@@ -31,17 +31,17 @@ Do **not** start Frozen-backlog features (new providers, agent mode, semantic me
 
 **Delete / unwind**
 
-- [ ] Remove Rust module [`src-tauri/src/plans.rs`](../src-tauri/src/plans.rs); drop `mod plans` and `plans_*` handlers from [`lib.rs`](../src-tauri/src/lib.rs) / [`commands.rs`](../src-tauri/src/commands.rs).
-- [ ] Remove `PLANS_FILE` and any plans helpers from [`memory.rs`](../src-tauri/src/memory.rs); stop migrating/`plans.json` as a first-class file in [`paths.rs`](../src-tauri/src/paths.rs) (tolerant ignore OK).
-- [ ] Remove `plans.*` from [`desktopAPI.ts`](../src/shared/desktopAPI.ts) + [`desktopAdapter.ts`](../src/renderer/desktopAdapter.ts); strip load/state/`void plans` from [`App.tsx`](../src/renderer/App.tsx).
-- [ ] Remove `Plan` type (and related) from [`types.ts`](../src/shared/types.ts) if unused afterward.
-- [ ] Sync merge known-paths / labels: stop *writing* or requiring `app-state/plans.json`, but **tolerate reading** old bundles that still include it (ignore or drop on merge without failing):
+- [x] Remove Rust module [`src-tauri/src/plans.rs`](../src-tauri/src/plans.rs); drop `mod plans` and `plans_*` handlers from [`lib.rs`](../src-tauri/src/lib.rs) / [`commands.rs`](../src-tauri/src/commands.rs).
+- [x] Remove `PLANS_FILE` and any plans helpers from [`memory.rs`](../src-tauri/src/memory.rs); stop migrating/`plans.json` as a first-class file in [`paths.rs`](../src-tauri/src/paths.rs) (tolerant ignore OK).
+- [x] Remove `plans.*` from [`desktopAPI.ts`](../src/shared/desktopAPI.ts) + [`desktopAdapter.ts`](../src/renderer/desktopAdapter.ts); strip load/state/`void plans` from [`App.tsx`](../src/renderer/App.tsx).
+- [x] Remove `Plan` type (and related) from [`types.ts`](../src/shared/types.ts) if unused afterward.
+- [x] Sync merge known-paths / labels: stop *writing* or requiring `app-state/plans.json`, but **tolerate reading** old bundles that still include it (ignore or drop on merge without failing):
   - [`src/shared/syncMerge.ts`](../src/shared/syncMerge.ts)
   - [`src-tauri/src/sync_merge.rs`](../src-tauri/src/sync_merge.rs)
   - [`ios/HarnessMobile/Sync/SyncMerge.swift`](../ios/HarnessMobile/Sync/SyncMerge.swift)
-- [ ] Update [`dataStorageLayout.ts`](../src/shared/dataStorageLayout.ts) diagram (drop `plans.json`).
-- [ ] Grep for leftover `plans.` / `plans_` / `Plan` product references (leave prose “future plans” alone).
-- [ ] Tests: update any merge/ipc golden tests that list plans.
+- [x] Update [`dataStorageLayout.ts`](../src/shared/dataStorageLayout.ts) diagram (drop `plans.json`).
+- [x] Grep for leftover `plans.` / `plans_` / `Plan` product references (leave prose “future plans” alone).
+- [x] Tests: update any merge/ipc golden tests that list plans.
 
 ### A2 — Weather tool
 

@@ -38,9 +38,13 @@ enum SyncMerge {
     private static let mergeablePaths: Set<String> = [
         "app-state/conversations.json",
         "app-state/tasks.json",
-        "app-state/plans.json",
         "app-state/user_memory.json",
         "settings/settings.json",
+    ]
+
+    /// Legacy paths that may appear in old sync bundles; ignore rather than fail.
+    private static let ignoredSyncPaths: Set<String> = [
+        "app-state/plans.json",
     ]
 
     static func buildConflictReview(
@@ -57,6 +61,7 @@ enum SyncMerge {
         )
 
         for path in paths {
+            if ignoredSyncPaths.contains(path) { continue }
             let local = localFiles[path]
             let remote = remoteFiles[path]
             let kind: SyncFileChangeKind
@@ -114,6 +119,7 @@ enum SyncMerge {
         let paths = Set(localFiles.keys).union(remoteFiles.keys).sorted()
         var merged: [String: Data] = [:]
         for path in paths {
+            if ignoredSyncPaths.contains(path) { continue }
             let local = localFiles[path]
             let remote = remoteFiles[path]
             let kind: SyncFileChangeKind = {
@@ -183,7 +189,6 @@ enum SyncMerge {
         switch path {
         case "app-state/conversations.json": return "Conversation list"
         case "app-state/tasks.json": return "Tasks"
-        case "app-state/plans.json": return "Plans"
         case "app-state/user_memory.json": return "User context"
         case "app-state/writing.md": return "Writing surface"
         case "settings/settings.json": return "App preferences"

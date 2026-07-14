@@ -120,7 +120,6 @@ fn migrate_legacy_app_state() {
         let should_copy = name == "conversations.json"
             || name == "user_memory.json"
             || name == "tasks.json"
-            || name == "plans.json"
             || name == "notes.json"
             || name == "writing.md"
             || name == "notes"

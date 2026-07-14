@@ -149,14 +149,6 @@ export interface SearchResult {
   snippetMatchRange: [number, number];
 }
 
-export interface Plan {
-  id: string;
-  title: string;
-  description: string;
-  conversationIds: string[];
-  createdAt: number;
-}
-
 export interface LayoutOptions {
   sidebar: "left" | "right";
 }
