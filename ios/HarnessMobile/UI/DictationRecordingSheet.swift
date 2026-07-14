@@ -139,10 +139,13 @@ struct DictationRecordingSheet: View {
 
     private var recordingContent: some View {
         VStack(spacing: 36) {
-            LiveAudioWaveformView(samples: recorder.waveformSamples, barColor: .red)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .ignoresSafeArea(edges: .horizontal)
+            LiveAudioWaveformView(
+                samples: recorder.waveformSamples,
+                level: recorder.audioLevel,
+                color: .red
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
 
             HStack(spacing: 28) {
                 Button {

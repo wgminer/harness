@@ -1,6 +1,6 @@
 [package]
 name = "harness"
-version = "0.7.6"
+version = "0.7.10"
 description = "Personal all-in-one desktop harness for LLMs"
 authors = ["Your Name"]
 edition = "2021"

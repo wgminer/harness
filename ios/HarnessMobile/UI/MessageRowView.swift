@@ -73,26 +73,39 @@ private struct UserMessageCard: View {
     let content: String
     @Binding var isExpanded: Bool
     @State private var isOverflowing = false
-    @State private var didMeasureOverflow = false
+
+    private static let collapsedLineLimit = 5
+    private static let approxLineHeight: CGFloat = 24
+    private static var maxCollapsedHeight: CGFloat {
+        approxLineHeight * CGFloat(collapsedLineLimit) + 8
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .bottom) {
-                HarnessMarkdownView(content: content, lineLimit: isExpanded ? nil : 5)
-                    .equatable()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        Group {
-                            if !didMeasureOverflow {
-                                GeometryReader { proxy in
-                                    Color.clear.preference(
-                                        key: UserMessageHeightKey.self,
-                                        value: proxy.size.height
-                                    )
-                                }
+                HarnessMarkdownView(
+                    content: content,
+                    lineLimit: isExpanded ? nil : Self.collapsedLineLimit
+                )
+                .equatable()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(alignment: .topLeading) {
+                    // Measure uncapped height — clamped layout always ≈ 5 lines, so it can't detect overflow.
+                    HarnessMarkdownView(content: content, lineLimit: nil)
+                        .equatable()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(0)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: UserMessageHeightKey.self,
+                                    value: proxy.size.height
+                                )
                             }
-                        }
-                    )
+                        )
+                }
 
                 if !isExpanded && isOverflowing {
                     LinearGradient(
@@ -110,9 +123,7 @@ private struct UserMessageCard: View {
 
             if isOverflowing {
                 Button(isExpanded ? "Show less" : "Show more") {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isExpanded.toggle()
-                    }
+                    toggleExpanded()
                 }
                 .font(.caption)
                 .buttonStyle(.plain)
@@ -124,12 +135,23 @@ private struct UserMessageCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.bgSecondaryColor)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onTapGesture {
+            guard isOverflowing else { return }
+            toggleExpanded()
+        }
         .onPreferenceChange(UserMessageHeightKey.self) { height in
-            guard !didMeasureOverflow, !isExpanded else { return }
-            let lineHeight: CGFloat = 24
-            let maxCollapsedHeight = lineHeight * 5 + 8
-            isOverflowing = height > maxCollapsedHeight + 1
-            didMeasureOverflow = true
+            isOverflowing = height > Self.maxCollapsedHeight + 1
+        }
+        .onChange(of: content) { _, _ in
+            isOverflowing = false
+            if isExpanded { isExpanded = false }
+        }
+    }
+
+    private func toggleExpanded() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isExpanded.toggle()
         }
     }
 }
@@ -160,6 +182,19 @@ private struct UserMessageHeightKey: PreferenceKey {
                 message: MessageRecord(
                     role: "user",
                     content: "Remind me to ship the iOS tasks view.",
+                    timestamp: nil,
+                    model: nil
+                )
+            )
+            MessageRowView(
+                message: MessageRecord(
+                    role: "user",
+                    content: """
+                    This is a longer dictation that should clamp to five lines when collapsed. \
+                    Tapping the card expands it so the rest stays readable. \
+                    Keep packing: rain jacket, walking shoes, charger, notebook, and the gift for Alex. \
+                    Also remind me to ping the team about the waveform polish before the TestFlight cut.
+                    """,
                     timestamp: nil,
                     model: nil
                 )
