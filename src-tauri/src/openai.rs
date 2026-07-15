@@ -9,6 +9,13 @@ use tokio_util::sync::CancellationToken;
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
 const OPENAI_IMAGES_GENERATIONS_URL: &str = "https://api.openai.com/v1/images/generations";
 
+/// Max assistant↔tool round-trips per user turn. Keep in sync with iOS `OpenAIClient.maxToolCallIterations`.
+pub const MAX_TOOL_CALL_ITERATIONS: usize = 10;
+
+pub fn tool_error_result(message: impl Into<String>) -> String {
+    json!({ "error": message.into() }).to_string()
+}
+
 pub fn openai_chat_model() -> String {
     std::env::var("OPENAI_CHAT_MODEL").unwrap_or_else(|_| "gpt-5.4".into())
 }
@@ -518,6 +525,23 @@ pub async fn generate_image(
 }
 
 #[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tool_error_result_serializes_error_key() {
+        let raw = tool_error_result("tool failed");
+        let parsed: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(parsed["error"], "tool failed");
+    }
+
+    #[test]
+    fn max_tool_call_iterations_matches_ios_cap() {
+        assert_eq!(MAX_TOOL_CALL_ITERATIONS, 10);
+    }
+}
+
+#[cfg(test)]
 mod image_tests {
     use super::*;
 
@@ -648,11 +672,17 @@ impl OpenAIChatClient {
     where
         F: FnMut(&str),
         G: Fn(String, Value) -> Fut,
-        Fut: std::future::Future<Output = Result<String, OpenAIError>>,
+        Fut: std::future::Future<Output = String>,
     {
         let mut full_content = String::new();
+        let mut iteration = 0usize;
 
         loop {
+            if iteration >= MAX_TOOL_CALL_ITERATIONS {
+                break;
+            }
+            iteration += 1;
+
             if cancel.is_cancelled() {
                 return Err(OpenAIError::Cancelled);
             }
@@ -734,7 +764,7 @@ impl OpenAIChatClient {
                     return Err(OpenAIError::Cancelled);
                 }
                 let args: Value = serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| json!({}));
-                let result = execute_tool(tc.function.name.clone(), args).await?;
+                let result = execute_tool(tc.function.name.clone(), args).await;
                 messages.push(ChatMessageParam {
                     role: "tool".into(),
                     content: Some(result),

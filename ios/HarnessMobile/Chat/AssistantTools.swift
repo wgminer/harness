@@ -40,6 +40,10 @@ enum AssistantTools {
 }
 
 enum ToolResultJSON {
+    static func encodeError(_ message: String) -> String {
+        encode(["error": message])
+    }
+
     static func encode(_ object: [String: Any]) -> String {
         guard JSONSerialization.isValidJSONObject(object),
               let data = try? JSONSerialization.data(withJSONObject: object),

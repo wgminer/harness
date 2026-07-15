@@ -22,7 +22,7 @@ use crate::memory::{
 };
 use crate::notes;
 use crate::openai::{
-    map_http_cancel, tool_definitions, ChatMessageParam, OpenAIChatClient, OpenAIError,
+    map_http_cancel, tool_definitions, tool_error_result, ChatMessageParam, OpenAIChatClient,
 };
 use crate::recent_conversations::build_recent_conversations_block;
 use crate::settings;
@@ -577,19 +577,23 @@ impl ChatController {
                         let conversation_id = conversation_id.clone();
                         let tool_calls_cb = tool_calls_cb.clone();
                         async move {
-                            let result = controller
+                            match controller
                                 .execute_tool(&name, args, &conversation_id)
                                 .await
-                                .map_err(OpenAIError::Api)?;
-                            if is_assistant_tool_name(&name) {
-                                let payload = serde_json::from_str::<Value>(&result)
-                                    .unwrap_or_else(|_| json!(result));
-                                tool_calls_cb.lock().await.push(ToolCallRecord {
-                                    tool_name: name,
-                                    payload: Some(payload),
-                                });
+                            {
+                                Ok(result) => {
+                                    if is_assistant_tool_name(&name) {
+                                        let payload = serde_json::from_str::<Value>(&result)
+                                            .unwrap_or_else(|_| json!(result));
+                                        tool_calls_cb.lock().await.push(ToolCallRecord {
+                                            tool_name: name,
+                                            payload: Some(payload),
+                                        });
+                                    }
+                                    result
+                                }
+                                Err(err) => tool_error_result(err),
                             }
-                            Ok(result)
                         }
                     }
                 },

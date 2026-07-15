@@ -161,8 +161,8 @@ Three workstreams, roughly in order:
 
 ### W4 — Functional gaps
 
-- [ ] Tool execution errors return `{"error": ...}` as tool result (both platforms); do not abort the turn.
-- [ ] Cap the tool-call loop on both platforms.
+- [x] Tool execution errors return `{"error": ...}` as tool result (both platforms); do not abort the turn.
+- [x] Cap the tool-call loop on both platforms.
 - [ ] iOS tool expansion: `get_datetime`, `memory_set_fact` / `memory_list_facts`; gate or defer `web_search` on Tavily key presence. (**Do not** add `get_weather` — removed in v0.8 cull.)
 - [ ] Fix already-drifted bugs (empty-title label, sync-merge serialization, tool-label fallback/map, memory selection).
 

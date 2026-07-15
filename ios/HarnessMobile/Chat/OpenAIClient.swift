@@ -75,6 +75,9 @@ struct ChatCompletionResult {
 
 @MainActor
 final class OpenAIClient {
+    /// Max assistant↔tool round-trips per user turn. Keep in sync with Rust `openai::MAX_TOOL_CALL_ITERATIONS`.
+    static let maxToolCallIterations = 10
+
     private let apiKey: String
     private var streamTask: Task<ChatCompletionResult, Error>?
 
@@ -97,30 +100,37 @@ final class OpenAIClient {
             var currentMessages = messages
             var fullContent = ""
             var collectedToolCalls: [ToolCallRecord] = []
+            var iteration = 0
 
-            while true {
-                let iteration = try await self.streamSingleCompletion(
+            while iteration < Self.maxToolCallIterations {
+                iteration += 1
+                let streamIteration = try await self.streamSingleCompletion(
                     messages: currentMessages,
                     tools: tools,
                     onChunk: onChunk
                 )
-                fullContent += iteration.content
+                fullContent += streamIteration.content
 
-                guard let executeTool, let toolCalls = iteration.toolCalls, !toolCalls.isEmpty else {
+                guard let executeTool, let toolCalls = streamIteration.toolCalls, !toolCalls.isEmpty else {
                     return ChatCompletionResult(content: fullContent, toolCalls: collectedToolCalls)
                 }
 
                 currentMessages.append(
                     ChatCompletionMessage(
                         role: "assistant",
-                        content: iteration.content.isEmpty ? nil : iteration.content,
+                        content: streamIteration.content.isEmpty ? nil : streamIteration.content,
                         toolCalls: toolCalls
                     )
                 )
 
                 for call in toolCalls {
                     let args = parseToolArguments(call.arguments)
-                    let result = try await executeTool(call.name, args)
+                    let result: String
+                    do {
+                        result = try await executeTool(call.name, args)
+                    } catch {
+                        result = ToolResultJSON.encodeError(error.localizedDescription)
+                    }
                     if AssistantToolDefinitions.trackedToolNames.contains(call.name),
                        let payload = parseJSONValue(result) {
                         collectedToolCalls.append(ToolCallRecord(toolName: call.name, payload: payload.any))
@@ -134,6 +144,7 @@ final class OpenAIClient {
                     )
                 }
             }
+            return ChatCompletionResult(content: fullContent, toolCalls: collectedToolCalls)
         }
         streamTask = task
         defer { streamTask = nil }
