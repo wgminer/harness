@@ -124,15 +124,15 @@ Code is already fixed dark; no Theme studio UI left to delete.
 
 Run **after** A. Full checklist remains in the dedup plan; this section is the consolidation wrapper.
 
-- [ ] Re-read [2026-07-12-deduplication-drift-proofing.md](./2026-07-12-deduplication-drift-proofing.md); confirm weather/plans/memory-compile items are struck.
-- [ ] Dedup **W1** — shared contract JSON resources (tools, prompts, models, sync constants remaining after cull).
-- [x] Dedup **W2** — parity/drift scanners + golden fixtures; close ipcNames ↔ `generate_handler!` gap.
-- [ ] Dedup **W3** — [x] Rust `write_json_pretty` envelope; [ ] iOS ChatService dedup; [x] streaming accumulator cleanup.
-- [x] Dedup **W4** — tool errors as tool results; tool-loop cap; iOS tool expansion (**no weather**).
+- [x] Re-read [2026-07-12-deduplication-drift-proofing.md](./2026-07-12-deduplication-drift-proofing.md); confirm weather/plans/memory-compile items are struck.
+- [ ] Dedup **W1** — shared contract JSON resources: [x] bundling mechanism + **tools.json**; remaining: prompts, models, sync scopes, UI labels, etc.
+- [x] Dedup **W2** — ipcNames ↔ `generate_handler!` closed; sync-merge golden fixtures; further logic-mirror fixtures can continue.
+- [x] Dedup **W3** — Rust `write_json_pretty` envelope; iOS ChatService `makeToolExecutor` + `finishAssistantTurn`; streaming accumulator rewrite.
+- [x] Dedup **W4** — tool errors as tool results; tool-loop cap; iOS tool expansion (**no weather**); memory strategy removed (always all facts); empty-title + tool-label drift fixed; sync-merge canonical serialization.
 - [x] Dedup **W5** — CLAUDE.md / docs for single-source rules.
 - [ ] Break up god-files (incremental PRs OK):
-  - [x] [`SettingsView.tsx`](../src/renderer/SettingsView.tsx) — Data + Memory tabs → `settings/DataSettingsTab`, `MemorySettingsTab` + hooks (~1.7k → ~1.0k); General/Voice/Appearance remain
-  - [x] [`chat.rs`](../src-tauri/src/chat.rs) (~1.2k) → turn/tool/stream modules
+  - [x] [`SettingsView.tsx`](../src/renderer/SettingsView.tsx) — Data + Memory tabs extracted; General/Voice/Appearance remain
+  - [x] [`chat.rs`](../src-tauri/src/chat.rs) → turn/tool/stream modules
   - [ ] [`sync.rs`](../src-tauri/src/sync.rs) (~970) → runtime vs push/pull split if natural
   - [ ] Extract [`App.tsx`](../src/renderer/App.tsx) shell state (store or focused hooks)
 - [x] Extend ESLint to cover `src/` (today ignored).
