@@ -157,7 +157,7 @@ Three workstreams, roughly in order:
 
 - [ ] Tier 1: Rust `write_json_pretty` (or equivalent) envelope; iOS ChatService `makeToolExecutor` + `finishAssistantTurn`.
 - [x] Tier 2: shared `encodeJSON`, `makeChatRequest`, single `load_tray_image`, delete `getDocumentPanel`.
-- [ ] Rewrite Rust streaming accumulator to match Swift `PartialAssistantMessage` clarity (and fix O(n²)).
+- [x] Rewrite Rust streaming accumulator to match Swift `PartialAssistantMessage` clarity (and fix O(n²)).
 
 ### W4 — Functional gaps
 

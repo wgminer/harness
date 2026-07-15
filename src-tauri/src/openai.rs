@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use futures_util::StreamExt;
@@ -542,6 +543,172 @@ mod tests {
 }
 
 #[cfg(test)]
+mod streaming_accumulator_tests {
+    use super::*;
+
+    fn delta(content: Option<&str>, tool_calls: Option<Value>) -> Value {
+        let mut delta = json!({});
+        if let Some(text) = content {
+            delta["content"] = json!(text);
+        }
+        if let Some(calls) = tool_calls {
+            delta["tool_calls"] = calls;
+        }
+        json!({ "choices": [{ "delta": delta }] })
+    }
+
+    fn merge_chunks(chunks: &[Value]) -> PartialAssistantMessage {
+        let mut partial = PartialAssistantMessage::default();
+        for chunk in chunks {
+            if let Some(delta) = chunk.pointer("/choices/0/delta") {
+                partial.merge(delta);
+            }
+        }
+        partial
+    }
+
+    #[test]
+    fn accumulates_content_across_chunks() {
+        let partial = merge_chunks(&[
+            delta(Some("Hel"), None),
+            delta(Some("lo"), None),
+            delta(Some("!"), None),
+        ]);
+        assert_eq!(partial.content, "Hello!");
+        assert!(partial.tool_calls().is_empty());
+    }
+
+    #[test]
+    fn accumulates_tool_call_fields_by_index() {
+        let partial = merge_chunks(&[
+            delta(
+                None,
+                Some(json!([{
+                    "index": 0,
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": { "name": "read", "arguments": "{\"path\":" }
+                }])),
+            ),
+            delta(
+                None,
+                Some(json!([{
+                    "index": 0,
+                    "function": { "arguments": "\"/tmp\"}" }
+                }])),
+            ),
+        ]);
+
+        assert_eq!(partial.content, "");
+        let tool_calls = partial.tool_calls();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_abc");
+        assert_eq!(tool_calls[0].call_type, "function");
+        assert_eq!(tool_calls[0].function.name, "read");
+        assert_eq!(tool_calls[0].function.arguments, "{\"path\":\"/tmp\"}");
+    }
+
+    #[test]
+    fn accumulates_multiple_tool_calls_in_index_order() {
+        let partial = merge_chunks(&[
+            delta(
+                None,
+                Some(json!([
+                    {
+                        "index": 1,
+                        "id": "call_two",
+                        "type": "function",
+                        "function": { "name": "write", "arguments": "{}" }
+                    },
+                    {
+                        "index": 0,
+                        "id": "call_one",
+                        "type": "function",
+                        "function": { "name": "read", "arguments": "{}" }
+                    }
+                ])),
+            ),
+        ]);
+
+        let tool_calls = partial.tool_calls();
+        assert_eq!(tool_calls.len(), 2);
+        assert_eq!(tool_calls[0].id, "call_one");
+        assert_eq!(tool_calls[1].id, "call_two");
+    }
+
+    #[test]
+    fn skips_incomplete_tool_calls_missing_id() {
+        let partial = merge_chunks(&[delta(
+            None,
+            Some(json!([{
+                "index": 0,
+                "function": { "name": "read", "arguments": "{}" }
+            }])),
+        )]);
+
+        assert!(partial.tool_calls().is_empty());
+    }
+
+    #[test]
+    fn defaults_missing_arguments_to_empty_object() {
+        let partial = merge_chunks(&[delta(
+            None,
+            Some(json!([{
+                "index": 0,
+                "id": "call_abc",
+                "function": { "name": "task_list" }
+            }])),
+        )]);
+
+        let tool_calls = partial.tool_calls();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].function.arguments, "{}");
+    }
+
+    #[test]
+    fn defaults_missing_call_type_to_function() {
+        let partial = merge_chunks(&[delta(
+            None,
+            Some(json!([{
+                "index": 0,
+                "id": "call_abc",
+                "function": { "name": "task_list", "arguments": "{}" }
+            }])),
+        )]);
+
+        assert_eq!(partial.tool_calls()[0].call_type, "function");
+    }
+
+    #[test]
+    fn merges_content_and_tool_calls_in_same_stream() {
+        let partial = merge_chunks(&[
+            delta(Some("Checking"), None),
+            delta(
+                None,
+                Some(json!([{
+                    "index": 0,
+                    "id": "call_abc",
+                    "function": { "name": "read", "arguments": "{}" }
+                }])),
+            ),
+            delta(Some(" files"), None),
+        ]);
+
+        assert_eq!(partial.content, "Checking files");
+        assert_eq!(partial.tool_calls().len(), 1);
+    }
+
+    #[test]
+    fn ignores_non_object_delta() {
+        let mut partial = PartialAssistantMessage::default();
+        partial.merge(&json!(null));
+        partial.merge(&json!("not-an-object"));
+        assert_eq!(partial.content, "");
+        assert!(partial.tool_calls().is_empty());
+    }
+}
+
+#[cfg(test)]
 mod image_tests {
     use super::*;
 
@@ -564,89 +731,86 @@ mod image_tests {
     }
 }
 
-#[derive(Default, Clone, serde::Serialize)]
+#[derive(Default, Clone)]
+struct ToolCallPart {
+    id: Option<String>,
+    call_type: Option<String>,
+    name: String,
+    arguments: String,
+}
+
+#[derive(Default, Clone)]
 struct PartialAssistantMessage {
     content: String,
-    tool_calls: Vec<ToolCallParam>,
+    tool_call_parts: HashMap<usize, ToolCallPart>,
 }
 
-fn merge_delta(acc: &mut Value, delta: &Value) {
-    let Some(delta_obj) = delta.as_object() else {
-        return;
-    };
-    for (key, value) in delta_obj {
-        if value.is_null() {
-            continue;
+impl PartialAssistantMessage {
+    fn merge(&mut self, delta: &Value) {
+        let Some(delta_obj) = delta.as_object() else {
+            return;
+        };
+
+        if let Some(chunk) = delta_obj.get("content").and_then(|v| v.as_str()) {
+            self.content.push_str(chunk);
         }
-        match acc.get_mut(key) {
-            None => {
-                acc[key] = value.clone();
+
+        let Some(tool_calls) = delta_obj.get("tool_calls").and_then(|v| v.as_array()) else {
+            return;
+        };
+
+        for part in tool_calls {
+            let idx = part
+                .get("index")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(self.tool_call_parts.len() as u64) as usize;
+
+            let entry = self.tool_call_parts.entry(idx).or_default();
+
+            if let Some(id) = part.get("id").and_then(|v| v.as_str()) {
+                entry.id = Some(id.to_string());
             }
-            Some(existing) if existing.is_string() && value.as_str().is_some() => {
-                let merged = format!(
-                    "{}{}",
-                    existing.as_str().unwrap_or_default(),
-                    value.as_str().unwrap_or_default()
-                );
-                acc[key] = Value::String(merged);
+            if let Some(call_type) = part.get("type").and_then(|v| v.as_str()) {
+                entry.call_type = Some(call_type.to_string());
             }
-            Some(existing) if existing.is_array() && value.is_array() => {
-                let arr = existing.as_array_mut().unwrap();
-                for item in value.as_array().unwrap() {
-                    let idx = item
-                        .get("index")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(arr.len() as u64) as usize;
-                    while arr.len() <= idx {
-                        arr.push(json!({}));
-                    }
-                    if let Some(rest) = item.as_object() {
-                        let mut patch = json!({});
-                        for (k, v) in rest {
-                            if k != "index" {
-                                patch[k] = v.clone();
-                            }
-                        }
-                        merge_delta(&mut arr[idx], &patch);
-                    }
+            if let Some(function) = part.get("function").and_then(|v| v.as_object()) {
+                if let Some(name) = function.get("name").and_then(|v| v.as_str()) {
+                    entry.name.push_str(name);
+                }
+                if let Some(args) = function.get("arguments").and_then(|v| v.as_str()) {
+                    entry.arguments.push_str(args);
                 }
             }
-            Some(existing) if existing.is_object() && value.is_object() => {
-                merge_delta(existing, value);
-            }
-            Some(slot) => {
-                *slot = value.clone();
-            }
         }
     }
-}
 
-fn partial_from_delta(previous: &PartialAssistantMessage, chunk: &Value) -> PartialAssistantMessage {
-    let mut acc = json!({
-        "content": previous.content,
-        "tool_calls": previous.tool_calls
-    });
-    if let Some(delta) = chunk.pointer("/choices/0/delta") {
-        merge_delta(&mut acc, delta);
+    fn tool_calls(&self) -> Vec<ToolCallParam> {
+        let mut indices: Vec<_> = self.tool_call_parts.keys().copied().collect();
+        indices.sort_unstable();
+
+        indices
+            .into_iter()
+            .filter_map(|idx| {
+                let part = self.tool_call_parts.get(&idx)?;
+                let id = part.id.as_ref()?;
+                Some(ToolCallParam {
+                    id: id.clone(),
+                    call_type: part
+                        .call_type
+                        .clone()
+                        .unwrap_or_else(|| "function".into()),
+                    function: ToolFunctionParam {
+                        name: part.name.clone(),
+                        arguments: if part.arguments.is_empty() {
+                            "{}".into()
+                        } else {
+                            part.arguments.clone()
+                        },
+                    },
+                })
+            })
+            .collect()
     }
-
-    let content = acc
-        .get("content")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-
-    let tool_calls = acc
-        .get("tool_calls")
-        .and_then(|v| v.as_array())
-        .map(|rows| {
-            rows.iter()
-                .filter_map(|row| serde_json::from_value::<ToolCallParam>(row.clone()).ok())
-                .collect()
-        })
-        .unwrap_or_else(|| previous.tool_calls.clone());
-
-    PartialAssistantMessage { content, tool_calls }
 }
 
 pub struct OpenAIChatClient {
@@ -739,12 +903,15 @@ impl OpenAIChatClient {
                                 on_content(delta);
                             }
                         }
-                        partial = partial_from_delta(&partial, &parsed);
+                        if let Some(delta) = parsed.pointer("/choices/0/delta") {
+                            partial.merge(delta);
+                        }
                     }
                 }
             }
 
-            if partial.tool_calls.is_empty() {
+            let tool_calls = partial.tool_calls();
+            if tool_calls.is_empty() {
                 break;
             }
 
@@ -755,11 +922,11 @@ impl OpenAIChatClient {
                 } else {
                     Some(partial.content.clone())
                 },
-                tool_calls: Some(partial.tool_calls.clone()),
+                tool_calls: Some(tool_calls.clone()),
                 tool_call_id: None,
             });
 
-            for tc in &partial.tool_calls {
+            for tc in &tool_calls {
                 if cancel.is_cancelled() {
                     return Err(OpenAIError::Cancelled);
                 }
