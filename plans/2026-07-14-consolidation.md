@@ -183,6 +183,7 @@ After v0.8:
 3. After B sync-merge serialization fix: re-sync / re-pair devices (one-time full re-pull).
 4. Device test: Mac **Show sync QR** → iPhone **Set up sync**.
 5. Optionally cut a real release (`npm run release`) — pipeline verified with `--dry-run` when green.
+   - **Note (2026-07-14 dry-run):** `tauri build` finished without hanging on updater key password, and produced updater `.sig`. However the `.app` was **adhoc**-signed (`Signature=adhoc`), so `verify:mac-trust` failed. Investigate Tauri macOS Developer ID signing vs `CSC_*` env (may need Tauri-native cert env / identity) before a real release.
 
 ---
 
