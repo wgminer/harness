@@ -121,15 +121,7 @@ final class ChatService: ObservableObject {
             onChunk: onStreamChunk
         )
         try throwIfStopped()
-
-        try appendMessage(
-            conversationId: conversationId,
-            role: .assistant,
-            content: ChatTemporalContext.stripSentAtPrefix(result.content),
-            model: OpenAIModel.chat,
-            toolCalls: result.toolCalls.isEmpty ? nil : result.toolCalls
-        )
-        scheduleTitleRefinement(conversationId: conversationId)
+        try finishAssistantTurn(conversationId: conversationId, result: result)
     }
 
     /// Stream assistant reply without adding a new user message.
@@ -150,15 +142,7 @@ final class ChatService: ObservableObject {
             onChunk: onStreamChunk
         )
         try throwIfStopped()
-
-        try appendMessage(
-            conversationId: conversationId,
-            role: .assistant,
-            content: ChatTemporalContext.stripSentAtPrefix(result.content),
-            model: OpenAIModel.chat,
-            toolCalls: result.toolCalls.isEmpty ? nil : result.toolCalls
-        )
-        scheduleTitleRefinement(conversationId: conversationId)
+        try finishAssistantTurn(conversationId: conversationId, result: result)
     }
 
     /// Pop last user message, send polish instruction + transcript, stream assistant reply.
@@ -186,7 +170,13 @@ final class ChatService: ObservableObject {
             onChunk: onStreamChunk
         )
         try throwIfStopped()
+        try finishAssistantTurn(conversationId: conversationId, result: result)
+    }
 
+    private func finishAssistantTurn(
+        conversationId: String,
+        result: ChatCompletionResult
+    ) throws {
         try appendMessage(
             conversationId: conversationId,
             role: .assistant,
