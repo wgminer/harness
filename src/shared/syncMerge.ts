@@ -1,3 +1,6 @@
+import { canonicalJsonCompact, canonicalJsonPretty } from "./canonicalJson";
+import { stripSettingsSecrets } from "./settingsSecrets";
+
 /** Per-file resolution when merging a sync conflict. */
 export type SyncFileChoice = "local" | "remote" | "merge";
 
@@ -135,7 +138,7 @@ function mergeJsonRecords(local: Record<string, unknown>, remote: Record<string,
       continue;
     }
     const remoteValue = merged[key];
-    if (JSON.stringify(remoteValue) === JSON.stringify(localValue)) continue;
+    if (canonicalJsonCompact(remoteValue) === canonicalJsonCompact(localValue)) continue;
     const localTs = tsFromValue(localValue);
     const remoteTs = tsFromValue(remoteValue);
     merged[key] = localTs >= remoteTs ? localValue : remoteValue;
@@ -174,7 +177,7 @@ function mergeTasksJson(local: Buffer, remote: Buffer): Buffer {
   const tasks = [...byId.values()].sort(
     (a, b) => tsFromValue(b) - tsFromValue(a),
   );
-  return Buffer.from(JSON.stringify({ tasks }, null, 2), "utf-8");
+  return Buffer.from(canonicalJsonPretty({ tasks }), "utf-8");
 }
 
 function mergeMessagesJson(local: Buffer, remote: Buffer): Buffer {
@@ -184,16 +187,14 @@ function mergeMessagesJson(local: Buffer, remote: Buffer): Buffer {
   const merged: unknown[] = [];
   for (const row of [...remoteRows, ...localRows]) {
     if (!row || typeof row !== "object") continue;
-    const stamp = JSON.stringify(row);
+    const stamp = canonicalJsonCompact(row);
     if (seen.has(stamp)) continue;
     seen.add(stamp);
     merged.push(row);
   }
   merged.sort((a, b) => tsFromValue(a) - tsFromValue(b));
-  return Buffer.from(JSON.stringify(merged, null, 2), "utf-8");
+  return Buffer.from(canonicalJsonPretty(merged), "utf-8");
 }
-
-import { stripSettingsSecrets } from "./settingsSecrets";
 
 function mergeSettingsJson(local: Buffer, remote: Buffer): Buffer {
   const localObj = stripSettingsSecrets(parseJson(local) as Record<string, unknown>);
@@ -202,7 +203,7 @@ function mergeSettingsJson(local: Buffer, remote: Buffer): Buffer {
   if (localObj.sync && typeof localObj.sync === "object") {
     merged.sync = localObj.sync;
   }
-  return Buffer.from(JSON.stringify(stripSettingsSecrets(merged), null, 2), "utf-8");
+  return Buffer.from(canonicalJsonPretty(stripSettingsSecrets(merged)), "utf-8");
 }
 
 export function mergeFileBytes(path: string, local: Buffer, remote: Buffer): Buffer {
@@ -221,10 +222,8 @@ export function mergeFileBytes(path: string, local: Buffer, remote: Buffer): Buf
       !Array.isArray(remoteObj)
     ) {
       return Buffer.from(
-        JSON.stringify(
+        canonicalJsonPretty(
           mergeJsonRecords(localObj as Record<string, unknown>, remoteObj as Record<string, unknown>),
-          null,
-          2,
         ),
         "utf-8",
       );

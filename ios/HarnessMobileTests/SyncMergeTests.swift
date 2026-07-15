@@ -29,9 +29,56 @@ final class SyncMergeTests: XCTestCase {
             local: local,
             remote: remote
         )
-        let object = try JSONSerialization.jsonObject(with: merged) as? [String: Any]
-        XCTAssertNotNil(object?["a"])
-        XCTAssertNotNil(object?["b"])
+        let expected = """
+        {
+          "a": {
+            "createdAt": 1,
+            "title": "A"
+          },
+          "b": {
+            "createdAt": 2,
+            "title": "B"
+          }
+        }
+        """.data(using: .utf8)!
+        XCTAssertEqual(merged, expected)
+    }
+
+    func testMergeMessagesDedupUsesSortedKeyStamps() throws {
+        let local = Data(
+            #"[{"id":"m1","role":"user","content":"hi","createdAt":1},{"id":"m2","role":"assistant","content":"dup","createdAt":2}]"#.utf8
+        )
+        let remote = Data(
+            #"[{"role":"assistant","content":"dup","createdAt":2,"id":"m2"},{"id":"m3","role":"user","content":"new","createdAt":3}]"#.utf8
+        )
+        let merged = SyncMerge.mergeFileBytes(
+            path: "app-state/messages_abc.json",
+            local: local,
+            remote: remote
+        )
+        let expected = """
+        [
+          {
+            "content": "hi",
+            "createdAt": 1,
+            "id": "m1",
+            "role": "user"
+          },
+          {
+            "content": "dup",
+            "createdAt": 2,
+            "id": "m2",
+            "role": "assistant"
+          },
+          {
+            "content": "new",
+            "createdAt": 3,
+            "id": "m3",
+            "role": "user"
+          }
+        ]
+        """.data(using: .utf8)!
+        XCTAssertEqual(merged, expected)
     }
 
     func testMergeTasksPrefersNewerUpdatedAt() throws {
@@ -42,14 +89,23 @@ final class SyncMergeTests: XCTestCase {
             #"{"tasks":[{"id":"t1","title":"Remote","updatedAt":10},{"id":"t2","title":"Only remote","updatedAt":5}]}"#.utf8
         )
         let merged = SyncMerge.mergeFileBytes(path: "app-state/tasks.json", local: local, remote: remote)
-        let parsed = try JSONSerialization.jsonObject(with: merged) as? [String: Any]
-        let tasks = parsed?["tasks"] as? [[String: Any]] ?? []
-        let byId = Dictionary(uniqueKeysWithValues: tasks.compactMap { row -> (String, String)? in
-            guard let id = row["id"] as? String, let title = row["title"] as? String else { return nil }
-            return (id, title)
-        })
-        XCTAssertEqual(byId["t1"], "Local")
-        XCTAssertEqual(byId["t2"], "Only remote")
+        let expected = """
+        {
+          "tasks": [
+            {
+              "id": "t1",
+              "title": "Local",
+              "updatedAt": 20
+            },
+            {
+              "id": "t2",
+              "title": "Only remote",
+              "updatedAt": 5
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        XCTAssertEqual(merged, expected)
     }
 
     func testMergeUserMemoryDoesNotCrashOnPrimitiveValues() throws {

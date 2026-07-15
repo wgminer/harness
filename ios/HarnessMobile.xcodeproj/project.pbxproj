@@ -56,6 +56,7 @@
 		6C79BD9C512ED64CD00C27E3 /* ConversationTitlePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35F51CF22E15C7D534C9651A /* ConversationTitlePolicy.swift */; };
 		6FACF4E18F11CBD73D05C87F /* DictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6172253C5ABE472F7774D5 /* DictationService.swift */; };
 		6FF23FB5834882C622528275 /* VoiceMemoTranscriptExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2351E29292CD00EA870CB08 /* VoiceMemoTranscriptExtractor.swift */; };
+		76D9CD368139DC716734DB6E /* CanonicalJson.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAE1DCD61A0E31E0C2B57163 /* CanonicalJson.swift */; };
 		76F0EA817A627DDB001EEA70 /* LiquidGlassSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A9ADD822DFC19A3C629854 /* LiquidGlassSurface.swift */; };
 		790B7DD0B54714BD2F97636A /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 765261EE8A48169A07C84552 /* AudioRecorder.swift */; };
 		79C393517DCF3F28CE5F2E3C /* TasksStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BEF9A627EE1ED20DC74693A /* TasksStore.swift */; };
@@ -247,6 +248,7 @@
 		DD6C78F5A4237F52C16C4269 /* RemoteBackupStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBackupStoreTests.swift; sourceTree = "<group>"; };
 		E4485CC6393915027618C569 /* SettingsSecretsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSecretsTests.swift; sourceTree = "<group>"; };
 		E8EDC7BBC9E5869A42F0B0BD /* TaskModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskModels.swift; sourceTree = "<group>"; };
+		EAE1DCD61A0E31E0C2B57163 /* CanonicalJson.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalJson.swift; sourceTree = "<group>"; };
 		ECA1858568F8E70A03F3E641 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EF673E8C0C642B79F38552E7 /* TagNormalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagNormalization.swift; sourceTree = "<group>"; };
 		F5D82D3C326D45826E585020 /* TranscriptionSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionSettingsTests.swift; sourceTree = "<group>"; };
@@ -380,6 +382,7 @@
 			children = (
 				D7C9D0416E9ECD23AE827A4D /* BackupManifest.swift */,
 				BB0AF1D9F3C9BB9FACBE6CDE /* BundleCodec.swift */,
+				EAE1DCD61A0E31E0C2B57163 /* CanonicalJson.swift */,
 				A4E1299233D995333C97F759 /* PairingPayload.swift */,
 				53DAF78FF2D79400916203AD /* R2SettingsStore.swift */,
 				313A36142F5789A36D3B8752 /* RemoteBackupStore.swift */,
@@ -642,6 +645,7 @@
 				790B7DD0B54714BD2F97636A /* AudioRecorder.swift in Sources */,
 				4E1EF2930783BB50E1D5222D /* BackupManifest.swift in Sources */,
 				7B28310EB93D34E6352ED9AB /* BundleCodec.swift in Sources */,
+				76D9CD368139DC716734DB6E /* CanonicalJson.swift in Sources */,
 				E175849E389B13D5263D80E1 /* ChatComposerView.swift in Sources */,
 				C8BBA6AB9024EA02BF81ECD0 /* ChatScrollLogic.swift in Sources */,
 				97941B84CF5AC90DCF4CF5E6 /* ChatService.swift in Sources */,

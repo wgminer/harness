@@ -1,0 +1,14 @@
+{
+  "tasks": [
+    {
+      "id": "t1",
+      "title": "Local",
+      "updatedAt": 20
+    },
+    {
+      "id": "t2",
+      "title": "Only remote",
+      "updatedAt": 5
+    }
+  ]
+}

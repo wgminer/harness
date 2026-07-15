@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildDefaultMergeChoices,
@@ -5,6 +7,12 @@ import {
   buildSyncConflictReview,
   mergeFileBytes,
 } from "./syncMerge";
+
+const FIXTURES = join(import.meta.dirname, "fixtures", "syncMerge");
+
+function readFixture(name: string): string {
+  return readFileSync(join(FIXTURES, name), "utf-8").replace(/\n$/, "");
+}
 
 describe("buildSyncConflictReview", () => {
   it("classifies unchanged, local-only, remote-only, and conflict files", () => {
@@ -34,6 +42,50 @@ describe("buildSyncConflictReview", () => {
 });
 
 describe("mergeFileBytes", () => {
+  it("emits canonical JSON for conversations merge (golden fixture)", () => {
+    const merged = mergeFileBytes(
+      "app-state/conversations.json",
+      Buffer.from(JSON.stringify({ a: { title: "A", createdAt: 1 } })),
+      Buffer.from(JSON.stringify({ b: { title: "B", createdAt: 2 } })),
+    );
+    expect(merged.toString("utf-8")).toBe(readFixture("conversations-merge.expected.json"));
+  });
+
+  it("emits canonical JSON for tasks merge (golden fixture)", () => {
+    const merged = mergeFileBytes(
+      "app-state/tasks.json",
+      Buffer.from(JSON.stringify({ tasks: [{ id: "t1", title: "Local", updatedAt: 20 }] })),
+      Buffer.from(
+        JSON.stringify({
+          tasks: [
+            { id: "t1", title: "Remote", updatedAt: 10 },
+            { id: "t2", title: "Only remote", updatedAt: 5 },
+          ],
+        }),
+      ),
+    );
+    expect(merged.toString("utf-8")).toBe(readFixture("tasks-merge.expected.json"));
+  });
+
+  it("emits canonical JSON for messages merge with sorted-key dedup stamps (golden fixture)", () => {
+    const merged = mergeFileBytes(
+      "app-state/messages_abc.json",
+      Buffer.from(
+        JSON.stringify([
+          { id: "m1", role: "user", content: "hi", createdAt: 1 },
+          { id: "m2", role: "assistant", content: "dup", createdAt: 2 },
+        ]),
+      ),
+      Buffer.from(
+        JSON.stringify([
+          { role: "assistant", content: "dup", createdAt: 2, id: "m2" },
+          { id: "m3", role: "user", content: "new", createdAt: 3 },
+        ]),
+      ),
+    );
+    expect(merged.toString("utf-8")).toBe(readFixture("messages-merge.expected.json"));
+  });
+
   it("merges conversation records by id", () => {
     const merged = mergeFileBytes(
       "app-state/conversations.json",

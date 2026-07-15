@@ -229,10 +229,7 @@ enum SyncMerge {
     }
 
     private static func encodeJSON(_ object: Any) -> Data {
-        // `data(withJSONObject:)` raises an uncatchable NSException when handed
-        // a non-container top level. Guard with `isValidJSONObject` first.
-        guard JSONSerialization.isValidJSONObject(object) else { return Data() }
-        return (try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])) ?? Data()
+        CanonicalJson.encodePretty(object)
     }
 
     private static func jsonEqual(_ a: Any, _ b: Any) -> Bool {
@@ -304,8 +301,7 @@ enum SyncMerge {
         var merged: [Any] = []
         for row in remoteRows + localRows {
             guard JSONSerialization.isValidJSONObject(row),
-                  let stampData = try? JSONSerialization.data(withJSONObject: row),
-                  let stamp = String(data: stampData, encoding: .utf8)
+                  let stamp = CanonicalJson.encodeCompactStamp(row)
             else { continue }
             if seen.contains(stamp) { continue }
             seen.insert(stamp)

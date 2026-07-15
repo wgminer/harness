@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::canonical_json::{to_string_compact_canonical, to_vec_pretty_canonical};
 use crate::settings::strip_settings_secrets;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -296,7 +297,7 @@ fn merge_tasks_json(local: &[u8], remote: &[u8]) -> Vec<u8> {
 
     let mut tasks: Vec<Value> = by_id.into_values().collect();
     tasks.sort_by(|a, b| ts_from_value(b).cmp(&ts_from_value(a)));
-    serde_json::to_vec_pretty(&json!({ "tasks": tasks })).unwrap_or_default()
+    to_vec_pretty_canonical(&json!({ "tasks": tasks }))
 }
 
 fn merge_messages_json(local: &[u8], remote: &[u8]) -> Vec<u8> {
@@ -311,7 +312,7 @@ fn merge_messages_json(local: &[u8], remote: &[u8]) -> Vec<u8> {
         if !row.is_object() {
             continue;
         }
-        let stamp = serde_json::to_string(&row).unwrap_or_default();
+        let stamp = to_string_compact_canonical(&row);
         if seen.contains(&stamp) {
             continue;
         }
@@ -319,7 +320,7 @@ fn merge_messages_json(local: &[u8], remote: &[u8]) -> Vec<u8> {
         merged.push(row);
     }
     merged.sort_by_key(|row| ts_from_value(row));
-    serde_json::to_vec_pretty(&merged).unwrap_or_default()
+    to_vec_pretty_canonical(&Value::Array(merged))
 }
 
 fn merge_settings_json(local: &[u8], remote: &[u8]) -> Vec<u8> {
@@ -332,7 +333,7 @@ fn merge_settings_json(local: &[u8], remote: &[u8]) -> Vec<u8> {
         merged["sync"] = sync.clone();
     }
     strip_settings_secrets(&mut merged);
-    serde_json::to_vec_pretty(&merged).unwrap_or_default()
+    to_vec_pretty_canonical(&merged)
 }
 
 pub fn merge_file_bytes(path: &str, local: &[u8], remote: &[u8]) -> Vec<u8> {
@@ -349,8 +350,7 @@ pub fn merge_file_bytes(path: &str, local: &[u8], remote: &[u8]) -> Vec<u8> {
         let local_obj = parse_json(local);
         let remote_obj = parse_json(remote);
         if local_obj.is_object() && remote_obj.is_object() {
-            return serde_json::to_vec_pretty(&merge_json_records(&local_obj, &remote_obj))
-                .unwrap_or_else(|_| local.to_vec());
+            return to_vec_pretty_canonical(&merge_json_records(&local_obj, &remote_obj));
         }
     }
     if local.len() >= remote.len() {
@@ -422,6 +422,56 @@ pub fn build_merged_file_map(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn emits_canonical_json_for_conversations_merge_golden_fixture() {
+        const EXPECTED: &str =
+            include_str!("../../src/shared/fixtures/syncMerge/conversations-merge.expected.json");
+        let merged = merge_file_bytes(
+            "app-state/conversations.json",
+            br#"{"a":{"title":"A","createdAt":1}}"#,
+            br#"{"b":{"title":"B","createdAt":2}}"#,
+        );
+        assert_eq!(String::from_utf8_lossy(&merged), EXPECTED.trim_end());
+    }
+
+    #[test]
+    fn emits_canonical_json_for_tasks_merge_golden_fixture() {
+        const EXPECTED: &str =
+            include_str!("../../src/shared/fixtures/syncMerge/tasks-merge.expected.json");
+        let merged = merge_file_bytes(
+            "app-state/tasks.json",
+            br#"{"tasks":[{"id":"t1","title":"Local","updatedAt":20}]}"#,
+            br#"{"tasks":[{"id":"t1","title":"Remote","updatedAt":10},{"id":"t2","title":"Only remote","updatedAt":5}]}"#,
+        );
+        assert_eq!(String::from_utf8_lossy(&merged), EXPECTED.trim_end());
+    }
+
+    #[test]
+    fn emits_canonical_json_for_messages_merge_golden_fixture() {
+        const EXPECTED: &str =
+            include_str!("../../src/shared/fixtures/syncMerge/messages-merge.expected.json");
+        let merged = merge_file_bytes(
+            "app-state/messages_abc.json",
+            br#"[{"id":"m1","role":"user","content":"hi","createdAt":1},{"id":"m2","role":"assistant","content":"dup","createdAt":2}]"#,
+            br#"[{"role":"assistant","content":"dup","createdAt":2,"id":"m2"},{"id":"m3","role":"user","content":"new","createdAt":3}]"#,
+        );
+        assert_eq!(String::from_utf8_lossy(&merged), EXPECTED.trim_end());
+    }
+
+    #[test]
+    fn message_dedup_stamp_matches_golden_fixture() {
+        use crate::canonical_json::to_string_compact_canonical;
+        const EXPECTED: &str =
+            include_str!("../../src/shared/fixtures/syncMerge/message-dedup-stamp.expected.txt");
+        let row = json!({
+            "id": "m2",
+            "role": "assistant",
+            "content": "dup",
+            "createdAt": 2
+        });
+        assert_eq!(to_string_compact_canonical(&row), EXPECTED.trim_end());
+    }
 
     #[test]
     fn preview_truncates_on_char_boundary_not_byte_boundary() {

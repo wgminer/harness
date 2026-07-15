@@ -1,4 +1,5 @@
 pub mod assistant_tools;
+pub mod canonical_json;
 pub mod chat;
 pub mod commands;
 pub mod conversation_title;

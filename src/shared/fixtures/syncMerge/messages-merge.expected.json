@@ -1,0 +1,20 @@
+[
+  {
+    "content": "hi",
+    "createdAt": 1,
+    "id": "m1",
+    "role": "user"
+  },
+  {
+    "content": "dup",
+    "createdAt": 2,
+    "id": "m2",
+    "role": "assistant"
+  },
+  {
+    "content": "new",
+    "createdAt": 3,
+    "id": "m3",
+    "role": "user"
+  }
+]
