@@ -176,4 +176,14 @@ After v0.8:
 
 ---
 
+## Return checklist (after walk-away C+B)
+
+1. Re-enter credentials in Dev (or restore from local `~/Projects/harness-appdata-archive-2026-07-14`).
+2. Smoke: chat streams, Settings saves, ChatGPT/Claude import, sync pull.
+3. After B sync-merge serialization fix: re-sync / re-pair devices (one-time full re-pull).
+4. Device test: Mac **Show sync QR** → iPhone **Set up sync**.
+5. Optionally cut a real release (`npm run release`) — pipeline verified with `--dry-run` when green.
+
+---
+
 *Last updated: 2026-07-14*
