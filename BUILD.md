@@ -6,10 +6,11 @@
 | `npm install`              | Install project dependencies.                                                                                                                                                                                                                                                                                                                                         |
 | `npm run dev`              | Run the app in development mode with hot reload.                                                                                                                                                                                                                                                                                                                      |
 | `npm run build`            | Runs **prebuild** first: `icon:icns`, then `build:speech-helper` and `build:fn-monitor` on macOS, then compiles the renderer to `dist-web/`. |
-| `npm run dist`             | Full pipeline: native helpers → vite build → `tauri build` (DMG + `.app` on macOS). Does **not** bump version by default (use an explicit bump / release path).                                                                                                                                                                                                         |
+| `npm run dist`             | Full pipeline: native helpers → vite build → `tauri build` (DMG + `.app` on macOS). Does **not** bump version unless you pass `--bump`.                                                                                                                                                                  |
 | `npm run dist:mac`         | Same as `dist` on macOS. Use for the main Mac build and with `--replace`.                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:quick`   | Unsigned local build (`CSC_IDENTITY_AUTO_DISCOVERY=false`, no version bump).                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:replace` | `dist:mac` with `--replace`: copy the built `.app` into `/Applications`.                                                                                                                                                                                                                                                                                              |
+| `npm run release`          | Bumps patch version, signed+notarized `dist:mac`, verify trust, publish GitHub Release + `latest.json`, push tag. |
 | `npm run icon:icns`        | Generate `build/icon.icns` from the project icon assets.                                                                                                                                                                                                                                                                                                              |
 | `npm run build:speech-helper` | **(macOS)** Build `native/HarnessSpeech` and copy the CLI into `resources/HarnessSpeech`. Needs Xcode Command Line Tools and Swift. |
 | `npm run build:fn-monitor` | **(macOS)** Build `native/HarnessFnMonitor` for the global Fn dictation shortcut. |
@@ -195,9 +196,10 @@ The landing page download button points to:
 
 ### One-command release
 
-1. Bump `version` in `package.json` and commit to `main`.
-2. Set signing env vars in `.env` (see [`.env.example`](.env.example)): `GH_TOKEN`, Apple notarization (`APPLE_*`), code signing (`CSC_*`), and updater signing (`TAURI_SIGNING_PRIVATE_KEY`).
-3. Generate an updater key pair once (if you have not already):
+`package.json` is the single version source. `scripts/dist-runner.js --bump` (and `npm run release`) sync the same patch into `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. iOS `MARKETING_VERSION` stays separate.
+
+1. Set signing env vars in `.env` (see [`.env.example`](.env.example)): `GH_TOKEN`, Apple notarization (`APPLE_*`), code signing (`CSC_*`), and updater signing (`TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Always set the password variable (empty if the key has no password) so builds never hang on a TTY prompt.
+2. Generate an updater key pair once (if you have not already):
 
 ```bash
 npx tauri signer generate -w ~/.tauri/harness.key
@@ -205,7 +207,7 @@ npx tauri signer generate -w ~/.tauri/harness.key
 
 Copy the printed public key into `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.
 
-4. Run:
+3. On a clean `main` working tree:
 
 ```bash
 npm run release
@@ -214,17 +216,27 @@ npm run release
 This command:
 
 1. Verifies your git working tree is clean.
-2. Builds `dist:mac` with `REQUIRE_NOTARIZE=1` (signed + notarized).
-3. Runs `verify:mac-trust`.
-4. Collects DMG, ZIP, updater bundle, and `latest.json`, then publishes them to GitHub Releases on this repo.
-5. Creates git tag `vX.Y.Z` and pushes tag + `main`.
+2. Bumps the patch version in `package.json` (and syncs Cargo / tauri.conf).
+3. Builds `dist:mac` with `REQUIRE_NOTARIZE=1` (signed + notarized).
+4. Runs `verify:mac-trust`.
+5. Collects DMG, ZIP, updater bundle, and `latest.json`, then publishes them to GitHub Releases on this repo.
+6. Creates git tag `vX.Y.Z` and pushes tag + `main`.
 
 Installed copies of Harness check GitHub on launch and show an **Update** button in the sidebar when a newer release exists.
 
 Optional flags:
 
-- `npm run release -- --dry-run` — build and verify only; skip publish and git tag.
+- `npm run release -- --dry-run` — build and verify the **current** version only; skip bump, publish, and git tag.
 - `npm run release -- --no-tag` — publish to GitHub but skip git tag push.
+
+Local dist without releasing:
+
+```bash
+npm run dist:mac              # current version
+npm run dist:mac -- --bump    # bump patch, then build
+```
+
+A Vitest check (`src/shared/versionParity.test.ts`) fails CI if the three desktop version fields drift.
 
 ### Manual release
 

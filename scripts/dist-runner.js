@@ -15,9 +15,14 @@ const args = process.argv.slice(2);
 const isMac = args.includes("--mac") || process.platform === "darwin";
 const replace = args.includes("--replace");
 const quick = args.includes("--quick");
+const bumpFlag = args.includes("--bump");
 if (quick) {
   process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
-  process.env.HARNESS_SKIP_VERSION_BUMP = "1";
+}
+
+// Avoid tauri signer TTY password prompt when the key has no password.
+if (!("TAURI_SIGNING_PRIVATE_KEY_PASSWORD" in process.env)) {
+  process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "";
 }
 
 const startedAt = Date.now();
@@ -54,12 +59,18 @@ function makeBar(done, total, width = 24) {
   return `[${"#".repeat(filled)}${"-".repeat(width - filled)}]`;
 }
 
+/**
+ * Version bumps are explicit only:
+ * - `--bump` CLI flag
+ * - `HARNESS_BUMP_VERSION=1`
+ * `HARNESS_SKIP_VERSION_BUMP=1` always wins (legacy release / quick guards).
+ */
 function shouldBumpVersion() {
   const skip = process.env.HARNESS_SKIP_VERSION_BUMP;
   if (skip === "1" || skip === "true") return false;
-  const requireNotarize = process.env.REQUIRE_NOTARIZE;
-  if (requireNotarize === "1" || requireNotarize === "true") return false;
-  return true;
+  if (bumpFlag) return true;
+  const bumpEnv = process.env.HARNESS_BUMP_VERSION;
+  return bumpEnv === "1" || bumpEnv === "true";
 }
 
 function syncTauriVersion(next) {
@@ -175,7 +186,11 @@ function installToApplications(appPath) {
 }
 
 async function main() {
-  const modeExtras = [replace && "replace", quick && "quick (unsigned)"].filter(Boolean);
+  const modeExtras = [
+    replace && "replace",
+    quick && "quick (unsigned)",
+    shouldBumpVersion() && "bump",
+  ].filter(Boolean);
   console.log(
     color("bold", `\n▸ Harness dist (tauri${modeExtras.length ? ` + ${modeExtras.join(" + ")}` : ""})`)
   );
@@ -194,7 +209,12 @@ async function main() {
   } else {
     const cur = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
     versionInfo = { from: cur, to: cur, bumped: false };
-    console.log(`  ${color("cyan", "version")}: ${color("green", `v${cur}`)} ${color("dim", "(bump skipped)")}`);
+    console.log(
+      `  ${color("cyan", "version")}: ${color("green", `v${cur}`)} ${color(
+        "dim",
+        "(no bump — pass --bump or set HARNESS_BUMP_VERSION=1)"
+      )}`
+    );
   }
 
   const tauriCli = path.join(root, "node_modules", ".bin", "tauri");

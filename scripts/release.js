@@ -69,24 +69,39 @@ function tagExists(tag) {
 function main() {
   ensureCleanWorkingTree();
 
-  const version = capture("node", ["-p", "require('./package.json').version"], {
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const tag = `v${version}`;
+  // Prevent Tauri signer from prompting on a TTY when the key has no password.
+  if (!("TAURI_SIGNING_PRIVATE_KEY_PASSWORD" in process.env)) {
+    process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "";
+  }
 
   if (!dryRun) {
     ensureGhToken();
   }
 
-  console.log(`Releasing Harness ${tag}${dryRun ? " (dry run — no publish/tag)" : ""}...`);
+  // Real releases bump package.json + Cargo.toml + tauri.conf.json first.
+  // Dry-run keeps the current version (for verifying the pipeline).
+  const distArgs = ["--mac"];
+  if (!dryRun) {
+    distArgs.push("--bump");
+  }
 
-  run(process.execPath, [path.join(root, "scripts", "dist-runner.js"), "--mac"], {
-    env: {
-      ...process.env,
-      REQUIRE_NOTARIZE: "1",
-      HARNESS_SKIP_VERSION_BUMP: "1",
-    },
+  console.log(
+    `Releasing Harness${dryRun ? " (dry run — no bump/publish/tag)" : " (bump + publish)"}...`
+  );
+
+  run(process.execPath, [path.join(root, "scripts", "dist-runner.js"), ...distArgs], {
+    env: (() => {
+      const env = { ...process.env, REQUIRE_NOTARIZE: "1" };
+      delete env.HARNESS_SKIP_VERSION_BUMP;
+      return env;
+    })(),
   });
+
+  const version = capture("node", ["-p", "require('./package.json').version"], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const tag = `v${version}`;
+  console.log(`Built Harness ${tag}${dryRun ? " (dry run)" : ""}.`);
 
   console.log("Verifying notarization and Gatekeeper trust...");
   run("npm", ["run", "verify:mac-trust"]);

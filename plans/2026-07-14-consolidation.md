@@ -100,10 +100,10 @@ Code is already fixed dark; no Theme studio UI left to delete.
 
 ### C2 — Release pipeline
 
-- [ ] Non-interactive updater / signing: ensure `TAURI_SIGNING_PRIVATE_KEY` (+ password via env or keychain helper) never blocks `npm run dist` on a TTY prompt.
-- [ ] Single-source version bump: one place drives `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` (and iOS marketing version if releasing together).
-- [ ] Document / wire one-command release path (dist → GitHub release → `latest.json`) and call out remaining manual steps.
-- [ ] Fix or document any hang/timeout gaps in [`scripts/dist-runner.js`](../scripts/dist-runner.js) / [`scripts/release.js`](../scripts/release.js).
+- [x] Non-interactive updater / signing: ensure `TAURI_SIGNING_PRIVATE_KEY` (+ password via env) never blocks `npm run dist` on a TTY prompt (`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` defaulted to empty in dist/release runners; documented in `.env.example`).
+- [x] Single-source version bump: `package.json` drives bump; `--bump` / `npm run release` sync `Cargo.toml` + `tauri.conf.json`. iOS marketing version stays separate. Parity test: `src/shared/versionParity.test.ts`.
+- [x] Document / wire one-command release path (dist → GitHub release → `latest.json`) and call out remaining manual steps.
+- [x] Dist no longer auto-bumps; release bumps explicitly. Heartbeats already cover long `tauri build` steps.
 
 ### C3 — Cross-machine bootstrap
 
