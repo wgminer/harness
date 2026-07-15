@@ -150,7 +150,7 @@ Three workstreams, roughly in order:
 
 - [ ] Add drift-check scanner(s) modeled on grid-audit (CLI + vitest, CI `static` job).
 - [ ] Cover logic mirrors with shared golden fixtures where code cannot be shared (sync merge, title policy, memory scoring, tag normalization, etc.).
-- [ ] Close ipcNames gap: verify derived wire names against actual `generate_handler!` / commands.
+- [x] Close ipcNames gap: verify derived wire names against actual `generate_handler!` / commands.
 - [ ] One npm script that runs all drift checks.
 
 ### W3 — Within-language dedup
@@ -168,7 +168,7 @@ Three workstreams, roughly in order:
 
 ### W5 — Developer guardrails
 
-- [ ] Add repo `CLAUDE.md` + docs describing single-source rules and "do not hand-copy contracts."
+- [x] Add repo `CLAUDE.md` + docs describing single-source rules and "do not hand-copy contracts."
 - [ ] Update README / ios README as needed for the new resource layout and drift-check scripts.
 
 ## Verification

@@ -1,5 +1,36 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { tauriCommandName, tauriEventName } from "./ipcNames";
+
+const root = join(__dirname, "../..");
+
+/** Wire names registered in `tauri::generate_handler![...]` (lib.rs). */
+function parseGenerateHandlerWireNames(): Set<string> {
+  const lib = readFileSync(join(root, "src-tauri/src/lib.rs"), "utf8");
+  const match = lib.match(/generate_handler!\[([\s\S]*?)\]/);
+  if (!match) throw new Error("generate_handler! block not found in src-tauri/src/lib.rs");
+  const names = new Set<string>();
+  for (const entry of match[1].split(",")) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const wire = trimmed.split("::").pop()?.trim();
+    if (!wire) throw new Error(`Could not parse generate_handler entry: ${entry}`);
+    names.add(wire);
+  }
+  return names;
+}
+
+/** `namespace:method` literals passed through `cmd()` in desktopAdapter. */
+function parseDesktopAdapterIpcNames(): string[] {
+  const src = readFileSync(join(root, "src/renderer/desktopAdapter.ts"), "utf8");
+  const names = new Set<string>();
+  const re = /cmd\(["']([^"']+)["']\)/g;
+  for (let m = re.exec(src); m; m = re.exec(src)) {
+    names.add(m[1]);
+  }
+  return [...names].sort();
+}
 
 describe("tauriCommandName", () => {
   it("maps namespace methods to snake_case Rust command ids", () => {
@@ -37,5 +68,32 @@ describe("tauriEventName", () => {
     expect(tauriEventName("chat:noteStreamChunk")).toBe("chat-note-stream-chunk");
     expect(tauriEventName("chat:noteStreamClose")).toBe("chat-note-stream-close");
     expect(tauriEventName("notes:openInMain")).toBe("notes-open-in-main");
+  });
+});
+
+describe("ipcNames ↔ generate_handler drift", () => {
+  it("maps every desktopAdapter invoke to a registered Tauri handler", () => {
+    const handlers = parseGenerateHandlerWireNames();
+    const ipcNames = parseDesktopAdapterIpcNames();
+    const missing: string[] = [];
+
+    for (const ipc of ipcNames) {
+      const wire = tauriCommandName(ipc);
+      if (!handlers.has(wire)) missing.push(`${ipc} → ${wire}`);
+    }
+
+    expect(missing, `Unregistered handlers:\n${missing.join("\n")}`).toEqual([]);
+  });
+
+  it("registers a handler for every desktopAdapter invoke (no orphan wire names)", () => {
+    const handlers = parseGenerateHandlerWireNames();
+    const ipcNames = parseDesktopAdapterIpcNames();
+    const wired = new Set(ipcNames.map(tauriCommandName));
+    const orphan = [...handlers].filter((wire) => !wired.has(wire)).sort();
+
+    expect(
+      orphan,
+      `Handlers in generate_handler! with no desktopAdapter cmd():\n${orphan.join("\n")}`,
+    ).toEqual([]);
   });
 });

@@ -126,10 +126,10 @@ Run **after** A. Full checklist remains in the dedup plan; this section is the c
 
 - [ ] Re-read [2026-07-12-deduplication-drift-proofing.md](./2026-07-12-deduplication-drift-proofing.md); confirm weather/plans/memory-compile items are struck.
 - [ ] Dedup **W1** — shared contract JSON resources (tools, prompts, models, sync constants remaining after cull).
-- [ ] Dedup **W2** — parity/drift scanners + golden fixtures; close ipcNames ↔ `generate_handler!` gap.
+- [x] Dedup **W2** — parity/drift scanners + golden fixtures; close ipcNames ↔ `generate_handler!` gap.
 - [ ] Dedup **W3** — [x] Rust `write_json_pretty` envelope; [ ] iOS ChatService dedup; [x] streaming accumulator cleanup.
 - [x] Dedup **W4** — tool errors as tool results; tool-loop cap; iOS tool expansion (**no weather**).
-- [ ] Dedup **W5** — CLAUDE.md / docs for single-source rules.
+- [x] Dedup **W5** — CLAUDE.md / docs for single-source rules.
 - [ ] Break up god-files (incremental PRs OK):
   - [ ] [`SettingsView.tsx`](../src/renderer/SettingsView.tsx) (~1.7k) → section components / hooks
   - [ ] [`chat.rs`](../src-tauri/src/chat.rs) (~1.2k) → turn/tool/stream modules
