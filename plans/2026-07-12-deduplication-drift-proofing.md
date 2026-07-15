@@ -163,7 +163,7 @@ Three workstreams, roughly in order:
 
 - [x] Tool execution errors return `{"error": ...}` as tool result (both platforms); do not abort the turn.
 - [x] Cap the tool-call loop on both platforms.
-- [ ] iOS tool expansion: `get_datetime`, `memory_set_fact` / `memory_list_facts`; gate or defer `web_search` on Tavily key presence. (**Do not** add `get_weather` — removed in v0.8 cull.)
+- [x] iOS tool expansion: `get_datetime`, `memory_set_fact` / `memory_list_facts`; gate or defer `web_search` on Tavily key presence. (**Do not** add `get_weather` — removed in v0.8 cull.)
 - [ ] Fix already-drifted bugs (memory selection).
 
 ### W5 — Developer guardrails

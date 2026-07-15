@@ -77,7 +77,7 @@ struct SystemPromptSettings: Equatable {
         ios: """
         [CORE_INSTRUCTIONS]
         You are a helpful assistant in Harness Mobile (iOS).
-        Available tools: task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_search_conversations (search all prior chats — call proactively when recall would help, not only on explicit search requests). Call them when appropriate.
+        Available tools: task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (search all prior chats — call proactively when recall would help, not only on explicit search requests); get_datetime (for the current date and time, optionally in a specific IANA timezone). Call them when appropriate.
         """
     )
 
@@ -112,18 +112,33 @@ struct SystemPromptSettings: Equatable {
         return settings
     }
 
-    func staticPrompt(for platform: Platform) -> String {
-        let overlay = platform == .ios ? ios : desktop
+    func staticPrompt(for platform: Platform, includeWebSearch: Bool = false) -> String {
+        let overlay: String
+        if platform == .ios {
+            overlay = Self.iosPrompt(base: ios, includeWebSearch: includeWebSearch)
+        } else {
+            overlay = desktop
+        }
         return "\(shared)\n\n\(overlay)"
+    }
+
+    static func iosPrompt(base: String, includeWebSearch: Bool) -> String {
+        guard includeWebSearch else { return base }
+        if base.contains("web_search") { return base }
+        return base.replacingOccurrences(
+            of: "get_datetime (for the current date and time, optionally in a specific IANA timezone). Call them when appropriate.",
+            with: "get_datetime (for the current date and time, optionally in a specific IANA timezone); web_search (Tavily web search for current information outside the user's local data). Call them when appropriate."
+        )
     }
 
     func assembledSystemPrompt(
         memoryBlock: String,
         recentConversationsBlock: String,
         temporalContext: String,
-        platform: Platform = .ios
+        platform: Platform = .ios,
+        includeWebSearch: Bool = false
     ) -> String {
-        var system = staticPrompt(for: platform)
+        var system = staticPrompt(for: platform, includeWebSearch: includeWebSearch)
         if !memoryBlock.isEmpty {
             system += "\n\n" + memoryBlock
         }

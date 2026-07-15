@@ -216,6 +216,7 @@ enum ToolCallLabels {
         case "memory_list_facts": return "Listed context"
         case "memory_search_conversations": return "Searched history"
         case "get_datetime": return "Checked date & time"
+        case "web_search": return "Searched the web"
         case "note_list": return "Listed notes"
         case "note_create": return "Created note"
         case "note_read": return "Read note"

@@ -261,10 +261,63 @@ final class ConversationStore: ObservableObject {
     }
 
     func loadUserMemory() throws -> [String: String] {
+        try Self.loadUserMemory(in: localDataDir)
+    }
+
+    func setUserMemoryFact(args: [String: Any]) throws -> MemoryFactsPayload {
+        let key = (args["key"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = (args["value"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        var memory = try Self.loadUserMemory(in: localDataDir)
+        if key.isEmpty {
+            return MemoryFactsPayload(lastAction: "set_fact", memory: memory, key: key)
+        }
+        memory[key] = value
+        try Self.saveUserMemory(memory, in: localDataDir)
+        notifyContentChanged()
+        return MemoryFactsPayload(lastAction: "set_fact", memory: memory, key: key)
+    }
+
+    func listUserMemoryFacts() throws -> MemoryFactsPayload {
+        let memory = try Self.loadUserMemory(in: localDataDir)
+        return MemoryFactsPayload(lastAction: "list_facts", memory: memory, key: nil)
+    }
+
+    func loadTavilyApiKey() throws -> String? {
+        let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.settingsFile)
+        guard FileManager.default.fileExists(atPath: path.path) else { return nil }
+        let data = try LocalDataLayout.readRegularFileData(at: path)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let search = json["search"] as? [String: Any],
+              let key = search["tavilyApiKey"] as? String,
+              !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return key
+    }
+
+    nonisolated static func loadUserMemory(in localDataDir: URL) throws -> [String: String] {
         let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.userMemoryFile)
         guard FileManager.default.fileExists(atPath: path.path) else { return [:] }
         let data = try LocalDataLayout.readRegularFileData(at: path)
-        return try JSONDecoder().decode([String: String].self, from: data)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        var memory: [String: String] = [:]
+        for (key, value) in object {
+            if let text = value as? String {
+                memory[key] = text
+            }
+        }
+        return memory
+    }
+
+    nonisolated static func saveUserMemory(_ memory: [String: String], in localDataDir: URL) throws {
+        try LocalDataLayout.ensureDirectories(at: localDataDir)
+        let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.userMemoryFile)
+        let data = try JSONSerialization.data(
+            withJSONObject: memory,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try data.write(to: path, options: .atomic)
     }
 
     func loadSettingsOpenAIKey() throws -> String? {

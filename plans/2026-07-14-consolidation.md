@@ -128,7 +128,7 @@ Run **after** A. Full checklist remains in the dedup plan; this section is the c
 - [ ] Dedup **W1** — shared contract JSON resources (tools, prompts, models, sync constants remaining after cull).
 - [ ] Dedup **W2** — parity/drift scanners + golden fixtures; close ipcNames ↔ `generate_handler!` gap.
 - [ ] Dedup **W3** — Rust `write_json_pretty` envelope; iOS ChatService dedup; streaming accumulator cleanup.
-- [ ] Dedup **W4** — tool errors as tool results; tool-loop cap; iOS tool expansion (**no weather**).
+- [x] Dedup **W4** — tool errors as tool results; tool-loop cap; iOS tool expansion (**no weather**).
 - [ ] Dedup **W5** — CLAUDE.md / docs for single-source rules.
 - [ ] Break up god-files (incremental PRs OK):
   - [ ] [`SettingsView.tsx`](../src/renderer/SettingsView.tsx) (~1.7k) → section components / hooks

@@ -77,11 +77,13 @@ final class ChatService: ObservableObject {
             excludeConversationId: conversationId
         )
         let systemPromptSettings = SystemPromptSettings.load(from: store.localDataDir)
+        let includeWebSearch = AssistantToolDefinitions.hasTavilyApiKey(in: store.localDataDir)
         let system = systemPromptSettings.assembledSystemPrompt(
             memoryBlock: memoryBlock,
             recentConversationsBlock: recentConversationsBlock,
             temporalContext: ChatTemporalContext.temporalContextBlock(),
-            platform: .ios
+            platform: .ios,
+            includeWebSearch: includeWebSearch
         )
 
         var messages: [ChatCompletionMessage] = [ChatCompletionMessage(role: "system", content: system)]
@@ -114,35 +116,8 @@ final class ChatService: ObservableObject {
 
         let result = try await client.streamChatWithTools(
             messages: apiMessages,
-            tools: AssistantToolDefinitions.openAITools,
-            executeTool: { [weak self] name, args in
-                guard let self else {
-                    return #"{"error":"Chat unavailable"}"#
-                }
-                if TaskToolDefinitions.gatedToolNames.contains(name) {
-                    onToolCall(ToolCallRecord(toolName: name, payload: [
-                        "pending": true,
-                        "tool": name,
-                        "args": args,
-                    ]))
-                }
-                let toolResult: String
-                if TaskToolDefinitions.toolNames.contains(name) {
-                    guard let taskToolExecutor = self.taskToolExecutor else {
-                        return #"{"error":"Chat unavailable"}"#
-                    }
-                    toolResult = try await taskToolExecutor.execute(name: name, args: args)
-                } else if ChatToolDefinitions.toolNames.contains(name) {
-                    toolResult = try AssistantTools.execute(name: name, args: args, store: self.store)
-                } else {
-                    toolResult = #"{"error":"Unknown tool: \(name)"}"#
-                }
-                if AssistantToolDefinitions.trackedToolNames.contains(name),
-                   let payload = self.parseJSONObject(toolResult) {
-                    onToolCall(ToolCallRecord(toolName: name, payload: payload))
-                }
-                return toolResult
-            },
+            tools: AssistantToolDefinitions.openAITools(in: store.localDataDir),
+            executeTool: makeToolExecutor(onToolCall: onToolCall),
             onChunk: onStreamChunk
         )
         try throwIfStopped()
@@ -170,33 +145,8 @@ final class ChatService: ObservableObject {
         let apiMessages = try buildMessages(conversationId: conversationId)
         let result = try await client.streamChatWithTools(
             messages: apiMessages,
-            tools: AssistantToolDefinitions.openAITools,
-            executeTool: { [weak self] name, args in
-                guard let self else { return #"{"error":"Chat unavailable"}"# }
-                if TaskToolDefinitions.gatedToolNames.contains(name) {
-                    onToolCall(ToolCallRecord(toolName: name, payload: [
-                        "pending": true,
-                        "tool": name,
-                        "args": args,
-                    ]))
-                }
-                let toolResult: String
-                if TaskToolDefinitions.toolNames.contains(name) {
-                    guard let taskToolExecutor = self.taskToolExecutor else {
-                        return #"{"error":"Chat unavailable"}"#
-                    }
-                    toolResult = try await taskToolExecutor.execute(name: name, args: args)
-                } else if ChatToolDefinitions.toolNames.contains(name) {
-                    toolResult = try AssistantTools.execute(name: name, args: args, store: self.store)
-                } else {
-                    toolResult = #"{"error":"Unknown tool: \(name)"}"#
-                }
-                if AssistantToolDefinitions.trackedToolNames.contains(name),
-                   let payload = self.parseJSONObject(toolResult) {
-                    onToolCall(ToolCallRecord(toolName: name, payload: payload))
-                }
-                return toolResult
-            },
+            tools: AssistantToolDefinitions.openAITools(in: store.localDataDir),
+            executeTool: makeToolExecutor(onToolCall: onToolCall),
             onChunk: onStreamChunk
         )
         try throwIfStopped()
@@ -231,33 +181,8 @@ final class ChatService: ObservableObject {
         let apiMessages = try buildMessages(conversationId: conversationId)
         let result = try await client.streamChatWithTools(
             messages: apiMessages,
-            tools: AssistantToolDefinitions.openAITools,
-            executeTool: { [weak self] name, args in
-                guard let self else { return #"{"error":"Chat unavailable"}"# }
-                if TaskToolDefinitions.gatedToolNames.contains(name) {
-                    onToolCall(ToolCallRecord(toolName: name, payload: [
-                        "pending": true,
-                        "tool": name,
-                        "args": args,
-                    ]))
-                }
-                let toolResult: String
-                if TaskToolDefinitions.toolNames.contains(name) {
-                    guard let taskToolExecutor = self.taskToolExecutor else {
-                        return #"{"error":"Chat unavailable"}"#
-                    }
-                    toolResult = try await taskToolExecutor.execute(name: name, args: args)
-                } else if ChatToolDefinitions.toolNames.contains(name) {
-                    toolResult = try AssistantTools.execute(name: name, args: args, store: self.store)
-                } else {
-                    toolResult = #"{"error":"Unknown tool: \(name)"}"#
-                }
-                if AssistantToolDefinitions.trackedToolNames.contains(name),
-                   let payload = self.parseJSONObject(toolResult) {
-                    onToolCall(ToolCallRecord(toolName: name, payload: payload))
-                }
-                return toolResult
-            },
+            tools: AssistantToolDefinitions.openAITools(in: store.localDataDir),
+            executeTool: makeToolExecutor(onToolCall: onToolCall),
             onChunk: onStreamChunk
         )
         try throwIfStopped()
@@ -270,6 +195,39 @@ final class ChatService: ObservableObject {
             toolCalls: result.toolCalls.isEmpty ? nil : result.toolCalls
         )
         scheduleTitleRefinement(conversationId: conversationId)
+    }
+
+    private func makeToolExecutor(
+        onToolCall: @escaping (ToolCallRecord) -> Void
+    ) -> (String, [String: Any]) async throws -> String {
+        { [weak self] name, args in
+            guard let self else {
+                return #"{"error":"Chat unavailable"}"#
+            }
+            if TaskToolDefinitions.gatedToolNames.contains(name) {
+                onToolCall(ToolCallRecord(toolName: name, payload: [
+                    "pending": true,
+                    "tool": name,
+                    "args": args,
+                ]))
+            }
+            let toolResult: String
+            if TaskToolDefinitions.toolNames.contains(name) {
+                guard let taskToolExecutor = self.taskToolExecutor else {
+                    return #"{"error":"Chat unavailable"}"#
+                }
+                toolResult = try await taskToolExecutor.execute(name: name, args: args)
+            } else if ChatToolDefinitions.toolNames.contains(name) {
+                toolResult = try await AssistantTools.execute(name: name, args: args, store: self.store)
+            } else {
+                toolResult = #"{"error":"Unknown tool: \(name)"}"#
+            }
+            if AssistantToolDefinitions.trackedToolNames.contains(name),
+               let payload = self.parseJSONObject(toolResult) {
+                onToolCall(ToolCallRecord(toolName: name, payload: payload))
+            }
+            return toolResult
+        }
     }
 
     func resolveGatedTool(_ action: GatedToolAction) {
