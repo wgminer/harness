@@ -26,6 +26,9 @@ targets:
     platform: iOS
     sources:
       - path: HarnessMobile
+      - path: ../resources/contracts
+        name: SharedContracts
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.harness.mobile

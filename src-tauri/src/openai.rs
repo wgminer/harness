@@ -91,286 +91,14 @@ impl From<serde_json::Error> for OpenAIError {
     }
 }
 
+/// Single source of truth for the desktop tool-calling schema, shared with iOS via
+/// `resources/contracts/tools.json` (iOS loads the same file as a bundled resource and
+/// filters it down to its supported subset — see `SharedToolDefinitions.swift`).
+const TOOL_DEFINITIONS_JSON: &str = include_str!("../../resources/contracts/tools.json");
+
 pub fn tool_definitions() -> Value {
-    json!([
-      {
-        "type": "function",
-        "function": {
-          "name": "list_directory",
-          "description": "List contents of a directory (files and subdirectories). Path must be under allowed roots.",
-          "parameters": {
-            "type": "object",
-            "properties": { "path": { "type": "string", "description": "Absolute path to the directory" } },
-            "required": ["path"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "read_file",
-          "description": "Read plain text content of a file. Size limit 1MB.",
-          "parameters": {
-            "type": "object",
-            "properties": { "path": { "type": "string", "description": "Absolute path to the file" } },
-            "required": ["path"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "write_file",
-          "description": "Create or overwrite a file with the given content. Path must be under allowed roots.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "path": { "type": "string", "description": "Absolute path to the file" },
-              "content": { "type": "string", "description": "Content to write" }
-            },
-            "required": ["path", "content"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "delete_file",
-          "description": "Delete a file. Path must be under allowed roots.",
-          "parameters": {
-            "type": "object",
-            "properties": { "path": { "type": "string", "description": "Absolute path to the file" } },
-            "required": ["path"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "create_directory",
-          "description": "Create a directory. Path must be under allowed roots.",
-          "parameters": {
-            "type": "object",
-            "properties": { "path": { "type": "string", "description": "Absolute path for the new directory" } },
-            "required": ["path"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "set_layout",
-          "description": "Change app layout: sidebar position (left/right).",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "sidebar": { "type": "string", "enum": ["left", "right"], "description": "Sidebar position" }
-            }
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "task_list",
-          "description": "List all persistent assistant tasks. Use this to understand current open work items before adding or changing tasks.",
-          "parameters": { "type": "object", "properties": {} }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "task_create",
-          "description": "Create a new persistent assistant task that will be remembered across messages. Use concise, user-facing titles.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "title": { "type": "string", "description": "Short description of the task" },
-              "status": {
-                "type": "string",
-                "enum": ["pending", "in_progress", "completed", "cancelled"],
-                "description": "Workflow state for the task. Defaults to pending."
-              },
-              "tags": {
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "Optional filterable labels."
-              },
-              "metadata": {
-                "type": "object",
-                "description": "Optional extra structured information about the task."
-              }
-            },
-            "required": ["title"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "task_update",
-          "description": "Update an existing persistent assistant task.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string", "description": "ID of the task to update" },
-              "title": { "type": "string" },
-              "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
-              "tags": { "type": "array", "items": { "type": "string" } },
-              "add_tags": { "type": "array", "items": { "type": "string" } },
-              "remove_tags": { "type": "array", "items": { "type": "string" } },
-              "metadata": { "type": "object" }
-            },
-            "required": ["id"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "task_delete",
-          "description": "Delete a persistent assistant task by ID when it is no longer relevant.",
-          "parameters": {
-            "type": "object",
-            "properties": { "id": { "type": "string" } },
-            "required": ["id"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "task_clear_completed",
-          "description": "Remove all tasks whose status is completed or cancelled.",
-          "parameters": { "type": "object", "properties": {} }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "memory_set_fact",
-          "description": "Store a stable user fact or preference in persistent memory.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "key": { "type": "string" },
-              "value": { "type": "string" }
-            },
-            "required": ["key", "value"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "memory_list_facts",
-          "description": "List all stored persistent user facts and preferences.",
-          "parameters": { "type": "object", "properties": {} }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "memory_search_conversations",
-          "description": "Search all prior conversations for a free-text query. Use whenever cross-thread recall, continuity, names, or prior decisions would help — not only when the user explicitly asks to search chat history.",
-          "parameters": {
-            "type": "object",
-            "properties": { "query": { "type": "string" } },
-            "required": ["query"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "web_search",
-          "description": "Search the web for current information via Tavily.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "query": { "type": "string" },
-              "max_results": { "type": "number" }
-            },
-            "required": ["query"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "note_list",
-          "description": "List all persisted notes with their ids, titles, and timestamps.",
-          "parameters": { "type": "object", "properties": {} }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "note_create",
-          "description": "Create a new note. For long chat replies, pass title and summary (1-3 sentences shown in chat), leave content empty, then write the full body in your following output. For background notes, pass title/content without summary.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "title": { "type": "string", "description": "Note title shown in the editor and inline preview" },
-              "summary": { "type": "string", "description": "Optional 1-3 sentence summary for chat when attaching a long write-up inline" },
-              "content": { "type": "string", "description": "Initial note body (usually empty when streaming a long reply)" }
-            }
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "note_read",
-          "description": "Read one note by id.",
-          "parameters": {
-            "type": "object",
-            "properties": { "id": { "type": "string" } },
-            "required": ["id"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "note_save",
-          "description": "Replace the full markdown content of a note by id.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "content": { "type": "string" }
-            },
-            "required": ["id", "content"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "note_delete",
-          "description": "Delete a note by id.",
-          "parameters": {
-            "type": "object",
-            "properties": { "id": { "type": "string" } },
-            "required": ["id"]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "get_datetime",
-          "description": "Get the current date and time from the app host.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "timezone": { "type": "string", "description": "Optional IANA timezone" }
-            }
-          }
-        }
-      }
-    ])
+    serde_json::from_str(TOOL_DEFINITIONS_JSON)
+        .expect("resources/contracts/tools.json must be a valid tool-definitions array")
 }
 
 pub async fn generate_thread_title_with_openai(
@@ -539,6 +267,53 @@ mod tests {
     #[test]
     fn max_tool_call_iterations_matches_ios_cap() {
         assert_eq!(MAX_TOOL_CALL_ITERATIONS, 10);
+    }
+
+    /// Drift guard for the shared `resources/contracts/tools.json`: parses on the Rust
+    /// side and contains every tool name iOS also needs to load from the same file
+    /// (see `SharedToolDefinitionsTests.swift` for the iOS-side counterpart).
+    #[test]
+    fn tool_definitions_parses_and_contains_expected_names() {
+        let defs = tool_definitions();
+        let names: Vec<&str> = defs
+            .as_array()
+            .expect("tool_definitions() must be a JSON array")
+            .iter()
+            .filter_map(|t| t.pointer("/function/name")?.as_str())
+            .collect();
+
+        for expected in [
+            "list_directory",
+            "read_file",
+            "write_file",
+            "delete_file",
+            "create_directory",
+            "set_layout",
+            "note_list",
+            "note_create",
+            "note_read",
+            "note_save",
+            "note_delete",
+        ] {
+            assert!(names.contains(&expected), "missing desktop-only tool: {expected}");
+        }
+
+        for expected in [
+            "task_list",
+            "task_create",
+            "task_update",
+            "task_delete",
+            "task_clear_completed",
+            "memory_set_fact",
+            "memory_list_facts",
+            "memory_search_conversations",
+            "web_search",
+            "get_datetime",
+        ] {
+            assert!(names.contains(&expected), "missing shared (also-iOS) tool: {expected}");
+        }
+
+        assert_eq!(names.len(), 21, "unexpected tool count — update this test if tools.json changed intentionally");
     }
 }
 

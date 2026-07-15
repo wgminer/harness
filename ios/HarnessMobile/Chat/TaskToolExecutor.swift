@@ -15,89 +15,11 @@ enum TaskToolDefinitions {
         "task_update",
     ]
 
-    static let openAITools: [[String: Any]] = [
-        [
-            "type": "function",
-            "function": [
-                "name": "task_list",
-                "description": "List all persistent assistant tasks. Use this to understand current open work items before adding or changing tasks.",
-                "parameters": ["type": "object", "properties": [:] as [String: Any]],
-            ] as [String: Any],
-        ],
-        [
-            "type": "function",
-            "function": [
-                "name": "task_create",
-                "description": "Create a new persistent assistant task that will be remembered across messages. Use concise, user-facing titles.",
-                "parameters": [
-                    "type": "object",
-                    "properties": [
-                        "title": ["type": "string", "description": "Short description of the task"],
-                        "status": [
-                            "type": "string",
-                            "enum": ["pending", "in_progress", "completed", "cancelled"],
-                            "description": "Workflow state for the task. Defaults to pending.",
-                        ],
-                        "tags": [
-                            "type": "array",
-                            "items": ["type": "string"],
-                            "description": "Optional filterable labels (e.g. urgent, research).",
-                        ],
-                        "metadata": [
-                            "type": "object",
-                            "description": "Optional extra structured information about the task.",
-                        ],
-                    ] as [String: Any],
-                    "required": ["title"],
-                ] as [String: Any],
-            ] as [String: Any],
-        ],
-        [
-            "type": "function",
-            "function": [
-                "name": "task_update",
-                "description": "Update an existing persistent assistant task (rename, change status, edit filterable tags, or attach metadata).",
-                "parameters": [
-                    "type": "object",
-                    "properties": [
-                        "id": ["type": "string", "description": "ID of the task to update"],
-                        "title": ["type": "string", "description": "New title, if you want to rename the task"],
-                        "status": [
-                            "type": "string",
-                            "enum": ["pending", "in_progress", "completed", "cancelled"],
-                        ],
-                        "tags": ["type": "array", "items": ["type": "string"]],
-                        "add_tags": ["type": "array", "items": ["type": "string"]],
-                        "remove_tags": ["type": "array", "items": ["type": "string"]],
-                        "metadata": ["type": "object"],
-                    ] as [String: Any],
-                    "required": ["id"],
-                ] as [String: Any],
-            ] as [String: Any],
-        ],
-        [
-            "type": "function",
-            "function": [
-                "name": "task_delete",
-                "description": "Delete a persistent assistant task by ID when it is no longer relevant.",
-                "parameters": [
-                    "type": "object",
-                    "properties": [
-                        "id": ["type": "string", "description": "ID of the task to delete"],
-                    ] as [String: Any],
-                    "required": ["id"],
-                ] as [String: Any],
-            ] as [String: Any],
-        ],
-        [
-            "type": "function",
-            "function": [
-                "name": "task_clear_completed",
-                "description": "Remove all tasks whose status is completed or cancelled to keep the task list tidy.",
-                "parameters": ["type": "object", "properties": [:] as [String: Any]],
-            ] as [String: Any],
-        ],
-    ]
+    /// OpenAI schemas for `toolNames`, sourced from the shared `resources/contracts/tools.json`
+    /// (see `SharedToolDefinitions`) rather than hand-copied — keeps iOS in sync with desktop.
+    static var openAITools: [[String: Any]] {
+        SharedToolDefinitions.filtered(names: toolNames)
+    }
 }
 
 enum GatedToolAction: Equatable {

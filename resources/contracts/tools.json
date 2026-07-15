@@ -1,0 +1,279 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "list_directory",
+      "description": "List contents of a directory (files and subdirectories). Path must be under allowed roots.",
+      "parameters": {
+        "type": "object",
+        "properties": { "path": { "type": "string", "description": "Absolute path to the directory" } },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "read_file",
+      "description": "Read plain text content of a file. Size limit 1MB.",
+      "parameters": {
+        "type": "object",
+        "properties": { "path": { "type": "string", "description": "Absolute path to the file" } },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "write_file",
+      "description": "Create or overwrite a file with the given content. Path must be under allowed roots.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Absolute path to the file" },
+          "content": { "type": "string", "description": "Content to write" }
+        },
+        "required": ["path", "content"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "delete_file",
+      "description": "Delete a file. Path must be under allowed roots.",
+      "parameters": {
+        "type": "object",
+        "properties": { "path": { "type": "string", "description": "Absolute path to the file" } },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "create_directory",
+      "description": "Create a directory. Path must be under allowed roots.",
+      "parameters": {
+        "type": "object",
+        "properties": { "path": { "type": "string", "description": "Absolute path for the new directory" } },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "set_layout",
+      "description": "Change app layout: sidebar position (left/right).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sidebar": { "type": "string", "enum": ["left", "right"], "description": "Sidebar position" }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "task_list",
+      "description": "List all persistent assistant tasks. Use this to understand current open work items before adding or changing tasks.",
+      "parameters": { "type": "object", "properties": {} }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "task_create",
+      "description": "Create a new persistent assistant task that will be remembered across messages. Use concise, user-facing titles.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "Short description of the task" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "cancelled"],
+            "description": "Workflow state for the task. Defaults to pending."
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional filterable labels (e.g. urgent, research)."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Optional extra structured information about the task."
+          }
+        },
+        "required": ["title"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "task_update",
+      "description": "Update an existing persistent assistant task (rename, change status, edit filterable tags, or attach metadata).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "ID of the task to update" },
+          "title": { "type": "string", "description": "New title, if you want to rename the task" },
+          "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "add_tags": { "type": "array", "items": { "type": "string" } },
+          "remove_tags": { "type": "array", "items": { "type": "string" } },
+          "metadata": { "type": "object" }
+        },
+        "required": ["id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "task_delete",
+      "description": "Delete a persistent assistant task by ID when it is no longer relevant.",
+      "parameters": {
+        "type": "object",
+        "properties": { "id": { "type": "string", "description": "ID of the task to delete" } },
+        "required": ["id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "task_clear_completed",
+      "description": "Remove all tasks whose status is completed or cancelled to keep the task list tidy.",
+      "parameters": { "type": "object", "properties": {} }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "memory_set_fact",
+      "description": "Store a stable user fact or preference in persistent memory.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string" },
+          "value": { "type": "string" }
+        },
+        "required": ["key", "value"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "memory_list_facts",
+      "description": "List all stored persistent user facts and preferences.",
+      "parameters": { "type": "object", "properties": {} }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "memory_search_conversations",
+      "description": "Search all prior conversations for a free-text query. Use whenever cross-thread recall, continuity, names, or prior decisions would help — not only when the user explicitly asks to search chat history.",
+      "parameters": {
+        "type": "object",
+        "properties": { "query": { "type": "string", "description": "Search query text" } },
+        "required": ["query"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "web_search",
+      "description": "Search the web for current information via Tavily.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" },
+          "max_results": { "type": "number" }
+        },
+        "required": ["query"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "note_list",
+      "description": "List all persisted notes with their ids, titles, and timestamps.",
+      "parameters": { "type": "object", "properties": {} }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "note_create",
+      "description": "Create a new note. For long chat replies, pass title and summary (1-3 sentences shown in chat), leave content empty, then write the full body in your following output. For background notes, pass title/content without summary.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "Note title shown in the editor and inline preview" },
+          "summary": { "type": "string", "description": "Optional 1-3 sentence summary for chat when attaching a long write-up inline" },
+          "content": { "type": "string", "description": "Initial note body (usually empty when streaming a long reply)" }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "note_read",
+      "description": "Read one note by id.",
+      "parameters": {
+        "type": "object",
+        "properties": { "id": { "type": "string" } },
+        "required": ["id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "note_save",
+      "description": "Replace the full markdown content of a note by id.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "content": { "type": "string" }
+        },
+        "required": ["id", "content"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "note_delete",
+      "description": "Delete a note by id.",
+      "parameters": {
+        "type": "object",
+        "properties": { "id": { "type": "string" } },
+        "required": ["id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_datetime",
+      "description": "Get the current date and time from the app host.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "timezone": { "type": "string", "description": "Optional IANA timezone" }
+        }
+      }
+    }
+  }
+]

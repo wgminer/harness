@@ -141,10 +141,10 @@ Three workstreams, roughly in order:
 
 ### W1 — Shared contracts (single sources of truth)
 
-- [ ] Decide bundling mechanism (JSON + `include_str!` / iOS resource / TS import).
-- [ ] Extract tool definitions to shared resource (desktop full set; iOS subset).
+- [x] Decide bundling mechanism (JSON + `include_str!` / iOS resource / TS import). **Decided:** checked-in JSON under `resources/contracts/` (repo-root, sibling to the existing Tauri-bundled `resources/`) as the single source per contract. Rust reads it via `include_str!` (compiled in — no runtime resource resolution needed since it's embedded at build time, unlike the existing `resolve_bundled_resource()` runtime assets). iOS gets it via an extra XcodeGen `sources` entry in `ios/project.yml` (`../resources/contracts`) so `xcodegen generate` adds it to the `HarnessMobile` target's Copy Bundle Resources phase; loaded at runtime via `Bundle.main` (works in both the app and hosted unit tests, since `HarnessMobileTests` sets `TEST_HOST`). TS contracts that need direct consumption can `import`/`fetch` the same file directly (no build step needed for TS); none do yet since only tool defs are wired this pass. Rejected: codegen into per-language copies (adds a build step + staleness risk that's exactly what this workstream removes) and duplicating the file per-language (defeats the point).
+- [x] Extract tool definitions to shared resource (desktop full set; iOS subset). **Done for tool defs only** (`resources/contracts/tools.json`, 21 desktop tool schemas). Desktop `openai.rs::tool_definitions()` now `include_str!`s + parses it verbatim. iOS `ChatToolDefinitions`/`TaskToolDefinitions` (`ios/HarnessMobile/Chat/`) filter the same array by name via a new `SharedToolDefinitions` loader — iOS keeps its own `toolNames`/`gatedToolNames` sets (behavior, not contract JSON) but no longer hand-writes the OpenAI `function.parameters` schemas. This also fixed the noted `task_update`/`task_clear_completed`/tags description drift (one JSON, so both platforms now say the same thing — the richer iOS wording won). Remaining, deferred to a later W1 pass: system prompt defaults, dictation/title/transcript prompts, model names, sync scopes, gated tool names, tool-call UI labels, and other value contracts listed above are **not yet extracted**.
 - [ ] Extract system prompt defaults, dictation/title/transcript prompts, model names, sync scopes, gated tool names, tool-call UI labels, and other value contracts listed above.
-- [ ] Wire Rust, TS, and Swift consumers; delete hand-copied duplicates.
+- [ ] Wire Rust, TS, and Swift consumers; delete hand-copied duplicates. (Tool defs wired; remaining contracts above still pending.)
 
 ### W2 — Parity / drift guards
 
