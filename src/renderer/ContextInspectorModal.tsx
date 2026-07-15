@@ -92,10 +92,7 @@ export function ContextInspectorModal({
       {preview ? (
         <div className="context-inspector-sections">
           <section className="context-inspector-section">
-            <h4 className="context-inspector-heading">Memory injection</h4>
-            <p className="context-inspector-meta">
-              Strategy: <code>{preview.injectionStrategy}</code>
-            </p>
+            <h4 className="context-inspector-heading">Memory facts</h4>
             {preview.selectedFacts.length > 0 ? (
               <div className="context-inspector-facts">
                 {preview.selectedFacts.map((fact) => (

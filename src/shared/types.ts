@@ -1,4 +1,3 @@
-import type { MemoryInjectionStrategy } from "./memoryInjection";
 import { DEFAULT_NOTE_TEMPLATES, DEFAULT_NOTE_TEMPLATE_ID } from "./writing";
 import { DEFAULT_SYSTEM_PROMPT, type SystemPromptSettings } from "./systemPromptDefaults";
 
@@ -20,7 +19,6 @@ export interface ContextPreviewTool {
 }
 
 export interface ContextPreview {
-  injectionStrategy: MemoryInjectionStrategy;
   selectedFacts: ContextPreviewFact[];
   systemPrompt: string;
   temporalContext: string;
@@ -52,7 +50,6 @@ export interface SystemPromptPreview {
   recentConversationsBlock: string;
   temporalContext: string;
   assembledPrompt: string;
-  injectionStrategy: MemoryInjectionStrategy;
   selectedFacts: SystemPromptPreviewFact[];
 }
 
@@ -122,10 +119,6 @@ export interface Settings {
     prefix: string;
     accessKeyId: string;
   };
-  /** How stored user facts are injected into the chat system prompt. */
-  memory?: {
-    injectionStrategy: MemoryInjectionStrategy;
-  };
   chat?: {
     /** When true, app launch opens the centered compose splash instead of restoring the last session. */
     openToComposeOnLaunch: boolean;
@@ -181,9 +174,6 @@ export const DEFAULT_SETTINGS: Settings = {
     bucket: "",
     prefix: "harness/",
     accessKeyId: "",
-  },
-  memory: {
-    injectionStrategy: "all",
   },
   chat: {
     openToComposeOnLaunch: true,

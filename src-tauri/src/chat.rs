@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -34,20 +34,6 @@ const DICTATION_POLISH_INSTRUCTION: &str =
     "Polish and clarify the following dictation. Fix grammar and wording; keep the meaning. Reply with a clear, concise version.";
 
 const HARNESS_E2E_ASSISTANT_REPLY: &str = "Harness E2E assistant reply.";
-
-const MEMORY_STOPWORDS: &[&str] = &[
-    "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "how", "i", "if", "in",
-    "is", "it", "me", "my", "of", "on", "or", "that", "the", "this", "to", "was", "we", "with",
-    "you", "your",
-];
-
-const MEMORY_ALWAYS_RELEVANT_KEY_PARTS: &[&str] =
-    &["writing", "tone", "style", "voice", "goal", "audience", "constraint"];
-const RELEVANT_MAX_ENTRIES: usize = 6;
-const RELEVANT_MAX_CHARS: usize = 900;
-const RELEVANT_MIN_SCORE: f64 = 0.65;
-const BUDGET_MAX_CHARS: usize = 900;
-const RELEVANT_FALLBACK_COUNT: usize = 3;
 
 struct PendingGatedTool {
     tool: String,
@@ -256,16 +242,10 @@ impl ChatController {
     ) -> Result<SystemPromptPreview, String> {
         let platform = if platform == "ios" { "ios" } else { "desktop" };
         let settings = settings::get_settings(&self.state.write_chains).await;
-        let strategy = parse_memory_injection_strategy(
-            settings
-                .get("memory")
-                .and_then(|v| v.get("injectionStrategy")),
-        );
         let user_memory = get_user_memory(&self.state)
             .await
             .map_err(|e| e.to_string())?;
-        let selected_memory =
-            select_memory_entries_for_prompt(strategy, &user_memory, None);
+        let selected_memory = sorted_memory_entries(&user_memory);
         let memory_block = format_memory_context_block(&selected_memory);
         let recent_conversations_block =
             build_recent_conversations_block(&self.state, None)
@@ -288,7 +268,6 @@ impl ChatController {
             recent_conversations_block,
             temporal_context,
             assembled_prompt,
-            injection_strategy: strategy.to_string(),
             selected_facts: selected_memory
                 .into_iter()
                 .map(|(key, value)| SystemPromptPreviewFact { key, value })
@@ -304,7 +283,6 @@ impl ChatController {
             .assemble_context(conversation_id, None, None)
             .await?;
         Ok(ContextPreview {
-            injection_strategy: assembly.strategy.to_string(),
             selected_facts: assembly
                 .selected_memory
                 .iter()
@@ -351,17 +329,10 @@ impl ChatController {
         second_user_content: Option<&str>,
     ) -> Result<(ContextAssembly, Vec<ChatMessageParam>), String> {
         let settings = settings::get_settings(&self.state.write_chains).await;
-        let strategy = parse_memory_injection_strategy(
-            settings
-                .get("memory")
-                .and_then(|v| v.get("injectionStrategy")),
-        );
         let user_memory = get_user_memory(&self.state)
             .await
             .map_err(|e| e.to_string())?;
-        let scoring_content = user_content.or(second_user_content);
-        let selected_memory =
-            select_memory_entries_for_prompt(strategy, &user_memory, scoring_content);
+        let selected_memory = sorted_memory_entries(&user_memory);
         let memory_block = format_memory_context_block(&selected_memory);
         let recent_conversations_block =
             build_recent_conversations_block(&self.state, conversation_id)
@@ -377,7 +348,6 @@ impl ChatController {
             &temporal_context,
         );
         let assembly = ContextAssembly {
-            strategy,
             selected_memory,
             memory_block,
             system_prompt: system_prompt.clone(),
@@ -974,7 +944,6 @@ fn split_into_word_chunks(content: &str) -> Vec<String> {
 
 #[derive(Debug, Clone)]
 struct ContextAssembly {
-    strategy: MemoryStrategy,
     selected_memory: Vec<(String, String)>,
     memory_block: String,
     system_prompt: String,
@@ -1005,7 +974,6 @@ pub struct ContextPreviewTool {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextPreview {
-    pub injection_strategy: String,
     pub selected_facts: Vec<ContextPreviewFact>,
     pub system_prompt: String,
     pub temporal_context: String,
@@ -1063,53 +1031,6 @@ fn strip_sent_at_prefix(content: &str) -> String {
     re.replace_all(content, "").into_owned()
 }
 
-type MemoryStrategy = &'static str;
-
-fn parse_memory_injection_strategy(raw: Option<&Value>) -> MemoryStrategy {
-    match raw.and_then(|v| v.as_str()) {
-        Some("all") => "all",
-        Some("relevant") => "relevant",
-        Some("budget") => "budget",
-        Some("none") => "none",
-        _ => "all",
-    }
-}
-
-fn to_tokens(text: &str) -> Vec<String> {
-    text.to_lowercase()
-        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-        .filter(|t| t.len() >= 3 && !MEMORY_STOPWORDS.contains(&t))
-        .map(str::to_string)
-        .collect()
-}
-
-fn count_overlap(base: &HashSet<String>, candidates: &[String]) -> usize {
-    candidates.iter().filter(|t| base.contains(*t)).count()
-}
-
-fn score_memory_entry(key: &str, value: &str, user_content: &str) -> f64 {
-    let user_tokens: HashSet<String> = to_tokens(user_content).into_iter().collect();
-    if user_tokens.is_empty() {
-        return 0.0;
-    }
-    let key_tokens = to_tokens(key);
-    let value_tokens = to_tokens(value);
-    let key_matches = count_overlap(&user_tokens, &key_tokens);
-    let value_matches = count_overlap(&user_tokens, &value_tokens);
-    let token_norm = ((key_tokens.len() + value_tokens.len()) as f64).sqrt().max(1.0);
-    let mut score = (key_matches as f64 * 2.0 + value_matches as f64) / token_norm;
-    let key_lower = key.to_lowercase();
-    if MEMORY_ALWAYS_RELEVANT_KEY_PARTS
-        .iter()
-        .any(|part| key_lower.contains(part))
-    {
-        score += 1.0;
-    }
-    let extra_chars = value.len().saturating_sub(260);
-    score -= (extra_chars as f64 / 200.0) * 0.2;
-    score
-}
-
 fn sorted_memory_entries(user_memory: &HashMap<String, String>) -> Vec<(String, String)> {
     let mut entries: Vec<(String, String)> = user_memory
         .iter()
@@ -1118,76 +1039,6 @@ fn sorted_memory_entries(user_memory: &HashMap<String, String>) -> Vec<(String, 
         .collect();
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     entries
-}
-
-fn apply_char_budget(rows: &[(String, String)], max_chars: usize) -> Vec<(String, String)> {
-    let mut used_chars = 0usize;
-    let mut selected = Vec::new();
-    for (key, value) in rows {
-        let next_line = format!("- {key}: {value}");
-        if !selected.is_empty() && used_chars + next_line.len() > max_chars {
-            break;
-        }
-        selected.push((key.clone(), value.clone()));
-        used_chars += next_line.len();
-    }
-    selected
-}
-
-fn select_relevant_entries(
-    entries: &[(String, String)],
-    user_content: Option<&str>,
-) -> Vec<(String, String)> {
-    let Some(content) = user_content.map(str::trim).filter(|s| !s.is_empty()) else {
-        return entries
-            .iter()
-            .take(RELEVANT_FALLBACK_COUNT)
-            .cloned()
-            .collect();
-    };
-
-    let mut scored: Vec<(String, String, f64)> = entries
-        .iter()
-        .map(|(key, value)| {
-            (
-                key.clone(),
-                value.clone(),
-                score_memory_entry(key, value, content),
-            )
-        })
-        .filter(|(_, _, score)| *score >= RELEVANT_MIN_SCORE)
-        .collect();
-    scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-    scored.truncate(RELEVANT_MAX_ENTRIES);
-    let rows: Vec<(String, String)> = scored
-        .into_iter()
-        .map(|(k, v, _)| (k, v))
-        .collect();
-    apply_char_budget(&rows, RELEVANT_MAX_CHARS)
-}
-
-fn select_budget_entries(entries: &[(String, String)]) -> Vec<(String, String)> {
-    apply_char_budget(entries, BUDGET_MAX_CHARS)
-}
-
-fn select_memory_entries_for_prompt(
-    strategy: MemoryStrategy,
-    user_memory: &HashMap<String, String>,
-    user_content: Option<&str>,
-) -> Vec<(String, String)> {
-    if strategy == "none" {
-        return Vec::new();
-    }
-    let entries = sorted_memory_entries(user_memory);
-    if entries.is_empty() {
-        return Vec::new();
-    }
-    match strategy {
-        "all" => entries,
-        "relevant" => select_relevant_entries(&entries, user_content),
-        "budget" => select_budget_entries(&entries),
-        _ => entries,
-    }
 }
 
 fn format_memory_context_block(selected: &[(String, String)]) -> String {
@@ -1236,10 +1087,14 @@ mod context_preview_tests {
     }
 
     #[test]
-    fn select_memory_none_strategy_returns_empty() {
+    fn sorted_memory_entries_returns_all_facts_sorted() {
         let mut mem = HashMap::new();
-        mem.insert("tone".into(), "warm".into());
-        let selected = select_memory_entries_for_prompt("none", &mem, Some("hello"));
-        assert!(selected.is_empty());
+        mem.insert("zip".into(), "12528".into());
+        mem.insert("alpha".into(), "first".into());
+        let selected = sorted_memory_entries(&mem);
+        assert_eq!(
+            selected,
+            vec![("alpha".into(), "first".into()), ("zip".into(), "12528".into())]
+        );
     }
 }

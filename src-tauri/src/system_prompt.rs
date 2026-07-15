@@ -87,7 +87,6 @@ pub struct SystemPromptPreview {
     pub recent_conversations_block: String,
     pub temporal_context: String,
     pub assembled_prompt: String,
-    pub injection_strategy: String,
     pub selected_facts: Vec<SystemPromptPreviewFact>,
 }
 

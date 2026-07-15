@@ -33,9 +33,6 @@ pub fn default_settings() -> Value {
             "prefix": "harness/",
             "accessKeyId": ""
         },
-        "memory": {
-            "injectionStrategy": "all"
-        },
         "chat": {
             "openToComposeOnLaunch": true
         },
@@ -61,16 +58,6 @@ fn default_note_templates() -> Value {
             "content": "# Daily Log\n\n{{today}}\n\n## Wins\n- \n\n## Focus\n- \n\n## Blockers\n- \n\n## Tomorrow\n- "
         }
     ])
-}
-
-fn parse_memory_injection_strategy(raw: Option<&Value>) -> &'static str {
-    match raw.and_then(|v| v.as_str()) {
-        Some("all") => "all",
-        Some("relevant") => "relevant",
-        Some("budget") => "budget",
-        Some("none") => "none",
-        _ => "all",
-    }
 }
 
 pub fn normalize_note_templates(input: Option<&Value>) -> Value {
@@ -281,11 +268,6 @@ pub fn parse_settings(data: &Value) -> Value {
     let defaults = default_settings();
     let obj = data.as_object();
 
-    let injection_strategy = parse_memory_injection_strategy(
-        obj.and_then(|o| o.get("memory"))
-            .and_then(|v| v.get("injectionStrategy")),
-    );
-
     let chat_raw = obj.and_then(|o| o.get("chat"));
     let open_to_compose = chat_raw
         .and_then(|v| v.get("openToComposeOnLaunch"))
@@ -342,7 +324,6 @@ pub fn parse_settings(data: &Value) -> Value {
         },
         "transcription": parse_transcription(obj.and_then(|o| o.get("transcription")), &defaults),
         "sync": parse_sync(obj.and_then(|o| o.get("sync")), &defaults),
-        "memory": { "injectionStrategy": injection_strategy },
         "chat": { "openToComposeOnLaunch": open_to_compose },
         "systemPrompt": parse_system_prompt(
             obj.and_then(|o| o.get("systemPrompt")),
@@ -532,14 +513,6 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
             current.get("sync").unwrap_or(&json!({})),
             sync,
             &["accountId", "bucket", "prefix", "accessKeyId"],
-        );
-    }
-
-    if let Some(memory) = partial.get("memory") {
-        next["memory"] = merge_object_fields(
-            current.get("memory").unwrap_or(&json!({})),
-            memory,
-            &["injectionStrategy"],
         );
     }
 

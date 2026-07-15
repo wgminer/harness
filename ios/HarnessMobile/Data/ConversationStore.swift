@@ -279,17 +279,6 @@ final class ConversationStore: ObservableObject {
         return key
     }
 
-    func loadMemoryInjectionStrategy() throws -> MemoryInjectionStrategy {
-        let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.settingsFile)
-        guard FileManager.default.fileExists(atPath: path.path) else { return .all }
-        let data = try LocalDataLayout.readRegularFileData(at: path)
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let memory = json["memory"] as? [String: Any],
-              let raw = memory["injectionStrategy"] as? String
-        else { return .all }
-        return MemoryInjectionStrategy.parse(raw)
-    }
-
     func markSynced(revision: String) {
         hasLocalEdits = false
         UserDefaults.standard.set(revision, forKey: SyncEngine.lastSyncedRevisionKey)

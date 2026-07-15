@@ -3,10 +3,6 @@ import { createPortal } from "react-dom";
 import { ExternalLink, Settings as SettingsIcon } from "lucide-react";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import { LLM_CONTEXT_EXPORT_PROMPT } from "../shared/memoryImport";
-import {
-  MEMORY_INJECTION_STRATEGY_OPTIONS,
-  type MemoryInjectionStrategy,
-} from "../shared/memoryInjection";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
 import { appDataFolderButtonLabel } from "../shared/dataStorageLayout";
@@ -71,7 +67,6 @@ type PersistedFormState = {
   cleanupEnabled: boolean;
   cleanupPrompt: string;
   transcriptDictionary: TranscriptDictionaryEntry[];
-  memoryInjectionStrategy: MemoryInjectionStrategy;
   r2AccountId: string;
   r2Bucket: string;
   r2Prefix: string;
@@ -147,9 +142,6 @@ export function SettingsView({
   const [openToComposeOnLaunch, setOpenToComposeOnLaunch] = useState(D.chat!.openToComposeOnLaunch);
   const [tavilyApiKey, setTavilyApiKey] = useState(D.search?.tavilyApiKey ?? "");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const [memoryInjectionStrategy, setMemoryInjectionStrategy] = useState<MemoryInjectionStrategy>(
-    D.memory!.injectionStrategy
-  );
   const [userMemory, setUserMemory] = useState<Record<string, string>>({});
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
   const [editingMemoryKey, setEditingMemoryKey] = useState<string | null>(null);
@@ -250,7 +242,6 @@ export function SettingsView({
           cleanupEnabled: S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false,
           cleanupPrompt: S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "",
           transcriptDictionary: S.transcription?.dictionary ?? D.transcription?.dictionary ?? [],
-          memoryInjectionStrategy: S.memory?.injectionStrategy ?? D.memory!.injectionStrategy,
           r2AccountId: S.sync?.accountId ?? D.sync!.accountId,
           r2Bucket: S.sync?.bucket ?? D.sync!.bucket,
           r2Prefix: S.sync?.prefix ?? D.sync!.prefix,
@@ -270,7 +261,6 @@ export function SettingsView({
         setR2Bucket(hydrated.r2Bucket);
         setR2Prefix(hydrated.r2Prefix);
         setR2AccessKeyId(hydrated.r2AccessKeyId);
-        setMemoryInjectionStrategy(hydrated.memoryInjectionStrategy);
         setNoteTemplates(normalizeNoteTemplates(S.notes?.templates));
         setDefaultNoteTemplateId(
           normalizeDefaultNoteTemplateId(S.notes?.defaultTemplateId, normalizeNoteTemplates(S.notes?.templates)),
@@ -343,7 +333,6 @@ export function SettingsView({
       cleanupEnabled,
       cleanupPrompt,
       transcriptDictionary,
-      memoryInjectionStrategy,
       r2AccountId,
       r2Bucket,
       r2Prefix,
@@ -385,9 +374,6 @@ export function SettingsView({
           },
           dictionary: next.transcriptDictionary,
         },
-        memory: {
-          injectionStrategy: next.memoryInjectionStrategy,
-        },
         sync: {
           accountId: next.r2AccountId.trim(),
           bucket: next.r2Bucket.trim(),
@@ -428,7 +414,6 @@ export function SettingsView({
     cleanupPrompt,
     transcriptDictionary,
     tavilyApiKey,
-    memoryInjectionStrategy,
     r2AccountId,
     r2Bucket,
     r2Prefix,
@@ -465,7 +450,6 @@ export function SettingsView({
       cleanupEnabled,
       cleanupPrompt,
       transcriptDictionary,
-      memoryInjectionStrategy,
       r2AccountId,
       r2Bucket,
       r2Prefix,
@@ -498,7 +482,6 @@ export function SettingsView({
       cleanupEnabled,
       cleanupPrompt,
       transcriptDictionary,
-      memoryInjectionStrategy,
       r2AccountId,
       r2Bucket,
       r2Prefix,
@@ -518,7 +501,6 @@ export function SettingsView({
     cleanupEnabled,
     cleanupPrompt,
     transcriptDictionary,
-    memoryInjectionStrategy,
     r2AccountId,
     r2Bucket,
     r2Prefix,
@@ -900,33 +882,6 @@ export function SettingsView({
             </SettingsGroup>
 
             <SettingsGroup
-              title="Facts in chat"
-              description="Choose how stored facts are included when you send a message."
-            >
-              <select
-                id="settings-memory-injection"
-                data-testid="settings-memory-injection"
-                value={memoryInjectionStrategy}
-                onChange={(e) =>
-                  setMemoryInjectionStrategy(e.target.value as MemoryInjectionStrategy)
-                }
-                aria-label="When to include facts in chat"
-              >
-                {MEMORY_INJECTION_STRATEGY_OPTIONS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <SettingsHint flush>
-                {
-                  MEMORY_INJECTION_STRATEGY_OPTIONS.find((o) => o.id === memoryInjectionStrategy)
-                    ?.description
-                }
-              </SettingsHint>
-            </SettingsGroup>
-
-            <SettingsGroup
               title="Launch & sending"
               description="Startup view and what happens after voice dictation."
             >
@@ -1138,7 +1093,7 @@ export function SettingsView({
           </SettingsTabPanel>}
 
           {activeTab === "memory" && <SettingsTabPanel id="memory">
-            <SystemPromptPreviewPanel memoryInjectionStrategy={memoryInjectionStrategy} />
+            <SystemPromptPreviewPanel />
 
             <SettingsGroup
               title="Your facts"

@@ -1,19 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import type { MemoryInjectionStrategy } from "../../shared/memoryInjection";
-import { MEMORY_INJECTION_STRATEGY_OPTIONS } from "../../shared/memoryInjection";
 import type { SystemPromptPreview } from "../../shared/types";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";
 
 type PreviewPlatform = "desktop" | "ios";
 
-interface SystemPromptPreviewPanelProps {
-  memoryInjectionStrategy: MemoryInjectionStrategy;
-}
-
-export function SystemPromptPreviewPanel({
-  memoryInjectionStrategy,
-}: SystemPromptPreviewPanelProps) {
+export function SystemPromptPreviewPanel() {
   const [platform, setPlatform] = useState<PreviewPlatform>("desktop");
   const [preview, setPreview] = useState<SystemPromptPreview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,11 +28,7 @@ export function SystemPromptPreviewPanel({
 
   useEffect(() => {
     void loadPreview(platform);
-  }, [loadPreview, platform, memoryInjectionStrategy]);
-
-  const strategyLabel =
-    MEMORY_INJECTION_STRATEGY_OPTIONS.find((o) => o.id === memoryInjectionStrategy)?.label ??
-    memoryInjectionStrategy;
+  }, [loadPreview, platform]);
 
   return (
     <SettingsGroup
@@ -92,13 +80,11 @@ export function SystemPromptPreviewPanel({
           </label>
 
           <SettingsHint flush>
-            At send time, memory facts ({strategyLabel.toLowerCase()}), recent conversations, and
-            temporal context append below the static prompt.
+            At send time, all stored memory facts (sorted by key), recent conversations, and temporal
+            context append below the static prompt.
             {preview.selectedFacts.length > 0
               ? ` ${preview.selectedFacts.length} fact${preview.selectedFacts.length === 1 ? "" : "s"} would inject now.`
-              : preview.injectionStrategy === "none"
-                ? " Memory injection is off."
-                : " No facts selected with the current strategy."}
+              : " No facts stored yet."}
           </SettingsHint>
 
           {preview.memoryBlock && (

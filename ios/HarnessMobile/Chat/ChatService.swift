@@ -69,10 +69,8 @@ final class ChatService: ObservableObject {
 
     func buildMessages(conversationId: String) throws -> [ChatCompletionMessage] {
         let history = try store.loadMessages(conversationId: conversationId)
-        let lastUser = history.last(where: { $0.messageRole == .user })?.content ?? ""
-        let strategy = try store.loadMemoryInjectionStrategy()
         let memory = try store.loadUserMemory()
-        let selected = MemorySelector.selectForPrompt(strategy: strategy, memory: memory, userContent: lastUser)
+        let selected = MemorySelector.sortedEntries(memory: memory)
         let memoryBlock = MemorySelector.formatBlock(selected: selected)
         let recentConversationsBlock = try RecentConversations.buildBlock(
             store: store,
