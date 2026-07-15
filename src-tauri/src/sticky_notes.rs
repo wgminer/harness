@@ -9,6 +9,7 @@ use tauri::{
 use crate::memory::AppState;
 use crate::notes::read_note;
 use crate::paths::get_app_state_dir;
+use crate::storage::{write_json_pretty_sync, JsonWriteStyle};
 
 pub const STICKY_LABEL_PREFIX: &str = "sticky-";
 
@@ -59,9 +60,12 @@ fn read_state(app_state_dir: &Path) -> StickyWindowState {
 }
 
 fn write_state(app_state_dir: &Path, state: &StickyWindowState) -> std::io::Result<()> {
-    let pretty =
-        serde_json::to_string_pretty(state).unwrap_or_else(|_| "{\"windows\":[]}".into());
-    std::fs::write(sticky_state_path(app_state_dir), pretty)
+    write_json_pretty_sync(
+        &sticky_state_path(app_state_dir),
+        &serde_json::to_value(state).unwrap_or_default(),
+        JsonWriteStyle::Pretty,
+        r#"{"windows":[]}"#,
+    )
 }
 
 pub fn capture_window_geometry(

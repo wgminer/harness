@@ -77,7 +77,7 @@ Ranked; consolidation safety noted.
 
 ### Tier 1 (do)
 
-- [ ] **Rust JSON persistence scaffolding**: `storage.rs` helpers exist (`read_json_object_file`, `atomic_write_utf8`, `storage.rs:103-130`) but `notes.rs:112-165`, `tasks.rs:229-270`, `sticky_notes.rs:57-64`, `ui_session.rs:90-98`, ~~`memory_compile.rs`~~ (**struck by v0.8 cull**), and 6+ write sites in `memory.rs` hand-roll the same read→parse→pretty-print→write cycle, each with its own fallback literal. Extract the IO envelope (e.g. `write_json_pretty`) only — leave interleaved per-module row migrations (tasks status migration, notes field validation) in place. After cull, also drop plans persistence sites rather than consolidating them.
+- [x] **Rust JSON persistence scaffolding**: `storage.rs` helpers exist (`read_json_object_file`, `atomic_write_utf8`, `storage.rs:103-130`) but `notes.rs:112-165`, `tasks.rs:229-270`, `sticky_notes.rs:57-64`, `ui_session.rs:90-98`, ~~`memory_compile.rs`~~ (**struck by v0.8 cull**), and 6+ write sites in `memory.rs` hand-roll the same read→parse→pretty-print→write cycle, each with its own fallback literal. Extract the IO envelope (e.g. `write_json_pretty`) only — leave interleaved per-module row migrations (tasks status migration, notes field validation) in place. After cull, also drop plans persistence sites rather than consolidating them.
 - [ ] **iOS ChatService triplication** (bigger than first flagged): byte-identical `executeTool` closures ×3 (`ChatService.swift:120-147, 176-201, 237-262`) AND identical trailing append+title-refinement blocks ×3 (`:152-159, 206-213, 267-274`). Extract `makeToolExecutor(onToolCall:)` + `finishAssistantTurn(...)`.
 
 ### Tier 2 (quick safe wins)
@@ -155,7 +155,7 @@ Three workstreams, roughly in order:
 
 ### W3 — Within-language dedup
 
-- [ ] Tier 1: Rust `write_json_pretty` (or equivalent) envelope; iOS ChatService `makeToolExecutor` + `finishAssistantTurn`.
+- [x] Tier 1: Rust `write_json_pretty` (or equivalent) envelope; [ ] iOS ChatService `makeToolExecutor` + `finishAssistantTurn`.
 - [x] Tier 2: shared `encodeJSON`, `makeChatRequest`, single `load_tray_image`, delete `getDocumentPanel`.
 - [x] Rewrite Rust streaming accumulator to match Swift `PartialAssistantMessage` clarity (and fix O(n²)).
 

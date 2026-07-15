@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::Value;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
@@ -69,16 +71,36 @@ pub fn parse_json_utf8<T: DeserializeOwned>(raw: &str) -> Result<ParseJsonResult
     }
 }
 
-async fn atomic_write_utf8_once(path: &Path, data: &str) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    let tmp = format!(
+fn atomic_write_tmp_path(path: &Path) -> String {
+    format!(
         "{}.tmp.{}.{}",
         path.display(),
         std::process::id(),
         uuid::Uuid::new_v4()
-    );
+    )
+}
+
+fn atomic_write_utf8_blocking(path: &Path, data: &str) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = atomic_write_tmp_path(path);
+    {
+        let mut file = std::fs::File::create(&tmp)?;
+        file.write_all(data.as_bytes())?;
+        file.sync_all()?;
+    }
+    std::fs::rename(&tmp, path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        e
+    })
+}
+
+async fn atomic_write_utf8_once(path: &Path, data: &str) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    let tmp = atomic_write_tmp_path(path);
     let mut file = tokio::fs::File::create(&tmp).await?;
     file.write_all(data.as_bytes()).await?;
     file.sync_all().await?;
@@ -87,6 +109,59 @@ async fn atomic_write_utf8_once(path: &Path, data: &str) -> std::io::Result<()> 
         let _ = std::fs::remove_file(&tmp);
         e
     })
+}
+
+/// How JSON persistence files are serialized before write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JsonWriteStyle {
+    /// Standard serde pretty-print (key order preserved).
+    Pretty,
+    /// Canonical 2-space pretty with sorted keys (sync-merge / revision-hash parity).
+    Canonical,
+}
+
+pub fn serialize_json(value: &Value, style: JsonWriteStyle, fallback: &str) -> String {
+    match style {
+        JsonWriteStyle::Pretty => {
+            serde_json::to_string_pretty(value).unwrap_or_else(|_| fallback.to_string())
+        }
+        JsonWriteStyle::Canonical => String::from_utf8(crate::canonical_json::to_vec_pretty_canonical(
+            value,
+        ))
+        .unwrap_or_else(|_| fallback.to_string()),
+    }
+}
+
+pub fn serialize_json_value<T: Serialize>(
+    value: &T,
+    style: JsonWriteStyle,
+    fallback: &str,
+) -> String {
+    match serde_json::to_value(value) {
+        Ok(json) => serialize_json(&json, style, fallback),
+        Err(_) => fallback.to_string(),
+    }
+}
+
+pub async fn write_json_pretty(
+    chains: &WriteChains,
+    path: &Path,
+    value: &Value,
+    style: JsonWriteStyle,
+    fallback: &str,
+) -> std::io::Result<()> {
+    let data = serialize_json(value, style, fallback);
+    atomic_write_utf8(chains, path, &data).await
+}
+
+pub fn write_json_pretty_sync(
+    path: &Path,
+    value: &Value,
+    style: JsonWriteStyle,
+    fallback: &str,
+) -> std::io::Result<()> {
+    let data = serialize_json(value, style, fallback);
+    atomic_write_utf8_blocking(path, &data)
 }
 
 pub async fn atomic_write_utf8(chains: &WriteChains, path: &Path, data: &str) -> std::io::Result<()> {
@@ -114,7 +189,7 @@ pub async fn read_json_object_file(path: &Path) -> ParseJsonResult<Value> {
                 let stamp = chrono::Utc::now().timestamp_millis();
                 let corrupt = format!("{}.corrupt-{}", path.display(), stamp);
                 let _ = tokio::fs::write(&corrupt, &raw).await;
-                let pretty = serde_json::to_string_pretty(&parsed.value).unwrap_or_default();
+                let pretty = serialize_json(&parsed.value, JsonWriteStyle::Pretty, "{}");
                 let chains = new_write_chains();
                 let _ = atomic_write_utf8(&chains, path, &pretty).await;
             }
@@ -172,7 +247,7 @@ pub async fn read_json_array_file<T: DeserializeOwned>(path: &Path) -> Vec<T> {
             let corrupt_path = format!("{}.corrupt-{}", path.display(), stamp);
             let _ = tokio::fs::write(&corrupt_path, &raw).await;
         }
-        let pretty = serde_json::to_string_pretty(&parsed).unwrap_or_else(|_| "[]".into());
+        let pretty = serialize_json(&parsed, JsonWriteStyle::Pretty, "[]");
         let chains = new_write_chains();
         let _ = atomic_write_utf8(&chains, path, &pretty).await;
     }
@@ -182,4 +257,30 @@ pub async fn read_json_array_file<T: DeserializeOwned>(path: &Path) -> Vec<T> {
 
 pub async fn file_exists(path: &Path) -> bool {
     tokio::fs::metadata(path).await.is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn serialize_json_pretty_formats_object() {
+        let value = json!({ "notes": [] });
+        assert_eq!(
+            serialize_json(&value, JsonWriteStyle::Pretty, "{}"),
+            "{\n  \"notes\": []\n}"
+        );
+    }
+
+    #[test]
+    fn serialize_json_canonical_sorts_keys() {
+        let value = json!({ "b": 1, "a": 2 });
+        let text = serialize_json(&value, JsonWriteStyle::Canonical, "{}");
+        assert!(!text.ends_with('\n'));
+        assert_eq!(
+            text,
+            "{\n  \"a\": 2,\n  \"b\": 1\n}"
+        );
+    }
 }

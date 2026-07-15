@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::memory::AppState;
 use crate::paths::get_app_state_dir;
-use crate::storage::{atomic_write_utf8, file_exists};
+use crate::storage::{atomic_write_utf8, file_exists, write_json_pretty, JsonWriteStyle};
 
 const LEGACY_DOC_FILE: &str = "writing.md";
 const NOTES_INDEX_FILE: &str = "notes.json";
@@ -159,8 +159,14 @@ async fn save_notes_index(
     let mut notes = index.notes.clone();
     sort_by_updated_at_desc(&mut notes);
     let payload = serde_json::json!({ "notes": notes });
-    let pretty = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{\"notes\":[]}".into());
-    atomic_write_utf8(&state.write_chains, &notes_index_path(memory_dir), &pretty).await
+    write_json_pretty(
+        &state.write_chains,
+        &notes_index_path(memory_dir),
+        &payload,
+        JsonWriteStyle::Canonical,
+        r#"{"notes":[]}"#,
+    )
+    .await
 }
 
 fn format_note_template_today() -> String {

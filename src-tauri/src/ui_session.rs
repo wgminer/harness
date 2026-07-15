@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::paths::get_app_state_dir;
+use crate::storage::{write_json_pretty_sync, JsonWriteStyle};
 
 const UI_SESSION_FILE: &str = "ui-session.json";
 
@@ -102,8 +103,13 @@ pub fn read_ui_session_from_dir(app_state_dir: &Path) -> UiSession {
 
 pub fn write_ui_session_to_dir(app_state_dir: &Path, session: &UiSession) -> std::io::Result<()> {
     let next = normalize_ui_session(&serde_json::to_value(session).unwrap_or_else(|_| serde_json::json!({})));
-    let pretty = serde_json::to_string_pretty(&next).unwrap_or_else(|_| "{}".into());
-    std::fs::write(get_ui_session_path_in(app_state_dir), pretty)
+    let value = serde_json::to_value(&next).unwrap_or_else(|_| serde_json::json!({}));
+    write_json_pretty_sync(
+        &get_ui_session_path_in(app_state_dir),
+        &value,
+        JsonWriteStyle::Pretty,
+        "{}",
+    )
 }
 
 pub fn merge_ui_session_in_dir(

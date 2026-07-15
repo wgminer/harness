@@ -11,8 +11,8 @@ use crate::paths::{
     get_local_data_settings_path, get_recordings_dir, get_user_data_dir,
 };
 use crate::storage::{
-    atomic_write_utf8, file_exists, read_json_array_file, read_json_object_file, new_write_chains,
-    WriteChains,
+    file_exists, read_json_array_file, read_json_object_file, write_json_pretty, JsonWriteStyle,
+    WriteChains, new_write_chains,
 };
 
 pub const TASKS_FILE: &str = "tasks.json";
@@ -263,8 +263,14 @@ pub async fn set_user_memory_in(
     mem.insert(key.to_string(), value.to_string());
     let path = user_memory_path(memory_dir);
     let json_value = serde_json::to_value(&mem).unwrap_or_else(|_| json!({}));
-    let pretty = serde_json::to_string_pretty(&json_value).unwrap_or_else(|_| "{}".into());
-    atomic_write_utf8(&state.write_chains, &path, &pretty).await
+    write_json_pretty(
+        &state.write_chains,
+        &path,
+        &json_value,
+        JsonWriteStyle::Canonical,
+        "{}",
+    )
+    .await
 }
 
 async fn load_conversations_map(
@@ -291,8 +297,14 @@ async fn save_conversations_map(
 ) -> std::io::Result<()> {
     let path = conversations_path(memory_dir);
     let value = serde_json::to_value(conv).unwrap_or_else(|_| json!({}));
-    let pretty = serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".into());
-    atomic_write_utf8(&state.write_chains, &path, &pretty).await
+    write_json_pretty(
+        &state.write_chains,
+        &path,
+        &value,
+        JsonWriteStyle::Canonical,
+        "{}",
+    )
+    .await
 }
 
 pub async fn load_messages_in(
@@ -311,8 +323,15 @@ async fn save_messages_in(
     messages: &[MessageRecord],
 ) -> std::io::Result<()> {
     let path = get_messages_path_in(memory_dir, conversation_id);
-    let pretty = serde_json::to_string_pretty(messages).unwrap_or_else(|_| "[]".into());
-    atomic_write_utf8(&state.write_chains, &path, &pretty).await
+    let value = serde_json::to_value(messages).unwrap_or_else(|_| json!([]));
+    write_json_pretty(
+        &state.write_chains,
+        &path,
+        &value,
+        JsonWriteStyle::Canonical,
+        "[]",
+    )
+    .await
 }
 
 pub async fn create_conversation(state: &AppState) -> Result<String, std::io::Error> {
@@ -478,8 +497,14 @@ pub async fn set_user_memory(
     mem.insert(key.to_string(), value.to_string());
     let path = user_memory_path(&memory_dir);
     let json_value = serde_json::to_value(&mem).unwrap_or_else(|_| json!({}));
-    let pretty = serde_json::to_string_pretty(&json_value).unwrap_or_else(|_| "{}".into());
-    atomic_write_utf8(&state.write_chains, &path, &pretty).await
+    write_json_pretty(
+        &state.write_chains,
+        &path,
+        &json_value,
+        JsonWriteStyle::Canonical,
+        "{}",
+    )
+    .await
 }
 
 pub async fn delete_user_memory_key(state: &AppState, key: &str) -> Result<(), std::io::Error> {
@@ -499,8 +524,14 @@ pub async fn delete_user_memory_key(state: &AppState, key: &str) -> Result<(), s
         }
     } else {
         let json_value = serde_json::to_value(&mem).unwrap_or_else(|_| json!({}));
-        let pretty = serde_json::to_string_pretty(&json_value).unwrap_or_else(|_| "{}".into());
-        atomic_write_utf8(&state.write_chains, &path, &pretty).await?;
+        write_json_pretty(
+            &state.write_chains,
+            &path,
+            &json_value,
+            JsonWriteStyle::Canonical,
+            "{}",
+        )
+        .await?;
     }
     Ok(())
 }

@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use crate::env_util::generate_id;
 use crate::memory::{AppState, TASKS_FILE};
 use crate::paths::get_app_state_dir;
-use crate::storage::{atomic_write_utf8, file_exists};
+use crate::storage::{file_exists, write_json_pretty, JsonWriteStyle};
 
 const TASK_STATUSES: [&str; 4] = ["pending", "in_progress", "completed", "cancelled"];
 
@@ -264,8 +264,14 @@ pub async fn save_tasks_in(
 ) -> Result<(), std::io::Error> {
     let path = tasks_file_path(memory_dir);
     let payload = json!({ "tasks": task_state.tasks });
-    let pretty = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{\"tasks\":[]}".into());
-    atomic_write_utf8(&state.write_chains, &path, &pretty).await
+    write_json_pretty(
+        &state.write_chains,
+        &path,
+        &payload,
+        JsonWriteStyle::Canonical,
+        r#"{"tasks":[]}"#,
+    )
+    .await
 }
 
 async fn save_tasks(state: &AppState, task_state: &TaskState) -> Result<(), std::io::Error> {
