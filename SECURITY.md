@@ -27,6 +27,10 @@ Any path under those roots is reachable. A manipulated or compromised model resp
 
 R2 credentials you configure are used to read and write your backup bucket. Bucket contents include conversation data and redacted settings. Protect R2 access keys like any cloud storage credential.
 
+### Mac → phone sync QR
+
+Desktop **Show sync QR** embeds R2 credentials and (when present) the OpenAI API key in a short-lived `harness-pair:1:…` string (~10 minutes). Treat the QR like a password: don’t screenshot or share it. Dismiss the modal when finished. Documented under Settings → Data on desktop and Settings → Set up sync on iOS.
+
 ## iOS companion
 
 Harness Mobile stores API keys and R2 secrets in the iOS Keychain. See [ios/README.md](ios/README.md).

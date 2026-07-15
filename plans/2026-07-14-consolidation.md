@@ -115,8 +115,8 @@ Code is already fixed dark; no Theme studio UI left to delete.
 **Chosen direction:** one Mac→phone **sync QR** (R2 stays the data plane). Full execution plan: [2026-07-14-sync-qr-pairing.md](./2026-07-14-sync-qr-pairing.md).
 
 - [x] Decide architecture — R2 + single QR pairing (not CloudKit / BaaS / split OpenAI+R2 UX).
-- [ ] Implement shared `harness-pair` v1 payload + desktop **Show sync QR** + iOS **Set up sync** (scan → apply → pull). See pairing plan checkboxes.
-- [ ] Goal: phone is ready without filling OpenAI or R2 forms.
+- [x] Implement shared `harness-pair` v1 payload + desktop **Show sync QR** + iOS **Set up sync** (scan → apply → pull). See pairing plan checkboxes.
+- [x] Goal: phone is ready without filling OpenAI or R2 forms. *(device camera smoke deferred to return checklist)*
 
 ---
 

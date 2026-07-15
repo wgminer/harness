@@ -35,10 +35,12 @@ Simulator builds often work without a paid team; device builds require your own 
 
 ## First-run setup on iPhone
 
-1. Build and run on a device or simulator (iOS 17+).
-2. **Settings** (gear) → **Cloudflare R2** → enter account ID, bucket, prefix, access key ID, and secret access key (same as desktop).
-3. Tap **Test connection**, then **Sync now** to pull existing conversations.
-4. **Settings** → enter your OpenAI API key, or **Import from synced settings** after a pull.
+1. Build and run on a device (iOS 17+). Camera QR scanning needs a real device; paste-code works on simulator.
+2. On the Mac: Settings → Data → **Show sync QR** (R2 must already be working and sync’d at least once).
+3. On the phone: Settings → **Set up sync** → scan that QR (or paste the sync code).
+4. Phone saves credentials, tests the connection, and pulls the backup. Chats appear without filling OpenAI or R2 forms.
+
+**Manual fallback:** Settings → Cloudflare R2 (same fields as desktop) → **Test connection** → **Sync now**, then enter or import an OpenAI API key.
 
 ## Voice dictation
 

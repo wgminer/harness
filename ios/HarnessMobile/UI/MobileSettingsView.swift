@@ -11,6 +11,7 @@ struct MobileSettingsView: View {
     @State private var r2AccessKeyId = ""
     @State private var r2SecretAccessKey = ""
     @State private var showVoiceMemoImport = false
+    @State private var showSyncPairing = false
     @State private var settingsMessage = ""
     @State private var recordingCount = 0
     @State private var recentRecordings: [VoiceRecording] = []
@@ -42,6 +43,16 @@ struct MobileSettingsView: View {
                         settingsMessage = error.localizedDescription
                     }
                 }
+            }
+
+            Section {
+                Button("Set up sync") {
+                    showSyncPairing = true
+                }
+            } header: {
+                Text("Sync setup")
+            } footer: {
+                Text("Scan the QR from Mac Settings → Data → Show sync QR. Manual R2 and API key fields below stay available as a fallback.")
             }
 
             Section {
@@ -224,6 +235,13 @@ struct MobileSettingsView: View {
             VoiceMemoImportSheet(app: app, isPresented: $showVoiceMemoImport) { conversationId in
                 app.openThread(id: conversationId)
                 dismiss()
+            }
+        }
+        .sheet(isPresented: $showSyncPairing) {
+            SyncPairingSheet(app: app, isPresented: $showSyncPairing) {
+                apiKey = KeychainStore.loadAPIKey() ?? ""
+                loadR2Fields()
+                settingsMessage = "Synced from pairing QR."
             }
         }
     }

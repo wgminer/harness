@@ -24,6 +24,7 @@ import {
 import type { GlobalRecordingStatus } from "../shared/desktopAPI";
 import { isRecordingReady } from "./recordingBootstrap";
 import { Modal } from "./Modal";
+import { SyncQrModal } from "./SyncQrModal";
 import { Tooltip } from "./Tooltip";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
@@ -172,6 +173,7 @@ export function SettingsView({
   const [r2Prefix, setR2Prefix] = useState(D.sync!.prefix);
   const [r2AccessKeyId, setR2AccessKeyId] = useState(D.sync!.accessKeyId);
   const [r2SecretAccessKey, setR2SecretAccessKey] = useState("");
+  const [syncQrOpen, setSyncQrOpen] = useState(false);
   const [dataStatus, setDataStatus] = useState<{
     localDataDir: string;
     appStateDir: string;
@@ -1448,6 +1450,18 @@ export function SettingsView({
                 </>
               }
             >
+              <SettingsActions>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setSyncQrOpen(true)}
+                >
+                  Show sync QR
+                </button>
+              </SettingsActions>
+              <SettingsHint>
+                Pair an iPhone by scanning this QR. Manual R2 fields below remain for advanced setup.
+              </SettingsHint>
               <SettingsField label="Account ID" htmlFor="settings-r2-account">
                 <input
                   id="settings-r2-account"
@@ -1620,6 +1634,16 @@ export function SettingsView({
         </div>
         </SettingsSwitchProvider>
       </div>
+      <SyncQrModal
+        open={syncQrOpen}
+        onClose={() => setSyncQrOpen(false)}
+        accountId={r2AccountId}
+        bucket={r2Bucket}
+        prefix={r2Prefix}
+        accessKeyId={r2AccessKeyId}
+        secretAccessKey={r2SecretAccessKey}
+        openaiApiKey={apiKey}
+      />
       <SettingsSaveToast status={saveStatus} />
     </div>
   );

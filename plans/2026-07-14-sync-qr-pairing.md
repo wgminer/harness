@@ -86,29 +86,29 @@ QR is a short-lived credential transfer. Copy near the QR: “Contains your sync
 
 ### Shared payload
 
-- [ ] Define `harness-pair` v1 encode/decode in [`src/shared/pairingPayload.ts`](../src/shared/pairingPayload.ts) (base64url JSON + expiry + version checks).
-- [ ] Mirror codec in Swift (iOS) for the same string format.
-- [ ] Unit tests: Vitest + Swift — round-trip, reject expired, reject bad version, missing fields.
+- [x] Define `harness-pair` v1 encode/decode in [`src/shared/pairingPayload.ts`](../src/shared/pairingPayload.ts) (base64url JSON + expiry + version checks).
+- [x] Mirror codec in Swift (iOS) for the same string format.
+- [x] Unit tests: Vitest + Swift — round-trip, reject expired, reject bad version, missing fields.
 
 ### Desktop
 
-- [ ] Assemble payload from settings + keychain secrets (credentials IPC; never log secrets).
-- [ ] QR render in renderer (`qrcode` or similar).
-- [ ] UI: one control **Show sync QR** (Settings → Data) → modal with QR + countdown + **Copy sync code**. No OpenAI toggle.
-- [ ] Keep existing manual R2 fields as advanced / secondary.
+- [x] Assemble payload from settings + keychain secrets (credentials IPC; never log secrets).
+- [x] QR render in renderer (`qrcode`).
+- [x] UI: one control **Show sync QR** (Settings → Data) → modal with QR + countdown + **Copy sync code**. No OpenAI toggle.
+- [x] Keep existing manual R2 fields as advanced / secondary.
 
 ### iOS
 
-- [ ] One primary control: **Set up sync** (opens camera) — not “Scan for R2” / not a separate OpenAI import in this flow.
-- [ ] On successful scan: write R2 settings + Keychain secrets → test connection → **pull backup** → short status (“Synced” / error).
-- [ ] Paste-code fallback uses the same single decoder.
-- [ ] Advanced section keeps manual R2 / API key editing for power users.
-- [ ] Camera permission string: sync setup wording, not “scan R2 barcodes.”
+- [x] One primary control: **Set up sync** (opens camera) — not “Scan for R2” / not a separate OpenAI import in this flow.
+- [x] On successful scan: write R2 settings + Keychain secrets → test connection → **pull backup** → short status (“Synced” / error).
+- [x] Paste-code fallback uses the same single decoder.
+- [x] Advanced section keeps manual R2 / API key editing for power users.
+- [x] Camera permission string: sync setup wording, not “scan R2 barcodes.”
 
 ### Docs
 
-- [ ] Update [ios/README.md](../ios/README.md) first-run: Mac configure → Show sync QR → phone Set up sync → done.
-- [ ] Document QR credential transfer in [SECURITY.md](../SECURITY.md) (short-lived, don’t screenshot/share).
+- [x] Update [ios/README.md](../ios/README.md) first-run: Mac configure → Show sync QR → phone Set up sync → done.
+- [x] Document QR credential transfer in [SECURITY.md](../SECURITY.md) (short-lived, don’t screenshot/share).
 
 ## Out of scope
 
