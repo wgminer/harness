@@ -92,10 +92,11 @@ Code is already fixed dark; no Theme studio UI left to delete.
 
 ### C1 — Dev vs installed clarity
 
-- [ ] Document in [BUILD.md](../BUILD.md): `HARNESS_DEV=1` → Application Support **Harness Dev** vs installed **Harness**; what is shared vs not (credentials, sync, audio).
-- [ ] Audit current affordances (dev icons via `make-dev-icons`, window/tray naming) and note gaps.
-- [ ] Optional: script to copy selected prod app-state into the Dev data dir (explicit, opt-in; never the reverse by default).
-- [ ] Optional: stronger in-app banner or title when running Dev so it is impossible to confuse binaries.
+- [x] Document in [BUILD.md](../BUILD.md): `HARNESS_DEV=1` → Application Support **Harness Dev** vs installed **Harness**; what is shared vs not (credentials, sync, audio).
+- [x] Audit current affordances (dev icons via `make-dev-icons`, window/tray naming) and note gaps.
+- [x] ~~Optional: script to copy selected prod app-state into the Dev data dir~~ — **declined** for v0.8.
+- [x] ~~Optional: stronger in-app banner~~ — **declined**; window title **Harness Dev** is enough.
+- [x] Unify icons: removed `make-dev-icons.js` and `icon-*-dev.png` so Dev and installed use the same Dock / tray icons.
 
 ### C2 — Release pipeline
 
@@ -106,8 +107,8 @@ Code is already fixed dark; no Theme studio UI left to delete.
 
 ### C3 — Cross-machine bootstrap
 
-- [ ] Checklist or script covering: clone, `npm install`, native helpers, Apple signing cert / `.p12`, `TAURI_SIGNING_PRIVATE_KEY`, R2 + OpenAI/Tavily into keychain/credential store, iOS XcodeGen.
-- [ ] Store *instructions* in-repo; never commit secrets. Prefer “where to put files” + env var names.
+- [x] ~~Checklist / bootstrap script~~ — **deferred** until a second-machine setup is needed.
+- [ ] When revisited: store *instructions* in-repo; never commit secrets. Prefer “where to put files” + env var names.
 
 ### C4 — App-data sync onboarding
 

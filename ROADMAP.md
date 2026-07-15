@@ -210,7 +210,7 @@ Sync note: dropping `plans.json` from scopes must tolerate old bundles that stil
 
 ### Workstream C — Dev process `[O5]`
 
-- **Dev vs installed clarity** — document `Harness Dev` vs `Harness` data dirs; stronger in-app/dev indicators; optional prod→dev data copy script.
+- **Dev vs installed clarity** — documented `Harness Dev` vs `Harness` data dirs; icons unified; window title remains the Dev indicator.
 - **Release pipeline** — non-interactive signing; single-source version bump; one-command release that doesn’t hang.
 - **Cross-machine bootstrap** — scripted/docs path for signing keys, `TAURI_SIGNING_PRIVATE_KEY`, credentials, native helpers.
 - **Sync onboarding** — one Mac **Show sync QR** / phone **Set up sync** (R2 under the hood; no OpenAI-vs-R2 UX split). Plan: [plans/2026-07-14-sync-qr-pairing.md](plans/2026-07-14-sync-qr-pairing.md).

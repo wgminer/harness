@@ -10,7 +10,7 @@
     "url": "https://github.com/wgminer/harness.git"
   },
   "scripts": {
-    "dev": "node scripts/make-dev-icons.js && HARNESS_DEV=1 tauri dev",
+    "dev": "HARNESS_DEV=1 tauri dev",
     "dev:web": "vite",
     "site": "serve site -l 8080",
     "prebuild": "npm run icon:icns && npm run build:speech-helper && npm run build:fn-monitor",

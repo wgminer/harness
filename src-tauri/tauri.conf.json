@@ -44,7 +44,6 @@
       "../resources/HarnessSpeech",
       "../resources/HarnessFnMonitor",
       "../resources/icon-tray.png",
-      "../resources/icon-tray-dev.png",
       "../resources/icon-tray-recording.png",
       "../resources/icon-tray-processing.png"
     ],

@@ -6,7 +6,7 @@
 | `npm install`              | Install project dependencies.                                                                                                                                                                                                                                                                                                                                         |
 | `npm run dev`              | Run the app in development mode with hot reload.                                                                                                                                                                                                                                                                                                                      |
 | `npm run build`            | Runs **prebuild** first: `icon:icns`, then `build:speech-helper` and `build:fn-monitor` on macOS, then compiles the renderer to `dist-web/`. |
-| `npm run dist`             | Full pipeline: native helpers → vite build → `tauri build` (DMG + `.app` on macOS). Auto-bumps patch version unless skipped.                                                                                                                                                                                                                                          |
+| `npm run dist`             | Full pipeline: native helpers → vite build → `tauri build` (DMG + `.app` on macOS). Does **not** bump version by default (use an explicit bump / release path).                                                                                                                                                                                                         |
 | `npm run dist:mac`         | Same as `dist` on macOS. Use for the main Mac build and with `--replace`.                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:quick`   | Unsigned local build (`CSC_IDENTITY_AUTO_DISCOVERY=false`, no version bump).                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:replace` | `dist:mac` with `--replace`: copy the built `.app` into `/Applications`.                                                                                                                                                                                                                                                                                              |
@@ -16,6 +16,31 @@
 
 
 This guide walks you through creating a double-clickable, signed (and optionally notarized) Mac app using your Apple Developer account.
+
+---
+
+## Dev vs installed profiles
+
+`npm run dev` sets `HARNESS_DEV=1`. That switches the **Application Support directory** and window title — nothing else is split (Dock / tray icons use the same production assets).
+
+| Mode | How you launch | App Support folder (macOS) | Window title |
+|------|----------------|----------------------------|--------------|
+| Development | `npm run dev` | `~/Library/Application Support/Harness Dev` | **Harness Dev** |
+| Installed | `/Applications/Harness.app` or `npm run dist:mac:replace` | `~/Library/Application Support/Harness` | **Harness** |
+
+### What is separate (not shared)
+
+- All app state under that folder: `local-data/` (conversations, messages, tasks, notes, memory, settings, sync state)
+- `audio-recordings/` (local-only; never synced)
+- Dev may also write a plaintext `credentials.json` under the Dev folder (see [SECURITY.md](SECURITY.md)); production keeps secrets in the OS keychain
+
+### What is shared or external
+
+- R2 backup bucket (same credentials → same remote bundle)
+- OpenAI / Tavily API accounts (same keys work in both profiles once entered)
+- Signing / notarization env (`CSC_*`, `APPLE_*`, `TAURI_SIGNING_*`) — build-time only, not per profile
+
+Deleting or moving either Application Support folder forces a **fresh empty profile** on next launch.
 
 ---
 
