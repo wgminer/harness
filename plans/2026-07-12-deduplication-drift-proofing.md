@@ -101,9 +101,9 @@ DocumentCard hand-rolled modal, three `toLocaleTimeString` formatters, idiomatic
 
 ### Already-drifted bugs (fix explicitly)
 
-- [ ] Recent-conversations empty-title label: Rust emits `"Empty chat @ {time}"` (`recent_conversations.rs:113`), Swift emits `"New chat @ {time}"` (via `ConversationTitlePolicy.swift:42`). Also Rust `%I:%M %p` (leading-zero hour) vs localized numeric hour on Swift/TS.
+- [x] Recent-conversations empty-title label: Rust emits `"Empty chat @ {time}"` (`recent_conversations.rs:113`), Swift emits `"New chat @ {time}"` (via `ConversationTitlePolicy.swift:42`). Also Rust `%I:%M %p` (leading-zero hour) vs localized numeric hour on Swift/TS.
 - [x] Sync-merge serialization: Swift `.prettyPrinted + .sortedKeys` vs TS `JSON.stringify(x, null, 2)` (insertion order); messages-dedup stamp differs too → merged bytes and revision hashes differ across platforms (`syncMerge.ts` / `sync_merge.rs` / `SyncMerge.swift`). **Fixed:** canonical 2-space pretty-print with sorted keys via `canonicalJson.ts` / `canonical_json.rs` / `CanonicalJson.swift`; golden fixtures in `src/shared/fixtures/syncMerge/`. Revision hashes change once — devices must re-pull.
-- [ ] Tool-label fallback: TS capitalizes first char, Swift `.capitalized`; iOS map missing 7 labels (`chatHelpers.tsx:354` vs `TaskToolExecutor.swift:214`). Also Swift `summarize` iterates a Dictionary (nondeterministic order) vs TS Map (insertion order); Swift has unused `compressThreshold`.
+- [x] Tool-label fallback: TS capitalizes first char, Swift `.capitalized`; iOS map missing 7 labels (`chatHelpers.tsx:354` vs `TaskToolExecutor.swift:214`). Also Swift `summarize` iterates a Dictionary (nondeterministic order) vs TS Map (insertion order); Swift has unused `compressThreshold`.
 - [ ] Memory selection: on stopword-only messages Swift returns first 3 entries, TS+Rust return `[]` (TS defines `RELEVANT_FALLBACK_COUNT=3`, suggesting fallback-3 was the intent); char-budget counting is UTF-16 units (TS) vs graphemes (Swift) vs bytes (Rust) → divergent for non-ASCII.
 
 ### Value contracts (identical today, hand-copied — candidates for shared JSON resources)
@@ -164,7 +164,7 @@ Three workstreams, roughly in order:
 - [x] Tool execution errors return `{"error": ...}` as tool result (both platforms); do not abort the turn.
 - [x] Cap the tool-call loop on both platforms.
 - [ ] iOS tool expansion: `get_datetime`, `memory_set_fact` / `memory_list_facts`; gate or defer `web_search` on Tavily key presence. (**Do not** add `get_weather` — removed in v0.8 cull.)
-- [ ] Fix already-drifted bugs (empty-title label, sync-merge serialization, tool-label fallback/map, memory selection).
+- [ ] Fix already-drifted bugs (memory selection).
 
 ### W5 — Developer guardrails
 

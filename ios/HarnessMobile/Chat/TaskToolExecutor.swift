@@ -212,10 +212,26 @@ enum ToolCallLabels {
         case "task_update": return "Updated task"
         case "task_delete": return "Deleted task"
         case "task_clear_completed": return "Cleared completed"
+        case "memory_set_fact": return "Updated context"
+        case "memory_list_facts": return "Listed context"
         case "memory_search_conversations": return "Searched history"
+        case "get_datetime": return "Checked date & time"
+        case "note_list": return "Listed notes"
+        case "note_create": return "Created note"
+        case "note_read": return "Read note"
+        case "note_save": return "Saved note"
+        case "note_delete": return "Deleted note"
+        case "set_layout": return "Updated layout"
         default:
-            return toolName.replacingOccurrences(of: "_", with: " ").capitalized
+            return fallbackLabel(for: toolName)
         }
+    }
+
+    /// Mirrors `toolLabel` fallback in `src/renderer/chatHelpers.tsx` (first char only).
+    private static func fallbackLabel(for toolName: String) -> String {
+        let spaced = toolName.replacingOccurrences(of: "_", with: " ")
+        guard let first = spaced.first else { return spaced }
+        return String(first).uppercased() + spaced.dropFirst()
     }
 
     static func summarize(_ toolCalls: [ToolCallRecord]) -> String {

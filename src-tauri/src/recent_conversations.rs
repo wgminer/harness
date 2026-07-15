@@ -108,9 +108,14 @@ fn conversation_display_title(title: Option<&str>, created_at: i64) -> String {
     let time = Local
         .timestamp_millis_opt(created_at)
         .single()
-        .map(|dt| dt.format("%I:%M %p").to_string())
+        .map(format_sidebar_time)
         .unwrap_or_else(|| "Unknown".to_string());
     format!("Empty chat @ {time}")
+}
+
+fn format_sidebar_time(dt: chrono::DateTime<Local>) -> String {
+    let hour: u32 = dt.format("%I").to_string().parse().unwrap_or(12);
+    format!("{hour}:{} {}", dt.format("%M"), dt.format("%p"))
 }
 
 pub(crate) fn select_recent_candidates(
