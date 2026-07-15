@@ -131,7 +131,7 @@ Run **after** A. Full checklist remains in the dedup plan; this section is the c
 - [x] Dedup **W4** — tool errors as tool results; tool-loop cap; iOS tool expansion (**no weather**).
 - [x] Dedup **W5** — CLAUDE.md / docs for single-source rules.
 - [ ] Break up god-files (incremental PRs OK):
-  - [ ] [`SettingsView.tsx`](../src/renderer/SettingsView.tsx) (~1.7k) → section components / hooks
+  - [x] [`SettingsView.tsx`](../src/renderer/SettingsView.tsx) — Data + Memory tabs → `settings/DataSettingsTab`, `MemorySettingsTab` + hooks (~1.7k → ~1.0k); General/Voice/Appearance remain
   - [x] [`chat.rs`](../src-tauri/src/chat.rs) (~1.2k) → turn/tool/stream modules
   - [ ] [`sync.rs`](../src-tauri/src/sync.rs) (~970) → runtime vs push/pull split if natural
   - [ ] Extract [`App.tsx`](../src/renderer/App.tsx) shell state (store or focused hooks)

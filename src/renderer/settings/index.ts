@@ -9,3 +9,5 @@ export { SettingsEntryRow, type SettingsEntryRowProps } from "./SettingsEntryRow
 export { SecretField, type SecretFieldProps } from "./SecretField";
 export { SettingsTabPanel, type SettingsTabPanelProps } from "./SettingsTabPanel";
 export { SystemPromptPreviewPanel } from "./SystemPromptPreviewPanel";
+export { DataSettingsTab } from "./DataSettingsTab";
+export { MemorySettingsTab } from "./MemorySettingsTab";

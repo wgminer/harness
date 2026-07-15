@@ -2,12 +2,8 @@ import { useState, useEffect, useMemo, useRef, useCallback, type KeyboardEvent }
 import { createPortal } from "react-dom";
 import { ExternalLink, Settings as SettingsIcon } from "lucide-react";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
-import { LLM_CONTEXT_EXPORT_PROMPT } from "../shared/memoryImport";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
-import { appDataFolderButtonLabel } from "../shared/dataStorageLayout";
-import type { SyncStatus } from "../shared/sync";
-import { syncResultChangedLocalData, syncNowButtonTooltip, syncInlineStatusLine } from "../shared/sync";
 import {
   DEFAULT_NOTE_TEMPLATE_ID,
   DEFAULT_NOTE_TEMPLATES,
@@ -20,8 +16,6 @@ import {
 import type { GlobalRecordingStatus } from "../shared/desktopAPI";
 import { isRecordingReady } from "./recordingBootstrap";
 import { Modal } from "./Modal";
-import { SyncQrModal } from "./SyncQrModal";
-import { Tooltip } from "./Tooltip";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
@@ -34,7 +28,8 @@ import {
   SettingsSwitch,
   SettingsSwitchProvider,
   SettingsTabPanel,
-  SystemPromptPreviewPanel,
+  DataSettingsTab,
+  MemorySettingsTab,
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
@@ -142,44 +137,15 @@ export function SettingsView({
   const [openToComposeOnLaunch, setOpenToComposeOnLaunch] = useState(D.chat!.openToComposeOnLaunch);
   const [tavilyApiKey, setTavilyApiKey] = useState(D.search?.tavilyApiKey ?? "");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const [userMemory, setUserMemory] = useState<Record<string, string>>({});
-  const [memoryModalOpen, setMemoryModalOpen] = useState(false);
-  const [editingMemoryKey, setEditingMemoryKey] = useState<string | null>(null);
-  const [newMemTitle, setNewMemTitle] = useState("");
-  const [newMemDetail, setNewMemDetail] = useState("");
-  const [importStatus, setImportStatus] = useState<{ imported: number; errors: string[] } | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [claudeImportStatus, setClaudeImportStatus] = useState<{ imported: number; errors: string[] } | null>(null);
-  const [claudeImporting, setClaudeImporting] = useState(false);
-  const [llmImportDraft, setLlmImportDraft] = useState("");
-  const [llmImportBusy, setLlmImportBusy] = useState(false);
-  const [llmImportMessage, setLlmImportMessage] = useState<string | null>(null);
-  const [exportPromptOpen, setExportPromptOpen] = useState(false);
-  const [cleanupLegacyBusy, setCleanupLegacyBusy] = useState(false);
-  const [cleanupLegacyMessage, setCleanupLegacyMessage] = useState<string | null>(null);
-  const [syncBusy, setSyncBusy] = useState(false);
-  const [syncTestBusy, setSyncTestBusy] = useState(false);
-  const [r2TestError, setR2TestError] = useState<string | null>(null);
   const [r2AccountId, setR2AccountId] = useState(D.sync!.accountId);
   const [r2Bucket, setR2Bucket] = useState(D.sync!.bucket);
   const [r2Prefix, setR2Prefix] = useState(D.sync!.prefix);
   const [r2AccessKeyId, setR2AccessKeyId] = useState(D.sync!.accessKeyId);
   const [r2SecretAccessKey, setR2SecretAccessKey] = useState("");
-  const [syncQrOpen, setSyncQrOpen] = useState(false);
-  const [dataStatus, setDataStatus] = useState<{
-    localDataDir: string;
-    appStateDir: string;
-    localDataExists: boolean;
-    conversationsCount: number;
-    messageFilesCount: number;
-    notesFilesCount: number;
-    hasSettingsFile: boolean;
-    recordingsDir: string;
-    recordingsLocalOnly: true;
-    legacyMemoryDir: string;
-    legacyMemoryExists: boolean;
-    sync: SyncStatus;
-  } | null>(null);
+  const dataRefreshRef = useRef<(() => Promise<void>) | null>(null);
+  const registerDataRefresh = useCallback((refresh: () => Promise<void>) => {
+    dataRefreshRef.current = refresh;
+  }, []);
   const platform = useMemo((): NodeJS.Platform => {
     if (typeof navigator === "undefined") return "linux";
     if (navigator.platform.startsWith("Mac")) return "darwin";
@@ -271,7 +237,6 @@ export function SettingsView({
         if (!cancelled) settingsHydratedRef.current = true;
         enableSwitchAnimations();
       });
-    window.harness.memory.getUserMemory().then(setUserMemory);
     return () => {
       cancelled = true;
     };
@@ -301,20 +266,6 @@ export function SettingsView({
     }, 3000);
     return () => clearInterval(timer);
   }, [activeTab, isMac, refreshGlobalRecordingStatus]);
-
-  useEffect(() => {
-    if (activeTab !== "data") return;
-    void refreshDataStatus();
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (activeTab !== "data" || !dataStatus?.sync.configured) return;
-    const timer = setInterval(() => {
-      void refreshDataStatus();
-    }, 15_000);
-    return () => clearInterval(timer);
-  }, [activeTab, dataStatus?.sync.configured]);
-
 
   useEffect(() => {
     return () => {
@@ -387,7 +338,7 @@ export function SettingsView({
         next.r2Prefix !== prev.r2Prefix ||
         next.r2AccessKeyId !== prev.r2AccessKeyId ||
         next.r2SecretAccessKey !== prev.r2SecretAccessKey;
-      if (r2Changed) setDataStatus(await window.harness.memory.getDataStatus());
+      if (r2Changed) await dataRefreshRef.current?.();
       lastPersistedRef.current = latest;
       setSaveStatus("saved");
       onSettingsChanged?.();
@@ -611,165 +562,6 @@ export function SettingsView({
     });
     window.dispatchEvent(new CustomEvent("notes:templatesUpdated", { detail: normalized }));
     closeTemplatesModal();
-  };
-
-  const closeMemoryModal = () => {
-    setMemoryModalOpen(false);
-    setEditingMemoryKey(null);
-    setNewMemTitle("");
-    setNewMemDetail("");
-  };
-
-  const openAddMemoryModal = () => {
-    setEditingMemoryKey(null);
-    setNewMemTitle("");
-    setNewMemDetail("");
-    setMemoryModalOpen(true);
-  };
-
-  const openEditMemoryModal = (key: string, detail: string) => {
-    setEditingMemoryKey(key);
-    setNewMemTitle(key);
-    setNewMemDetail(detail);
-    setMemoryModalOpen(true);
-  };
-
-  const saveMemory = async () => {
-    if (!newMemTitle.trim()) return;
-    const nextTitle = newMemTitle.trim();
-    const nextDetail = newMemDetail.trim();
-    if (editingMemoryKey && editingMemoryKey !== nextTitle) {
-      await window.harness.memory.deleteUserMemoryKey(editingMemoryKey);
-    }
-    await window.harness.memory.setUserMemory(nextTitle, nextDetail);
-    setUserMemory(await window.harness.memory.getUserMemory());
-    closeMemoryModal();
-  };
-
-  const deleteMemoryEntry = async (key: string) => {
-    await window.harness.memory.deleteUserMemoryKey(key);
-    setUserMemory(await window.harness.memory.getUserMemory());
-  };
-
-  const refreshDataStatus = async () => {
-    const status = await window.harness.memory.getDataStatus();
-    setDataStatus(status);
-  };
-
-  const runCleanupLegacyMemory = async () => {
-    setCleanupLegacyBusy(true);
-    setCleanupLegacyMessage(null);
-    try {
-      const result = await window.harness.memory.cleanupLegacyMemory();
-      setCleanupLegacyMessage(result.removed ? "Removed legacy memory folder." : "No legacy memory folder to remove.");
-      await refreshDataStatus();
-    } finally {
-      setCleanupLegacyBusy(false);
-    }
-  };
-
-  const runSyncNow = async () => {
-    setSyncBusy(true);
-    try {
-      const result = await window.harness.sync.runNow();
-      await refreshDataStatus();
-      if (syncResultChangedLocalData(result)) {
-        onSyncComplete?.();
-      }
-    } finally {
-      setSyncBusy(false);
-    }
-  };
-
-  const testR2Connection = async () => {
-    setSyncTestBusy(true);
-    setR2TestError(null);
-    try {
-      const result = await window.harness.sync.testConnection();
-      if (result.ok) {
-        await refreshDataStatus();
-      } else {
-        setR2TestError(result.error ?? "Connection failed.");
-      }
-    } finally {
-      setSyncTestBusy(false);
-    }
-  };
-
-  const syncTooltip = syncNowButtonTooltip({
-    busy: syncBusy,
-    configured: dataStatus?.sync.configured ?? false,
-  });
-
-  const syncInlineStatus =
-    dataStatus?.sync.configured && !dataStatus.sync.lastError
-      ? syncBusy
-        ? "Syncing…"
-        : syncInlineStatusLine({ lastSuccessAt: dataStatus.sync.lastSuccessAt ?? null })
-      : null;
-
-  const runImport = async () => {
-    setImporting(true);
-    setImportStatus(null);
-    try {
-      const result = await window.harness.memory.importFromChatGPTFolder();
-      setImportStatus(result);
-      if (result.imported > 0) onImportComplete?.();
-    } catch (e) {
-      setImportStatus({
-        imported: 0,
-        errors: [e instanceof Error ? e.message : String(e)],
-      });
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const runClaudeImport = async () => {
-    setClaudeImporting(true);
-    setClaudeImportStatus(null);
-    try {
-      const result = await window.harness.memory.importFromClaudeFolder();
-      setClaudeImportStatus(result);
-      if (result.imported > 0) onImportComplete?.();
-    } catch (e) {
-      setClaudeImportStatus({
-        imported: 0,
-        errors: [e instanceof Error ? e.message : String(e)],
-      });
-    } finally {
-      setClaudeImporting(false);
-    }
-  };
-
-  const copyExportPrompt = async () => {
-    try {
-      await navigator.clipboard.writeText(LLM_CONTEXT_EXPORT_PROMPT);
-      setLlmImportMessage("Export prompt copied to clipboard.");
-    } catch {
-      setLlmImportMessage("Could not copy to clipboard.");
-    }
-  };
-
-  const runLlmContextImport = async () => {
-    setLlmImportBusy(true);
-    setLlmImportMessage(null);
-    try {
-      const response = await window.harness.memory.importLlmContext(llmImportDraft);
-      if (response.ok) {
-        const r = response.result;
-        const parts = [`Added ${r.added}, updated ${r.updated}.`];
-        if (r.importSource) parts.push(`Source: ${r.importSource}.`);
-        if (r.truncated) parts.push("Export was truncated before processing.");
-        setLlmImportMessage(parts.join(" "));
-        setLlmImportDraft("");
-        setUserMemory(await window.harness.memory.getUserMemory());
-      } else {
-        setLlmImportMessage(response.error);
-      }
-    } finally {
-      setLlmImportBusy(false);
-    }
   };
 
   const switchTab = (id: SettingsTabId) => {
@@ -1096,98 +888,7 @@ export function SettingsView({
             )}
           </SettingsTabPanel>}
 
-          {activeTab === "memory" && <SettingsTabPanel id="memory">
-            <SystemPromptPreviewPanel />
-
-            <SettingsGroup
-              title="Your facts"
-              description="Stable facts stored locally and synced with your backup. Pick a short label and a one-line value; the same label updates the existing entry."
-            >
-              <div className="settings-entry-list">
-                {Object.entries(userMemory).map(([k, v]) => (
-                  <SettingsEntryRow
-                    key={k}
-                    title={k}
-                    detail={v}
-                    onEdit={() => openEditMemoryModal(k, v)}
-                    onDelete={() => void deleteMemoryEntry(k)}
-                    editAriaLabel={`Edit ${k}`}
-                    deleteAriaLabel={`Remove ${k}`}
-                  />
-                ))}
-              </div>
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="settings-add-memory"
-                  onClick={openAddMemoryModal}
-                >
-                  Add Entry
-                </button>
-              </SettingsActions>
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Import from another assistant"
-              description={
-                <>
-                  Run the export prompt in ChatGPT, Claude, or another assistant, paste the result
-                  below, then import. Harness uses your OpenAI API key to distill entries into your
-                  facts above (same merge rules as learn from past chats).
-                </>
-              }
-            >
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setExportPromptOpen((open) => !open)}
-                  aria-expanded={exportPromptOpen}
-                >
-                  {exportPromptOpen ? "Hide Export Prompt" : "Show Export Prompt"}
-                </button>
-                <button type="button" className="btn" onClick={() => void copyExportPrompt()}>
-                  Copy Export Prompt
-                </button>
-              </SettingsActions>
-              {exportPromptOpen && (
-                <label className="app-modal-field">
-                  <span className="app-modal-field__label">Export prompt</span>
-                  <textarea
-                    readOnly
-                    value={LLM_CONTEXT_EXPORT_PROMPT}
-                    className="app-modal-input app-modal-input--multiline settings-llm-import-prompt"
-                    rows={12}
-                    aria-label="Export prompt for other assistants"
-                  />
-                </label>
-              )}
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Pasted export</span>
-                <textarea
-                  placeholder="Paste the structured export from the other assistant…"
-                  value={llmImportDraft}
-                  onChange={(e) => setLlmImportDraft(e.target.value)}
-                  className="app-modal-input app-modal-input--multiline settings-llm-import-export"
-                  rows={14}
-                  data-testid="settings-llm-import-export"
-                />
-              </label>
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  data-testid="settings-import-llm-context"
-                  onClick={() => void runLlmContextImport()}
-                  disabled={llmImportBusy || !llmImportDraft.trim()}
-                >
-                  {llmImportBusy ? "Importing…" : "Import Facts"}
-                </button>
-              </SettingsActions>
-              {llmImportMessage && <SettingsHint flush>{llmImportMessage}</SettingsHint>}
-            </SettingsGroup>
-          </SettingsTabPanel>}
+          {activeTab === "memory" && <MemorySettingsTab />}
 
           <Modal
             open={cleanupPromptModalOpen}
@@ -1274,53 +975,6 @@ export function SettingsView({
           </Modal>
 
           <Modal
-            open={memoryModalOpen}
-            onClose={closeMemoryModal}
-            title={editingMemoryKey ? "Edit entry" : "Add entry"}
-            data-testid="settings-memory-modal"
-            footer={
-              <>
-                <button type="button" className="btn" onClick={closeMemoryModal}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void saveMemory()}
-                  disabled={!newMemTitle.trim()}
-                >
-                  {editingMemoryKey ? "Update" : "Save"}
-                </button>
-              </>
-            }
-          >
-            <div className="app-modal-stack">
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Label</span>
-                <input
-                  type="text"
-                  placeholder="e.g. timezone"
-                  value={newMemTitle}
-                  onChange={(e) => setNewMemTitle(e.target.value)}
-                  className="app-modal-input"
-                  autoComplete="off"
-                />
-              </label>
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Detail</span>
-                <textarea
-                  placeholder="What to remember"
-                  value={newMemDetail}
-                  onChange={(e) => setNewMemDetail(e.target.value)}
-                  className="app-modal-input app-modal-input--multiline"
-                  rows={4}
-                  autoComplete="off"
-                />
-              </label>
-            </div>
-          </Modal>
-
-          <Modal
             open={templatesModalOpen}
             onClose={closeTemplatesModal}
             title="Edit notes template"
@@ -1379,230 +1033,29 @@ export function SettingsView({
             </div>
           </Modal>
 
-          {activeTab === "data" && <SettingsTabPanel id="data">
-            <SettingsGroup
-              title="Local data"
-              description="Harness stores conversations, notes, and settings on this device. Backup syncs everything except local recordings."
-            >
-              <SettingsActions>
-                <button type="button" className="btn" onClick={() => window.harness.memory.openAppDataFolder()}>
-                  {appDataFolderButtonLabel(platform)} <ExternalLink size={14} aria-hidden />
-                </button>
-                {dataStatus?.legacyMemoryExists && (
-                  <button type="button" className="btn" onClick={() => void runCleanupLegacyMemory()} disabled={cleanupLegacyBusy}>
-                    {cleanupLegacyBusy ? "Cleaning…" : "Clean Legacy Memory Folder"}
-                  </button>
-                )}
-              </SettingsActions>
-              {dataStatus?.legacyMemoryExists && cleanupLegacyMessage && (
-                <SettingsHint flush>{cleanupLegacyMessage}</SettingsHint>
-              )}
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Backup (R2)"
-              description={
-                <>
-                  Connect a Cloudflare R2 bucket. Harness stores <code>bundle.json.gz</code> and{" "}
-                  <code>manifest.json</code> under the prefix below. Enable object versioning in R2 for
-                  free backup history.
-                </>
-              }
-            >
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => setSyncQrOpen(true)}
-                >
-                  Show sync QR
-                </button>
-              </SettingsActions>
-              <SettingsHint>
-                Pair an iPhone by scanning this QR. Manual R2 fields below remain for advanced setup.
-              </SettingsHint>
-              <SettingsField label="Account ID" htmlFor="settings-r2-account">
-                <input
-                  id="settings-r2-account"
-                  type="text"
-                  value={r2AccountId}
-                  onChange={(e) => setR2AccountId(e.target.value)}
-                  placeholder="Cloudflare account ID"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </SettingsField>
-              <SettingsField label="Bucket" htmlFor="settings-r2-bucket">
-                <input
-                  id="settings-r2-bucket"
-                  type="text"
-                  value={r2Bucket}
-                  onChange={(e) => setR2Bucket(e.target.value)}
-                  placeholder="harness-sync"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </SettingsField>
-              <SettingsField label="Prefix" htmlFor="settings-r2-prefix">
-                <input
-                  id="settings-r2-prefix"
-                  type="text"
-                  value={r2Prefix}
-                  onChange={(e) => setR2Prefix(e.target.value)}
-                  placeholder="harness/"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </SettingsField>
-              <SettingsField label="Access key ID" htmlFor="settings-r2-access-key-id">
-                <input
-                  id="settings-r2-access-key-id"
-                  type="text"
-                  value={r2AccessKeyId}
-                  onChange={(e) => setR2AccessKeyId(e.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </SettingsField>
-              <SettingsField label="Secret access key" htmlFor="settings-r2-secret">
-                <SecretField
-                  id="settings-r2-secret"
-                  value={r2SecretAccessKey}
-                  onChange={(e) => setR2SecretAccessKey(e.target.value)}
-                  onBlur={() => void persistSettings()}
-                  placeholder="Secret access key"
-                  ariaLabel="R2 secret access key"
-                />
-              </SettingsField>
-              {(dataStatus?.sync.lastError || r2TestError) && (
-                <p className="settings-import-status__errors">
-                  {dataStatus?.sync.lastError ?? r2TestError}
-                </p>
-              )}
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => void testR2Connection()}
-                  disabled={syncTestBusy}
-                >
-                  {syncTestBusy ? "Testing…" : "Test Connection"}
-                </button>
-                <div className="settings-sync-control">
-                  <Tooltip label={syncTooltip}>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => void runSyncNow()}
-                      disabled={syncBusy || !dataStatus?.sync.configured}
-                    >
-                      {syncBusy ? "Syncing…" : "Sync Now"}
-                    </button>
-                  </Tooltip>
-                  {syncInlineStatus ? (
-                    <span className="settings-sync-status" role="status">
-                      {syncInlineStatus}
-                    </span>
-                  ) : null}
-                </div>
-              </SettingsActions>
-            </SettingsGroup>
-
-            <SettingsGroup title="Import chat history">
-              <details className="settings-import-details">
-                <summary>Import chat history (optional)</summary>
-                <p className="settings-group__lead settings-import-details__lead">
-                  Bring conversations from ChatGPT or Claude exports into Harness. This is separate
-                  from importing facts on the Memory tab.
-                </p>
-                <div className="settings-import-details__section">
-                  <h4 className="settings-import-details__heading">ChatGPT</h4>
-                  <p className="settings-group__hint">Choose the folder from an unzipped ChatGPT export.</p>
-                  <SettingsActions>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={runImport}
-                      disabled={importing}
-                    >
-                      {importing ? "Importing…" : "Import From ChatGPT"}
-                    </button>
-                  </SettingsActions>
-                  {importStatus != null && (
-                    <div className="settings-import-status" role="status">
-                      {importStatus.imported > 0 && (
-                        <p className="settings-import-status__ok">
-                          Imported {importStatus.imported} conversation{importStatus.imported !== 1 ? "s" : ""}.
-                        </p>
-                      )}
-                      {importStatus.errors.length > 0 && (
-                        <div className="settings-import-status__errors">
-                          <p>Errors:</p>
-                          <ul>
-                            {importStatus.errors.map((err, i) => (
-                              <li key={i}>{err}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="settings-import-details__section">
-                  <h4 className="settings-import-details__heading">Claude</h4>
-                  <p className="settings-group__hint">
-                    Choose the folder from Claude.ai&apos;s &ldquo;Export data&rdquo; archive (contains{" "}
-                    <code>conversations.json</code>). Re-imports skip threads already added.
-                  </p>
-                  <SettingsActions>
-                    <button
-                      type="button"
-                      className="btn"
-                      data-testid="settings-claude-import"
-                      onClick={runClaudeImport}
-                      disabled={claudeImporting}
-                    >
-                      {claudeImporting ? "Importing…" : "Import From Claude"}
-                    </button>
-                  </SettingsActions>
-                  {claudeImportStatus != null && (
-                    <div className="settings-import-status" role="status">
-                      {claudeImportStatus.imported > 0 && (
-                        <p className="settings-import-status__ok">
-                          Imported {claudeImportStatus.imported} conversation
-                          {claudeImportStatus.imported !== 1 ? "s" : ""}.
-                        </p>
-                      )}
-                      {claudeImportStatus.errors.length > 0 && (
-                        <div className="settings-import-status__errors">
-                          <p>Errors:</p>
-                          <ul>
-                            {claudeImportStatus.errors.map((err, i) => (
-                              <li key={i}>{err}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </details>
-            </SettingsGroup>
-
-          </SettingsTabPanel>}
+          {activeTab === "data" && (
+            <DataSettingsTab
+              platform={platform}
+              apiKey={apiKey}
+              r2AccountId={r2AccountId}
+              setR2AccountId={setR2AccountId}
+              r2Bucket={r2Bucket}
+              setR2Bucket={setR2Bucket}
+              r2Prefix={r2Prefix}
+              setR2Prefix={setR2Prefix}
+              r2AccessKeyId={r2AccessKeyId}
+              setR2AccessKeyId={setR2AccessKeyId}
+              r2SecretAccessKey={r2SecretAccessKey}
+              setR2SecretAccessKey={setR2SecretAccessKey}
+              persistSettings={persistSettings}
+              onSyncComplete={onSyncComplete}
+              onImportComplete={onImportComplete}
+              onRegisterRefresh={registerDataRefresh}
+            />
+          )}
         </div>
         </SettingsSwitchProvider>
       </div>
-      <SyncQrModal
-        open={syncQrOpen}
-        onClose={() => setSyncQrOpen(false)}
-        accountId={r2AccountId}
-        bucket={r2Bucket}
-        prefix={r2Prefix}
-        accessKeyId={r2AccessKeyId}
-        secretAccessKey={r2SecretAccessKey}
-        openaiApiKey={apiKey}
-      />
       <SettingsSaveToast status={saveStatus} />
     </div>
   );
