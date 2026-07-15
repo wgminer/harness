@@ -493,7 +493,7 @@ export function NotesView({
       activeElement?.focus();
       setAsideStatus({ kind: "error", message: String(e) });
     }
-  }, [selection, panelPrompt, notesApi]);
+  }, [selection, panelPrompt, notesApi, draft]);
 
   const approveAside = useCallback(() => {
     if (!selection) return;

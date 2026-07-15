@@ -7,7 +7,6 @@ import {
   summarizeToolCalls,
   toolCallLabel,
   toolIcon,
-  toolLabel,
 } from "./chatHelpers";
 
 interface ToolCallsCardProps {

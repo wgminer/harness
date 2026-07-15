@@ -387,7 +387,7 @@ export function CopyButton({
       await navigator.clipboard.writeText(content);
       onCopied(messageId);
       setTimeout(() => onCopied(null), 2000);
-    } catch (_) {
+    } catch {
       /* ignore */
     }
   };

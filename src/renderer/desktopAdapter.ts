@@ -14,11 +14,11 @@ import type {
 import type { ImageGenerateInput } from "../shared/images";
 import type { SyncResult, SyncStatus } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
-import { legacyIpcCommand, legacyIpcEvent } from "../shared/ipcNames";
+import { tauriCommandName, tauriEventName } from "../shared/ipcNames";
 import { subscribeToWire } from "./tauriEventHub";
 
-const cmd = legacyIpcCommand;
-const evt = legacyIpcEvent;
+const cmd = tauriCommandName;
+const evt = tauriEventName;
 
 function subscribe<T>(
   eventName: string,

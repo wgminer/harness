@@ -48,7 +48,7 @@ function previewText(bytes: Buffer | undefined, maxLen = 120): string | undefine
   return text.length <= maxLen ? text : `${text.slice(0, maxLen)}…`;
 }
 
-function labelForPath(path: string, bytes: Buffer | undefined): string {
+function labelForPath(path: string, _bytes: Buffer | undefined): string {
   if (path.startsWith("app-state/notes/")) {
     const name = path.slice("app-state/notes/".length);
     return name.endsWith(".md") ? name.slice(0, -3) : name;

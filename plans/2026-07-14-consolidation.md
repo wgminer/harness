@@ -135,8 +135,8 @@ Run **after** A. Full checklist remains in the dedup plan; this section is the c
   - [ ] [`chat.rs`](../src-tauri/src/chat.rs) (~1.2k) → turn/tool/stream modules
   - [ ] [`sync.rs`](../src-tauri/src/sync.rs) (~970) → runtime vs push/pull split if natural
   - [ ] Extract [`App.tsx`](../src/renderer/App.tsx) shell state (store or focused hooks)
-- [ ] Extend ESLint to cover `src/` (today ignored).
-- [ ] Cheap legacy naming cleanup: reduce `legacyIpc*` noise; drop dead `clippings` names where migrations already cover — keep on-disk migrations.
+- [x] Extend ESLint to cover `src/` (today ignored).
+- [x] Cheap legacy naming cleanup: reduce `legacyIpc*` noise; drop dead `clippings` names where migrations already cover — keep on-disk migrations.
 
 ---
 

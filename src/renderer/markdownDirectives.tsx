@@ -21,7 +21,6 @@ import {
   useRef,
   useState,
   type ComponentType,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 import {

@@ -20,20 +20,6 @@ function run(command, args, options = {}) {
   }
 }
 
-function capture(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    encoding: "utf8",
-    cwd: root,
-    ...options,
-  });
-  if (result.status !== 0) {
-    const stderr = (result.stderr || "").trim();
-    if (stderr) console.error(stderr);
-    process.exit(result.status || 1);
-  }
-  return (result.stdout || "").trim();
-}
-
 function getGithubRepo() {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const url = pkg.repository?.url || "";

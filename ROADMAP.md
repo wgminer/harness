@@ -56,7 +56,7 @@ Harness is where you practice the full stack: providers, tools, streaming, persi
 |---|---|
 | **Success picture** | Each meaningful change teaches something reusable: a new tool, IPC boundary, test pattern, or provider adapter you could lift into another project — without triplicating contracts by hand. |
 | **Signals today** | Provider registry; assistant tools; `*In(dir)` test harnesses; import parsers; typed `window.harness`; unit tests; iOS sync codec tests; CI on PRs (lint, tsc, Vitest, Rust, iOS). |
-| **Gaps** | Cross-language drift checks (shared contracts + parity tests); plugin/tool registry; documented patterns for adding tools/providers; ESLint covering `src/`. |
+| **Gaps** | Cross-language drift checks (shared contracts + parity tests); plugin/tool registry; documented patterns for adding tools/providers. |
 | **Anti-goals** | Opaque magic (no tests, no boundaries); one giant file per feature; hand-copied contracts guarded only by comments. |
 
 ### O5 — Low-friction development
@@ -205,8 +205,8 @@ Sync note: dropping `plans.json` from scopes must tolerate old bundles that stil
 
 - Shared contracts + parity/drift guards (dedup plan W1–W5), including ipcNames ↔ `generate_handler!` parity.
 - Break up god-files: `SettingsView.tsx`, `chat.rs`, `sync.rs`; extract `App.tsx` state.
-- Extend ESLint to cover `src/`.
-- Retire cheap legacy naming (`legacyIpc*` bridge noise, `clippings` constants); keep data migrations.
+- ~~Extend ESLint to cover `src/`.~~ Done (recommended TS/React rules; react-hooks@7 strict purity rules relaxed).
+- ~~Retire cheap legacy naming (`legacyIpc*` bridge noise, `clippings` constants); keep data migrations.~~ Partial: renamed `tauriCommandName`/`tauriEventName`, removed dead `CLIPPINGS_NOTE_TITLE`; on-disk migrations unchanged.
 
 ### Workstream C — Dev process `[O5]`
 

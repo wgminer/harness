@@ -1,5 +1,3 @@
-/** Title for the numbered-list note that replaces legacy clippings. */
-export const CLIPPINGS_NOTE_TITLE = "Clippings";
 
 export interface NoteSummary {
   id: string;

@@ -462,6 +462,8 @@ export function SettingsView({
     }, SECRETS_SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
+  // Secrets autosave: only debounce credential fields (non-secrets use the effect below).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional split debounce buckets
   }, [apiKey, tavilyApiKey, r2SecretAccessKey, persistSettings]);
 
   useEffect(() => {
@@ -494,6 +496,8 @@ export function SettingsView({
     }, SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
+  // Non-secret settings autosave (secrets debounced separately above).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional split debounce buckets
   }, [
     autoSend,
     globalFnHotkey,

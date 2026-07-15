@@ -22,8 +22,6 @@ export function createRecorder(): Recorder {
     releaseStreamOnStop = releaseOnStop;
     const ctx = await createRecordingAudioContext();
     const source = ctx.createMediaStreamSource(stream);
-    // createScriptProcessor is deprecated but reliable in WKWebView
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     const buffers: Float32Array[] = [];
     processor.onaudioprocess = (e) => {

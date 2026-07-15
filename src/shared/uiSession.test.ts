@@ -25,6 +25,10 @@ describe("normalizeUiSession", () => {
     });
   });
 
+  it("migrates legacy clippings view to notes", () => {
+    expect(normalizeUiSession({ view: "clippings" }).view).toBe("notes");
+  });
+
   it("drops unknown views and empty ids", () => {
     expect(
       normalizeUiSession({

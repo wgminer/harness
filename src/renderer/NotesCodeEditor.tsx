@@ -118,6 +118,8 @@ export const NotesCodeEditor = forwardRef<NotesCodeEditorHandle, NotesCodeEditor
       view.destroy();
       viewRef.current = null;
     };
+    // Initial doc comes from `value`; ongoing sync is handled in the effect below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- remount editor only when chrome changes
   }, [placeholderText, readOnly]);
 
   useEffect(() => {

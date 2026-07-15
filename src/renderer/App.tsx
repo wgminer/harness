@@ -74,7 +74,7 @@ export default function App() {
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
 
   const refreshSetupState = useCallback(async () => {
-    const [settings, syncStatus, credentialStatus, platform] = await Promise.all([
+    const [, syncStatus, credentialStatus, platform] = await Promise.all([
       window.harness.settings.get() as Promise<Settings>,
       window.harness.sync.getStatus(),
       window.harness.credentials.getStatus(),
