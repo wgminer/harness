@@ -1,4 +1,6 @@
 use regex::Regex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
 use crate::credentials::resolve_openai_api_key;
@@ -10,6 +12,7 @@ use crate::openai::generate_thread_title_with_openai;
 
 const CONTEXT_MAX_CHARS: usize = 2400;
 const REFINE_EVERY: usize = 4;
+const FALLBACK_TITLE_MAX_CHARS: usize = 60;
 
 fn clean_title(raw: &str) -> String {
   let re_quotes = Regex::new(r#"["'`]"#).unwrap();
@@ -24,6 +27,33 @@ fn is_time_placeholder_title(title: Option<&str>) -> bool {
   Regex::new(r"^(?:Dictation|New chat|Empty chat) @ ")
     .unwrap()
     .is_match(t)
+}
+
+/// Truncate first user message into a short sidebar title when the LLM returns nothing.
+pub fn fallback_title_from_messages(messages: &[MessageRecord]) -> Option<String> {
+  let first_user = messages.iter().find(|m| m.role == "user")?;
+  let cleaned = clean_title(&first_user.content);
+  if cleaned.is_empty() {
+    return None;
+  }
+  if cleaned.chars().count() <= FALLBACK_TITLE_MAX_CHARS {
+    return Some(cleaned);
+  }
+  let mut truncated = String::new();
+  for word in cleaned.split_whitespace() {
+    let next_len = truncated.chars().count() + word.chars().count() + if truncated.is_empty() { 0 } else { 1 };
+    if next_len > FALLBACK_TITLE_MAX_CHARS {
+      break;
+    }
+    if !truncated.is_empty() {
+      truncated.push(' ');
+    }
+    truncated.push_str(word);
+  }
+  if truncated.is_empty() {
+    truncated = cleaned.chars().take(FALLBACK_TITLE_MAX_CHARS).collect();
+  }
+  Some(truncated)
 }
 
 pub fn should_refine_conversation_title(messages: &[MessageRecord], title: Option<&str>) -> bool {
@@ -93,6 +123,28 @@ pub async fn finalize_voice_dictation_session(
     Ok(title)
 }
 
+/// Generation counter so a newer refine for the same conversation wins (user then assistant).
+static TITLE_REFINE_GENERATION: Mutex<Option<std::collections::HashMap<String, u64>>> =
+  Mutex::new(None);
+static TITLE_REFINE_SEQ: AtomicU64 = AtomicU64::new(1);
+
+fn next_title_refine_generation(conversation_id: &str) -> u64 {
+  let gen = TITLE_REFINE_SEQ.fetch_add(1, Ordering::Relaxed);
+  let mut guard = TITLE_REFINE_GENERATION.lock().unwrap();
+  let map = guard.get_or_insert_with(std::collections::HashMap::new);
+  map.insert(conversation_id.to_string(), gen);
+  gen
+}
+
+fn is_current_title_refine_generation(conversation_id: &str, gen: u64) -> bool {
+  let guard = TITLE_REFINE_GENERATION.lock().unwrap();
+  guard
+    .as_ref()
+    .and_then(|m| m.get(conversation_id).copied())
+    .map(|current| current == gen)
+    .unwrap_or(false)
+}
+
 pub fn schedule_conversation_title_refinement(
   app: AppHandle,
   state: AppState,
@@ -101,6 +153,7 @@ pub fn schedule_conversation_title_refinement(
   if is_harness_e2e() {
     return;
   }
+  let generation = next_title_refine_generation(&conversation_id);
   tauri::async_runtime::spawn(async move {
     let mut notified_start = false;
     let result: Result<(), String> = async {
@@ -128,21 +181,51 @@ pub fn schedule_conversation_title_refinement(
       }
       let openai_key = resolve_openai_api_key().await.trim().to_string();
       if openai_key.is_empty() {
+        // Still give the sidebar something better than "Empty chat @ …".
+        if is_time_placeholder_title(meta.title.as_deref()) {
+          if let Some(fallback) = fallback_title_from_messages(&messages) {
+            if !is_current_title_refine_generation(&conversation_id, generation) {
+              return Ok(());
+            }
+            crate::memory::patch_conversation_auto_title(&state, &conversation_id, &fallback)
+              .await
+              .map_err(|e| e.to_string())?;
+            emit_conversation_title_updated(&app, &conversation_id);
+          }
+        }
         return Ok(());
       }
 
       emit_title_generation_started(&app, &conversation_id);
       notified_start = true;
 
+      // Match iOS: don't treat time placeholders as a real previous title.
+      let previous_title = meta
+        .title
+        .as_deref()
+        .filter(|t| !t.trim().is_empty() && !is_time_placeholder_title(Some(t)));
+
       let raw_title = generate_thread_title_with_openai(
         &openai_key,
-        meta.title.as_deref(),
+        previous_title,
         &context,
       )
       .await
       .map_err(|e| e.to_string())?;
-      let title = clean_title(raw_title.as_deref().unwrap_or(""));
+      let mut title = clean_title(raw_title.as_deref().unwrap_or(""));
       if title.is_empty() {
+        // UNCHANGED / empty model output: keep an existing real title; only fall back
+        // when the sidebar would otherwise stay on "Empty chat @ …".
+        if !is_time_placeholder_title(meta.title.as_deref()) {
+          return Ok(());
+        }
+        title = fallback_title_from_messages(&messages).unwrap_or_default();
+      }
+      if title.is_empty() {
+        return Ok(());
+      }
+
+      if !is_current_title_refine_generation(&conversation_id, generation) {
         return Ok(());
       }
 
@@ -156,9 +239,69 @@ pub fn schedule_conversation_title_refinement(
 
     if let Err(err) = result {
       eprintln!("[title] LLM title generation failed: {err}");
+      // Best-effort local title so new chats don't stay on "Empty chat @ …".
+      if is_current_title_refine_generation(&conversation_id, generation) {
+        if let Ok(messages) = crate::memory::get_messages(&state, &conversation_id).await {
+          if let Ok(Some(meta)) = crate::memory::get_conversation_meta_for_id(&state, &conversation_id).await {
+            if is_time_placeholder_title(meta.title.as_deref()) {
+              if let Some(fallback) = fallback_title_from_messages(&messages) {
+                if crate::memory::patch_conversation_auto_title(&state, &conversation_id, &fallback)
+                  .await
+                  .is_ok()
+                {
+                  emit_conversation_title_updated(&app, &conversation_id);
+                }
+              }
+            }
+          }
+        }
+      }
     }
     if notified_start {
       emit_title_generation_ended(&app, &conversation_id);
     }
   });
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn msg(role: &str, content: &str) -> MessageRecord {
+    MessageRecord {
+      role: role.into(),
+      content: content.into(),
+      tool_calls: None,
+      timestamp: None,
+      model: None,
+      attachments: None,
+    }
+  }
+
+  #[test]
+  fn fallback_title_truncates_long_user_message() {
+    let long = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda";
+    let title = fallback_title_from_messages(&[msg("user", long)]).unwrap();
+    assert!(title.chars().count() <= FALLBACK_TITLE_MAX_CHARS);
+    assert!(title.starts_with("alpha"));
+    assert!(!title.contains('"'));
+  }
+
+  #[test]
+  fn fallback_title_uses_first_user_message() {
+    let title = fallback_title_from_messages(&[
+      msg("user", "Buy milk and eggs"),
+      msg("assistant", "Sure"),
+    ])
+    .unwrap();
+    assert_eq!(title, "Buy milk and eggs");
+  }
+
+  #[test]
+  fn should_refine_on_first_user_only_placeholder() {
+    assert!(should_refine_conversation_title(
+      &[msg("user", "hello")],
+      None
+    ));
+  }
 }

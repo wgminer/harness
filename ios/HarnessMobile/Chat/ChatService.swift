@@ -67,17 +67,32 @@ final class ChatService: ObservableObject {
         }
     }
 
-    func buildMessages(conversationId: String) throws -> [ChatCompletionMessage] {
-        let history = try store.loadMessages(conversationId: conversationId)
-        let memory = try store.loadUserMemory()
+    /// Loads history / memory / recent-chat context off the main actor so Send
+    /// does not freeze the UI while reading dozens of message JSON files.
+    func buildMessages(conversationId: String) async throws -> [ChatCompletionMessage] {
+        let dir = store.localDataDir
+        return try await Task.detached(priority: .userInitiated) {
+            try Self.assembleMessages(localDataDir: dir, conversationId: conversationId)
+        }.value
+    }
+
+    nonisolated private static func assembleMessages(
+        localDataDir: URL,
+        conversationId: String
+    ) throws -> [ChatCompletionMessage] {
+        let history = try ConversationStore.loadMessages(
+            localDataDir: localDataDir,
+            conversationId: conversationId
+        )
+        let memory = try ConversationStore.loadUserMemory(in: localDataDir)
         let selected = MemorySelector.sortedEntries(memory: memory)
         let memoryBlock = MemorySelector.formatBlock(selected: selected)
         let recentConversationsBlock = try RecentConversations.buildBlock(
-            store: store,
+            localDataDir: localDataDir,
             excludeConversationId: conversationId
         )
-        let systemPromptSettings = SystemPromptSettings.load(from: store.localDataDir)
-        let includeWebSearch = AssistantToolDefinitions.hasTavilyApiKey(in: store.localDataDir)
+        let systemPromptSettings = SystemPromptSettings.load(from: localDataDir)
+        let includeWebSearch = AssistantToolDefinitions.hasTavilyApiKey(in: localDataDir)
         let system = systemPromptSettings.assembledSystemPrompt(
             memoryBlock: memoryBlock,
             recentConversationsBlock: recentConversationsBlock,
@@ -92,7 +107,28 @@ final class ChatService: ObservableObject {
                 record.content,
                 timestampMs: record.timestamp
             )
-            messages.append(ChatCompletionMessage(role: record.role, content: content))
+            if let attachments = record.attachments, !attachments.isEmpty {
+                var parts: [ChatCompletionContentPart] = []
+                if !content.isEmpty {
+                    parts.append(.text(content))
+                }
+                for attachment in attachments where attachment.mimeType.hasPrefix("image/") {
+                    let url = LocalDataLayout.fileURL(
+                        in: localDataDir,
+                        relativePath: attachment.relativePath
+                    )
+                    if let data = try? Data(contentsOf: url), !data.isEmpty {
+                        parts.append(.imageJPEG(data))
+                    }
+                }
+                if parts.isEmpty {
+                    messages.append(ChatCompletionMessage(role: record.role, content: content))
+                } else {
+                    messages.append(ChatCompletionMessage(role: record.role, contentParts: parts))
+                }
+            } else {
+                messages.append(ChatCompletionMessage(role: record.role, content: content))
+            }
         }
         return messages
     }
@@ -100,19 +136,33 @@ final class ChatService: ObservableObject {
     func send(
         conversationId: String,
         userContent: String,
+        imageJPEG: Data? = nil,
+        attachments: [MessageAttachment]? = nil,
         onStreamChunk: @escaping (String) -> Void,
         onToolCall: @escaping (ToolCallRecord) -> Void
     ) async throws {
         guard let client else { throw OpenAIError.missingAPIKey }
         guard let taskToolExecutor else { throw OpenAIError.missingAPIKey }
         let trimmed = userContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        var resolvedAttachments = attachments
+        if resolvedAttachments == nil, let imageJPEG {
+            resolvedAttachments = [try store.saveChatImageAttachment(
+                conversationId: conversationId,
+                jpegData: imageJPEG
+            )]
+        }
+        guard !trimmed.isEmpty || resolvedAttachments != nil else { return }
 
         beginStreaming(conversationId: conversationId)
         defer { endStreaming() }
 
-        try appendMessage(conversationId: conversationId, role: .user, content: trimmed)
-        let apiMessages = try buildMessages(conversationId: conversationId)
+        try appendMessage(
+            conversationId: conversationId,
+            role: .user,
+            content: trimmed,
+            attachments: resolvedAttachments
+        )
+        let apiMessages = try await buildMessages(conversationId: conversationId)
 
         let result = try await client.streamChatWithTools(
             messages: apiMessages,
@@ -134,7 +184,7 @@ final class ChatService: ObservableObject {
         beginStreaming(conversationId: conversationId)
         defer { endStreaming() }
 
-        let apiMessages = try buildMessages(conversationId: conversationId)
+        let apiMessages = try await buildMessages(conversationId: conversationId)
         let result = try await client.streamChatWithTools(
             messages: apiMessages,
             tools: AssistantToolDefinitions.openAITools(in: store.localDataDir),
@@ -162,7 +212,7 @@ final class ChatService: ObservableObject {
 
         try appendMessage(conversationId: conversationId, role: .user, content: DictationPolish.instruction)
         try appendMessage(conversationId: conversationId, role: .user, content: transcript)
-        let apiMessages = try buildMessages(conversationId: conversationId)
+        let apiMessages = try await buildMessages(conversationId: conversationId)
         let result = try await client.streamChatWithTools(
             messages: apiMessages,
             tools: AssistantToolDefinitions.openAITools(in: store.localDataDir),
@@ -237,14 +287,16 @@ final class ChatService: ObservableObject {
         role: MessageRole,
         content: String,
         model: String? = nil,
-        toolCalls: [ToolCallRecord]? = nil
+        toolCalls: [ToolCallRecord]? = nil,
+        attachments: [MessageAttachment]? = nil
     ) throws {
         try store.appendMessage(
             conversationId: conversationId,
             role: role,
             content: content,
             model: model,
-            toolCalls: toolCalls
+            toolCalls: toolCalls,
+            attachments: attachments
         )
         if role == .user {
             scheduleTitleRefinement(conversationId: conversationId)

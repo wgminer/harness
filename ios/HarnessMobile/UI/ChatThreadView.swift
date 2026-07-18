@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum ChatScrollAnchor {
     static let replying = "replying"
@@ -12,7 +13,6 @@ private enum ChatThreadLayout {
 struct ChatThreadView: View {
     let app: AppModel
     @ObservedObject private var chatService: ChatService
-    @Environment(\.harnessTheme) private var theme
     let conversationId: String
 
     @StateObject private var scrollController = ChatScrollController()
@@ -21,6 +21,7 @@ struct ChatThreadView: View {
     @State private var streamingMessageTimestamp: Int64?
     @State private var streamingToolCalls: [ToolCallRecord] = []
     @State private var loadError: String?
+    @State private var isLoadingThread = true
     @State private var scrollProxy: ScrollViewProxy?
     @State private var isDictationSession = false
     @State private var didAutoGenerateReply = false
@@ -29,6 +30,8 @@ struct ChatThreadView: View {
     @State private var showDeleteConfirm = false
     @State private var didInitialScrollToLiveEdge = false
     @State private var showDictationSheet = false
+    @State private var pendingImage: UIImage?
+    @State private var showCamera = false
     @State private var conversationTitle = "Chat"
     @State private var streamingContent = ""
     @State private var lastLiveEdgeFollowAt = Date.distantPast
@@ -67,6 +70,106 @@ struct ChatThreadView: View {
     }
 
     var body: some View {
+        Group {
+            if isLoadingThread && messages.isEmpty && loadError == nil {
+                ProgressView("Loading conversation…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground).ignoresSafeArea())
+            } else {
+                threadScroll
+            }
+        }
+        .background(Color(.systemBackground).ignoresSafeArea())
+        .navigationTitle(conversationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        renameDraft = conversationTitle
+                        showRenameAlert = true
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .alert("Rename conversation", isPresented: $showRenameAlert) {
+            TextField("Title", text: $renameDraft)
+            Button("Save") {
+                renameConversation(title: renameDraft)
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Delete conversation?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                deleteConversation()
+            }
+        } message: {
+            Text("This chat and its messages will be removed from this device and synced to your Mac.")
+        }
+        .task(id: conversationId) {
+            scrollController.reset()
+            didInitialScrollToLiveEdge = false
+            isLoadingThread = true
+            await loadThread()
+            if let pending = app.takePendingOutboundMessage(conversationId: conversationId) {
+                await send(text: pending.text, imageJPEG: pending.imageJPEG)
+            } else if app.takePendingAutoGenerateReply(conversationId: conversationId), !didAutoGenerateReply {
+                didAutoGenerateReply = true
+                await generateReply()
+            }
+        }
+        .onChange(of: isStreamingThisThread) { _, sending in
+            scrollController.onSendingChange(sending)
+            if sending {
+                followLiveEdgeIfPinned(animated: true)
+            }
+        }
+        .onChange(of: streamingContent) { _, _ in
+            followLiveEdgeIfPinned(animated: false)
+        }
+        .onChange(of: messages.count) { _, _ in
+            followLiveEdgeIfPinned(animated: false)
+        }
+        .onDisappear {
+            app.flushComposerDrafts()
+        }
+        .alert("Error", isPresented: .constant(loadError != nil)) {
+            Button("OK") { loadError = nil }
+        } message: {
+            Text(loadError ?? "")
+        }
+        .sheet(isPresented: $showDictationSheet) {
+            DictationRecordingSheet(
+                app: app,
+                mode: .sendToConversation(conversationId: conversationId),
+                isPresented: $showDictationSheet,
+                onTranscriptSent: { transcript in
+                    Task { await send(text: transcript) }
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPickerView(isPresented: $showCamera) { image in
+                pendingImage = image
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    private var threadScroll: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
@@ -79,7 +182,8 @@ struct ChatThreadView: View {
                     ForEach(messages) { msg in
                         MessageRowView(
                             message: msg,
-                            isStreaming: msg.timestamp == streamingMessageTimestamp,
+                            localDataDir: app.localDataDir,
+                            isStreaming: false,
                             onToolConfirm: { call, action in
                                 handleToolConfirm(call: call, action: action, messageTimestamp: msg.timestamp)
                             }
@@ -95,21 +199,19 @@ struct ChatThreadView: View {
                         .id("dictation-reply-strip")
                     }
 
-                    if let streamingTimestamp = streamingMessageTimestamp {
-                        MessageRowView(
-                            message: MessageRecord(
-                                role: MessageRole.assistant.rawValue,
-                                content: streamingContent,
-                                timestamp: streamingTimestamp,
-                                model: OpenAIModel.chat,
-                                toolCalls: streamingToolCalls.isEmpty ? nil : streamingToolCalls
-                            ),
+                    if streamingMessageTimestamp != nil {
+                        AssistantMessageView(
+                            content: streamingContent,
                             isStreaming: true,
+                            toolCalls: streamingToolCalls,
                             onToolConfirm: { call, action in
-                                handleToolConfirm(call: call, action: action, messageTimestamp: streamingTimestamp)
+                                handleToolConfirm(
+                                    call: call,
+                                    action: action,
+                                    messageTimestamp: streamingMessageTimestamp
+                                )
                             }
                         )
-                        .equatable()
                         .id(ChatScrollAnchor.streaming)
                     }
                     if isAwaitingFirstToken {
@@ -167,87 +269,6 @@ struct ChatThreadView: View {
             }
             .onAppear { scrollProxy = proxy }
         }
-        .background(theme.bgColor.ignoresSafeArea())
-        .navigationTitle(conversationTitle)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        renameDraft = conversationTitle
-                        showRenameAlert = true
-                    } label: {
-                        Label("Rename", systemImage: "pencil")
-                    }
-                    Button(role: .destructive) {
-                        showDeleteConfirm = true
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
-        }
-        .alert("Rename conversation", isPresented: $showRenameAlert) {
-            TextField("Title", text: $renameDraft)
-            Button("Save") {
-                renameConversation(title: renameDraft)
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .confirmationDialog(
-            "Delete conversation?",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                deleteConversation()
-            }
-        } message: {
-            Text("This chat and its messages will be removed from this device and synced to your Mac.")
-        }
-        .task(id: conversationId) {
-            scrollController.reset()
-            didInitialScrollToLiveEdge = false
-            await loadThread()
-            if let text = app.takePendingOutboundMessage(conversationId: conversationId) {
-                await send(text: text)
-            } else if app.takePendingAutoGenerateReply(conversationId: conversationId), !didAutoGenerateReply {
-                didAutoGenerateReply = true
-                await generateReply()
-            }
-        }
-        .onChange(of: isStreamingThisThread) { _, sending in
-            scrollController.onSendingChange(sending)
-            if sending {
-                followLiveEdgeIfPinned(animated: true)
-            }
-        }
-        .onChange(of: streamingContent) { _, _ in
-            followLiveEdgeIfPinned(animated: false)
-        }
-        .onChange(of: messages.count) { _, _ in
-            followLiveEdgeIfPinned(animated: false)
-        }
-        .onDisappear {
-            app.flushComposerDrafts()
-        }
-        .alert("Error", isPresented: .constant(loadError != nil)) {
-            Button("OK") { loadError = nil }
-        } message: {
-            Text(loadError ?? "")
-        }
-        .sheet(isPresented: $showDictationSheet) {
-            DictationRecordingSheet(
-                app: app,
-                mode: .sendToConversation(conversationId: conversationId),
-                isPresented: $showDictationSheet,
-                onTranscriptSent: { transcript in
-                    Task { await send(text: transcript) }
-                }
-            )
-        }
     }
 
     private var minScrollHeight: CGFloat {
@@ -262,11 +283,14 @@ struct ChatThreadView: View {
             startsExpanded: app.hasPendingOutboundMessage(conversationId: conversationId),
             allowsCollapse: true,
             initialDraft: app.cachedComposerDraft(conversationId: conversationId),
+            pendingImage: pendingImage,
             onDraftChange: { app.cacheComposerDraft($0, conversationId: conversationId) },
             onClearDraft: { app.clearComposerDraft(conversationId: conversationId) },
-            onSend: { text in Task { await send(text: text) } },
+            onClearPendingImage: { pendingImage = nil },
+            onSend: { payload in Task { await send(text: payload.text, imageJPEG: payload.imageJPEG) } },
             onStop: { chatService.stop() },
             onDictate: { showDictationSheet = true },
+            onCamera: { showCamera = true },
             isFocused: $isComposerFocused
         )
         .padding(.horizontal, ChatThreadLayout.horizontalInset)
@@ -276,6 +300,8 @@ struct ChatThreadView: View {
     private func loadThread() async {
         let id = conversationId
         let dir = app.localDataDir
+        isLoadingThread = true
+        defer { isLoadingThread = false }
         do {
             let loaded = try await Task.detached(priority: .userInitiated) {
                 let messages = try ConversationStore.loadMessages(localDataDir: dir, conversationId: id)
@@ -343,22 +369,29 @@ struct ChatThreadView: View {
         }
     }
 
-    private func reloadMessages() {
+    private func reloadMessages() async {
+        let id = conversationId
+        let dir = app.localDataDir
         do {
-            messages = try app.store.loadMessages(conversationId: conversationId)
+            messages = try await Task.detached(priority: .userInitiated) {
+                try ConversationStore.loadMessages(localDataDir: dir, conversationId: id)
+            }.value
         } catch {
             loadError = error.localizedDescription
         }
     }
 
-    private func appendOptimisticUserMessage(_ text: String) {
+    private func appendOptimisticUserMessage(_ text: String, attachments: [MessageAttachment]? = nil) {
         let record = MessageRecord(
             role: MessageRole.user.rawValue,
             content: text,
             timestamp: Int64(Date().timeIntervalSince1970 * 1000),
-            model: nil
+            model: nil,
+            attachments: attachments
         )
-        if messages.last?.content == text, messages.last?.messageRole == .user {
+        if messages.last?.content == text,
+           messages.last?.messageRole == .user,
+           messages.last?.attachments == attachments {
             return
         }
         messages.append(record)
@@ -409,33 +442,52 @@ struct ChatThreadView: View {
         finishStreaming()
     }
 
-    private func send(text: String) async {
-        guard !text.isEmpty else { return }
+    private func send(text: String, imageJPEG: Data? = nil) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || imageJPEG != nil else { return }
 
-        appendOptimisticUserMessage(text)
+        var attachments: [MessageAttachment]?
+        if let imageJPEG {
+            do {
+                attachments = [try app.store.saveChatImageAttachment(
+                    conversationId: conversationId,
+                    jpegData: imageJPEG
+                )]
+            } catch {
+                loadError = error.localizedDescription
+                return
+            }
+        }
+
+        appendOptimisticUserMessage(trimmed, attachments: attachments)
         finishStreaming()
         scrollController.pinForTurn()
         followLiveEdgeIfPinned(animated: true)
 
         do {
-            try await chatService.send(conversationId: conversationId, userContent: text) { chunk in
+            try await chatService.send(
+                conversationId: conversationId,
+                userContent: trimmed,
+                attachments: attachments
+            ) { chunk in
                 appendStreamingChunk(chunk)
             } onToolCall: { call in
                 appendStreamingToolCall(call)
             }
-            commitStreamingToMessages()
+            await reloadMessages()
+            finishStreaming()
             refreshConversationTitle()
             await app.pushAfterChat()
         } catch is CancellationError {
             finishStreaming()
-            reloadMessages()
+            await reloadMessages()
         } catch ChatServiceError.cancelled {
             finishStreaming()
-            reloadMessages()
+            await reloadMessages()
         } catch {
             loadError = error.localizedDescription
             finishStreaming()
-            reloadMessages()
+            await reloadMessages()
         }
     }
 
@@ -455,14 +507,14 @@ struct ChatThreadView: View {
             await app.pushAfterChat()
         } catch is CancellationError {
             finishStreaming()
-            reloadMessages()
+            await reloadMessages()
         } catch ChatServiceError.cancelled {
             finishStreaming()
-            reloadMessages()
+            await reloadMessages()
         } catch {
             loadError = error.localizedDescription
             finishStreaming()
-            reloadMessages()
+            await reloadMessages()
         }
     }
 
@@ -511,6 +563,7 @@ struct ChatThreadView: View {
 
     private func deleteConversation() {
         do {
+            HapticFeedback.warning()
             app.clearComposerDraft(conversationId: conversationId)
             try app.deleteConversation(id: conversationId)
         } catch {

@@ -358,28 +358,18 @@ mod cleanup_framing_tests {
     }
 }
 
-#[cfg(target_os = "macos")]
-async fn request_microphone_access_macos() -> bool {
-    let output = TokioCommand::new("osascript")
-        .arg("-e")
-        .arg(r#"do shell script "osascript -e 'tell application \"System Events\" to return true'"#)
-        .output()
-        .await;
-    if let Ok(output) = output {
-        if output.status.success() {
-            return true;
-        }
-    }
-    // Trigger mic permission prompt via ffmpeg/sox if available; fallback true for renderer getUserMedia flow.
-    true
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_request_microphone_access(
+    app: AppHandle,
+) -> Result<bool, String> {
+    Ok(crate::mic_permission::request_microphone_access(&app).await)
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn recording_request_microphone_access() -> Result<bool, String> {
-    if !cfg!(target_os = "macos") {
-        return Ok(true);
-    }
-    Ok(request_microphone_access_macos().await)
+pub fn recording_microphone_permission_status() -> Result<String, String> {
+    Ok(crate::mic_permission::microphone_permission_status()
+        .as_str()
+        .to_string())
 }
 
 #[tauri::command(rename_all = "camelCase")]

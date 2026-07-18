@@ -90,6 +90,30 @@ fn emit_recording_error(app: &AppHandle, message: &str) {
     );
 }
 
+/// Poll native capture peaks and emit `global-recording-level` until capture ends.
+fn spawn_recording_level_meter(app: AppHandle, runtime: Arc<GlobalRecordingRuntime>) {
+    tauri::async_runtime::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(40));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let level = {
+                let Ok(guard) = runtime.capture.lock() else {
+                    break;
+                };
+                match guard.as_ref() {
+                    Some(cap) => cap.latest_level(),
+                    None => break,
+                }
+            };
+            let _ = app.emit(
+                "global-recording-level",
+                serde_json::json!({ "level": level }),
+            );
+        }
+    });
+}
+
 async fn save_wav(wav: &[u8]) -> Option<std::path::PathBuf> {
     let dir = get_recordings_dir();
     if tokio::fs::create_dir_all(&dir).await.is_err() {
@@ -209,6 +233,8 @@ pub async fn run_recording_effects(
 
                 let capture_result = if is_harness_e2e() {
                     Ok(())
+                } else if !crate::mic_permission::request_microphone_access(app).await {
+                    Err(crate::mic_permission::MICROPHONE_PERMISSION_DENIED_MESSAGE.to_string())
                 } else {
                     NativeCapture::start().map(|cap| {
                         *runtime.capture.lock().unwrap() = Some(cap);
@@ -219,6 +245,9 @@ pub async fn run_recording_effects(
                     Ok(()) => {
                         register_escape_cancel(app, runtime);
                         let _ = app.emit("global-recording-started", serde_json::json!({}));
+                        if !is_harness_e2e() {
+                            spawn_recording_level_meter(app.clone(), runtime.clone());
+                        }
                         set_tray_state(app, runtime, TrayIconState::Recording).await;
                     }
                     Err(err) => {

@@ -1,4 +1,5 @@
 import { DEFAULT_NOTE_TEMPLATES, DEFAULT_NOTE_TEMPLATE_ID } from "./writing";
+import { DEFAULT_ACCENT } from "./accent";
 import { DEFAULT_SYSTEM_PROMPT, type SystemPromptSettings } from "./systemPromptDefaults";
 
 export type MessageRole = "user" | "assistant" | "system";
@@ -53,6 +54,13 @@ export interface SystemPromptPreview {
   selectedFacts: SystemPromptPreviewFact[];
 }
 
+export interface MessageAttachment {
+  id: string;
+  mimeType: string;
+  /** Path relative to the app data root (e.g. app-state/chat-attachments/...). */
+  relativePath: string;
+}
+
 export interface ChatMessage {
   role: MessageRole;
   content: string;
@@ -61,6 +69,8 @@ export interface ChatMessage {
   timestamp?: number;
   /** Chat model used for assistant messages; omitted for user/system. */
   model?: string;
+  /** Optional image (or other) attachments; preserved across sync rewrites. */
+  attachments?: MessageAttachment[];
 }
 
 /** Optional fields when appending a message via IPC / storage. */
@@ -125,6 +135,11 @@ export interface Settings {
   };
   /** Shared chat system prompt fields synced across desktop and iOS. */
   systemPrompt?: SystemPromptSettings;
+  /** Desktop appearance (accent drives derived CSS tokens). */
+  appearance?: {
+    /** Accent hex (`#rrggbb`). */
+    accent?: string;
+  };
 }
 
 export interface SearchResult {
@@ -179,4 +194,7 @@ export const DEFAULT_SETTINGS: Settings = {
     openToComposeOnLaunch: true,
   },
   systemPrompt: { ...DEFAULT_SYSTEM_PROMPT },
+  appearance: {
+    accent: DEFAULT_ACCENT,
+  },
 };

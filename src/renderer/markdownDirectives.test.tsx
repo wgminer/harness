@@ -77,73 +77,11 @@ describe("markdown directives", () => {
     expect(html).not.toContain("Recommended");
   });
 
-  it("renders a slide deck: shows the first slide and a nav for two slides", () => {
-    const html = render(
-      [
-        "::::slides",
-        ':::slide{layout=title title="Hi" subtitle="Sub"}',
-        ":::",
-        ':::slide{layout=bullets title="Wins"}',
-        "- A",
-        "- B",
-        ":::",
-        "::::",
-      ].join("\n"),
-    );
-    expect(html).toContain("md-slides");
-    expect(html).toContain("md-slide--title");
-    expect(html).toContain("Hi");
-    expect(html).toContain("Sub");
-    expect(html).toContain("1 / 2");
-    expect(html).toContain("md-slides__nav");
-    expect(html).not.toContain("md-slide--bullets");
-  });
-
-  it("renders a bullets slide when first in the deck", () => {
-    const html = render(
-      [
-        "::::slides",
-        ':::slide{layout=bullets title="Wins"}',
-        "- A",
-        "- B",
-        ":::",
-        "::::",
-      ].join("\n"),
-    );
-    expect(html).toContain("md-slide--bullets");
-    expect(html).toContain("Wins");
-    expect(html).toContain("<li>A</li>");
-    expect(html).not.toContain("md-slides__nav");
-  });
-
-  it("renders a quote slide with attribution", () => {
-    const html = render(
-      [
-        "::::slides",
-        ':::slide{layout=quote attribution="— Lee"}',
-        "Make it work, then make it fast.",
-        ":::",
-        "::::",
-      ].join("\n"),
-    );
-    expect(html).toContain("md-slide--quote");
-    expect(html).toContain("md-slide__quote");
-    expect(html).toContain("Make it work");
-    expect(html).toContain("— Lee");
-  });
-
-  it("intercepts ```mermaid code blocks into the lazy renderer", () => {
-    const html = render("```mermaid\nflowchart LR\nA-->B\n```");
-    expect(html).toContain("md-mermaid");
-    expect(html).not.toMatch(/<pre[^>]*>\s*<code[^>]*language-mermaid/);
-  });
-
-  it("leaves non-mermaid fenced code blocks alone", () => {
+  it("renders fenced code blocks", () => {
     const html = render("```ts\nconst x = 1;\n```");
     expect(html).toContain("md-code-block");
     expect(html).toContain("<pre");
     expect(html).toContain("language-ts");
-    expect(html).not.toContain("md-mermaid");
   });
 
   it("falls back gracefully for an unknown directive", () => {

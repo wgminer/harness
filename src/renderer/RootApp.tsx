@@ -30,7 +30,11 @@ export function RootApp() {
   }, []);
 
   if (route.kind === "loading") {
-    return null;
+    return (
+      <div className="harness-boot" data-testid="harness-boot" role="status" aria-label="Harness">
+        <span className="harness-boot__wordmark">Harness</span>
+      </div>
+    );
   }
   if (route.kind === "sticky") {
     return <WindowedNoteView noteId={route.noteId} />;

@@ -1,34 +1,70 @@
 import SwiftUI
+import UIKit
 
 struct MessageRowView: View, Equatable {
     let message: MessageRecord
+    var localDataDir: URL?
     var isStreaming = false
     var onToolConfirm: ((ToolCallRecord, GatedToolAction) -> Void)?
     @State private var isExpanded = false
+    @State private var attachmentImages: [UIImage] = []
 
     static func == (lhs: MessageRowView, rhs: MessageRowView) -> Bool {
-        lhs.message == rhs.message && lhs.isStreaming == rhs.isStreaming
+        lhs.message == rhs.message
+            && lhs.isStreaming == rhs.isStreaming
+            && lhs.localDataDir == rhs.localDataDir
     }
 
     var body: some View {
-        switch message.messageRole {
-        case .assistant:
-            AssistantMessageView(
-                content: ChatTemporalContext.stripSentAtPrefix(message.content),
-                isStreaming: isStreaming,
-                toolCalls: message.toolCalls ?? [],
-                onToolConfirm: onToolConfirm
-            )
-        case .user:
-            UserMessageCard(content: message.content, isExpanded: $isExpanded)
-        case .system:
-            AssistantMessageView(
-                content: message.content,
-                isStreaming: isStreaming,
-                toolCalls: message.toolCalls ?? [],
-                onToolConfirm: onToolConfirm
+        Group {
+            switch message.messageRole {
+            case .assistant:
+                AssistantMessageView(
+                    content: ChatTemporalContext.stripSentAtPrefix(message.content),
+                    isStreaming: isStreaming,
+                    toolCalls: message.toolCalls ?? [],
+                    onToolConfirm: onToolConfirm
+                )
+            case .user:
+                UserMessageCard(
+                    content: message.content,
+                    attachmentImages: attachmentImages,
+                    isExpanded: $isExpanded
+                )
+            case .system:
+                AssistantMessageView(
+                    content: message.content,
+                    isStreaming: isStreaming,
+                    toolCalls: message.toolCalls ?? [],
+                    onToolConfirm: onToolConfirm
+                )
+            }
+        }
+        .task(id: attachmentCacheKey) {
+            attachmentImages = await Self.loadAttachmentImages(
+                message: message,
+                localDataDir: localDataDir
             )
         }
+    }
+
+    private var attachmentCacheKey: String {
+        guard let attachments = message.attachments, !attachments.isEmpty else { return message.id }
+        let paths = attachments.map(\.relativePath).joined(separator: "|")
+        return "\(message.id):\(paths)"
+    }
+
+    private static func loadAttachmentImages(message: MessageRecord, localDataDir: URL?) async -> [UIImage] {
+        guard let localDataDir, let attachments = message.attachments, !attachments.isEmpty else {
+            return []
+        }
+        let paths = attachments.compactMap { attachment -> String? in
+            guard attachment.mimeType.hasPrefix("image/") else { return nil }
+            return LocalDataLayout.fileURL(in: localDataDir, relativePath: attachment.relativePath).path
+        }
+        return await Task.detached(priority: .utility) {
+            paths.compactMap { UIImage(contentsOfFile: $0) }
+        }.value
     }
 }
 
@@ -44,7 +80,7 @@ struct ReplyingIndicatorView: View {
     }
 }
 
-private struct AssistantMessageView: View {
+struct AssistantMessageView: View {
     let content: String
     var isStreaming = false
     var toolCalls: [ToolCallRecord]
@@ -59,93 +95,128 @@ private struct AssistantMessageView: View {
                 )
             }
             if !content.isEmpty || isStreaming {
-                HarnessMarkdownView(content: content, isStreaming: isStreaming)
-                    .equatable()
-                    .lineSpacing(4)
+                Group {
+                    if isStreaming || !UserMessageCard.looksLikeMarkdown(content) {
+                        Text(content)
+                            .font(.body)
+                            .lineSpacing(4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    } else {
+                        HarnessMarkdownView(content: content, isStreaming: false)
+                            .lineSpacing(4)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private struct UserMessageCard: View {
-    @Environment(\.harnessTheme) private var theme
+struct UserMessageCard: View {
     let content: String
+    var attachmentImages: [UIImage] = []
     @Binding var isExpanded: Bool
-    @State private var isOverflowing = false
 
     private static let collapsedLineLimit = 5
-    private static let approxLineHeight: CGFloat = 24
-    private static var maxCollapsedHeight: CGFloat {
-        approxLineHeight * CGFloat(collapsedLineLimit) + 8
+    private static let approxCharsPerLine = 70
+
+    static func looksLikeMarkdown(_ content: String) -> Bool {
+        content.contains("```")
+            || content.contains("**")
+            || content.contains("](")
+            || content.contains("\n- ")
+            || content.contains("\n* ")
+            || content.hasPrefix("#")
+            || content.contains("\n#")
+    }
+
+    private var isOverflowing: Bool {
+        guard !content.isEmpty else { return false }
+        let newlineCount = content.reduce(0) { partial, char in
+            partial + (char == "\n" ? 1 : 0)
+        }
+        if newlineCount >= Self.collapsedLineLimit { return true }
+        return content.count > Self.collapsedLineLimit * Self.approxCharsPerLine
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .bottom) {
-                HarnessMarkdownView(
-                    content: content,
-                    lineLimit: isExpanded ? nil : Self.collapsedLineLimit
-                )
-                .equatable()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(alignment: .topLeading) {
-                    // Measure uncapped height — clamped layout always ≈ 5 lines, so it can't detect overflow.
-                    HarnessMarkdownView(content: content, lineLimit: nil)
-                        .equatable()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .opacity(0)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                        .background(
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: UserMessageHeightKey.self,
-                                    value: proxy.size.height
-                                )
-                            }
-                        )
-                }
-
-                if !isExpanded && isOverflowing {
-                    LinearGradient(
-                        colors: [
-                            theme.bgSecondaryColor.opacity(0),
-                            theme.bgSecondaryColor,
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 38)
-                    .allowsHitTesting(false)
-                }
+            if !attachmentImages.isEmpty {
+                attachmentStrip
             }
 
-            if isOverflowing {
-                Button(isExpanded ? "Show less" : "Show more") {
-                    toggleExpanded()
+            if !content.isEmpty {
+                ZStack(alignment: .bottom) {
+                    userBody
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(isExpanded ? nil : Self.collapsedLineLimit)
+
+                    if !isExpanded && isOverflowing {
+                        LinearGradient(
+                            colors: [
+                                Color(.secondarySystemBackground).opacity(0),
+                                Color(.secondarySystemBackground),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 38)
+                        .allowsHitTesting(false)
+                    }
                 }
-                .font(.caption)
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+
+                if isOverflowing {
+                    Button(isExpanded ? "Show less" : "Show more") {
+                        toggleExpanded()
+                    }
+                    .font(.caption)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.bgSecondaryColor)
+        .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture {
             guard isOverflowing else { return }
             toggleExpanded()
         }
-        .onPreferenceChange(UserMessageHeightKey.self) { height in
-            isOverflowing = height > Self.maxCollapsedHeight + 1
-        }
         .onChange(of: content) { _, _ in
-            isOverflowing = false
             if isExpanded { isExpanded = false }
+        }
+    }
+
+    private var attachmentStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(attachmentImages.enumerated()), id: \.offset) { _, image in
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 160, height: 160)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var userBody: some View {
+        if Self.looksLikeMarkdown(content) {
+            HarnessMarkdownView(
+                content: content,
+                lineLimit: isExpanded ? nil : Self.collapsedLineLimit
+            )
+        } else {
+            Text(content)
+                .font(.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
         }
     }
 
@@ -153,13 +224,6 @@ private struct UserMessageCard: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             isExpanded.toggle()
         }
-    }
-}
-
-private struct UserMessageHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 

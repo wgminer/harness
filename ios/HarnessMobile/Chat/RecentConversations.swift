@@ -4,6 +4,9 @@ enum RecentConversations {
     static let perChatBodyBudget = 2000
     static let totalBodyBudget = 8000
     static let protectRecentCount = 3
+    /// Max conversations to load from disk when shortlisting by map metadata.
+    /// Covers protect-recent + a buffer for same-day / recently created threads without O(library) I/O.
+    static let shortlistLoadLimit = 24
 
     private struct Candidate {
         let id: String
@@ -19,25 +22,47 @@ enum RecentConversations {
         var body: String
     }
 
-    @MainActor
-    static func buildBlock(store: ConversationStore, excludeConversationId: String?) throws -> String {
-        let map = try store.loadConversationMapRaw()
+    /// Builds the recent-conversations system prompt block from disk.
+    /// Safe to call off the main actor — uses only nonisolated ConversationStore loaders.
+    nonisolated static func buildBlock(
+        localDataDir: URL,
+        excludeConversationId: String?
+    ) throws -> String {
+        let map = try ConversationStore.loadConversationMapRaw(localDataDir: localDataDir)
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-        var candidates: [Candidate] = []
+        let todayStart = localDayStartMs(timestampMs: nowMs)
 
+        var eligible: [(id: String, meta: ConversationMeta)] = []
         for (id, meta) in map {
             if id == excludeConversationId { continue }
             guard meta.hasMessages == true else { continue }
-            let messages = try store.loadMessages(conversationId: id)
+            eligible.append((id, meta))
+        }
+        eligible.sort { $0.meta.createdAt > $1.meta.createdAt }
+
+        var shortlistIds = Set<String>()
+        for item in eligible.prefix(shortlistLoadLimit) {
+            shortlistIds.insert(item.id)
+        }
+        for item in eligible where item.meta.createdAt >= todayStart {
+            shortlistIds.insert(item.id)
+        }
+
+        var candidates: [Candidate] = []
+        for item in eligible where shortlistIds.contains(item.id) {
+            let messages = try ConversationStore.loadMessages(
+                localDataDir: localDataDir,
+                conversationId: item.id
+            )
             if messages.isEmpty { continue }
-            let activityAt = conversationActivityAt(messages: messages, createdAt: meta.createdAt)
+            let activityAt = conversationActivityAt(messages: messages, createdAt: item.meta.createdAt)
             let previewBody = cleanDialogueBody(messages: messages, budget: perChatBodyBudget)
             if previewBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
             candidates.append(
                 Candidate(
-                    id: id,
-                    title: meta.title,
-                    createdAt: meta.createdAt,
+                    id: item.id,
+                    title: item.meta.title,
+                    createdAt: item.meta.createdAt,
                     activityAt: activityAt,
                     messages: messages
                 )
@@ -76,6 +101,31 @@ enum RecentConversations {
             turns.append((label, text))
         }
         return windowDialogueFromEnd(turns: turns, budget: budget)
+    }
+
+    /// IDs that would be loaded from disk for a given map (for tests / introspection).
+    static func shortlistIds(
+        from map: [String: ConversationMeta],
+        excludeConversationId: String?,
+        nowMs: Int64
+    ) -> Set<String> {
+        let todayStart = localDayStartMs(timestampMs: nowMs)
+        var eligible: [(id: String, meta: ConversationMeta)] = []
+        for (id, meta) in map {
+            if id == excludeConversationId { continue }
+            guard meta.hasMessages == true else { continue }
+            eligible.append((id, meta))
+        }
+        eligible.sort { $0.meta.createdAt > $1.meta.createdAt }
+
+        var ids = Set<String>()
+        for item in eligible.prefix(shortlistLoadLimit) {
+            ids.insert(item.id)
+        }
+        for item in eligible where item.meta.createdAt >= todayStart {
+            ids.insert(item.id)
+        }
+        return ids
     }
 
     private static func conversationActivityAt(messages: [MessageRecord], createdAt: Int64) -> Int64 {

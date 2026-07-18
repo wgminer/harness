@@ -1,14 +1,12 @@
 import SwiftUI
 
 struct HarnessBootView: View {
-    @Environment(\.harnessTheme) private var theme
-
     var body: some View {
         ZStack {
-            theme.bgColor.ignoresSafeArea()
+            Color(.systemBackground).ignoresSafeArea()
             Text("Harness")
                 .font(.largeTitle.weight(.semibold))
-                .foregroundStyle(theme.fgColor)
+                .foregroundStyle(.primary)
         }
         .accessibilityLabel("Harness")
     }
@@ -16,6 +14,4 @@ struct HarnessBootView: View {
 
 #Preview {
     HarnessBootView()
-        .environment(\.harnessTheme, .default)
-        .preferredColorScheme(.dark)
 }

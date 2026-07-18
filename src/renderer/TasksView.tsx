@@ -1,6 +1,6 @@
 import { snapToGrid } from "../shared/grid";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, ListTodo, Square, SquareCheck, Trash2, X } from "lucide-react";
+import { ChevronRight, Circle, CircleCheck, ListTodo, Trash2, X } from "lucide-react";
 import type { TaskItem, TasksPayload } from "../shared/desktopAPI";
 import { normalizeTags } from "../shared/tags";
 import {
@@ -69,9 +69,9 @@ function TaskRow({
           disabled={dismissing}
         >
           {done ? (
-            <SquareCheck size={20} strokeWidth={2} className="tasks-check-icon tasks-check-icon--on" />
+            <CircleCheck size={20} strokeWidth={2} className="tasks-check-icon tasks-check-icon--on" />
           ) : (
-            <Square size={20} strokeWidth={2} className="tasks-check-icon" />
+            <Circle size={20} strokeWidth={2} className="tasks-check-icon" />
           )}
         </button>
         <button

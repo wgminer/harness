@@ -7,6 +7,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const { pathToFileURL } = require("node:url");
 
 const root = path.join(__dirname, "..");
 require("dotenv").config({ path: path.join(root, ".env") });
@@ -16,13 +17,69 @@ const isMac = args.includes("--mac") || process.platform === "darwin";
 const replace = args.includes("--replace");
 const quick = args.includes("--quick");
 const bumpFlag = args.includes("--bump");
+
+// Legacy electron-builder name → Tauri notarization password.
+if (!process.env.APPLE_PASSWORD && process.env.APPLE_APP_SPECIFIC_PASSWORD) {
+  process.env.APPLE_PASSWORD = process.env.APPLE_APP_SPECIFIC_PASSWORD;
+}
+
 if (quick) {
-  process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
+  // Tauri adhoc identity — local smoke builds only; Gatekeeper will reject on other Macs.
+  process.env.APPLE_SIGNING_IDENTITY = "-";
+  for (const key of [
+    "APPLE_ID",
+    "APPLE_PASSWORD",
+    "APPLE_APP_SPECIFIC_PASSWORD",
+    "APPLE_TEAM_ID",
+    "APPLE_CERTIFICATE",
+    "APPLE_CERTIFICATE_PASSWORD",
+    "APPLE_API_KEY",
+    "APPLE_API_ISSUER",
+    "APPLE_API_KEY_PATH",
+    "REQUIRE_NOTARIZE",
+  ]) {
+    delete process.env[key];
+  }
 }
 
 // Avoid tauri signer TTY password prompt when the key has no password.
 if (!("TAURI_SIGNING_PRIVATE_KEY_PASSWORD" in process.env)) {
   process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "";
+}
+
+function requireNotarizeEnabled() {
+  const v = process.env.REQUIRE_NOTARIZE;
+  return v === "1" || v === "true";
+}
+
+function ensureSigningAndNotarizationEnv() {
+  if (!requireNotarizeEnabled() || !isMac || quick) return;
+
+  const identity = process.env.APPLE_SIGNING_IDENTITY;
+  if (!identity || identity === "-") {
+    throw new Error(
+      "REQUIRE_NOTARIZE=1 but APPLE_SIGNING_IDENTITY is missing (or adhoc '-'). " +
+        "Set it to your Developer ID Application identity from `security find-identity -v -p codesigning`. " +
+        "See .env.example and BUILD.md."
+    );
+  }
+
+  const hasAppleIdAuth =
+    Boolean(process.env.APPLE_ID) &&
+    Boolean(process.env.APPLE_PASSWORD) &&
+    Boolean(process.env.APPLE_TEAM_ID);
+  const hasApiKeyAuth =
+    Boolean(process.env.APPLE_API_KEY) &&
+    Boolean(process.env.APPLE_API_ISSUER) &&
+    Boolean(process.env.APPLE_API_KEY_PATH);
+
+  if (!hasAppleIdAuth && !hasApiKeyAuth) {
+    throw new Error(
+      "REQUIRE_NOTARIZE=1 but notarization credentials are missing. " +
+        "Set APPLE_ID + APPLE_PASSWORD + APPLE_TEAM_ID (or APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_KEY_PATH). " +
+        "See .env.example and BUILD.md."
+    );
+  }
 }
 
 const startedAt = Date.now();
@@ -176,6 +233,42 @@ function findBuiltApp() {
   return null;
 }
 
+function findBuiltDmg() {
+  const dmgDir = path.join(root, "src-tauri", "target", "release", "bundle", "dmg");
+  if (!fs.existsSync(dmgDir)) return null;
+  const names = fs
+    .readdirSync(dmgDir)
+    .filter((f) => f.endsWith(".dmg") && !f.startsWith("."))
+    .sort();
+  return names.length ? path.join(dmgDir, names[names.length - 1]) : null;
+}
+
+/** Clickable terminal hyperlink (OSC 8); falls back to plain label when not a TTY. */
+function terminalLink(url, label) {
+  if (!process.stdout.isTTY) return label;
+  return `\x1b]8;;${url}\x07${label}\x1b]8;;\x07`;
+}
+
+function printArtifactSummary() {
+  const { execSync } = require("child_process");
+  const builtDmg = findBuiltDmg();
+  const builtApp = findBuiltApp();
+  const distributable = builtDmg || builtApp;
+  if (!distributable) return;
+
+  const size = execSync(`du -sh "${distributable}"`, { encoding: "utf8" }).trim();
+  console.log(color("dim", `  artifact: ${distributable} (${size.split("\t")[0]})`));
+  if (builtDmg && builtApp) {
+    console.log(color("dim", `  app:      ${builtApp}`));
+  }
+
+  const folder = path.dirname(distributable);
+  const folderUrl = pathToFileURL(folder).href;
+  const openLabel = process.platform === "darwin" ? "Open in Finder" : "Open folder";
+  // Always print file:// so Cursor/terminals can turn it into a clickable link.
+  console.log(color("cyan", `  ${openLabel}: `) + terminalLink(folderUrl, folderUrl));
+}
+
 function installToApplications(appPath) {
   const dest = "/Applications/Harness.app";
   if (fs.existsSync(dest)) {
@@ -195,8 +288,10 @@ async function main() {
     color("bold", `\n▸ Harness dist (tauri${modeExtras.length ? ` + ${modeExtras.join(" + ")}` : ""})`)
   );
   if (quick) {
-    console.log(color("yellow", "  quick: code signing disabled — for local testing only"));
+    console.log(color("yellow", "  quick: adhoc signing (APPLE_SIGNING_IDENTITY=-) — for local testing only"));
   }
+
+  ensureSigningAndNotarizationEnv();
 
   let versionInfo;
   if (shouldBumpVersion()) {
@@ -261,12 +356,7 @@ async function main() {
     installToApplications(appPath);
   }
 
-  const builtApp = findBuiltApp();
-  if (builtApp) {
-    const { execSync } = require("child_process");
-    const size = execSync(`du -sh "${builtApp}"`, { encoding: "utf8" }).trim();
-    console.log(color("dim", `  artifact: ${builtApp} (${size.split("\t")[0]})`));
-  }
+  printArtifactSummary();
 
   const totalE = fmtDuration(Date.now() - startedAt);
   console.log(color("green", `\n✓ dist finished in ${totalE}`));
@@ -280,4 +370,12 @@ if (require.main === module) {
   });
 }
 
-module.exports = { shouldBumpVersion, bumpPatchVersion, fmtDuration, makeBar };
+module.exports = {
+  shouldBumpVersion,
+  bumpPatchVersion,
+  fmtDuration,
+  makeBar,
+  findBuiltApp,
+  findBuiltDmg,
+  printArtifactSummary,
+};

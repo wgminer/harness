@@ -80,6 +80,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private var smoothedLevel: Float = 0
     private var heldPeak: Float = 0
     private var peakHoldRemaining = 0
+    /// Counts metering ticks so we can publish to SwiftUI at a lower rate.
+    private var publishTick = 0
     /// Bumped on every `cancel()` so an in-flight `start()` cannot leave the mic on after teardown.
     private var startGeneration = 0
 
@@ -183,12 +185,15 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     private func startTimer() {
         stopTimer()
-        // AudioRecorder is @MainActor; schedule on the main run loop and tick inline
-        // (no Task hop) so metering stays smooth at ~30 Hz.
+        // Tick metering often for smoothing, but publish to SwiftUI much less often.
         let timer = Timer(timeInterval: 0.033, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let startedAt = self.startedAt else { return }
-                self.elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
+                // Elapsed label only needs ~4 Hz; avoid rebuilding chrome every tick.
+                if ms - self.elapsedMs >= 250 || ms < self.elapsedMs {
+                    self.elapsedMs = ms
+                }
                 self.tickMetering()
             }
         }
@@ -219,6 +224,10 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
         smoothedLevel = AudioRecorderMetering.smooth(current: smoothedLevel, toward: heldPeak)
         let level = CGFloat(smoothedLevel)
+
+        publishTick += 1
+        // Publish ~12 Hz — enough for the waveform; avoids SwiftUI rebuild storms.
+        guard publishTick % 3 == 0 else { return }
         audioLevel = level
         waveformSamples = AudioRecorderMetering.appendSample(level, to: waveformSamples)
     }
@@ -227,6 +236,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         smoothedLevel = 0
         heldPeak = 0
         peakHoldRemaining = 0
+        publishTick = 0
         audioLevel = 0
         waveformSamples = Array(repeating: 0, count: Self.waveformSampleCount)
     }

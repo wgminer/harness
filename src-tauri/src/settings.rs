@@ -7,6 +7,9 @@ use crate::storage::{atomic_write_utf8, file_exists, read_json_object_file, Writ
 
 const DEFAULT_TRANSCRIPTION_PROMPT: &str = "Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Keep proper nouns and technical terms unchanged. Do not add new information.";
 
+/// Must match `DEFAULT_ACCENT` in `src/shared/accent.ts` and `--accent` in `base.css`.
+const DEFAULT_ACCENT: &str = "#5b9cf5";
+
 pub fn default_settings() -> Value {
     json!({
         "version": 1,
@@ -36,7 +39,10 @@ pub fn default_settings() -> Value {
         "chat": {
             "openToComposeOnLaunch": true
         },
-        "systemPrompt": default_system_prompt_value()
+        "systemPrompt": default_system_prompt_value(),
+        "appearance": {
+            "accent": DEFAULT_ACCENT
+        }
     })
 }
 
@@ -264,6 +270,32 @@ fn parse_sync(raw: Option<&Value>, defaults: &Value) -> Value {
     })
 }
 
+fn normalize_accent_hex(raw: Option<&Value>) -> String {
+    let Some(s) = raw.and_then(|v| v.as_str()) else {
+        return DEFAULT_ACCENT.to_string();
+    };
+    let trimmed = s.trim();
+    let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
+    let lower = hex.to_ascii_lowercase();
+    let expanded = if lower.len() == 3 && lower.chars().all(|c| c.is_ascii_hexdigit()) {
+        lower
+            .chars()
+            .flat_map(|c| [c, c])
+            .collect::<String>()
+    } else if lower.len() == 6 && lower.chars().all(|c| c.is_ascii_hexdigit()) {
+        lower
+    } else {
+        return DEFAULT_ACCENT.to_string();
+    };
+    format!("#{expanded}")
+}
+
+fn parse_appearance(raw: Option<&Value>) -> Value {
+    json!({
+        "accent": normalize_accent_hex(raw.and_then(|v| v.get("accent")))
+    })
+}
+
 pub fn parse_settings(data: &Value) -> Value {
     let defaults = default_settings();
     let obj = data.as_object();
@@ -328,7 +360,8 @@ pub fn parse_settings(data: &Value) -> Value {
         "systemPrompt": parse_system_prompt(
             obj.and_then(|o| o.get("systemPrompt")),
             &defaults,
-        )
+        ),
+        "appearance": parse_appearance(obj.and_then(|o| o.get("appearance"))),
     })
 }
 
@@ -533,6 +566,14 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
             &current_sp,
             system_prompt,
             &["shared", "desktop", "ios"],
+        );
+    }
+
+    if let Some(appearance) = partial.get("appearance") {
+        next["appearance"] = merge_object_fields(
+            current.get("appearance").unwrap_or(&json!({})),
+            appearance,
+            &["accent"],
         );
     }
 

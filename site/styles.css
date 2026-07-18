@@ -8,11 +8,12 @@
   --fg-muted: #999;
   --fg-faint: #383838;
   --accent: #5b9cf5;
-  --btn-primary-bg: #2e4463;
-  --btn-primary-fg: #87b5f4;
-  --btn-primary-bg-hover: #355178;
+  --accent-readable: color-mix(in oklab, var(--accent) 72%, white);
+  --btn-primary-bg: color-mix(in oklab, var(--accent) 38%, var(--bg));
+  --btn-primary-fg: var(--accent-readable);
+  --btn-primary-bg-hover: color-mix(in oklab, var(--accent) 48%, var(--bg));
   --border-edge: #222;
-  --selection-bg: #416eac;
+  --selection-bg: color-mix(in oklab, var(--accent) 65%, black);
 
   --font-body: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
@@ -23,6 +24,10 @@
   --space-lg: 1.5rem;
   --space-xl: 2rem;
   --space-2xl: 2.5rem;
+
+  /* Match desktop app radius scale (base.css) */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
 }
 
 *,
@@ -91,7 +96,7 @@ a:focus-visible {
 .stack__icon {
   width: 80px;
   height: 80px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .stack__title {
@@ -162,15 +167,19 @@ a:focus-visible {
   width: 100%;
   margin: var(--space-lg) 0 0;
   padding: 0.75rem 1.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-size: 0.9375rem;
   font-weight: 500;
   letter-spacing: 0.01em;
   text-decoration: none;
   color: var(--btn-primary-fg);
-  background: linear-gradient(180deg, #355178 0%, var(--btn-primary-bg) 100%);
-  border: 1px solid #3d5f8a;
+  background: linear-gradient(
+    180deg,
+    var(--btn-primary-bg-hover) 0%,
+    var(--btn-primary-bg) 100%
+  );
+  border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--bg));
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 1px 2px rgba(0, 0, 0, 0.2);
@@ -182,12 +191,16 @@ a:focus-visible {
 }
 
 .cta:hover {
-  background: linear-gradient(180deg, #3d5f8a 0%, var(--btn-primary-bg-hover) 100%);
-  border-color: #4a6f9e;
-  color: #a8c8f8;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--accent) 55%, var(--bg)) 0%,
+    var(--btn-primary-bg-hover) 100%
+  );
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--bg));
+  color: var(--accent-readable);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 2px 8px rgba(91, 156, 245, 0.15);
+    0 2px 8px color-mix(in oklab, var(--accent) 15%, transparent);
   transform: translateY(-1px);
 }
 

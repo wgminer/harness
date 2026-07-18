@@ -10,7 +10,7 @@
     "url": "https://github.com/wgminer/harness.git"
   },
   "scripts": {
-    "dev": "HARNESS_DEV=1 tauri dev",
+    "dev": "HARNESS_DEV=1 tauri dev --config src-tauri/tauri.dev.conf.json",
     "dev:web": "vite",
     "site": "serve site -l 8080",
     "prebuild": "npm run icon:icns && npm run build:speech-helper && npm run build:fn-monitor",
@@ -43,7 +43,6 @@
     "@tauri-apps/plugin-opener": "^2.2.6",
     "@tauri-apps/plugin-updater": "^2.7.0",
     "lucide-react": "^0.575.0",
-    "mermaid": "^11.15.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

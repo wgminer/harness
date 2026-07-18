@@ -30,11 +30,57 @@ enum DictationReplyLabel {
     static let continueLabel = "Continue"
 }
 
+struct ChatCompletionContentPart {
+    enum Kind {
+        case text(String)
+        case imageJPEG(Data)
+    }
+
+    let kind: Kind
+
+    static func text(_ value: String) -> ChatCompletionContentPart {
+        ChatCompletionContentPart(kind: .text(value))
+    }
+
+    static func imageJPEG(_ data: Data) -> ChatCompletionContentPart {
+        ChatCompletionContentPart(kind: .imageJPEG(data))
+    }
+
+    func toRequestBody() -> [String: Any] {
+        switch kind {
+        case .text(let text):
+            return ["type": "text", "text": text]
+        case .imageJPEG(let data):
+            let url = "data:image/jpeg;base64,\(data.base64EncodedString())"
+            return [
+                "type": "image_url",
+                "image_url": ["url": url],
+            ]
+        }
+    }
+}
+
 struct ChatCompletionMessage {
     let role: String
     var content: String?
+    /// When set, serialized as a multimodal content-part array instead of a string.
+    var contentParts: [ChatCompletionContentPart]?
     var toolCalls: [AccumulatedToolCall]?
     var toolCallId: String?
+
+    init(
+        role: String,
+        content: String? = nil,
+        contentParts: [ChatCompletionContentPart]? = nil,
+        toolCalls: [AccumulatedToolCall]? = nil,
+        toolCallId: String? = nil
+    ) {
+        self.role = role
+        self.content = content
+        self.contentParts = contentParts
+        self.toolCalls = toolCalls
+        self.toolCallId = toolCallId
+    }
 
     func toRequestBody() -> [String: Any] {
         var body: [String: Any] = ["role": role]
@@ -57,7 +103,11 @@ struct ChatCompletionMessage {
             }
             return body
         }
-        body["content"] = content ?? ""
+        if let contentParts, !contentParts.isEmpty {
+            body["content"] = contentParts.map { $0.toRequestBody() }
+        } else {
+            body["content"] = content ?? ""
+        }
         return body
     }
 }

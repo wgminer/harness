@@ -111,6 +111,11 @@ export default function App() {
     setSetupNoticeOpen(false);
   }, []);
 
+  const openDataSettings = useCallback(() => {
+    setSettingsInitialTab("data");
+    setView("settings");
+  }, []);
+
   const dismissSetupNotice = useCallback(() => {
     setSetupNoticeOpen(false);
     if (!setupGaps.some((gap) => gap.severity === "required")) {
@@ -505,6 +510,7 @@ export default function App() {
         updateStatus={updateStatus}
         onUpdateClick={handleUpdateClick}
         onSyncComplete={refreshLibraryAfterSync}
+        onOpenDataSettings={openDataSettings}
       />
       <main className="main">
         {(view === "chat" || activeChatProcessing) && (

@@ -34,14 +34,20 @@ final class ConversationStoreComposeTests: XCTestCase {
     func testAppendMessageSetsHasMessages() throws {
         let store = ConversationStore(localDataDir: tempDir)
         let id = try store.createConversation()
+        XCTAssertTrue(store.conversations.isEmpty, "Empty create must not appear in sidebar")
 
         try store.appendMessage(conversationId: id, role: .user, content: "First message")
-        try store.reload()
 
         let meta = try store.loadConversationMeta(conversationId: id)
         XCTAssertEqual(meta?.hasMessages, true)
         XCTAssertEqual(store.conversations.count, 1)
         XCTAssertEqual(store.conversations.first?.id, id)
+    }
+
+    func testCreateConversationSkipsSidebarUntilMessages() throws {
+        let store = ConversationStore(localDataDir: tempDir)
+        _ = try store.createConversation()
+        XCTAssertTrue(store.conversations.isEmpty)
     }
 
     func testReloadHidesMessagelessConversations() throws {
@@ -60,11 +66,13 @@ final class ConversationStoreComposeTests: XCTestCase {
         let store = ConversationStore(localDataDir: tempDir)
         let id = try store.createDictationConversation(userMessage: "Dictated text")
 
-        try store.reload()
-
         XCTAssertEqual(store.conversations.count, 1)
         XCTAssertEqual(store.conversations.first?.id, id)
         XCTAssertEqual(try store.loadConversationMeta(conversationId: id)?.hasMessages, true)
+
+        try store.reload()
+        XCTAssertEqual(store.conversations.count, 1)
+        XCTAssertEqual(store.conversations.first?.id, id)
     }
 
     func testReloadTrustsHasMessagesWithoutOpeningMessageFile() throws {

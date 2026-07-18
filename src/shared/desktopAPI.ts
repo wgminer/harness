@@ -2,6 +2,7 @@ import type {
   AppendMessageMeta,
   ContextPreview,
   LayoutOptions,
+  MessageAttachment,
   RecordingLink,
   SearchResult,
   Settings,
@@ -43,6 +44,7 @@ export interface GlobalRecordingStatus {
   hotkeyActive: boolean;
   sessionMode: string;
   captureBackend: string;
+  microphonePermission: "granted" | "denied" | "undetermined" | "unsupported";
 }
 
 export interface HarnessAPI {
@@ -58,6 +60,8 @@ export interface HarnessAPI {
     macosAccessibilityTrusted: () => Promise<boolean>;
     requestAccessibilityPrompt: () => Promise<boolean>;
     openAccessibilitySettings: () => Promise<void>;
+    openMicrophoneSettings: () => Promise<void>;
+    openSpeechRecognitionSettings: () => Promise<void>;
   };
   windowSize: {
     get: () => Promise<"small" | "large">;
@@ -99,7 +103,14 @@ export interface HarnessAPI {
     >;
     deleteConversation: (id: string) => Promise<void>;
     getMessages: (id: string) => Promise<
-      { role: string; content: string; toolCalls?: unknown; timestamp?: number; model?: string }[]
+      {
+        role: string;
+        content: string;
+        toolCalls?: unknown;
+        timestamp?: number;
+        model?: string;
+        attachments?: MessageAttachment[];
+      }[]
     >;
     appendMessage: (conversationId: string, role: string, content: string, meta?: AppendMessageMeta) => Promise<void>;
     getUserMemory: () => Promise<Record<string, string>>;
@@ -107,7 +118,25 @@ export interface HarnessAPI {
     deleteUserMemoryKey: (key: string) => Promise<void>;
     searchConversations: (query: string, composeFirstOnly?: boolean) => Promise<SearchResult[]>;
     importFromChatGPTFolder: () => Promise<{ imported: number; errors: string[] }>;
-    importFromClaudeFolder: () => Promise<{ imported: number; errors: string[] }>;
+    /** Pick a Claude export folder and return a reviewable preview (no writes). */
+    previewClaudeImport: () => Promise<{
+      folderPath: string | null;
+      found: number;
+      alreadyImported: number;
+      conversations: Array<{
+        claudeId: string;
+        title: string | null;
+        createdAt: number;
+        messageCount: number;
+        alreadyImported: boolean;
+      }>;
+      errors: string[];
+    }>;
+    /** Persist selected Claude conversations from a previously previewed folder. */
+    confirmClaudeImport: (
+      folderPath: string,
+      claudeIds?: string[],
+    ) => Promise<{ imported: number; updated: number; errors: string[] }>;
     /** Distill user-memory facts from a pasted export produced by another assistant. */
     importLlmContext: (exportText: string) => Promise<
       | {
@@ -219,6 +248,9 @@ export interface HarnessAPI {
     /** Call once after IPC listeners are registered so Fn monitor can start. */
     signalFrontendReady: () => Promise<void>;
     requestMicrophoneAccess: () => Promise<boolean>;
+    microphonePermissionStatus: () => Promise<
+      "granted" | "denied" | "undetermined" | "unsupported"
+    >;
     saveWav: (data: ArrayBuffer) => Promise<{ path: string }>;
     showInFolder: (path: string) => Promise<void>;
     exportWav: (data: ArrayBuffer, suggestedName?: string) => Promise<{ path: string } | { cancelled: true }>;
@@ -234,6 +266,7 @@ export interface HarnessAPI {
     onGlobalRecordingStopped: (cb: () => void) => () => void;
     onGlobalRecordingCancelled: (cb: () => void) => () => void;
     onGlobalRecordingError: (cb: (message: string) => void) => () => void;
+    onGlobalRecordingLevel: (cb: (level: number) => void) => () => void;
     onGlobalTranscriptReady: (cb: (text: string) => void) => () => void;
     onGlobalTranscriptDelivered: (cb: (conversationId: string) => void) => () => void;
   };

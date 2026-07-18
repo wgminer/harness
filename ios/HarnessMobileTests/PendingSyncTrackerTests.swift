@@ -26,7 +26,7 @@ final class PendingSyncTrackerTests: XCTestCase {
         }
     }
 
-    func testRefreshPendingSyncStateMatchesLastSyncedRevision() throws {
+    func testRefreshPendingSyncStateMatchesLastSyncedRevision() async throws {
         try write("app-state/conversations.json", contents: "{\"a\":1}")
         let revision = try BundleCodec.computeRevision(
             localDataDir: localDataDir,
@@ -35,12 +35,12 @@ final class PendingSyncTrackerTests: XCTestCase {
         UserDefaults.standard.set(revision, forKey: SyncEngine.lastSyncedContentRevisionKey)
 
         let store = ConversationStore(localDataDir: localDataDir)
-        try store.refreshPendingSyncState()
+        await store.refreshPendingSyncState()
 
         XCTAssertFalse(store.hasLocalEdits)
     }
 
-    func testRefreshPendingSyncStateDetectsDrift() throws {
+    func testRefreshPendingSyncStateDetectsDrift() async throws {
         try write("app-state/conversations.json", contents: "{\"a\":1}")
         let syncedRevision = try BundleCodec.computeRevision(
             localDataDir: localDataDir,
@@ -51,7 +51,7 @@ final class PendingSyncTrackerTests: XCTestCase {
         try write("app-state/conversations.json", contents: "{\"a\":2}")
 
         let store = ConversationStore(localDataDir: localDataDir)
-        try store.refreshPendingSyncState()
+        await store.refreshPendingSyncState()
 
         XCTAssertTrue(store.hasLocalEdits)
     }

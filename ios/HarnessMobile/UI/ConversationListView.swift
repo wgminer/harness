@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct ConversationListView: View {
-    @ObservedObject var app: AppModel
+    /// Not `@ObservedObject` — observing `AppModel` rebuilds the list on chat route / sync chrome changes.
+    let app: AppModel
     @ObservedObject private var store: ConversationStore
     let onSelect: (String) -> Void
 
@@ -26,8 +27,9 @@ struct ConversationListView: View {
 
     var body: some View {
         conversationList
-        .labeledRefreshable("Pull to sync") {
+        .refreshable {
             await app.performSync()
+            Self.hapticForSyncOutcome(configured: R2SettingsStore.isConfigured, kind: app.syncStatus.kind)
         }
         .navigationTitle("Harness")
         .navigationBarTitleDisplayMode(.inline)
@@ -117,6 +119,7 @@ struct ConversationListView: View {
     private var homeBottomBar: some View {
         HStack(spacing: 12) {
             Button {
+                HapticFeedback.medium()
                 createNewChat()
             } label: {
                 Label("New Chat", systemImage: "plus")
@@ -155,9 +158,23 @@ struct ConversationListView: View {
 
     private func deleteConversation(id: String) {
         do {
+            HapticFeedback.warning()
             try app.deleteConversation(id: id)
         } catch {
             createError = error.localizedDescription
+        }
+    }
+
+    private static func hapticForSyncOutcome(configured: Bool, kind: SyncStatusSnapshot.Kind) {
+        guard configured else {
+            HapticFeedback.warning()
+            return
+        }
+        switch kind {
+        case .error:
+            HapticFeedback.error()
+        case .idle:
+            HapticFeedback.success()
         }
     }
 

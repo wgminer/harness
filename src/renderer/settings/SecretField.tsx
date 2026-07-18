@@ -6,7 +6,6 @@ export interface SecretFieldProps {
   value: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onBlur?: () => void;
-  placeholder?: string;
   ariaLabel: string;
   testId?: string;
 }
@@ -16,7 +15,6 @@ export function SecretField({
   value,
   onChange,
   onBlur,
-  placeholder,
   ariaLabel,
   testId,
 }: SecretFieldProps) {
@@ -31,7 +29,6 @@ export function SecretField({
         value={value}
         onChange={onChange}
         onBlur={onBlur}
-        placeholder={placeholder}
         autoComplete="off"
         spellCheck={false}
         data-lpignore="true"

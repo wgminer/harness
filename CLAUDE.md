@@ -29,4 +29,14 @@ Vitest includes version parity, ipcNames ↔ `generate_handler!` parity, sync-me
 
 ## Dev vs installed data dirs
 
-`npm run dev` sets `HARNESS_DEV=1`, which uses **`~/Library/Application Support/Harness Dev`** (window title **Harness Dev**). An installed app uses **`~/Library/Application Support/Harness`**. Credentials, sync, and audio are **not** split — only the on-disk profile root. See [BUILD.md](BUILD.md) (development vs installed Application Support).
+`npm run dev` sets `HARNESS_DEV=1` and merges `src-tauri/tauri.dev.conf.json`, which uses **`~/Library/Application Support/Harness Dev`**, window title / Dock / Accessibility name **Harness Dev**, and bundle id `com.harness.app.dev`. An installed app uses **`~/Library/Application Support/Harness`** (`com.harness.app`). Credentials, sync, and audio are **not** split — only the on-disk profile root and macOS app identity. See [BUILD.md](BUILD.md) (development vs installed Application Support).
+
+## Dist / release confirmation
+
+When reporting a finished desktop dist or release build in chat, always include a markdown `file://` link to the folder that holds the distributable (prefer the DMG dir: `src-tauri/target/release/bundle/dmg/`, else the `.app` parent). Example: `[Open in Finder](file:///…/bundle/dmg)`. The dist runner also prints this link at the end of `npm run dist` / `dist:mac`.
+
+## Border radius
+
+Desktop radius lives in [`src/renderer/base.css`](src/renderer/base.css): `--radius-xs` (2px), `--radius-sm` / `--radius-md` / `--radius-lg` (4px grid), `--radius-pill`. Prefer these over hardcoded px. Leave `0`, `50%`, and rare hairline `1px` literals when they are intentional.
+
+**iOS is out of this scale** — keep platform-native shapes (`Capsule`, `Circle`, continuous rounded rects, liquid-glass bar metrics). Do not port desktop `--radius-*` values to Swift or chase pixel parity with the desktop app.

@@ -1,10 +1,8 @@
 import {
-  Children,
   isValidElement,
   useMemo,
   useRef,
   useState,
-  type ReactElement,
   type ReactNode,
 } from "react";
 import { Check, Copy, Loader2, SquarePen } from "lucide-react";
@@ -14,7 +12,6 @@ import remarkDirective from "remark-directive";
 import rehypeHighlight from "rehype-highlight";
 import {
   MarkdownInteractionContext,
-  MermaidBlock,
   directiveComponents,
   remarkDirectiveToHast,
 } from "./markdownDirectives";
@@ -230,9 +227,7 @@ function CodeBlock({
  * Headers h1-h6 are intentionally squashed to paragraphs so the model can't
  * accidentally blow up the type scale; section structure is signalled instead
  * via the custom layout directives in `markdownDirectives.tsx`.
- *
- * We also intercept ```mermaid fenced blocks at the `<pre>` level and route them
- * to a lazy-loaded mermaid renderer; everything else flows through highlight.js.
+ * Fenced code blocks flow through highlight.js via `CodeBlock`.
  */
 export function MarkdownContent({
   content,
@@ -255,15 +250,6 @@ export function MarkdownContent({
     <p {...props}>{children}</p>
   );
   const preComponent = ({ children, ...rest }: { children?: ReactNode }) => {
-    const kids = Children.toArray(children);
-    const first = kids[0];
-    if (isValidElement(first)) {
-      const codeEl = first as ReactElement<{ className?: string; children?: ReactNode }>;
-      const cls = codeEl.props.className ?? "";
-      if (typeof cls === "string" && /\blanguage-mermaid\b/.test(cls)) {
-        return <MermaidBlock source={extractCodeText(codeEl.props.children)} />;
-      }
-    }
     const blockIndex = codeBlockIndexRef.current;
     codeBlockIndexRef.current += 1;
     const blockKey = messageId != null ? `${messageId}:code:${blockIndex}` : `code:${blockIndex}`;

@@ -248,18 +248,26 @@ export function ChatMessageList({
                   {m.role === "user" ? (
                     <>
                       <span>You</span>
-                      <span className="message-block-meta-sep" aria-hidden="true">
-                        ·
-                      </span>
-                      <span className="message-block-meta-time">{formatMessageTime(m.timestamp!)}</span>
+                      {m.timestamp != null ? (
+                        <>
+                          <span className="message-block-meta-sep" aria-hidden="true">
+                            ·
+                          </span>
+                          <span className="message-block-meta-time">{formatMessageTime(m.timestamp)}</span>
+                        </>
+                      ) : null}
                     </>
                   ) : (
                     <>
-                      <span className="message-block-meta-model">{m.model}</span>
-                      <span className="message-block-meta-sep" aria-hidden="true">
-                        ·
-                      </span>
-                      <span className="message-block-meta-time">{formatMessageTime(m.timestamp!)}</span>
+                      <span className="message-block-meta-model">{m.model?.trim() || "Assistant"}</span>
+                      {m.timestamp != null ? (
+                        <>
+                          <span className="message-block-meta-sep" aria-hidden="true">
+                            ·
+                          </span>
+                          <span className="message-block-meta-time">{formatMessageTime(m.timestamp)}</span>
+                        </>
+                      ) : null}
                     </>
                   )}
                 </div>

@@ -99,6 +99,19 @@ export function syncInlineStatusLine(input: {
   return `Synced ${ago}`;
 }
 
+/** Sidebar status control: title / aria for the minimal sync icon. */
+export function sidebarSyncStatusTooltip(input: {
+  busy: boolean;
+  configured: boolean;
+  lastError: string | null;
+  lastSuccessAt: number | null;
+}): string {
+  if (!input.configured) return `Set up sync in ${rigSection("Data")}`;
+  if (input.busy) return "Syncing…";
+  if (input.lastError) return input.lastError;
+  return syncInlineStatusLine({ lastSuccessAt: input.lastSuccessAt }) ?? "Synced";
+}
+
 export function formatSyncStatusLine(input: {
   lastSuccessAt: number | null;
   lastAction: SyncDirection | null;

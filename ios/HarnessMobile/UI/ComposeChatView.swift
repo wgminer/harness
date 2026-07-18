@@ -3,11 +3,12 @@ import UIKit
 
 struct ComposeChatView: View {
     @ObservedObject var app: AppModel
-    @Environment(\.harnessTheme) private var theme
 
     @State private var sendError: String?
     @State private var showDictationSheet = false
     @State private var dictationConversationId: String?
+    @State private var pendingImage: UIImage?
+    @State private var showCamera = false
     @FocusState private var isComposerFocused: Bool
 
     private var headerQuote: String {
@@ -33,7 +34,7 @@ struct ComposeChatView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.bgColor.ignoresSafeArea())
+        .background(Color(.systemBackground).ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -65,6 +66,12 @@ struct ComposeChatView: View {
                 dictationConversationId = nil
             }
         }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPickerView(isPresented: $showCamera) { image in
+                pendingImage = image
+            }
+            .ignoresSafeArea()
+        }
     }
 
     private static var quoteLineSpacing: CGFloat {
@@ -81,21 +88,29 @@ struct ComposeChatView: View {
             startsExpanded: true,
             allowsCollapse: false,
             initialDraft: app.composeDraft,
+            pendingImage: pendingImage,
             onDraftChange: { app.cacheComposeDraft($0) },
             onClearDraft: { app.clearComposeDraft() },
-            onSend: { text in Task { await sendFirstMessage(text) } },
+            onClearPendingImage: { pendingImage = nil },
+            onSend: { payload in Task { await sendFirstMessage(payload) } },
             onStop: { app.chatService.stop() },
             onDictate: { startComposeDictation() },
+            onCamera: { showCamera = true },
             isFocused: $isComposerFocused
         )
         .padding(.horizontal, BottomBarMetrics.horizontalInset)
         .padding(.bottom, BottomBarMetrics.bottomInset)
     }
 
-    private func sendFirstMessage(_ text: String) async {
+    private func sendFirstMessage(_ payload: ComposerSendPayload) async {
         do {
             let id = try app.store.createConversation()
-            app.queueOutboundMessage(conversationId: id, text: text)
+            app.queueOutboundMessage(
+                conversationId: id,
+                text: payload.text,
+                imageJPEG: payload.imageJPEG
+            )
+            pendingImage = nil
             app.clearComposeDraft()
             app.openThread(id: id)
         } catch {

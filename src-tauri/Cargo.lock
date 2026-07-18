@@ -1746,6 +1746,7 @@ dependencies = [
  "arboard",
  "async-trait",
  "base64 0.22.1",
+ "block2",
  "chrono",
  "chrono-tz",
  "core-foundation 0.10.1",
@@ -1757,6 +1758,7 @@ dependencies = [
  "keyring",
  "objc2",
  "objc2-app-kit",
+ "objc2-avf-audio",
  "objc2-foundation",
  "rand",
  "regex",
@@ -2770,6 +2772,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13a380031deed8e99db00065c45937da434ca987c034e13b87e4441f9e4090be"
 dependencies = [
  "bitflags 2.13.0",
+ "block2",
  "objc2",
  "objc2-foundation",
 ]

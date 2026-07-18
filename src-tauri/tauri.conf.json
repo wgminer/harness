@@ -49,7 +49,8 @@
     ],
     "macOS": {
       "minimumSystemVersion": "12.0",
-      "infoPlist": "Info.plist"
+      "infoPlist": "Info.plist",
+      "entitlements": "entitlements.plist"
     }
   },
   "plugins": {

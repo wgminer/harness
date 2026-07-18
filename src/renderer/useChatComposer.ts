@@ -3,6 +3,7 @@ import { useRecorder } from "./useRecorder";
 import { transcribeWav } from "./recordingPipeline";
 import { playCancelChime } from "./recordingUtils";
 import { audioFileToWav } from "./audioFileToWav";
+import { MICROPHONE_PERMISSION_DENIED_MESSAGE } from "./recordingAudioUtils";
 import type { VoiceState } from "./chatHelpers";
 import { transcriptCleanupSkippedMessage } from "../shared/setupState";
 import type { Settings } from "../shared/types";
@@ -228,7 +229,7 @@ export function useChatComposer({
         }
       }, 33);
     } catch (err) {
-      setVoiceError(err instanceof Error ? err.message : "Microphone access denied.");
+      setVoiceError(err instanceof Error ? err.message : MICROPHONE_PERMISSION_DENIED_MESSAGE);
     }
   }, [recorder, stopAndTranscribe]);
 

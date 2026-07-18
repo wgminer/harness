@@ -11,3 +11,4 @@ export { SettingsTabPanel, type SettingsTabPanelProps } from "./SettingsTabPanel
 export { SystemPromptPreviewPanel } from "./SystemPromptPreviewPanel";
 export { DataSettingsTab } from "./DataSettingsTab";
 export { MemorySettingsTab } from "./MemorySettingsTab";
+export { AccentColorField, type AccentColorFieldProps } from "./AccentColorField";

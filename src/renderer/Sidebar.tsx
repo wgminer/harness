@@ -6,7 +6,9 @@ import {
   useRef,
 } from "react";
 import {
+  AlertCircle,
   ArrowUpRight,
+  Check,
   Settings,
   Plus,
   Search,
@@ -15,12 +17,10 @@ import {
   X,
   ListTodo,
   Loader2,
-  RefreshCw,
   Circle,
   ListFilter,
   ChevronDown,
 } from "lucide-react";
-import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import type { SearchResult } from "../shared/types";
 import {
   conversationDisplayTitle,
@@ -29,7 +29,12 @@ import {
 } from "../shared/conversationSession";
 import { getDisplayNoteTitle, type NoteSummary } from "../shared/writing";
 import { getDisplayImageTitle, type GeneratedImage } from "../shared/images";
-import { syncResultChangedLocalData } from "../shared/sync";
+import {
+  sidebarSyncStatusTooltip,
+  syncResultChangedLocalData,
+  type SyncStatus,
+} from "../shared/sync";
+import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import type { UpdateStatus } from "../shared/updateStatus";
 import {
   type Conversation,
@@ -70,6 +75,8 @@ interface SidebarProps {
   onUpdateClick: () => void;
   /** Called after sync when local conversation data may have changed. */
   onSyncComplete?: () => void;
+  /** Open Settings → Data (error recovery / sync setup). */
+  onOpenDataSettings?: () => void;
 }
 
 function HighlightText({ text, range }: { text: string; range?: [number, number] }) {
@@ -111,6 +118,7 @@ export function Sidebar({
   updateStatus,
   onUpdateClick,
   onSyncComplete,
+  onOpenDataSettings,
 }: SidebarProps) {
   const updateButtonLabel = (() => {
     switch (updateStatus.status) {
@@ -149,7 +157,7 @@ export function Sidebar({
 
   const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_INITIAL_VISIBLE_COUNT);
   const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("recent");
-  const [syncConfigured, setSyncConfigured] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement | null>(null);
@@ -157,27 +165,42 @@ export function Sidebar({
   const { scrollRef: sidebarListRef, fadeTop, fadeBottom, onScroll: onSidebarListScroll } =
     useScrollFadeEdges();
 
-  const refreshSyncConfigured = useCallback(() => {
+  const syncConfigured = syncStatus?.configured ?? false;
+  const syncHasError = Boolean(syncStatus?.lastError);
+  const syncTooltip = sidebarSyncStatusTooltip({
+    busy: syncBusy,
+    configured: syncConfigured,
+    lastError: syncStatus?.lastError ?? null,
+    lastSuccessAt: syncStatus?.lastSuccessAt ?? null,
+  });
+
+  const refreshSyncStatus = useCallback(() => {
     void window.harness.sync.getStatus().then((status) => {
-      setSyncConfigured(status.configured);
+      setSyncStatus(status);
     });
   }, []);
 
   useEffect(() => {
-    refreshSyncConfigured();
-  }, [refreshSyncConfigured]);
+    refreshSyncStatus();
+  }, [refreshSyncStatus]);
 
   useEffect(() => {
     if (view === "settings") return;
-    refreshSyncConfigured();
-  }, [view, refreshSyncConfigured]);
+    refreshSyncStatus();
+  }, [view, refreshSyncStatus]);
+
+  useEffect(() => {
+    return window.harness.sync.onChanged(() => {
+      refreshSyncStatus();
+    });
+  }, [refreshSyncStatus]);
 
   const runSidebarSync = useCallback(async () => {
     if (syncBusy || !syncConfigured) return;
     setSyncBusy(true);
     try {
       const result = await window.harness.sync.runNow();
-      setSyncConfigured(result.status.configured);
+      setSyncStatus(result.status);
       if (syncResultChangedLocalData(result)) {
         onSyncComplete?.();
       }
@@ -185,6 +208,14 @@ export function Sidebar({
       setSyncBusy(false);
     }
   }, [syncBusy, syncConfigured, onSyncComplete]);
+
+  const handleSyncControlClick = useCallback(() => {
+    if (!syncConfigured || syncHasError) {
+      onOpenDataSettings?.();
+      return;
+    }
+    void runSidebarSync();
+  }, [syncConfigured, syncHasError, onOpenDataSettings, runSidebarSync]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -494,7 +525,10 @@ export function Sidebar({
                       onNewChat();
                     }}
                   >
-                    <span>New chat</span>
+                    <span className="sidebar-new-menu-item__main">
+                      <Circle size={16} className="sidebar-new-menu-item__icon" aria-hidden />
+                      <span>New chat</span>
+                    </span>
                     <span className="sidebar-new-menu-item__shortcut" aria-hidden>
                       {modKey}N
                     </span>
@@ -509,7 +543,10 @@ export function Sidebar({
                       onNewNote();
                     }}
                   >
-                    <span>New note</span>
+                    <span className="sidebar-new-menu-item__main">
+                      <StickyNote size={16} className="sidebar-new-menu-item__icon" aria-hidden />
+                      <span>New note</span>
+                    </span>
                     <span className="sidebar-new-menu-item__shortcut" aria-hidden>
                       ⇧{modKey}N
                     </span>
@@ -524,7 +561,10 @@ export function Sidebar({
                       onNewImage();
                     }}
                   >
-                    <span>New image</span>
+                    <span className="sidebar-new-menu-item__main">
+                      <ImageIcon size={16} className="sidebar-new-menu-item__icon" aria-hidden />
+                      <span>New image</span>
+                    </span>
                   </button>
                 </div>
               ) : null}
@@ -719,20 +759,34 @@ export function Sidebar({
           </div>
           <button
             type="button"
-            className="btn btn-icon sidebar-footer__sync-toggle"
-            data-testid="sidebar-sync"
-            onClick={() => void runSidebarSync()}
-            disabled={syncBusy || !syncConfigured}
-            aria-label={syncBusy ? "Syncing" : "Sync now"}
-            title={
-              syncBusy
-                ? "Syncing…"
-                : syncConfigured
-                  ? "Sync now"
-                  : `Set up a backup folder in ${RIG_PAGE_TITLE}`
+            className={
+              syncConfigured
+                ? `btn btn-icon sidebar-footer__sync-toggle${syncHasError ? " sidebar-footer__sync-toggle--error" : ""}`
+                : "btn sidebar-footer__sync-setup"
             }
+            data-testid="sidebar-sync"
+            onClick={handleSyncControlClick}
+            disabled={syncBusy && syncConfigured}
+            aria-label={
+              !syncConfigured
+                ? "Set up sync"
+                : syncBusy
+                  ? "Syncing"
+                  : syncHasError
+                    ? "Sync error — open Data settings"
+                    : syncTooltip
+            }
+            title={syncTooltip}
           >
-            {syncBusy ? <Loader2 size={14} className="voice-spinner" /> : <RefreshCw size={14} />}
+            {!syncConfigured ? (
+              "Set up sync"
+            ) : syncBusy ? (
+              <Loader2 size={14} className="voice-spinner" />
+            ) : syncHasError ? (
+              <AlertCircle size={14} />
+            ) : (
+              <Check size={14} strokeWidth={2.5} />
+            )}
           </button>
         </div>
       </aside>

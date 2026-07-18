@@ -11,23 +11,14 @@
  * `::::options` … `::::`. The system prompt teaches this.
  */
 import {
-  Children,
   createContext,
-  isValidElement,
-  useCallback,
   useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
   type ComponentType,
   type ReactNode,
 } from "react";
 import {
   AlertOctagon,
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
   ExternalLink,
   Info,
   Lightbulb,
@@ -50,8 +41,6 @@ const KNOWN_DIRECTIVES = new Set([
   "link",
   "options",
   "option",
-  "slides",
-  "slide",
 ]);
 
 /**
@@ -221,198 +210,6 @@ function MdOption({ title }: { title?: string }) {
 }
 (MdOption as ComponentType & { displayName?: string }).displayName = "MdOption";
 
-const SLIDE_LAYOUTS = new Set(["title", "bullets", "quote", "blank"]);
-
-function MdSlides({ children }: CommonProps) {
-  const slides = useMemo(
-    () =>
-      Children.toArray(children).filter(
-        (c) => isValidElement(c) && (c.type as { displayName?: string }).displayName === "MdSlide",
-      ),
-    [children],
-  );
-  const [index, setIndex] = useState(0);
-  const safeIndex = Math.min(index, Math.max(slides.length - 1, 0));
-  const prev = useCallback(
-    () => setIndex((i) => Math.max(0, i - 1)),
-    [],
-  );
-  const next = useCallback(
-    () => setIndex((i) => Math.min(slides.length - 1, i + 1)),
-    [slides.length],
-  );
-
-  if (slides.length === 0) return null;
-  const showNav = slides.length > 1;
-  return (
-    <section
-      className="md-slides"
-      role="group"
-      aria-roledescription="carousel"
-      aria-label="Slide deck"
-    >
-      <div className="md-slides__stage">{slides[safeIndex]}</div>
-      {showNav ? (
-        <nav className="md-slides__nav" aria-label="Slide navigation">
-          <button
-            type="button"
-            className="md-slides__btn"
-            onClick={prev}
-            disabled={safeIndex === 0}
-            aria-label="Previous slide"
-          >
-            <ChevronLeft size={14} aria-hidden />
-          </button>
-          <span className="md-slides__dots" role="tablist" aria-label="Slides">
-            {slides.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                role="tab"
-                aria-selected={i === safeIndex}
-                aria-label={`Go to slide ${i + 1}`}
-                className={joinClass(
-                  "md-slides__dot",
-                  i === safeIndex && "md-slides__dot--active",
-                )}
-                onClick={() => setIndex(i)}
-              />
-            ))}
-          </span>
-          <span className="md-slides__count">
-            {safeIndex + 1} / {slides.length}
-          </span>
-          <button
-            type="button"
-            className="md-slides__btn"
-            onClick={next}
-            disabled={safeIndex === slides.length - 1}
-            aria-label="Next slide"
-          >
-            <ChevronRight size={14} aria-hidden />
-          </button>
-        </nav>
-      ) : null}
-    </section>
-  );
-}
-
-function MdSlide({
-  layout,
-  title,
-  subtitle,
-  attribution,
-  children,
-}: CommonProps & {
-  layout?: string;
-  title?: string;
-  subtitle?: string;
-  attribution?: string;
-}) {
-  const kind = layout && SLIDE_LAYOUTS.has(layout) ? layout : "blank";
-  return (
-    <article
-      className={joinClass("md-slide", `md-slide--${kind}`)}
-      data-slide-layout={kind}
-    >
-      {kind === "title" ? (
-        <div className="md-slide__title-block">
-          <h2 className="md-slide__title-text">{title}</h2>
-          {subtitle ? <p className="md-slide__subtitle">{subtitle}</p> : null}
-        </div>
-      ) : kind === "quote" ? (
-        <blockquote className="md-slide__quote">
-          <div className="md-slide__quote-mark" aria-hidden="true">
-            &ldquo;
-          </div>
-          <div className="md-slide__quote-body">{children}</div>
-          {attribution ? (
-            <footer className="md-slide__quote-attr">{attribution}</footer>
-          ) : null}
-        </blockquote>
-      ) : (
-        <>
-          {title ? <header className="md-slide__header">{title}</header> : null}
-          <div className={joinClass("md-slide__body", `md-slide__body--${kind}`)}>
-            {children}
-          </div>
-        </>
-      )}
-    </article>
-  );
-}
-(MdSlide as ComponentType & { displayName?: string }).displayName = "MdSlide";
-
-/**
- * Lazy-loaded mermaid renderer. We intercept fenced ```mermaid blocks at the
- * `pre` component level (see `chatHelpers.tsx`) and hand the source string here.
- */
-export function MermaidBlock({ source }: { source: string }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [svg, setSvg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const idRef = useRef(
-    `md-mermaid-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`,
-  );
-  const trimmed = source.replace(/^\n+|\n+$/g, "");
-
-  useEffect(() => {
-    let cancelled = false;
-    setSvg(null);
-    setError(null);
-    if (!trimmed) return;
-    (async () => {
-      try {
-        const mod = await import("mermaid");
-        const mermaid = mod.default;
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: "dark",
-          securityLevel: "strict",
-          fontFamily: "inherit",
-        });
-        const { svg: rendered } = await mermaid.render(idRef.current, trimmed);
-        if (!cancelled) setSvg(rendered);
-      } catch (e) {
-        if (!cancelled) {
-          const msg = e instanceof Error ? e.message : String(e);
-          setError(msg.split("\n")[0].slice(0, 200));
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [trimmed]);
-
-  if (error) {
-    return (
-      <div className="md-mermaid md-mermaid--error">
-        <div className="md-mermaid__error" role="alert">
-          Diagram error: {error}
-        </div>
-        <pre>
-          <code>{trimmed}</code>
-        </pre>
-      </div>
-    );
-  }
-  if (!svg) {
-    return (
-      <div className="md-mermaid md-mermaid--loading" ref={containerRef}>
-        Rendering diagram&hellip;
-      </div>
-    );
-  }
-  return (
-    <div
-      className="md-mermaid"
-      ref={containerRef}
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
-  );
-}
-
 /**
  * Mapping consumed by `react-markdown`'s `components` prop. Cast through
  * `unknown` because TS only models standard HTML tags here, not our `md-*`
@@ -428,6 +225,4 @@ export const directiveComponents: Record<string, ComponentType<Record<string, un
   "md-link": MdLink as ComponentType<Record<string, unknown>>,
   "md-options": MdOptions as ComponentType<Record<string, unknown>>,
   "md-option": MdOption as ComponentType<Record<string, unknown>>,
-  "md-slides": MdSlides as ComponentType<Record<string, unknown>>,
-  "md-slide": MdSlide as ComponentType<Record<string, unknown>>,
 };

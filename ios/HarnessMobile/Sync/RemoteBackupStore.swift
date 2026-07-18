@@ -1,3 +1,4 @@
+import AsyncHTTPClient
 import Foundation
 import NIOCore
 import SotoCore
@@ -32,15 +33,24 @@ final class RemoteBackupStore: @unchecked Sendable {
     private let bucket: String
     private let prefix: String
     private let awsClient: AWSClient
+    /// Owned client with HTTP decompression disabled.
+    /// `HTTPClient.shared` enables gzip and fails on precompressed `bundle.json.gz` from R2
+    /// (`NIOHTTPDecompression.ExtraDecompressionError`).
+    private let httpClient: HTTPClient
 
     init(config: R2Config) {
         bucket = config.bucket.trimmingCharacters(in: .whitespacesAndNewlines)
         prefix = R2SettingsStore.normalizePrefix(config.prefix)
+        httpClient = HTTPClient(
+            eventLoopGroupProvider: .singleton,
+            configuration: HTTPClient.Configuration(decompression: .disabled)
+        )
         awsClient = AWSClient(
             credentialProvider: .static(
                 accessKeyId: config.accessKeyId.trimmingCharacters(in: .whitespacesAndNewlines),
                 secretAccessKey: config.secretAccessKey
-            )
+            ),
+            httpClient: httpClient
         )
         let endpoint = Self.r2Endpoint(accountId: config.accountId)
         s3 = S3(
@@ -53,6 +63,7 @@ final class RemoteBackupStore: @unchecked Sendable {
 
     deinit {
         try? awsClient.syncShutdown()
+        try? httpClient.syncShutdown()
     }
 
     static func r2Endpoint(accountId: String) -> String {

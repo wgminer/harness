@@ -48,6 +48,10 @@ urlencoding = "2"
 url = "2"
 cpal = "0.18.1"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-avf-audio = { version = "0.3", default-features = false, features = ["std", "alloc", "AVAudioApplication", "block2"] }
+block2 = "0.6"
+
 [profile.release]
 strip = true
 lto = true

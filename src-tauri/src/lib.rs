@@ -17,6 +17,7 @@ pub mod import;
 pub mod memory;
 pub mod memory_facts;
 pub mod memory_import;
+pub mod mic_permission;
 pub mod images;
 pub mod note_print;
 pub mod notes;
@@ -120,7 +121,8 @@ pub fn run() {
             commands::memory_delete_user_memory_key,
             commands::memory_search_conversations,
             commands::memory_import_from_chat_gpt_folder,
-            commands::memory_import_from_claude_folder,
+            commands::memory_preview_claude_import,
+            commands::memory_confirm_claude_import,
             commands::memory_import_llm_context,
             commands::memory_open_app_data_folder,
             commands::memory_get_data_status,
@@ -162,12 +164,15 @@ pub fn run() {
             system::system_macos_accessibility_trusted,
             system::system_request_accessibility_prompt,
             system::system_open_accessibility_settings,
+            system::system_open_microphone_settings,
+            system::system_open_speech_recognition_settings,
             sync::sync_get_status,
             sync::sync_run_now,
             sync::sync_test_connection,
             sync::sync_set_r2_secret_access_key,
             sync::sync_set_r2_config,
             recording::recording_request_microphone_access,
+            recording::recording_microphone_permission_status,
             recording::recording_save_wav,
             recording::recording_show_in_folder,
             recording::recording_export_wav,

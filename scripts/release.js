@@ -5,7 +5,7 @@ const path = require("node:path");
 
 const root = path.join(__dirname, "..");
 
-// Load repo-root .env (GH_TOKEN, APPLE_*, CSC_*, etc.) before any env checks.
+// Load repo-root .env (GH_TOKEN, APPLE_SIGNING_IDENTITY, APPLE_*, etc.) before any env checks.
 require("dotenv").config({ path: path.join(root, ".env") });
 
 const args = process.argv.slice(2);

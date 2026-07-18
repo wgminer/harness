@@ -44,6 +44,10 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke<boolean>(cmd("system:requestAccessibilityPrompt")),
       openAccessibilitySettings: () =>
         invoke<void>(cmd("system:openAccessibilitySettings")),
+      openMicrophoneSettings: () =>
+        invoke<void>(cmd("system:openMicrophoneSettings")),
+      openSpeechRecognitionSettings: () =>
+        invoke<void>(cmd("system:openSpeechRecognitionSettings")),
     },
     windowSize: {
       get: () => invoke<"small" | "large">(cmd("window:getSize")),
@@ -95,8 +99,9 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("memory:searchConversations"), { query, composeFirstOnly }),
       importFromChatGPTFolder: () =>
         invoke(cmd("memory:importFromChatGPTFolder")),
-      importFromClaudeFolder: () =>
-        invoke(cmd("memory:importFromClaudeFolder")),
+      previewClaudeImport: () => invoke(cmd("memory:previewClaudeImport")),
+      confirmClaudeImport: (folderPath: string, claudeIds?: string[]) =>
+        invoke(cmd("memory:confirmClaudeImport"), { folderPath, claudeIds }),
       importLlmContext: (exportText: string) =>
         invoke(cmd("memory:importLlmContext"), { exportText }),
       openAppDataFolder: () => invoke(cmd("memory:openAppDataFolder")),
@@ -238,6 +243,10 @@ export function createHarnessAdapter(): HarnessAPI {
       signalFrontendReady: () => invoke(cmd("recording:signalFrontendReady")),
       requestMicrophoneAccess: () =>
         invoke<boolean>(cmd("recording:requestMicrophoneAccess")),
+      microphonePermissionStatus: () =>
+        invoke<"granted" | "denied" | "undetermined" | "unsupported">(
+          cmd("recording:microphonePermissionStatus")
+        ),
       saveWav: (data: ArrayBuffer) =>
         invoke<{ path: string }>(cmd("recording:saveWav"), data),
       showInFolder: (path: string) =>
@@ -262,6 +271,11 @@ export function createHarnessAdapter(): HarnessAPI {
         subscribeToWire<{ message?: string }>("global-recording-error", (p) =>
           cb(p?.message ?? "Recording failed."),
         ),
+      onGlobalRecordingLevel: (cb) =>
+        subscribeToWire<{ level?: number }>("global-recording-level", (p) => {
+          const level = typeof p?.level === "number" && Number.isFinite(p.level) ? p.level : 0;
+          cb(Math.min(1, Math.max(0, level)));
+        }),
       onGlobalTranscriptReady: (cb) =>
         subscribeToWire<{ text?: string }>("global-transcript-ready", (p) =>
           cb(p?.text ?? ""),

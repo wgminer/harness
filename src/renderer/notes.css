@@ -568,7 +568,7 @@
 
 .notes-aside-panel__input-wrap .notes-aside-panel__textarea {
   padding-bottom: var(--space-8);
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 
 .notes-aside-panel__corner-btn {

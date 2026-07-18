@@ -202,8 +202,6 @@ impl ChatController {
             )
             .await;
 
-        self.emit_stream_end(conversation_id);
-
         let stream_state = self.note_stream.lock().unwrap().take();
         if let Some(ref stream) = stream_state {
             self.emit_note_stream_close(conversation_id, &stream.note_id);
@@ -301,15 +299,29 @@ impl ChatController {
                     .map_err(|e| e.to_string())?;
                     did_append_assistant = true;
                 }
+                // Persist + notify UI before returning so title refine still runs and
+                // stream-end sync sees the appended assistant (not the previous turn).
+                self.emit_stream_end(conversation_id);
+                {
+                    let mut guard = self.cancel_token.lock().await;
+                    *guard = None;
+                }
+                if did_append_assistant {
+                    schedule_conversation_title_refinement(
+                        self.app.clone(),
+                        self.state.clone(),
+                        conversation_id.to_string(),
+                    );
+                }
                 if !is_abort {
-                    {
-                        let mut guard = self.cancel_token.lock().await;
-                        *guard = None;
-                    }
                     return Err(err.to_string());
                 }
+                return Ok(());
             }
         }
+
+        // Emit end only after append so UI sync-from-storage sees this turn.
+        self.emit_stream_end(conversation_id);
 
         {
             let mut guard = self.cancel_token.lock().await;
@@ -351,7 +363,6 @@ impl ChatController {
                 tokio::time::sleep(Duration::from_millis(stream_delay_ms)).await;
             }
         }
-        self.emit_stream_end(conversation_id);
 
         if !emitted.is_empty() {
             append_message(
@@ -373,6 +384,8 @@ impl ChatController {
                 conversation_id.to_string(),
             );
         }
+
+        self.emit_stream_end(conversation_id);
 
         {
             let mut guard = self.cancel_token.lock().await;

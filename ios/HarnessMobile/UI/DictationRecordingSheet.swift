@@ -77,16 +77,12 @@ struct DictationRecordingSheet: View {
                 }
                 if phase == .recording {
                     ToolbarItem(placement: .principal) {
-                        HStack(spacing: 8) {
-                            RecordingPulseDot()
-                            Text(formattedElapsed(recorder.elapsedMs))
-                                .font(.system(.body, design: .monospaced).weight(.medium))
-                                .monospacedDigit()
-                                .foregroundStyle(.primary)
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Recording duration")
-                        .accessibilityValue(formattedElapsed(recorder.elapsedMs))
+                        DictationElapsedToolbarLabel(
+                            recorder: recorder,
+                            onMaxDuration: {
+                                Task { await stopAndTranscribe() }
+                            }
+                        )
                     }
                 }
             }
@@ -96,11 +92,6 @@ struct DictationRecordingSheet: View {
             guard !didAutoStart else { return }
             didAutoStart = true
             await startRecording()
-        }
-        .onChange(of: recorder.elapsedMs) { _, ms in
-            if ms >= Int(RecordingStorage.maxRecordingDuration * 1000), phase == .recording {
-                Task { await stopAndTranscribe() }
-            }
         }
         .onChange(of: recordingSession.liveActivityStopRequested) { _, requested in
             guard requested else { return }
@@ -139,13 +130,10 @@ struct DictationRecordingSheet: View {
 
     private var recordingContent: some View {
         VStack(spacing: 36) {
-            LiveAudioWaveformView(
-                samples: recorder.waveformSamples,
-                level: recorder.audioLevel,
-                color: .red
-            )
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            // Observe AudioRecorder in a leaf so metering does not rebuild the sheet chrome.
+            DictationWaveformHost(recorder: recorder)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
 
             HStack(spacing: 28) {
                 Button {
@@ -230,6 +218,8 @@ struct DictationRecordingSheet: View {
                 return
             }
             phase = .recording
+            // Distinct from the mic-open tap: confirms the session is actually live.
+            HapticFeedback.medium()
         } catch is CancellationError {
             // Cancelled mid-start; session manager already tore down. Avoid a stuck "Starting…" UI
             // if cancellation came from task teardown rather than the Cancel button.
@@ -303,13 +293,50 @@ struct DictationRecordingSheet: View {
         await recordingSession.cancelRecordingSession()
         isPresented = false
     }
+}
 
-    private func formattedElapsed(_ ms: Int) -> String {
+private enum DictationElapsedFormatting {
+    static func string(ms: Int) -> String {
         let totalSeconds = ms / 1000
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
         let tenths = (ms % 1000) / 100
         return String(format: "%d:%02d.%d", minutes, seconds, tenths)
+    }
+}
+
+/// Isolates AudioRecorder observation so metering does not rebuild the sheet body.
+private struct DictationWaveformHost: View {
+    @ObservedObject var recorder: AudioRecorder
+
+    var body: some View {
+        LiveAudioWaveformView(
+            samples: recorder.waveformSamples,
+            level: recorder.audioLevel
+        )
+    }
+}
+
+private struct DictationElapsedToolbarLabel: View {
+    @ObservedObject var recorder: AudioRecorder
+    var onMaxDuration: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RecordingPulseDot()
+            Text(DictationElapsedFormatting.string(ms: recorder.elapsedMs))
+                .font(.system(.body, design: .monospaced).weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Recording duration")
+        .accessibilityValue(DictationElapsedFormatting.string(ms: recorder.elapsedMs))
+        .onChange(of: recorder.elapsedMs) { _, ms in
+            if ms >= Int(RecordingStorage.maxRecordingDuration * 1000) {
+                onMaxDuration()
+            }
+        }
     }
 }
 

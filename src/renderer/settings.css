@@ -5,13 +5,10 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  --settings-radius-sm: var(--space-2);
-  --settings-radius-md: var(--space-3);
-  --settings-radius-lg: var(--space-4);
 }
 
 .settings-page .btn {
-  border-radius: var(--settings-radius-sm);
+  border-radius: var(--radius-sm);
 }
 
 /* Bare controls not wrapped in .settings-section */
@@ -25,7 +22,7 @@
   padding: 0 var(--space-3);
   background: var(--bg-secondary);
   color: var(--fg);
-  border-radius: var(--settings-radius-sm);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-input);
 }
 
@@ -87,7 +84,7 @@
   min-height: 24px;
   padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: var(--settings-radius-sm);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--fg-muted);
   font-family: var(--font-family);
@@ -183,13 +180,93 @@
   font-size: var(--font-size-caption);
 }
 
-.settings-section input:not([type="checkbox"]):not([type="radio"]),
+.settings-section input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
 .settings-section select {
   font-size: var(--font-size);
   width: 100%;
   max-width: 400px;
-  border-radius: var(--settings-radius-sm);
+  border-radius: var(--radius-sm);
   background: var(--bg-secondary);
+}
+
+.settings-accent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 400px;
+}
+
+.settings-accent__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-accent__picker {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-accent__picker::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.settings-accent__picker::-webkit-color-swatch {
+  border: none;
+  border-radius: var(--radius-xs);
+}
+
+.settings-accent__hex {
+  flex: 1;
+  min-width: 0;
+  max-width: 140px;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-ui);
+  text-transform: lowercase;
+}
+
+.settings-accent__reset {
+  flex-shrink: 0;
+}
+
+.settings-accent__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settings-accent__swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, white 12%, transparent);
+}
+
+.settings-accent__swatch:hover {
+  outline: 2px solid color-mix(in oklab, var(--swatch) 55%, white);
+  outline-offset: 1px;
+}
+
+.settings-accent__swatch--selected {
+  border-color: var(--fg);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, black 35%, transparent),
+    0 0 0 1px var(--bg);
+}
+
+.settings-accent__swatch:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .settings-api-key-row {
@@ -231,7 +308,7 @@
   flex-shrink: 0;
   width: calc(var(--grid) * 9);
   height: var(--space-5);
-  border-radius: var(--space-5);
+  border-radius: var(--radius-pill);
   background: var(--hover-bg-strong);
   transition: background var(--motion-duration-switch) var(--motion-ease-standard);
   border: 1px solid var(--overlay-subtle);
@@ -304,6 +381,14 @@
   gap: var(--space-2);
 }
 
+.settings-sync-now {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 7.5rem;
+  justify-content: center;
+}
+
 .settings-sync-status {
   font-size: var(--font-size-caption);
   line-height: var(--line-height-compact);
@@ -348,7 +433,7 @@
   flex-direction: column;
   margin-top: 8px;
   border: 1px solid var(--border-edge);
-  border-radius: var(--settings-radius-md);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -472,38 +557,76 @@
   padding-left: 20px;
 }
 
-.settings-import-details {
-  margin-top: var(--space-1);
+.claude-import-review__summary {
+  margin: 0 0 var(--space-3);
+  color: var(--fg-muted);
+  line-height: var(--line-height-normal);
 }
 
-.settings-import-details summary {
-  cursor: pointer;
-  font-size: var(--font-size);
-  font-weight: 500;
-  color: var(--fg);
+.claude-import-review__empty {
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+.claude-import-review__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.claude-import-review__count {
+  margin-left: auto;
+  font-size: var(--font-size-caption);
+  color: var(--fg-muted);
+}
+
+.claude-import-review__list {
   list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-edge);
+  border-radius: var(--radius-md);
+  max-height: min(420px, 50vh);
+  overflow: auto;
 }
 
-.settings-import-details summary::-webkit-details-marker {
-  display: none;
-}
-
-.settings-import-details__lead {
-  margin-top: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
-.settings-import-details__section + .settings-import-details__section {
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
+.claude-import-review__list > li + li {
   border-top: 1px solid var(--border-edge);
 }
 
-.settings-import-details__heading {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size);
-  font-weight: 600;
+.claude-import-review__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+  cursor: pointer;
+}
+
+.claude-import-review__row:hover {
+  background: var(--bg-secondary);
+}
+
+.claude-import-review__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.claude-import-review__title {
+  font-size: var(--font-size-ui);
   color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claude-import-review__meta {
+  font-size: var(--font-size-caption);
+  color: var(--fg-muted);
 }
 
 .settings-data-status {
@@ -511,7 +634,7 @@
   margin-bottom: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-edge);
-  border-radius: var(--settings-radius-md);
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   font-size: var(--font-size-caption);
 }
@@ -539,7 +662,7 @@
   color: var(--fg-muted);
   border: 1px solid var(--border-input);
   box-shadow: var(--shadow);
-  border-radius: var(--space-2);
+  border-radius: var(--radius-md);
   z-index: 3000;
 }
 

@@ -176,11 +176,25 @@ struct TasksListView: View {
                 }
             }
         }
+        .scrollDismissesKeyboard(.interactively)
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                isComposerFocused = false
+            }
+        )
         .safeAreaInset(edge: .bottom, spacing: 0) {
             composerDock
         }
         .refreshable {
             await app.performSync()
+            if !R2SettingsStore.isConfigured {
+                HapticFeedback.warning()
+            } else if app.syncStatus.kind == .error {
+                HapticFeedback.error()
+            } else {
+                HapticFeedback.success()
+            }
         }
         .sheet(item: $modalTask) { task in
             editSheet(task)
@@ -222,13 +236,13 @@ struct TasksListView: View {
         ChatComposerView(
             conversationId: Self.composerConversationId,
             isStreaming: false,
-            autofocusOnAppear: true,
-            startsExpanded: true,
-            allowsCollapse: false,
+            autofocusOnAppear: false,
+            startsExpanded: false,
+            allowsCollapse: true,
             initialDraft: app.cachedComposerDraft(conversationId: Self.composerConversationId),
             onDraftChange: { app.cacheComposerDraft($0, conversationId: Self.composerConversationId) },
             onClearDraft: { app.clearComposerDraft(conversationId: Self.composerConversationId) },
-            onSend: { text in Task { await createTask(title: text) } },
+            onSend: { payload in Task { await createTask(title: payload.text) } },
             onStop: {},
             isFocused: $isComposerFocused
         )
@@ -405,6 +419,7 @@ struct TasksListView: View {
     private func deleteTask(_ id: String) {
         Task {
             do {
+                HapticFeedback.warning()
                 _ = try tasksStore.delete(id: id)
             } catch {
                 loadError = error.localizedDescription
@@ -415,6 +430,7 @@ struct TasksListView: View {
     private func clearCompleted() {
         Task {
             do {
+                HapticFeedback.warning()
                 _ = try tasksStore.clearCompleted()
             } catch {
                 loadError = error.localizedDescription
@@ -473,6 +489,7 @@ struct TasksListView: View {
         modalSaving = true
         defer { modalSaving = false }
         do {
+            HapticFeedback.warning()
             _ = try tasksStore.delete(id: task.id)
             modalTask = nil
         } catch {

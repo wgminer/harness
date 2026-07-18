@@ -71,7 +71,7 @@
   background: var(--bg-secondary);
   color: var(--fg);
   border: 1px solid var(--border-input);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .tasks-textarea:focus {
@@ -269,19 +269,21 @@
   display: inline-flex;
   align-items: center;
   font-size: var(--font-size-caption);
+  font-weight: 400;
   line-height: var(--line-height-compact);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  background: var(--fg-muted);
+  background: var(--overlay-subtle);
   color: var(--fg-muted);
+  border: 1px solid var(--border-edge);
   text-transform: none;
 }
 
 .tasks-tag--editable {
   padding-right: 4px;
   gap: 2px;
-  background: var(--accent-tint);
-  color: var(--fg);
+  background: var(--overlay-subtle);
+  color: var(--fg-muted);
 }
 
 .tasks-tag-remove {

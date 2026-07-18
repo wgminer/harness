@@ -13,12 +13,11 @@
   --fg: #ccc;
   --fg-muted: #999;
 
-  /* --- Accent --- */
+  /* --- Accent (single source; variants derived via color-mix) --- */
   --accent: #5b9cf5;
-  --accent-readable: #87b5f4;
-  --accent-muted: #222d3c;
-  --accent-tint: #151e2b;
-  --accent-border: #5b9cf5;
+  --accent-readable: color-mix(in oklab, var(--accent) 72%, white);
+  --accent-muted: color-mix(in oklab, var(--accent) 22%, var(--bg));
+  --accent-tint: color-mix(in oklab, var(--accent) 12%, var(--bg));
 
   /* --- Borders --- */
   --border-light: #777;
@@ -29,9 +28,9 @@
   /* --- Buttons --- */
   --btn-bg: #2e3033;
   --btn-bg-hover: #3b3d40;
-  --btn-primary-bg: #2e4463;
-  --btn-primary-fg: #87b5f4;
-  --btn-primary-bg-hover: #355178;
+  --btn-primary-bg: color-mix(in oklab, var(--accent) 38%, var(--bg));
+  --btn-primary-fg: var(--accent-readable);
+  --btn-primary-bg-hover: color-mix(in oklab, var(--accent) 48%, var(--bg));
   --btn-shadow: none;
   --btn-shadow-hover: none;
 
@@ -43,7 +42,7 @@
   --hover-bg-strong: #323437;
 
   /* --- Selection --- */
-  --selection-bg: #416eac;
+  --selection-bg: color-mix(in oklab, var(--accent) 65%, black);
   --selection-fg: var(--fg);
 
   /* --- Scrollbars --- */
@@ -108,6 +107,7 @@
   --space-10: calc(var(--grid) * 10);
   --space-12: calc(var(--grid) * 12);
   --space-35: calc(var(--grid) * 35);
+  --radius-xs: 2px;
   --radius-sm: var(--space-1);
   --radius-md: var(--space-2);
   --radius-lg: var(--space-3);
@@ -412,6 +412,27 @@ hr {
   background: var(--overlay-subtle);
 }
 
+/* Boot — iOS-parity wordmark while RootApp resolves the window route. */
+.harness-boot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.harness-boot__wordmark {
+  font-family: var(--font-family);
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  user-select: none;
+}
+
 /* Layout */
 .app {
   position: relative;
@@ -496,10 +517,14 @@ hr {
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  background: var(--scrim);
+  background: rgba(0, 0, 0, 0.72);
   -webkit-backdrop-filter: blur(6px) saturate(0.92);
   backdrop-filter: blur(6px) saturate(0.92);
   pointer-events: none;
+}
+
+.hotkey-recording-overlay__field {
+  display: block;
 }
 
 .hotkey-recording-overlay__error {
@@ -514,42 +539,6 @@ hr {
   border: 1px solid var(--border-edge);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow);
-}
-
-.hotkey-recording-overlay__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--fg);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-edge);
-  border-radius: var(--radius-pill);
-  box-shadow: var(--shadow);
-}
-
-.hotkey-recording-overlay__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--danger-fg);
-  animation: hotkey-recording-dot-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
-}
-
-@keyframes hotkey-recording-dot-pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.55;
-    transform: scale(0.88);
-  }
 }
 
 @keyframes title-skeleton-pulse {

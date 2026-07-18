@@ -1,20 +1,15 @@
-let ready = false;
-let primePromise: Promise<void> | null = null;
-let bootstrapStream: MediaStream | null = null;
-let bootstrapCtx: AudioContext | null = null;
+import { MICROPHONE_PERMISSION_DENIED_MESSAGE } from "./recordingAudioUtils";
 
-export function isRecordingReady(): boolean {
-  return ready;
-}
+let ready = false;
+let readyPromise: Promise<void> | null = null;
+let bootstrapStream: MediaStream | null = null;
 
 /** Reset bootstrap state (tests only). */
 export function resetRecordingBootstrapForTests(): void {
   ready = false;
-  primePromise = null;
+  readyPromise = null;
   bootstrapStream?.getTracks().forEach((t) => t.stop());
   bootstrapStream = null;
-  void bootstrapCtx?.close().catch(() => {});
-  bootstrapCtx = null;
 }
 
 async function resumeAudioContext(ctx: AudioContext): Promise<void> {
@@ -22,7 +17,7 @@ async function resumeAudioContext(ctx: AudioContext): Promise<void> {
     await ctx.resume();
   }
   if (ctx.state !== "running") {
-    throw new Error("Audio system is not ready. Click in Harness once, then try again.");
+    throw new Error("Audio system is not ready.");
   }
 }
 
@@ -36,7 +31,7 @@ async function doEnsureReady(): Promise<void> {
   if (window.harness?.recording?.requestMicrophoneAccess) {
     const ok = await window.harness.recording.requestMicrophoneAccess();
     if (!ok) {
-      throw new Error("Microphone access denied.");
+      throw new Error(MICROPHONE_PERMISSION_DENIED_MESSAGE);
     }
   }
 
@@ -46,37 +41,20 @@ async function doEnsureReady(): Promise<void> {
     bootstrapStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   }
 
-  if (!bootstrapCtx || bootstrapCtx.state === "closed") {
-    bootstrapCtx = new AudioContext();
-  }
-  await resumeAudioContext(bootstrapCtx);
   ready = true;
 }
 
-/** Idempotent mic + AudioContext priming for hotkey and in-app recording. */
+/** Ensure macOS mic TCC + a live getUserMedia stream for in-app recording. */
 export async function ensureRecordingReady(): Promise<void> {
   if (ready) return;
-  if (primePromise) return primePromise;
-  primePromise = doEnsureReady().finally(() => {
-    primePromise = null;
+  if (readyPromise) return readyPromise;
+  readyPromise = doEnsureReady().finally(() => {
+    readyPromise = null;
   });
-  return primePromise;
+  return readyPromise;
 }
 
-/**
- * Prime mic access on the first user gesture so Fn hotkey works without an in-app recording first.
- */
-export function primeOnUserGesture(): void {
-  const handler = () => {
-    document.removeEventListener("pointerdown", handler, true);
-    void ensureRecordingReady().catch(() => {
-      /* permission may still be pending; hotkey path surfaces errors */
-    });
-  };
-  document.addEventListener("pointerdown", handler, true);
-}
-
-/** Reuse the primed stream when available; otherwise acquire a new one. */
+/** Reuse a live bootstrap stream when available; otherwise acquire a new one. */
 export async function acquireRecordingStream(): Promise<{
   stream: MediaStream;
   releaseOnStop: boolean;

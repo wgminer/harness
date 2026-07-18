@@ -6,7 +6,10 @@ struct DictationReplyStrip: View {
     var body: some View {
         HStack {
             Spacer(minLength: 0)
-            Button(action: onContinue) {
+            Button {
+                HapticFeedback.medium()
+                onContinue()
+            } label: {
                 Text(DictationReplyLabel.continueLabel)
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 16)

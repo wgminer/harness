@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import { appDataFolderButtonLabel } from "../../shared/dataStorageLayout";
 import { SyncQrModal } from "../SyncQrModal";
 import { Tooltip } from "../Tooltip";
+import { ClaudeImportModal } from "./ClaudeImportModal";
 import { SecretField } from "./SecretField";
 import { SettingsActions } from "./SettingsActions";
 import { SettingsField } from "./SettingsField";
@@ -97,6 +98,7 @@ export function DataSettingsTab({
             </button>
           </SettingsActions>
           <SettingsHint>
+            Sync runs automatically when configured. Use Sync Now if another device looks behind.
             Pair an iPhone by scanning this QR. Manual R2 fields below remain for advanced setup.
           </SettingsHint>
           <SettingsField label="Account ID" htmlFor="settings-r2-account">
@@ -105,7 +107,6 @@ export function DataSettingsTab({
               type="text"
               value={r2AccountId}
               onChange={(e) => setR2AccountId(e.target.value)}
-              placeholder="Cloudflare account ID"
               autoComplete="off"
               spellCheck={false}
             />
@@ -116,7 +117,6 @@ export function DataSettingsTab({
               type="text"
               value={r2Bucket}
               onChange={(e) => setR2Bucket(e.target.value)}
-              placeholder="harness-sync"
               autoComplete="off"
               spellCheck={false}
             />
@@ -127,7 +127,6 @@ export function DataSettingsTab({
               type="text"
               value={r2Prefix}
               onChange={(e) => setR2Prefix(e.target.value)}
-              placeholder="harness/"
               autoComplete="off"
               spellCheck={false}
             />
@@ -148,7 +147,6 @@ export function DataSettingsTab({
               value={r2SecretAccessKey}
               onChange={(e) => setR2SecretAccessKey(e.target.value)}
               onBlur={() => void persistSettings()}
-              placeholder="Secret access key"
               ariaLabel="R2 secret access key"
             />
           </SettingsField>
@@ -170,16 +168,28 @@ export function DataSettingsTab({
               <Tooltip label={data.syncTooltip}>
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="btn btn-primary settings-sync-now"
                   onClick={() => void data.runSyncNow()}
                   disabled={data.syncBusy || !data.dataStatus?.sync.configured}
+                  aria-busy={data.syncBusy}
                 >
-                  {data.syncBusy ? "Syncing…" : "Sync Now"}
+                  {data.syncBusy ? (
+                    <>
+                      <Loader2 size={14} className="voice-spinner" aria-hidden />
+                      Syncing…
+                    </>
+                  ) : (
+                    "Sync Now"
+                  )}
                 </button>
               </Tooltip>
               {data.syncInlineStatus ? (
                 <span className="settings-sync-status" role="status">
                   {data.syncInlineStatus}
+                </span>
+              ) : data.syncBusy ? (
+                <span className="settings-sync-status" role="status">
+                  Syncing…
                 </span>
               ) : null}
             </div>
@@ -187,82 +197,88 @@ export function DataSettingsTab({
         </SettingsGroup>
 
         <SettingsGroup title="Import chat history">
-          <details className="settings-import-details">
-            <summary>Import chat history (optional)</summary>
-            <p className="settings-group__lead settings-import-details__lead">
-              Bring conversations from ChatGPT or Claude exports into Harness. This is separate
-              from importing facts on the Memory tab.
-            </p>
-            <div className="settings-import-details__section">
-              <h4 className="settings-import-details__heading">ChatGPT</h4>
-              <p className="settings-group__hint">Choose the folder from an unzipped ChatGPT export.</p>
-              <SettingsActions>
-                <button type="button" className="btn" onClick={data.runImport} disabled={data.importing}>
-                  {data.importing ? "Importing…" : "Import From ChatGPT"}
-                </button>
-              </SettingsActions>
-              {data.importStatus != null && (
-                <div className="settings-import-status" role="status">
-                  {data.importStatus.imported > 0 && (
-                    <p className="settings-import-status__ok">
-                      Imported {data.importStatus.imported} conversation
-                      {data.importStatus.imported !== 1 ? "s" : ""}.
-                    </p>
-                  )}
-                  {data.importStatus.errors.length > 0 && (
-                    <div className="settings-import-status__errors">
-                      <p>Errors:</p>
-                      <ul>
-                        {data.importStatus.errors.map((err, i) => (
-                          <li key={i}>{err}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+          <SettingsActions>
+            <button type="button" className="btn" onClick={data.runImport} disabled={data.importing}>
+              {data.importing ? "Importing…" : "Import From ChatGPT"}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              data-testid="settings-claude-import"
+              onClick={() => void data.runClaudeImport()}
+              disabled={data.claudeImporting || data.claudeConfirming}
+            >
+              {data.claudeImporting ? "Reading export…" : "Import From Claude"}
+            </button>
+          </SettingsActions>
+          {data.importStatus != null && (
+            <div className="settings-import-status" role="status">
+              {data.importStatus.imported > 0 && (
+                <p className="settings-import-status__ok">
+                  Imported {data.importStatus.imported} conversation
+                  {data.importStatus.imported !== 1 ? "s" : ""}.
+                </p>
+              )}
+              {data.importStatus.errors.length > 0 && (
+                <div className="settings-import-status__errors">
+                  <ul>
+                    {data.importStatus.errors.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
-            <div className="settings-import-details__section">
-              <h4 className="settings-import-details__heading">Claude</h4>
-              <p className="settings-group__hint">
-                Choose the folder from Claude.ai&apos;s &ldquo;Export data&rdquo; archive (contains{" "}
-                <code>conversations.json</code>). Re-imports skip threads already added.
-              </p>
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="settings-claude-import"
-                  onClick={data.runClaudeImport}
-                  disabled={data.claudeImporting}
-                >
-                  {data.claudeImporting ? "Importing…" : "Import From Claude"}
-                </button>
-              </SettingsActions>
-              {data.claudeImportStatus != null && (
-                <div className="settings-import-status" role="status">
-                  {data.claudeImportStatus.imported > 0 && (
-                    <p className="settings-import-status__ok">
-                      Imported {data.claudeImportStatus.imported} conversation
-                      {data.claudeImportStatus.imported !== 1 ? "s" : ""}.
-                    </p>
-                  )}
-                  {data.claudeImportStatus.errors.length > 0 && (
-                    <div className="settings-import-status__errors">
-                      <p>Errors:</p>
-                      <ul>
-                        {data.claudeImportStatus.errors.map((err, i) => (
-                          <li key={i}>{err}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+          )}
+          {data.claudeImportStatus != null && (
+            <div className="settings-import-status" role="status">
+              {(data.claudeImportStatus.imported > 0 || data.claudeImportStatus.updated > 0) && (
+                <p className="settings-import-status__ok">
+                  {[
+                    data.claudeImportStatus.imported > 0
+                      ? `Imported ${data.claudeImportStatus.imported} conversation${
+                          data.claudeImportStatus.imported !== 1 ? "s" : ""
+                        }`
+                      : null,
+                    data.claudeImportStatus.updated > 0
+                      ? `refreshed ${data.claudeImportStatus.updated}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  .
+                </p>
+              )}
+              {data.claudeImportStatus.imported === 0 &&
+                data.claudeImportStatus.updated === 0 &&
+                data.claudeImportStatus.errors.length === 0 && (
+                  <p className="settings-import-status__ok">No conversations imported.</p>
+                )}
+              {data.claudeImportStatus.errors.length > 0 && (
+                <div className="settings-import-status__errors">
+                  <ul>
+                    {data.claudeImportStatus.errors.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
-          </details>
+          )}
         </SettingsGroup>
       </SettingsTabPanel>
+
+      <ClaudeImportModal
+        open={data.claudePreview != null}
+        preview={data.claudePreview}
+        selectedIds={data.claudeSelectedIds}
+        onToggle={data.toggleClaudeSelected}
+        onSelectAll={data.selectAllClaude}
+        onSelectNone={data.selectNoneClaude}
+        onClose={data.closeClaudePreview}
+        onConfirm={() => void data.confirmClaudeImport()}
+        confirming={data.claudeConfirming}
+      />
 
       <SyncQrModal
         open={data.syncQrOpen}

@@ -32,6 +32,8 @@ struct SyncOutcome: Equatable {
 
     let kind: Kind
     let mergeWarning: String?
+    /// True when local conversation/task files were rewritten and stores should reload.
+    let localDataChanged: Bool
 }
 
 @MainActor
@@ -57,23 +59,30 @@ final class SyncEngine {
         let remoteManifest = try await remote.readManifest()
         let remoteBundleData = try await loadRemoteBundleData(from: remote)
 
-        let localRevision = try BundleCodec.computeRevision(
-            localDataDir: localDataDir,
-            fallbackData: remoteBundleData
-        )
-        let localContentRevision = try BundleCodec.computeRevision(
-            localDataDir: localDataDir,
-            scopes: SyncScopes.userContentScopes,
-            fallbackData: remoteBundleData
-        )
-        let localMaxMtime = try BundleCodec.computeLocalMaxMtime(
-            localDataDir: localDataDir,
-            scopes: SyncScopes.userContentScopes
-        )
+        let dir = localDataDir
+        let revisions = try await Task.detached(priority: .userInitiated) {
+            let localRevision = try BundleCodec.computeRevision(
+                localDataDir: dir,
+                fallbackData: remoteBundleData
+            )
+            let localContentRevision = try BundleCodec.computeRevision(
+                localDataDir: dir,
+                scopes: SyncScopes.userContentScopes,
+                fallbackData: remoteBundleData
+            )
+            let localMaxMtime = try BundleCodec.computeLocalMaxMtime(
+                localDataDir: dir,
+                scopes: SyncScopes.userContentScopes
+            )
+            return (localRevision, localContentRevision, localMaxMtime)
+        }.value
+        let localRevision = revisions.0
+        let localContentRevision = revisions.1
+        let localMaxMtime = revisions.2
 
         if forcePull {
             _ = try await pull(remote: remote, remoteManifest: remoteManifest, remoteBundleData: remoteBundleData)
-            return SyncOutcome(kind: .pulled, mergeWarning: nil)
+            return SyncOutcome(kind: .pulled, mergeWarning: nil, localDataChanged: true)
         }
 
         guard let remoteManifest else {
@@ -83,7 +92,7 @@ final class SyncEngine {
                 localContentRevision: localContentRevision,
                 passthroughData: remoteBundleData
             )
-            return SyncOutcome(kind: .pushed, mergeWarning: nil)
+            return SyncOutcome(kind: .pushed, mergeWarning: nil, localDataChanged: false)
         }
 
         let remoteContentRevision = try remoteContentRevision(
@@ -105,10 +114,10 @@ final class SyncEngine {
         case .noop:
             recordSyncedRevisions(revision: localRevision, contentRevision: localContentRevision)
             store?.markSynced(revision: localRevision)
-            return SyncOutcome(kind: .noop, mergeWarning: nil)
+            return SyncOutcome(kind: .noop, mergeWarning: nil, localDataChanged: false)
         case .pull:
             _ = try await pull(remote: remote, remoteManifest: remoteManifest, remoteBundleData: remoteBundleData)
-            return SyncOutcome(kind: .pulled, mergeWarning: nil)
+            return SyncOutcome(kind: .pulled, mergeWarning: nil, localDataChanged: true)
         case .push:
             _ = try await push(
                 remote: remote,
@@ -116,14 +125,14 @@ final class SyncEngine {
                 localContentRevision: localContentRevision,
                 passthroughData: remoteBundleData
             )
-            return SyncOutcome(kind: .pushed, mergeWarning: nil)
+            return SyncOutcome(kind: .pushed, mergeWarning: nil, localDataChanged: false)
         case .conflict:
             let mergeWarning = try await merge(
                 remote: remote,
                 remoteManifest: remoteManifest,
                 remoteBundleData: remoteBundleData
             )
-            return SyncOutcome(kind: .pushed, mergeWarning: mergeWarning)
+            return SyncOutcome(kind: .pushed, mergeWarning: mergeWarning, localDataChanged: true)
         }
     }
 
@@ -167,13 +176,20 @@ final class SyncEngine {
         } else {
             contentRevision = BundleCodec.computeContentRevisionFromBundle(doc)
         }
-        let revision = try remoteManifest?.revision ?? BundleCodec.computeRevision(
-            localDataDir: localDataDir,
-            fallbackData: remoteBundleData
-        )
+        let dir = localDataDir
+        let remoteRevision = remoteManifest?.revision
+        let revision = try await Task.detached(priority: .userInitiated) {
+            if let remoteRevision, !remoteRevision.isEmpty {
+                return remoteRevision
+            }
+            return try BundleCodec.computeRevision(
+                localDataDir: dir,
+                fallbackData: remoteBundleData
+            )
+        }.value
         recordSyncedRevisions(revision: revision, contentRevision: contentRevision)
         store?.clearLocalEditsFlag()
-        try store?.reload()
+        try await store?.reloadAsync()
         return fileCount
     }
 
@@ -204,19 +220,23 @@ final class SyncEngine {
             passthrough[path] = data
         }
 
-        let localRevision = try BundleCodec.computeRevision(
-            localDataDir: localDataDir,
-            fallbackData: mergedFiles
-        )
-        let localContentRevision = try BundleCodec.computeRevision(
-            localDataDir: localDataDir,
-            scopes: SyncScopes.userContentScopes,
-            fallbackData: mergedFiles
-        )
+        let dir = localDataDir
+        let revisions = try await Task.detached(priority: .userInitiated) {
+            let localRevision = try BundleCodec.computeRevision(
+                localDataDir: dir,
+                fallbackData: mergedFiles
+            )
+            let localContentRevision = try BundleCodec.computeRevision(
+                localDataDir: dir,
+                scopes: SyncScopes.userContentScopes,
+                fallbackData: mergedFiles
+            )
+            return (localRevision, localContentRevision)
+        }.value
         _ = try await push(
             remote: remote,
-            localRevision: localRevision,
-            localContentRevision: localContentRevision,
+            localRevision: revisions.0,
+            localContentRevision: revisions.1,
             passthroughData: passthrough
         )
         return mergeWarning

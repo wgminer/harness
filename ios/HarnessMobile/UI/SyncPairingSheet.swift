@@ -109,25 +109,35 @@ struct SyncPairingSheet: View {
             statusMessage = "Testing connection…"
             guard let store = try? RemoteBackupStore.makeConfigured() else {
                 phase = .failed("R2 is not fully configured after applying the code.")
+                HapticFeedback.error()
                 return
             }
             let result = await store.testConnection()
             guard result.ok else {
                 phase = .failed(result.error ?? "R2 connection failed.")
+                HapticFeedback.error()
                 return
             }
 
             statusMessage = "Pulling backup…"
             await app.performSync(forcePull: true)
+            if app.syncStatus.kind == .error {
+                phase = .failed(app.syncStatus.detail ?? app.syncStatus.title)
+                HapticFeedback.error()
+                return
+            }
             statusMessage = "Synced"
             phase = .success
+            HapticFeedback.success()
             onApplied()
             try? await Task.sleep(nanoseconds: 800_000_000)
             isPresented = false
         } catch let error as PairingPayload.DecodeError {
             phase = .failed(decodeMessage(error))
+            HapticFeedback.error()
         } catch {
             phase = .failed(error.localizedDescription)
+            HapticFeedback.error()
         }
     }
 

@@ -92,6 +92,14 @@ pub struct ToolCallRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MessageAttachment {
+    pub id: String,
+    pub mime_type: String,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MessageRecord {
     pub role: String,
     pub content: String,
@@ -101,6 +109,10 @@ pub struct MessageRecord {
     pub timestamp: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Optional attachments (e.g. chat photos). Preserved on load/save so sync
+    /// rewrites do not strip iOS-authored metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<MessageAttachment>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -358,6 +370,126 @@ pub async fn create_conversation(state: &AppState) -> Result<String, std::io::Er
     Ok(id)
 }
 
+/// One message inside a ChatGPT / Claude import batch.
+pub struct ImportMessage {
+    pub role: String,
+    pub content: String,
+    pub timestamp: Option<i64>,
+    pub model: Option<String>,
+}
+
+/// Item for bulk import from ChatGPT / Claude export parsers.
+pub struct ImportConversationItem {
+    pub title: Option<String>,
+    pub created_at: i64,
+    pub messages: Vec<ImportMessage>,
+    pub chatgpt_id: Option<String>,
+    pub claude_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ImportConversationsResult {
+    pub imported: usize,
+    pub updated: usize,
+}
+
+/// Map Claude export uuid → existing Harness conversation id.
+pub async fn get_claude_id_map(
+    state: &AppState,
+) -> Result<HashMap<String, String>, std::io::Error> {
+    let memory_dir = get_memory_dir();
+    let conv = load_conversations_map(state, &memory_dir).await;
+    let mut map = HashMap::new();
+    for (harness_id, meta) in conv {
+        if meta.is_from_claude == Some(true) {
+            if let Some(claude_id) = meta.claude_id.as_ref().filter(|s| !s.is_empty()) {
+                map.insert(claude_id.clone(), harness_id);
+            }
+        }
+    }
+    Ok(map)
+}
+
+pub async fn import_conversations(
+    state: &AppState,
+    items: Vec<ImportConversationItem>,
+) -> Result<ImportConversationsResult, std::io::Error> {
+    if items.is_empty() {
+        return Ok(ImportConversationsResult::default());
+    }
+    let memory_dir = get_memory_dir();
+    let mut conv = load_conversations_map(state, &memory_dir).await;
+    let mut claude_map: HashMap<String, String> = HashMap::new();
+    for (harness_id, meta) in &conv {
+        if meta.is_from_claude == Some(true) {
+            if let Some(claude_id) = meta.claude_id.as_ref().filter(|s| !s.is_empty()) {
+                claude_map.insert(claude_id.clone(), harness_id.clone());
+            }
+        }
+    }
+
+    let mut imported = 0usize;
+    let mut updated = 0usize;
+
+    for item in items {
+        let existing_id = item
+            .claude_id
+            .as_ref()
+            .and_then(|cid| claude_map.get(cid).cloned());
+        let id = existing_id.clone().unwrap_or_else(|| generate_id("conv"));
+        let is_update = existing_id.is_some();
+
+        let has_messages = !item.messages.is_empty();
+        let has_assistant_reply = item.messages.iter().any(|m| m.role == "assistant");
+        let title_source = item
+            .title
+            .as_ref()
+            .filter(|t| !t.is_empty())
+            .map(|_| ConversationTitleSource::Imported);
+
+        let messages: Vec<MessageRecord> = item
+            .messages
+            .into_iter()
+            .map(|m| MessageRecord {
+                role: m.role,
+                content: m.content,
+                tool_calls: None,
+                timestamp: m.timestamp,
+                model: m.model.filter(|s| !s.is_empty()),
+                attachments: None,
+            })
+            .collect();
+
+        conv.insert(
+            id.clone(),
+            ConversationMeta {
+                title: item.title,
+                created_at: item.created_at,
+                is_from_chat_gpt: item.chatgpt_id.as_ref().map(|_| true),
+                chatgpt_id: item.chatgpt_id,
+                is_from_claude: item.claude_id.as_ref().map(|_| true),
+                claude_id: item.claude_id.clone(),
+                title_source,
+                session_kind: Some(ConversationSessionKind::Chat),
+                has_assistant_reply: if has_assistant_reply { Some(true) } else { None },
+                has_messages: if has_messages { Some(true) } else { None },
+            },
+        );
+        if let Some(claude_id) = item.claude_id.as_ref() {
+            claude_map.insert(claude_id.clone(), id.clone());
+        }
+        save_messages_in(state, &memory_dir, &id, &messages).await?;
+        if is_update {
+            updated += 1;
+        } else {
+            imported += 1;
+        }
+    }
+
+    save_conversations_map(state, &memory_dir, &conv).await?;
+    Ok(ImportConversationsResult { imported, updated })
+}
+
 pub async fn get_conversation(
     state: &AppState,
     id: &str,
@@ -414,6 +546,7 @@ pub async fn append_message(
         tool_calls: None,
         timestamp: None,
         model: None,
+        attachments: None,
     };
     if let Some(meta) = options {
         if let Some(tool_calls) = meta.tool_calls.filter(|t| !t.is_empty()) {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { decideSyncAction, syncInlineStatusLine, syncNowButtonTooltip } from "./sync";
+import {
+  decideSyncAction,
+  sidebarSyncStatusTooltip,
+  syncInlineStatusLine,
+  syncNowButtonTooltip,
+} from "./sync";
 
 describe("decideSyncAction", () => {
   const local = "local-rev";
@@ -115,5 +120,41 @@ describe("syncInlineStatusLine", () => {
 
   it("returns null when never synced", () => {
     expect(syncInlineStatusLine({ lastSuccessAt: null })).toBeNull();
+  });
+});
+
+describe("sidebarSyncStatusTooltip", () => {
+  it("points to Data setup when unconfigured", () => {
+    expect(
+      sidebarSyncStatusTooltip({
+        busy: false,
+        configured: false,
+        lastError: null,
+        lastSuccessAt: null,
+      }),
+    ).toBe("Set up sync in System → Data");
+  });
+
+  it("prefers last-synced when healthy", () => {
+    const now = Date.now();
+    expect(
+      sidebarSyncStatusTooltip({
+        busy: false,
+        configured: true,
+        lastError: null,
+        lastSuccessAt: now - 120_000,
+      }),
+    ).toBe("Synced 2m ago");
+  });
+
+  it("surfaces the last error", () => {
+    expect(
+      sidebarSyncStatusTooltip({
+        busy: false,
+        configured: true,
+        lastError: "R2 unavailable",
+        lastSuccessAt: null,
+      }),
+    ).toBe("R2 unavailable");
   });
 });

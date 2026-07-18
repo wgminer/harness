@@ -14,7 +14,10 @@ use crate::file_tools::get_allowed_roots;
 use crate::global_recording::{
     apply_global_fn_hotkey_setting, global_fn_hotkey_enabled_from_recording,
 };
-use crate::import::{import_from_claude_folder, import_from_chatgpt_folder};
+use crate::import::{
+    confirm_claude_import, import_from_chatgpt_folder, preview_claude_import, ClaudeImportPreview,
+    ImportResult,
+};
 use crate::memory::{
     append_message, cleanup_legacy_memory, create_conversation, delete_conversation,
     delete_user_memory_key, get_conversation, get_data_status, get_messages, get_user_memory,
@@ -248,11 +251,20 @@ pub async fn memory_import_from_chat_gpt_folder(
 }
 
 #[command(rename_all = "camelCase")]
-pub async fn memory_import_from_claude_folder(
+pub async fn memory_preview_claude_import(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Value, String> {
-    import_from_claude_folder(&app, &state).await
+) -> Result<ClaudeImportPreview, String> {
+    preview_claude_import(&app, &state).await
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn memory_confirm_claude_import(
+    state: State<'_, AppState>,
+    folder_path: String,
+    claude_ids: Option<Vec<String>>,
+) -> Result<ImportResult, String> {
+    confirm_claude_import(&state, folder_path, claude_ids).await
 }
 
 #[command(rename_all = "camelCase")]

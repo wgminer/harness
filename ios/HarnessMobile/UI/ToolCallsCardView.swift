@@ -72,10 +72,12 @@ struct ToolCallsCardView: View {
             if call.isPending {
                 HStack(spacing: 8) {
                     Button("Proceed") {
+                        HapticFeedback.success()
                         onToolConfirm(call, .proceed)
                     }
                     .font(.caption.weight(.semibold))
                     Button("Cancel") {
+                        HapticFeedback.warning()
                         onToolConfirm(call, .cancel)
                     }
                     .font(.caption.weight(.semibold))

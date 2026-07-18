@@ -370,6 +370,7 @@ mod tests {
             tool_calls: None,
             timestamp: Some(ts),
             model: None,
+            attachments: None,
         }
     }
 
@@ -399,6 +400,7 @@ mod tests {
             }]),
             timestamp: Some(1),
             model: None,
+            attachments: None,
         }];
         assert!(clean_dialogue_body(&messages, 2000).is_empty());
     }

@@ -2,11 +2,15 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var app: AppModel
+    @StateObject private var chatRouter: ChatRouter
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSetupSettings = false
 
-    init(app: AppModel? = nil) {
+    init(app: AppModel? = nil, initialChatRoute: ChatRoute? = nil) {
         _app = StateObject(wrappedValue: app ?? AppModel())
+        let router = ChatRouter()
+        router.route = initialChatRoute
+        _chatRouter = StateObject(wrappedValue: router)
     }
 
     var body: some View {
@@ -20,9 +24,8 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: app.hasCompletedInitialLoad)
-        .preferredColorScheme(app.themeStore.preferredColorScheme)
-        .environment(\.harnessTheme, app.themeStore.harnessTheme)
         .task {
+            app.chatRouter = chatRouter
             await app.bootstrap()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -55,17 +58,17 @@ struct ContentView: View {
 
     private var mainNavigation: some View {
         NavigationStack {
-            ConversationListView(app: app) { conversationId in
-                app.openThread(id: conversationId)
-            }
-            .navigationDestination(item: chatRouteBinding) { route in
-                switch route {
-                case .compose:
-                    ComposeChatView(app: app)
-                case .thread(let conversationId):
-                    ChatThreadView(app: app, conversationId: conversationId)
+            // Equatable isolation: chatRouter route changes must not rebuild the list.
+            ConversationListIsolation(app: app)
+                .equatable()
+                .navigationDestination(item: chatRouteBinding) { route in
+                    switch route {
+                    case .compose:
+                        ComposeChatView(app: app)
+                    case .thread(let conversationId):
+                        ChatThreadView(app: app, conversationId: conversationId)
+                    }
                 }
-            }
         }
     }
 
@@ -78,14 +81,29 @@ struct ContentView: View {
 
     private var chatRouteBinding: Binding<ChatRoute?> {
         Binding(
-            get: { app.chatRoute },
+            get: { chatRouter.route },
             set: { newValue in
-                if newValue == nil, case .compose = app.chatRoute {
+                if newValue == nil, case .compose = chatRouter.route {
                     app.clearComposeDraft()
                 }
-                app.chatRoute = newValue
+                chatRouter.route = newValue
             }
         )
+    }
+}
+
+/// Skips body updates when only unrelated parent state (e.g. chat route) changed.
+private struct ConversationListIsolation: View, Equatable {
+    let app: AppModel
+
+    static func == (lhs: ConversationListIsolation, rhs: ConversationListIsolation) -> Bool {
+        lhs.app === rhs.app
+    }
+
+    var body: some View {
+        ConversationListView(app: app) { conversationId in
+            app.openThread(id: conversationId)
+        }
     }
 }
 
@@ -95,11 +113,8 @@ struct ContentView: View {
 
 #Preview("Chat thread") {
     ContentView(
-        app: {
-            let app = PreviewSupport.populatedApp()
-            app.openThread(id: PreviewSupport.sampleConversationId)
-            return app
-        }()
+        app: PreviewSupport.populatedApp(),
+        initialChatRoute: .thread(id: PreviewSupport.sampleConversationId)
     )
 }
 

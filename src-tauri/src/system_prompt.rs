@@ -26,12 +26,6 @@ Link card — only when surfacing a single primary URL the user should open:
   :::link{url="https://example.com" title="Example" desc="One-line summary." site="example.com"}
   :::
 
-Mermaid diagrams — for flows, sequences, small state diagrams:
-  ```mermaid
-  flowchart LR
-    A --> B
-  ```
-
 Options — 2-5 short labels the user can tap to reply. Only title is shown; no body text, recommended flag, or section title. Outer fence uses FOUR colons:
   ::::options
   :::option{title="Plain-English walkthrough"}
@@ -40,23 +34,7 @@ Options — 2-5 short labels the user can tap to reply. Only title is shown; no 
   :::
   ::::
 
-Slide deck — a small inline deck (max ~6 slides). Outer fence uses FOUR colons. Layouts: title, bullets, quote, blank.
-  ::::slides
-  :::slide{layout=title title="Q3 Review" subtitle="Highlights"}
-  :::
-  :::slide{layout=bullets title="Wins"}
-  - Shipped feature X
-  - Closed deal Y
-  :::
-  :::slide{layout=quote attribution="— Lee"}
-  Make it work, then make it fast.
-  :::
-  :::slide{layout=blank title="Notes"}
-  Free-form markdown body.
-  :::
-  ::::
-
-Rules of thumb: prefer plain prose first; use at most one layout block per reply unless the user is explicitly asking for a comparison or a deck; never nest :::slides inside another directive; do not use callouts as section headers.
+Rules of thumb: prefer plain prose first; use at most one layout block per reply unless the user is explicitly asking for a comparison; do not use callouts as section headers.
 
 [CONVERSATION_RECALL]
 Prior chats may appear in [RECENT_CONVERSATIONS] below. Call memory_search_conversations whenever names, continuity, prior decisions, or cross-thread context would help — not only when the user explicitly asks to search or find something in chat history."#;

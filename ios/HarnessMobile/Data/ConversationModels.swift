@@ -7,6 +7,12 @@ enum MessageRole: String, Codable {
     case system
 }
 
+struct MessageAttachment: Codable, Equatable {
+    let id: String
+    let mimeType: String
+    let relativePath: String
+}
+
 struct MessageRecord: Codable, Identifiable, Equatable {
     private let cachedId: String
     var id: String { cachedId }
@@ -15,24 +21,27 @@ struct MessageRecord: Codable, Identifiable, Equatable {
     let timestamp: Int64?
     let model: String?
     let toolCalls: [ToolCallRecord]?
+    let attachments: [MessageAttachment]?
 
     init(
         role: String,
         content: String,
         timestamp: Int64?,
         model: String?,
-        toolCalls: [ToolCallRecord]? = nil
+        toolCalls: [ToolCallRecord]? = nil,
+        attachments: [MessageAttachment]? = nil
     ) {
         self.role = role
         self.content = content
         self.timestamp = timestamp
         self.model = model
         self.toolCalls = toolCalls
+        self.attachments = attachments
         self.cachedId = Self.makeId(role: role, timestamp: timestamp, content: content)
     }
 
     enum CodingKeys: String, CodingKey {
-        case role, content, timestamp, model, toolCalls
+        case role, content, timestamp, model, toolCalls, attachments
     }
 
     init(from decoder: Decoder) throws {
@@ -42,6 +51,7 @@ struct MessageRecord: Codable, Identifiable, Equatable {
         timestamp = try container.decodeIfPresent(Int64.self, forKey: .timestamp)
         model = try container.decodeIfPresent(String.self, forKey: .model)
         toolCalls = try container.decodeIfPresent([ToolCallRecord].self, forKey: .toolCalls)
+        attachments = try container.decodeIfPresent([MessageAttachment].self, forKey: .attachments)
         cachedId = Self.makeId(role: role, timestamp: timestamp, content: content)
     }
 
@@ -52,6 +62,7 @@ struct MessageRecord: Codable, Identifiable, Equatable {
         try container.encodeIfPresent(timestamp, forKey: .timestamp)
         try container.encodeIfPresent(model, forKey: .model)
         try container.encodeIfPresent(toolCalls, forKey: .toolCalls)
+        try container.encodeIfPresent(attachments, forKey: .attachments)
     }
 
     var messageRole: MessageRole {

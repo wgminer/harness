@@ -5,11 +5,23 @@ use std::sync::{Arc, Mutex};
 pub const TARGET_SAMPLE_RATE: u32 = 44100;
 pub const SILENT_AUDIO_PEAK_THRESHOLD: f32 = 0.0001;
 
+pub use crate::mic_permission::MICROPHONE_PERMISSION_DENIED_MESSAGE;
+
 pub const NO_AUDIO_CAPTURED_MESSAGE: &str =
-    "No audio captured. Click in Harness once to enable the microphone, then try Fn again.";
+    "No audio captured. Check that your microphone is connected and not muted, then try again.";
+
+pub fn silence_capture_error_message(microphone_authorized: bool) -> &'static str {
+    if microphone_authorized {
+        NO_AUDIO_CAPTURED_MESSAGE
+    } else {
+        MICROPHONE_PERMISSION_DENIED_MESSAGE
+    }
+}
 
 pub struct NativeCapture {
     samples: Arc<Mutex<Vec<f32>>>,
+    /// Peak of the most recent input chunk (0..1-ish); read by the level meter.
+    latest_peak: Arc<Mutex<f32>>,
     sample_rate: u32,
     stream: Option<cpal::Stream>,
 }
@@ -97,16 +109,17 @@ impl NativeCapture {
         let sample_rate = config.sample_rate();
         let channels = config.channels() as usize;
         let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
-        let samples_cb = samples.clone();
-
+        let latest_peak = Arc::new(Mutex::new(0.0_f32));
         let err_fn = |err: cpal::Error| stream_error_callback(err);
         let stream = match config.sample_format() {
             cpal::SampleFormat::F32 => {
                 let stream_config: cpal::StreamConfig = config.clone().into();
+                let samples_cb = samples.clone();
+                let peak_cb = latest_peak.clone();
                 device.build_input_stream(
                     stream_config,
                     move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                        append_samples(&samples_cb, data, channels);
+                        append_samples(&samples_cb, &peak_cb, data, channels);
                     },
                     err_fn,
                     None,
@@ -114,12 +127,14 @@ impl NativeCapture {
             }
             cpal::SampleFormat::I16 => {
                 let stream_config: cpal::StreamConfig = config.clone().into();
+                let samples_cb = samples.clone();
+                let peak_cb = latest_peak.clone();
                 device.build_input_stream(
                     stream_config,
                     move |data: &[i16], _: &cpal::InputCallbackInfo| {
                         let floats: Vec<f32> =
                             data.iter().map(|&s| s as f32 / 32768.0).collect();
-                        append_samples(&samples_cb, &floats, channels);
+                        append_samples(&samples_cb, &peak_cb, &floats, channels);
                     },
                     err_fn,
                     None,
@@ -127,6 +142,8 @@ impl NativeCapture {
             }
             cpal::SampleFormat::U16 => {
                 let stream_config: cpal::StreamConfig = config.clone().into();
+                let samples_cb = samples.clone();
+                let peak_cb = latest_peak.clone();
                 device.build_input_stream(
                     stream_config,
                     move |data: &[u16], _: &cpal::InputCallbackInfo| {
@@ -134,7 +151,7 @@ impl NativeCapture {
                             .iter()
                             .map(|&s| (s as f32 - 32768.0) / 32768.0)
                             .collect();
-                        append_samples(&samples_cb, &floats, channels);
+                        append_samples(&samples_cb, &peak_cb, &floats, channels);
                     },
                     err_fn,
                     None,
@@ -154,9 +171,18 @@ impl NativeCapture {
 
         Ok(Self {
             samples,
+            latest_peak,
             sample_rate,
             stream: Some(stream),
         })
+    }
+
+    /// Peak of the latest input chunk, clamped to 0..1.
+    pub fn latest_level(&self) -> f32 {
+        self.latest_peak
+            .lock()
+            .map(|p| (*p).clamp(0.0, 1.0))
+            .unwrap_or(0.0)
     }
 
     pub fn stop(mut self) -> Result<Vec<u8>, String> {
@@ -168,7 +194,8 @@ impl NativeCapture {
             samples.len()
         );
         if is_silent_audio(&samples) {
-            return Err(NO_AUDIO_CAPTURED_MESSAGE.into());
+            let authorized = crate::mic_permission::microphone_permission_status().is_granted();
+            return Err(silence_capture_error_message(authorized).into());
         }
         let mono = if self.sample_rate == TARGET_SAMPLE_RATE {
             samples
@@ -184,17 +211,32 @@ impl NativeCapture {
     }
 }
 
-fn append_samples(samples: &Arc<Mutex<Vec<f32>>>, data: &[f32], channels: usize) {
+fn append_samples(
+    samples: &Arc<Mutex<Vec<f32>>>,
+    latest_peak: &Arc<Mutex<f32>>,
+    data: &[f32],
+    channels: usize,
+) {
     let Ok(mut buf) = samples.lock() else {
         return;
     };
+    let start = buf.len();
     if channels <= 1 {
         buf.extend_from_slice(data);
-        return;
+    } else {
+        for frame in data.chunks(channels) {
+            let sum: f32 = frame.iter().sum();
+            buf.push(sum / channels as f32);
+        }
     }
-    for frame in data.chunks(channels) {
-        let sum: f32 = frame.iter().sum();
-        buf.push(sum / channels as f32);
+    let chunk_peak = peak_amplitude(&buf[start..]);
+    if let Ok(mut peak) = latest_peak.lock() {
+        // Envelope follower: attack to new peaks, slower release so the UI field stays lively.
+        *peak = if chunk_peak > *peak {
+            chunk_peak
+        } else {
+            *peak * 0.82 + chunk_peak * 0.18
+        };
     }
 }
 
@@ -211,6 +253,18 @@ mod tests {
         assert!(is_silent_audio(&[]));
         assert!(is_silent_audio(&[0.0, 0.00001, -0.00001]));
         assert!(!is_silent_audio(&[0.001]));
+    }
+
+    #[test]
+    fn silence_error_prefers_permission_message_when_denied() {
+        assert_eq!(
+            silence_capture_error_message(false),
+            MICROPHONE_PERMISSION_DENIED_MESSAGE
+        );
+        assert_eq!(
+            silence_capture_error_message(true),
+            NO_AUDIO_CAPTURED_MESSAGE
+        );
     }
 
     #[test]

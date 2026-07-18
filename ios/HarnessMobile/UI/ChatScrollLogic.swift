@@ -71,7 +71,7 @@ final class ChatScrollController: ObservableObject {
 
     func pinForTurn() {
         userTookOver = false
-        mode = .pinned
+        setMode(.pinned)
     }
 
     func updateContentOffset(_ offset: CGFloat) {
@@ -94,32 +94,38 @@ final class ChatScrollController: ObservableObject {
             contentBottom: contentBottom,
             viewportBottom: viewportBottom
         )
-        if ChatScrollLogic.shouldUnlockFromScrollDelta(prevOffset: lastScrollOffset, nextOffset: contentOffset) {
-            userTookOver = true
-            mode = .free
-        }
-        mode = ChatScrollLogic.shouldRepinFromUserScroll(
-            mode: mode,
-            prevOffset: lastScrollOffset,
-            nextOffset: contentOffset,
-            nearLiveEdge: nearLiveEdge
+        // Do not unlock from content-offset preferences: programmatic scrollTo
+        // during streaming also decreases minY and would fight auto-follow.
+        // Unlock only via onUserDraggedUp (finger drag toward older messages).
+        setMode(
+            ChatScrollLogic.shouldRepinFromUserScroll(
+                mode: mode,
+                prevOffset: lastScrollOffset,
+                nextOffset: contentOffset,
+                nearLiveEdge: nearLiveEdge
+            )
         )
         lastScrollOffset = contentOffset
     }
 
     func onUserDraggedUp() {
         userTookOver = true
-        mode = .free
+        setMode(.free)
     }
 
     func reset() {
         userTookOver = false
-        mode = .pinned
+        setMode(.pinned)
         prevSending = false
         lastScrollOffset = 0
         contentOffset = 0
         contentBottom = 0
         viewportBottom = 0
+    }
+
+    private func setMode(_ newMode: ChatScrollMode) {
+        guard mode != newMode else { return }
+        mode = newMode
     }
 }
 

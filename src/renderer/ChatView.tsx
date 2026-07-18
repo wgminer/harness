@@ -12,11 +12,16 @@ import {
   type Message,
   type ToolCallDisplay,
   formatMessageNoteTitle,
-  getInlineWriteup,
   type LiveNoteStream,
 } from "./chatHelpers";
 import { shouldFocusComposerAfterTurn } from "./composerFocusPolicy";
 import { shouldApplyTurnUpdate } from "./chatTurnFlow";
+import {
+  mergeAssistantFromStorage,
+  noteStaleStreamEndExpected,
+  consumeStaleStreamEnd,
+  type AssistantSyncFields,
+} from "./assistantStorageSync";
 import { scheduleAfterStreamEndSync } from "./streamEndScheduling";
 import { stripSentAtPrefix } from "../shared/chatTemporalContext";
 import { chatRequiresApiKeyMessage } from "../shared/setupState";
@@ -97,6 +102,7 @@ export function ChatView({
   const turnIdRef = useRef(0);
   const activeTurnIdRef = useRef<number | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
+  const pendingStaleStreamEndsRef = useRef(0);
 
   const sending = isTurnPending || isStreaming;
 
@@ -160,55 +166,37 @@ export function ChatView({
   }, [focusComposer]);
 
   const syncAssistantFromStorage = useCallback(async (convId: string, assistantId: string | null) => {
+    if (!assistantId) return;
     const list = await window.harness.memory.getMessages(convId);
     const lastAssistant = [...list].reverse().find((m) => m.role === "assistant");
-    if (!lastAssistant?.content?.trim()) return;
-    const storedToolCalls = (lastAssistant as Message).toolCalls;
-    const storedWriteup = getInlineWriteup(storedToolCalls);
-    const storedHasNote = !!storedWriteup?.noteId;
-    setMessages((prev) => {
-      let patched = false;
-      const next = prev.map((m) => {
+    if (!lastAssistant) return;
+    const stored: AssistantSyncFields = {
+      content: lastAssistant.content ?? "",
+      toolCalls: (lastAssistant as Message).toolCalls,
+      model: (lastAssistant as Message).model,
+    };
+    setMessages((prev) =>
+      prev.map((m) => {
         if (m.id !== assistantId) return m;
-        const localWriteup = getInlineWriteup(m.toolCalls);
-        const contentNeedsSync = m.content.length < lastAssistant.content.length;
-        const toolCallsNeedSync =
-          !!storedToolCalls &&
-          (storedToolCalls.length !== (m.toolCalls?.length ?? 0) ||
-            storedHasNote !== !!localWriteup?.noteId);
-        if (!contentNeedsSync && !toolCallsNeedSync) return m;
-        patched = true;
-        return {
-          ...m,
-          content: contentNeedsSync ? lastAssistant.content : m.content,
-          toolCalls: toolCallsNeedSync ? storedToolCalls : m.toolCalls,
-          model: (lastAssistant as Message).model ?? m.model,
-        };
-      });
-      if (patched) return next;
-      const last = prev[prev.length - 1];
-      if (last?.role === "assistant" && !last.content.trim()) {
-        return [
-          ...prev.slice(0, -1),
-          {
-            ...last,
-            content: lastAssistant.content,
-            toolCalls: (lastAssistant as Message).toolCalls ?? last.toolCalls,
-            model: (lastAssistant as Message).model ?? last.model,
-          },
-        ];
-      }
-      return prev;
-    });
+        const merged = mergeAssistantFromStorage(m, stored);
+        return merged ? { ...m, ...merged } : m;
+      })
+    );
   }, []);
 
   const beginNewTurn = useCallback(() => {
     const priorAbort = streamAbortRef.current;
+    const supersedingInFlight = sendingRef.current || isStreamingRef.current;
     if (priorAbort && !priorAbort.signal.aborted) {
       priorAbort.abort();
     }
     if (sendingRef.current) {
       void window.harness.chat.stop().catch(() => {});
+    }
+    if (supersedingInFlight) {
+      pendingStaleStreamEndsRef.current = noteStaleStreamEndExpected(
+        pendingStaleStreamEndsRef.current
+      );
     }
     const nextTurnId = turnIdRef.current + 1;
     turnIdRef.current = nextTurnId;
@@ -414,6 +402,9 @@ export function ChatView({
     });
     const unsubEnd = window.harness.chat.onStreamEnd((cid) => {
       if (cid !== conversationIdRef.current) return;
+      const stale = consumeStaleStreamEnd(pendingStaleStreamEndsRef.current);
+      pendingStaleStreamEndsRef.current = stale.pending;
+      if (stale.ignore) return;
       const turnId = activeTurnIdRef.current;
       if (turnId == null) return;
       const assistantId = activeAssistantMessageIdRef.current;

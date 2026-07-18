@@ -1,8 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { applyAccent } from "../shared/accent";
+import type { Settings } from "../shared/types";
 import { createHarnessAdapter } from "./desktopAdapter";
 import { initGlobalHotkeyController } from "./globalHotkeyController";
-import { primeOnUserGesture } from "./recordingBootstrap";
 import { RootApp } from "./RootApp";
 import { isCurrentStickyWindow } from "./stickyWindow";
 import "@fontsource/ibm-plex-sans/400.css";
@@ -26,10 +27,15 @@ import "highlight.js/styles/github-dark.css";
 
 window.harness = createHarnessAdapter();
 void (async () => {
+  try {
+    const settings = (await window.harness.settings.get()) as Settings;
+    applyAccent(settings.appearance?.accent);
+  } catch {
+    // Keep CSS default accent if settings fail to load.
+  }
   const sticky = await isCurrentStickyWindow();
   if (!sticky) {
     initGlobalHotkeyController();
-    primeOnUserGesture();
     void window.harness.recording.signalFrontendReady();
   }
   const dev = await window.harness.env.isHarnessDev();

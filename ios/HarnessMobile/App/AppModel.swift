@@ -1,10 +1,19 @@
-import Combine
 import Foundation
 import SwiftUI
 
 enum ChatRoute: Hashable {
     case compose
     case thread(id: String)
+}
+
+struct PendingOutboundMessage {
+    let text: String
+    let imageJPEG: Data?
+}
+
+struct ComposerSendPayload {
+    let text: String
+    let imageJPEG: Data?
 }
 
 enum ComposerDraftStorage {
@@ -49,9 +58,8 @@ final class AppModel: ObservableObject {
 
     @Published var syncStatus = SyncStatusSnapshot(kind: .idle, title: "", detail: nil, occurredAt: nil)
     @Published var isSyncing = false
-    @Published var chatRoute: ChatRoute?
     var composeDraft = ""
-    private var pendingOutboundMessages: [String: String] = [:]
+    private var pendingOutboundMessages: [String: PendingOutboundMessage] = [:]
     private var composerDraftCache: [String: String] = [:]
     @Published var syncNotConfigured = false
     @Published var needsAPIKey = false
@@ -68,10 +76,11 @@ final class AppModel: ObservableObject {
     let chatService: ChatService
     let dictationService: DictationService
     let recordingSession: RecordingSessionManager
-    let themeStore: ThemeStore
+
+    /// Owned by `ContentView`; route changes must not publish through `AppModel`.
+    weak var chatRouter: ChatRouter?
 
     private var pendingAutoGenerateReply: Set<String> = []
-    private var cancellables = Set<AnyCancellable>()
 
     init(localDataSubpath: String = "local-data") {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -82,15 +91,11 @@ final class AppModel: ObservableObject {
         chatService = ChatService(store: store, tasksStore: tasksStore)
         dictationService = DictationService(localDataDir: localDataDir)
         recordingSession = RecordingSessionManager()
-        themeStore = ThemeStore()
         syncEngine.store = store
         lastSuccessfulSyncAt = UserDefaults.standard.object(forKey: Self.lastSuccessfulSyncAtKey) as? Date
         setupNoticeDismissed = UserDefaults.standard.bool(forKey: Self.setupNoticeDismissedKey)
         composeDraft = ComposerDraftStorage.loadComposeDraft()
         composerDraftCache = ComposerDraftStorage.loadThreadDrafts()
-        // Store publishes still fan into AppModel for settings/sync chrome.
-        // Chat threads observe ChatService; tasks/dictation observe their own stores.
-        forwardObjectWillChange(from: store)
         wireContentChangeHandlers()
     }
 
@@ -142,7 +147,7 @@ final class AppModel: ObservableObject {
                 return
             }
             guard !Task.isCancelled else { return }
-            try? self?.store.refreshPendingSyncState()
+            await self?.store.refreshPendingSyncState()
         }
     }
 
@@ -166,22 +171,15 @@ final class AppModel: ObservableObject {
         store.hasLocalEdits && !isSyncing && !hasScheduledSync
     }
 
-    private func forwardObjectWillChange<P: ObservableObject>(from publisher: P) {
-        publisher.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
-    }
-
-    func queueOutboundMessage(conversationId: String, text: String) {
-        pendingOutboundMessages[conversationId] = text
+    func queueOutboundMessage(conversationId: String, text: String, imageJPEG: Data? = nil) {
+        pendingOutboundMessages[conversationId] = PendingOutboundMessage(text: text, imageJPEG: imageJPEG)
     }
 
     func hasPendingOutboundMessage(conversationId: String) -> Bool {
         pendingOutboundMessages[conversationId] != nil
     }
 
-    func takePendingOutboundMessage(conversationId: String) -> String? {
+    func takePendingOutboundMessage(conversationId: String) -> PendingOutboundMessage? {
         pendingOutboundMessages.removeValue(forKey: conversationId)
     }
 
@@ -258,11 +256,11 @@ final class AppModel: ObservableObject {
     }
 
     func openCompose() {
-        chatRoute = .compose
+        chatRouter?.openCompose()
     }
 
     func openThread(id: String) {
-        chatRoute = .thread(id: id)
+        chatRouter?.openThread(id: id)
     }
 
     func bootstrap() async {
@@ -289,7 +287,7 @@ final class AppModel: ObservableObject {
         maybePresentSetupNotice()
 
         Task(priority: .utility) { [weak self] in
-            try? self?.store.refreshPendingSyncState()
+            await self?.store.refreshPendingSyncState()
         }
 
         if R2SettingsStore.isConfigured {
@@ -342,29 +340,32 @@ final class AppModel: ObservableObject {
         do {
             let outcome = try await syncEngine.syncNow(forcePull: forcePull)
             applyOutcome(outcome)
-            try store.reload()
-            try tasksStore.reload()
-            try store.refreshPendingSyncState()
-            chatService.refreshClient()
+            if outcome.localDataChanged {
+                try await store.reloadAsync()
+                try tasksStore.reload()
+            }
+            await store.refreshPendingSyncState()
+            if outcome.localDataChanged {
+                chatService.refreshClient()
+            }
         } catch {
             applyError(error)
-            try? store.reload()
+            try? await store.reloadAsync()
             try? tasksStore.reload()
-            try? store.refreshPendingSyncState()
+            await store.refreshPendingSyncState()
             chatService.refreshClient()
         }
     }
 
     func pushAfterChat() async {
-        guard R2SettingsStore.isConfigured else { return }
-        await performSync()
+        // Message writes already schedule a debounced sync. Avoid an immediate
+        // full R2 sync that freezes the thread UI as streaming ends.
+        scheduleSyncAfterLocalChange()
     }
 
     func deleteConversation(id: String) throws {
         try store.deleteConversation(id: id)
-        if case .thread(let activeId) = chatRoute, activeId == id {
-            chatRoute = nil
-        }
+        chatRouter?.clearIfThread(id: id)
     }
 
     func importAPIKeyFromSyncedSettings() throws -> Bool {

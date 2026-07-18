@@ -11,6 +11,7 @@ use crate::settings;
 use crate::system_prompt::{
     build_system_prompt, fields_from_settings, SystemPromptPreview, SystemPromptPreviewFact,
 };
+use crate::conversation_title::schedule_conversation_title_refinement;
 
 use super::ChatController;
 
@@ -75,6 +76,13 @@ impl ChatController {
         )
         .await
         .map_err(|e| e.to_string())?;
+        // Match iOS: refine title after each user message (covers first-message threads
+        // even if the assistant stream errors before its own schedule runs).
+        schedule_conversation_title_refinement(
+            self.app.clone(),
+            self.state.clone(),
+            conversation_id.to_string(),
+        );
         self.stream_assistant_reply(conversation_id, messages).await
     }
 
@@ -115,6 +123,11 @@ impl ChatController {
         )
         .await
         .map_err(|e| e.to_string())?;
+        schedule_conversation_title_refinement(
+            self.app.clone(),
+            self.state.clone(),
+            conversation_id.to_string(),
+        );
         self.stream_assistant_reply(conversation_id, messages).await
     }
 

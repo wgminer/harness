@@ -76,6 +76,21 @@ function main() {
     appPath
   );
 
+  console.log("\n— microphone entitlement (hardened runtime)");
+  const ents = spawnSync("codesign", ["-d", "--entitlements", "-", appPath], {
+    encoding: "utf8",
+    cwd: path.join(__dirname, ".."),
+  });
+  const entsOut = `${ents.stdout || ""}${ents.stderr || ""}`;
+  if (!entsOut.includes("com.apple.security.device.audio-input")) {
+    console.error(
+      "Missing com.apple.security.device.audio-input — Microphone TCC will fail silently.\n" +
+        "Ensure src-tauri/tauri.conf.json sets bundle.macOS.entitlements to entitlements.plist, then rebuild."
+    );
+    process.exit(1);
+  }
+  console.log("com.apple.security.device.audio-input: present");
+
   runStep(
     "Gatekeeper assessment (execute)",
     "spctl",

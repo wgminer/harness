@@ -28,4 +28,42 @@ final class RecentConversationsTests: XCTestCase {
         ]
         XCTAssertTrue(RecentConversations.cleanDialogueBody(messages: messages, budget: 2000).isEmpty)
     }
+
+    func testShortlistCapsOlderConversations() {
+        let nowMs: Int64 = 1_700_000_000_000
+        var map: [String: ConversationMeta] = [:]
+        for index in 0..<40 {
+            let id = "conv_\(index)"
+            map[id] = ConversationMeta(
+                title: id,
+                createdAt: nowMs - Int64(index + 10) * 86_400_000,
+                sessionKind: "chat",
+                hasAssistantReply: true,
+                hasMessages: true,
+                titleSource: "auto"
+            )
+        }
+        let ids = RecentConversations.shortlistIds(from: map, excludeConversationId: nil, nowMs: nowMs)
+        XCTAssertEqual(ids.count, RecentConversations.shortlistLoadLimit)
+        XCTAssertTrue(ids.contains("conv_0"))
+        XCTAssertFalse(ids.contains("conv_39"))
+    }
+
+    func testShortlistIncludesAllSameDayEvenPastLoadLimit() {
+        let nowMs: Int64 = 1_700_000_000_000
+        var map: [String: ConversationMeta] = [:]
+        for index in 0..<30 {
+            let id = "today_\(index)"
+            map[id] = ConversationMeta(
+                title: id,
+                createdAt: nowMs - Int64(index) * 60_000,
+                sessionKind: "chat",
+                hasAssistantReply: true,
+                hasMessages: true,
+                titleSource: "auto"
+            )
+        }
+        let ids = RecentConversations.shortlistIds(from: map, excludeConversationId: nil, nowMs: nowMs)
+        XCTAssertEqual(ids.count, 30)
+    }
 }

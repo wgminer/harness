@@ -1,5 +1,4 @@
 import ActivityKit
-import Combine
 import Foundation
 
 @MainActor
@@ -8,17 +7,14 @@ final class RecordingSessionManager: ObservableObject {
 
     let recorder = AudioRecorder()
 
-    private var cancellables = Set<AnyCancellable>()
     private var liveActivity: Activity<DictationRecordingAttributes>?
     /// Bumped when a session starts or is cancelled so orphaned start work cannot tear down a newer session.
     private var sessionEpoch = 0
 
     init() {
-        recorder.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
-
+        // Intentionally do not forward recorder.objectWillChange — metering
+        // publishes ~12×/sec and would rebuild every view that observes this
+        // session. Dictation UI observes AudioRecorder in leaf views instead.
         NotificationCenter.default.addObserver(
             forName: .dictationLiveActivityStopRequested,
             object: nil,

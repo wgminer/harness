@@ -25,7 +25,7 @@ enum PreviewSupport {
         app.isSyncing = isSyncing
         if hasLocalEdits {
             UserDefaults.standard.set("stale-preview-revision", forKey: SyncEngine.lastSyncedContentRevisionKey)
-            try? app.store.refreshPendingSyncState()
+            app.store.setHasLocalEditsForPreview(true)
         }
         app.syncNotConfigured = syncNotConfigured
         app.needsAPIKey = needsAPIKey
@@ -162,6 +162,5 @@ struct PreviewNavigationRoot<Content: View>: View {
         NavigationStack {
             content()
         }
-        .preferredColorScheme(.dark)
     }
 }

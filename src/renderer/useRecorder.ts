@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { acquireRecordingStream, createRecordingAudioContext } from "./recordingBootstrap";
-import { isSilentAudio, NO_AUDIO_CAPTURED_MESSAGE } from "./recordingAudioUtils";
+import { isSilentAudio, silenceCaptureErrorMessage } from "./recordingAudioUtils";
 import { encodeWav, playStartChime, playStopChime } from "./recordingUtils";
 
 export type Recorder = {
@@ -54,7 +54,20 @@ export function createRecorder(): Recorder {
       await playStopChime();
     }
     if (isSilentAudio(buffers)) {
-      throw new Error(NO_AUDIO_CAPTURED_MESSAGE);
+      let authorized = true;
+      try {
+        const status = await window.harness?.recording?.microphonePermissionStatus?.();
+        if (status === "denied" || status === "undetermined") {
+          authorized = false;
+        } else if (status === "granted") {
+          authorized = true;
+        } else if (window.harness?.recording?.requestMicrophoneAccess) {
+          authorized = await window.harness.recording.requestMicrophoneAccess();
+        }
+      } catch {
+        authorized = false;
+      }
+      throw new Error(silenceCaptureErrorMessage(authorized));
     }
     return encodeWav(buffers, sampleRate);
   }

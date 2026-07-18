@@ -2,10 +2,11 @@ import MarkdownUI
 import SwiftUI
 import UIKit
 
-struct HarnessMarkdownView: View, Equatable {
+struct HarnessMarkdownView: View {
     let content: String
     let lineLimit: Int?
     let isStreaming: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     init(content: String, lineLimit: Int? = nil, isStreaming: Bool = false) {
         self.content = content
@@ -14,9 +15,26 @@ struct HarnessMarkdownView: View, Equatable {
     }
 
     var body: some View {
+        EquatableHarnessMarkdown(
+            content: content,
+            lineLimit: lineLimit,
+            isStreaming: isStreaming,
+            colorScheme: colorScheme
+        )
+        .equatable()
+    }
+}
+
+private struct EquatableHarnessMarkdown: View, Equatable {
+    let content: String
+    let lineLimit: Int?
+    let isStreaming: Bool
+    let colorScheme: ColorScheme
+
+    var body: some View {
         Markdown(content)
             .markdownTheme(.harnessChat)
-            .markdownCodeSyntaxHighlighter(.harness(streaming: isStreaming))
+            .markdownCodeSyntaxHighlighter(.harness(streaming: isStreaming, colorScheme: colorScheme))
             .lineLimit(lineLimit)
             .animation(nil, value: content)
     }
@@ -140,5 +158,4 @@ extension Theme {
         )
         .padding(20)
     }
-    .preferredColorScheme(.dark)
 }

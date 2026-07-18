@@ -17,8 +17,20 @@ final class ConversationStore: ObservableObject {
     func reload() throws {
         let map = try loadConversationMapRaw()
         conversations = Self.sidebarItems(from: map) { id in
-            (try? loadMessages(conversationId: id).count) ?? 0
+            Self.sidebarMessageProbe(localDataDir: localDataDir, conversationId: id)
         }
+    }
+
+    /// Off-main sidebar rebuild for sync / refresh paths that must not hitch the UI.
+    func reloadAsync() async throws {
+        let dir = localDataDir
+        let items = try await Task.detached(priority: .userInitiated) {
+            let map = try Self.loadConversationMapRaw(localDataDir: dir)
+            return Self.sidebarItems(from: map) { id in
+                Self.sidebarMessageProbe(localDataDir: dir, conversationId: id)
+            }
+        }.value
+        conversations = items
     }
 
     /// Single-pass bootstrap: optionally prune empties / backfill `hasMessages`, then publish sidebar.
@@ -28,7 +40,7 @@ final class ConversationStore: ObservableObject {
             map = try pruneMapInPlace(map)
         }
         conversations = Self.sidebarItems(from: map) { id in
-            (try? loadMessages(conversationId: id).count) ?? 0
+            Self.sidebarMessageProbe(localDataDir: localDataDir, conversationId: id)
         }
     }
 
@@ -56,7 +68,7 @@ final class ConversationStore: ObservableObject {
             }
         }
         let items = sidebarItems(from: map) { id in
-            (try? loadMessages(localDataDir: localDataDir, conversationId: id).count) ?? 0
+            Self.sidebarMessageProbe(localDataDir: localDataDir, conversationId: id)
         }
         return (items, removed)
     }
@@ -172,7 +184,7 @@ final class ConversationStore: ObservableObject {
         map[id] = ConversationMeta(title: nil, createdAt: Int64(Date().timeIntervalSince1970 * 1000), sessionKind: "chat")
         try saveConversationMap(map)
         try saveMessages(conversationId: id, messages: [])
-        try reload()
+        // Empty chats stay off the sidebar until they have messages — skip full reload.
         return id
     }
 
@@ -183,8 +195,7 @@ final class ConversationStore: ObservableObject {
         let id = generateId(prefix: "conv")
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         let title = ConversationTitlePolicy.voiceDictationTitle()
-        var map = try loadConversationMapRaw()
-        map[id] = ConversationMeta(
+        let meta = ConversationMeta(
             title: title,
             createdAt: now,
             sessionKind: "dictation",
@@ -192,6 +203,8 @@ final class ConversationStore: ObservableObject {
             hasMessages: true,
             titleSource: "auto"
         )
+        var map = try loadConversationMapRaw()
+        map[id] = meta
         try saveConversationMap(map)
         let record = MessageRecord(
             role: MessageRole.user.rawValue,
@@ -203,7 +216,11 @@ final class ConversationStore: ObservableObject {
         if let recordingURL {
             try DictationRecordingIndex.link(conversationId: id, recordingURL: recordingURL)
         }
-        try reload()
+        upsertSidebarItem(
+            conversationId: id,
+            meta: meta,
+            hasMessages: true
+        )
         return id
     }
 
@@ -229,7 +246,27 @@ final class ConversationStore: ObservableObject {
         if let titleSource { meta.titleSource = titleSource }
         map[conversationId] = meta
         try saveConversationMap(map)
-        try reload()
+        upsertSidebarItem(
+            conversationId: conversationId,
+            meta: meta,
+            hasMessages: meta.hasMessages == true
+        )
+    }
+
+    func saveChatImageAttachment(conversationId: String, jpegData: Data) throws -> MessageAttachment {
+        let attachmentId = UUID().uuidString.lowercased()
+        let relativePath = LocalDataLayout.chatAttachmentPath(
+            conversationId: conversationId,
+            attachmentId: attachmentId
+        )
+        try LocalDataLayout.ensureDirectories(at: localDataDir)
+        let url = LocalDataLayout.fileURL(in: localDataDir, relativePath: relativePath)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try jpegData.write(to: url, options: .atomic)
+        return MessageAttachment(id: attachmentId, mimeType: "image/jpeg", relativePath: relativePath)
     }
 
     func appendMessage(
@@ -237,7 +274,8 @@ final class ConversationStore: ObservableObject {
         role: MessageRole,
         content: String,
         model: String? = nil,
-        toolCalls: [ToolCallRecord]? = nil
+        toolCalls: [ToolCallRecord]? = nil,
+        attachments: [MessageAttachment]? = nil
     ) throws {
         var messages = try loadMessages(conversationId: conversationId)
         messages.append(MessageRecord(
@@ -245,19 +283,26 @@ final class ConversationStore: ObservableObject {
             content: content,
             timestamp: Int64(Date().timeIntervalSince1970 * 1000),
             model: model,
-            toolCalls: toolCalls
+            toolCalls: toolCalls,
+            attachments: attachments
         ))
         try saveMessages(conversationId: conversationId, messages: messages)
-        try markHasMessages(conversationId: conversationId)
-        if role == .assistant {
-            var map = try loadConversationMapRaw()
-            if var meta = map[conversationId] {
-                meta.hasAssistantReply = true
-                map[conversationId] = meta
-                try saveConversationMap(map)
-            }
+        var map = try loadConversationMapRaw()
+        guard var meta = map[conversationId] else { return }
+        var mapDirty = false
+        if meta.hasMessages != true {
+            meta.hasMessages = true
+            mapDirty = true
         }
-        try reload()
+        if role == .assistant, meta.hasAssistantReply != true {
+            meta.hasAssistantReply = true
+            mapDirty = true
+        }
+        if mapDirty {
+            map[conversationId] = meta
+            try saveConversationMap(map)
+        }
+        upsertSidebarItem(conversationId: conversationId, meta: meta, hasMessages: true)
     }
 
     func loadUserMemory() throws -> [String: String] {
@@ -349,7 +394,11 @@ final class ConversationStore: ObservableObject {
         meta.titleSource = "user"
         map[conversationId] = meta
         try saveConversationMap(map)
-        try reload()
+        upsertSidebarItem(
+            conversationId: conversationId,
+            meta: meta,
+            hasMessages: meta.hasMessages == true
+        )
     }
 
     func deleteConversation(id: String) throws {
@@ -376,11 +425,19 @@ final class ConversationStore: ObservableObject {
     }
 
     /// Reconcile the pending-upload flag with the last synced content revision.
-    func refreshPendingSyncState() throws {
-        let localRevision = try BundleCodec.computeRevision(
-            localDataDir: localDataDir,
-            scopes: SyncScopes.userContentScopes
-        )
+    func refreshPendingSyncState() async {
+        let dir = localDataDir
+        let localRevision: String
+        do {
+            localRevision = try await Task.detached(priority: .utility) {
+                try BundleCodec.computeRevision(
+                    localDataDir: dir,
+                    scopes: SyncScopes.userContentScopes
+                )
+            }.value
+        } catch {
+            return
+        }
         guard let lastRevision = UserDefaults.standard.string(forKey: SyncEngine.lastSyncedContentRevisionKey),
               !lastRevision.isEmpty
         else {
@@ -390,15 +447,15 @@ final class ConversationStore: ObservableObject {
         hasLocalEdits = localRevision != lastRevision
     }
 
-    private func notifyContentChanged() {
-        onContentChanged?()
+    func setHasLocalEditsForPreview(_ value: Bool) {
+        hasLocalEdits = value
     }
 
     func snapshotConversations() throws -> [String: ConversationSnapshot] {
         let map = try loadConversationMapRaw()
         var snapshots: [String: ConversationSnapshot] = [:]
         for (id, meta) in map {
-            let messageCount = (try? loadMessages(conversationId: id).count) ?? 0
+            let messageCount = Self.lightweightMessageCount(localDataDir: localDataDir, conversationId: id)
             snapshots[id] = ConversationSnapshot(
                 id: id,
                 title: meta.title,
@@ -408,6 +465,39 @@ final class ConversationStore: ObservableObject {
             )
         }
         return snapshots
+    }
+
+    private func notifyContentChanged() {
+        onContentChanged?()
+    }
+
+    /// Cheap sidebar visibility probe: avoid decoding full message JSON (and SHA-256 ids).
+    nonisolated static func sidebarMessageProbe(localDataDir: URL, conversationId: String) -> Int {
+        let path = LocalDataLayout.fileURL(
+            in: localDataDir,
+            relativePath: LocalDataLayout.messagesPath(conversationId: conversationId)
+        )
+        guard FileManager.default.fileExists(atPath: path.path) else { return 0 }
+        guard let size = try? FileManager.default.attributesOfItem(atPath: path.path)[.size] as? NSNumber else {
+            return 0
+        }
+        // Empty array encodes as "[]" (2 bytes).
+        return size.intValue > 2 ? 1 : 0
+    }
+
+    /// Message count without constructing `MessageRecord` (skips per-message SHA-256).
+    nonisolated static func lightweightMessageCount(localDataDir: URL, conversationId: String) -> Int {
+        let path = LocalDataLayout.fileURL(
+            in: localDataDir,
+            relativePath: LocalDataLayout.messagesPath(conversationId: conversationId)
+        )
+        guard FileManager.default.fileExists(atPath: path.path),
+              let data = try? LocalDataLayout.readRegularFileData(at: path),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [Any]
+        else {
+            return 0
+        }
+        return json.count
     }
 
     // MARK: - Private
@@ -462,12 +552,29 @@ final class ConversationStore: ObservableObject {
         return "\(prefix)_\(Int64(Date().timeIntervalSince1970 * 1000))_\(suffix)"
     }
 
-    private func markHasMessages(conversationId: String) throws {
-        var map = try loadConversationMapRaw()
-        guard var meta = map[conversationId] else { return }
-        guard meta.hasMessages != true else { return }
-        meta.hasMessages = true
-        map[conversationId] = meta
-        try saveConversationMap(map)
+    /// Patch a single sidebar row without decoding the full conversation library.
+    private func upsertSidebarItem(
+        conversationId: String,
+        meta: ConversationMeta,
+        hasMessages: Bool
+    ) {
+        let messageCount = hasMessages ? 1 : 0
+        guard ConversationListItem.isSidebarVisible(meta: meta, messageCount: messageCount) else {
+            conversations.removeAll { $0.id == conversationId }
+            return
+        }
+        let item = ConversationListItem(
+            id: conversationId,
+            title: meta.title,
+            createdAt: meta.createdAt,
+            hasAssistantReply: meta.hasAssistantReply ?? false,
+            hasMessages: hasMessages
+        )
+        if let index = conversations.firstIndex(where: { $0.id == conversationId }) {
+            conversations[index] = item
+        } else {
+            conversations.append(item)
+        }
+        conversations.sort { $0.createdAt > $1.createdAt }
     }
 }

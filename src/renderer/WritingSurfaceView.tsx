@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  DEFAULT_NOTE_TEMPLATE_ID,
   DEFAULT_NOTE_TEMPLATES,
   getDisplayNoteTitle,
   normalizeNoteTemplates,
@@ -938,17 +939,19 @@ export function NotesView({
                       Start from a template
                     </h3>
                     <div className="notes-surface__templates" role="group" aria-labelledby="notes-templates-label">
-                      {noteTemplates.map((template) => (
-                        <button
-                          key={template.id}
-                          type="button"
-                          className={`notes-surface__template-btn notes-surface__template-btn--${template.id}`}
-                          onClick={() => applyTemplate(template)}
-                          disabled={status.kind === "saving" || status.kind === "deleting"}
-                        >
-                          <span className="notes-surface__template-title">{template.title}</span>
-                        </button>
-                      ))}
+                      {noteTemplates
+                        .filter((template) => template.id !== DEFAULT_NOTE_TEMPLATE_ID)
+                        .map((template) => (
+                          <button
+                            key={template.id}
+                            type="button"
+                            className={`notes-surface__template-btn notes-surface__template-btn--${template.id}`}
+                            onClick={() => applyTemplate(template)}
+                            disabled={status.kind === "saving" || status.kind === "deleting"}
+                          >
+                            <span className="notes-surface__template-title">{template.title}</span>
+                          </button>
+                        ))}
                     </div>
                   </div>
                 ) : null}

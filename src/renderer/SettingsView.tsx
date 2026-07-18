@@ -4,6 +4,7 @@ import { ExternalLink, Settings as SettingsIcon } from "lucide-react";
 import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
+import { DEFAULT_ACCENT, applyAccent, normalizeAccentHex } from "../shared/accent";
 import {
   DEFAULT_NOTE_TEMPLATE_ID,
   DEFAULT_NOTE_TEMPLATES,
@@ -14,7 +15,6 @@ import {
   type NoteTemplateConfig,
 } from "../shared/writing";
 import type { GlobalRecordingStatus } from "../shared/desktopAPI";
-import { isRecordingReady } from "./recordingBootstrap";
 import { Modal } from "./Modal";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
@@ -30,6 +30,7 @@ import {
   SettingsTabPanel,
   DataSettingsTab,
   MemorySettingsTab,
+  AccentColorField,
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
@@ -66,6 +67,7 @@ type PersistedFormState = {
   r2Bucket: string;
   r2Prefix: string;
   r2AccessKeyId: string;
+  accent: string;
 };
 
 function serializeFormState(state: PersistedFormState): string {
@@ -142,6 +144,7 @@ export function SettingsView({
   const [r2Prefix, setR2Prefix] = useState(D.sync!.prefix);
   const [r2AccessKeyId, setR2AccessKeyId] = useState(D.sync!.accessKeyId);
   const [r2SecretAccessKey, setR2SecretAccessKey] = useState("");
+  const [accent, setAccent] = useState(D.appearance?.accent ?? DEFAULT_ACCENT);
   const dataRefreshRef = useRef<(() => Promise<void>) | null>(null);
   const registerDataRefresh = useCallback((refresh: () => Promise<void>) => {
     dataRefreshRef.current = refresh;
@@ -154,7 +157,6 @@ export function SettingsView({
   }, []);
   const isMac = platform === "darwin";
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
-  const [micReady, setMicReady] = useState(false);
   const [globalRecordingStatus, setGlobalRecordingStatus] = useState<GlobalRecordingStatus | null>(
     null,
   );
@@ -212,6 +214,7 @@ export function SettingsView({
           r2Bucket: S.sync?.bucket ?? D.sync!.bucket,
           r2Prefix: S.sync?.prefix ?? D.sync!.prefix,
           r2AccessKeyId: S.sync?.accessKeyId ?? D.sync!.accessKeyId,
+          accent: normalizeAccentHex(S.appearance?.accent ?? D.appearance?.accent),
         };
         setApiKey(hydrated.apiKey);
         setTavilyApiKey(hydrated.tavilyApiKey);
@@ -227,6 +230,8 @@ export function SettingsView({
         setR2Bucket(hydrated.r2Bucket);
         setR2Prefix(hydrated.r2Prefix);
         setR2AccessKeyId(hydrated.r2AccessKeyId);
+        setAccent(hydrated.accent);
+        applyAccent(hydrated.accent);
         setNoteTemplates(normalizeNoteTemplates(S.notes?.templates));
         setDefaultNoteTemplateId(
           normalizeDefaultNoteTemplateId(S.notes?.defaultTemplateId, normalizeNoteTemplates(S.notes?.templates)),
@@ -248,7 +253,6 @@ export function SettingsView({
   }, [isMac]);
 
   const refreshGlobalRecordingStatus = useCallback(async () => {
-    setMicReady(isRecordingReady());
     try {
       const status = await window.harness.recording.getGlobalStatus();
       setGlobalRecordingStatus(status);
@@ -261,7 +265,6 @@ export function SettingsView({
     if (!isMac || activeTab !== "voice") return;
     void refreshGlobalRecordingStatus();
     const timer = setInterval(() => {
-      setMicReady(isRecordingReady());
       void refreshGlobalRecordingStatus();
     }, 3000);
     return () => clearInterval(timer);
@@ -288,6 +291,7 @@ export function SettingsView({
       r2Bucket,
       r2Prefix,
       r2AccessKeyId,
+      accent,
     });
     if (latest === lastPersistedRef.current) {
       if (hideToastRef.current) clearTimeout(hideToastRef.current);
@@ -331,6 +335,7 @@ export function SettingsView({
           prefix: next.r2Prefix.trim() || D.sync!.prefix,
           accessKeyId: next.r2AccessKeyId.trim(),
         },
+        appearance: { accent: normalizeAccentHex(next.accent) },
       });
       const r2Changed =
         next.r2AccountId !== prev.r2AccountId ||
@@ -370,6 +375,7 @@ export function SettingsView({
     r2Prefix,
     r2AccessKeyId,
     r2SecretAccessKey,
+    accent,
     onSettingsChanged,
   ]);
 
@@ -405,6 +411,7 @@ export function SettingsView({
       r2Bucket,
       r2Prefix,
       r2AccessKeyId,
+      accent,
     });
     if (current === lastPersistedRef.current) return;
 
@@ -439,6 +446,7 @@ export function SettingsView({
       r2Bucket,
       r2Prefix,
       r2AccessKeyId,
+      accent,
     });
     if (current === lastPersistedRef.current) return;
 
@@ -460,6 +468,7 @@ export function SettingsView({
     r2Bucket,
     r2Prefix,
     r2AccessKeyId,
+    accent,
     persistSettings,
   ]);
 
@@ -644,34 +653,37 @@ export function SettingsView({
         <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
           {activeTab === "general" && <SettingsTabPanel id="general">
-            <SettingsGroup title="OpenAI" description="API key for chat. Voice transcription runs on your Mac.">
-              <SecretField
-                id="settings-api-key"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                onBlur={() => void persistSettings()}
-                placeholder="sk-…"
-                ariaLabel="OpenAI API key"
-              />
+            <SettingsGroup
+              title="OpenAI"
+              description="Chat, polish, and optional transcript cleanup. Voice transcription runs on your Mac without a key."
+            >
+              <SettingsField label="API key" htmlFor="settings-api-key">
+                <SecretField
+                  id="settings-api-key"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  onBlur={() => void persistSettings()}
+                  ariaLabel="OpenAI API key"
+                />
+              </SettingsField>
             </SettingsGroup>
 
             <SettingsGroup
-              title="Web search tool"
+              title="Tavily"
               description={
                 <>
-                  API key for the <code>web_search</code> tool. Get a free key at{" "}
+                  Optional web search for the assistant. Free keys at{" "}
                   <a href="https://tavily.com" target="_blank" rel="noreferrer noopener">tavily.com</a>.
                 </>
               }
             >
-              <SettingsField label="Tavily API key" htmlFor="settings-tavily-key">
+              <SettingsField label="API key" htmlFor="settings-tavily-key">
                 <SecretField
                   id="settings-tavily-key"
                   testId="settings-tavily-key"
                   value={tavilyApiKey}
                   onChange={(e) => setTavilyApiKey(e.target.value)}
                   onBlur={() => void persistSettings()}
-                  placeholder="tvly-…"
                   ariaLabel="Tavily API key"
                 />
               </SettingsField>
@@ -700,6 +712,13 @@ export function SettingsView({
 
           {activeTab === "appearance" && <SettingsTabPanel id="appearance">
             <SettingsGroup
+              title="Theme"
+              description="One accent color. Surfaces stay dark; muted and primary accents are derived from it."
+            >
+              <AccentColorField value={accent} onChange={setAccent} />
+            </SettingsGroup>
+
+            <SettingsGroup
               title="Notes"
               description="How new notes open from the sidebar New menu."
             >
@@ -714,7 +733,7 @@ export function SettingsView({
 
             <SettingsGroup
               title="Editor templates"
-              description="Edit note templates. The default is applied when you create a new note; all templates appear in the picker on a fresh note."
+              description="Edit note templates. The default is applied when you create a new note; non-blank templates appear in the picker on a fresh note."
             >
               <div className="settings-entry-list">
                 {noteTemplates.map((template) => (
@@ -816,8 +835,9 @@ export function SettingsView({
                 title="Fn shortcut"
                 description={
                   <>
-                    Press <strong>Fn</strong> to start recording, press again to stop. Harness needs Accessibility;
-                    allow <code>HarnessFnMonitor</code> too if macOS lists it.
+                    Press <strong>Fn</strong> to start recording, press again to stop. Needs{" "}
+                    <strong>Microphone</strong>, <strong>Speech Recognition</strong>, and{" "}
+                    <strong>Accessibility</strong> (allow <code>HarnessFnMonitor</code> if listed).
                   </>
                 }
               >
@@ -846,7 +866,7 @@ export function SettingsView({
                             }, 800);
                           }}
                         >
-                          Ask For Permission <ExternalLink size={14} aria-hidden />
+                          Ask For Accessibility <ExternalLink size={14} aria-hidden />
                         </button>
                       )}
                       <button
@@ -861,6 +881,45 @@ export function SettingsView({
                         }}
                       >
                         Open Accessibility <ExternalLink size={14} aria-hidden />
+                      </button>
+                    </SettingsActions>
+                    <SettingsActions>
+                      {globalRecordingStatus?.microphonePermission !== "granted" && (
+                        <button
+                          type="button"
+                          className="btn"
+                          data-testid="settings-microphone-prompt"
+                          onClick={() => {
+                            void window.harness.recording.requestMicrophoneAccess().then(() => {
+                              void refreshGlobalRecordingStatus();
+                            });
+                          }}
+                        >
+                          Ask For Microphone
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn"
+                        data-testid="settings-open-microphone"
+                        onClick={() => {
+                          void window.harness.system.openMicrophoneSettings();
+                          setTimeout(() => {
+                            void refreshGlobalRecordingStatus();
+                          }, 1500);
+                        }}
+                      >
+                        Open Microphone <ExternalLink size={14} aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        data-testid="settings-open-speech-recognition"
+                        onClick={() => {
+                          void window.harness.system.openSpeechRecognitionSettings();
+                        }}
+                      >
+                        Open Speech Recognition <ExternalLink size={14} aria-hidden />
                       </button>
                     </SettingsActions>
                     <SettingsHint flush>
@@ -880,7 +939,14 @@ export function SettingsView({
                             ? "starting…"
                             : "off"}
                       {" · "}
-                      Microphone: {micReady ? "ready" : "not primed — click anywhere in Harness or use the in-app mic once"}
+                      Microphone:{" "}
+                      {globalRecordingStatus?.microphonePermission === "granted"
+                        ? "allowed"
+                        : globalRecordingStatus?.microphonePermission === "denied"
+                          ? "denied — enable in System Settings"
+                          : globalRecordingStatus?.microphonePermission === "undetermined"
+                            ? "not asked yet — use Ask For Microphone"
+                            : "unknown"}
                     </SettingsHint>
                   </>
                 )}
@@ -918,7 +984,6 @@ export function SettingsView({
               <label className="app-modal-field">
                 <span className="app-modal-field__label">Prompt text</span>
                 <textarea
-                  placeholder="Describe how dictation should be cleaned up."
                   value={cleanupPromptDraft}
                   onChange={(e) => setCleanupPromptDraft(e.target.value)}
                   className="app-modal-input app-modal-input--multiline"
@@ -953,7 +1018,6 @@ export function SettingsView({
                 <span className="app-modal-field__label">Heard as</span>
                 <input
                   type="text"
-                  placeholder="e.g. wig em"
                   value={dictionaryFromDraft}
                   onChange={(e) => setDictionaryFromDraft(e.target.value)}
                   className="app-modal-input"
@@ -964,7 +1028,6 @@ export function SettingsView({
                 <span className="app-modal-field__label">Replace with</span>
                 <input
                   type="text"
-                  placeholder="e.g. WGM"
                   value={dictionaryToDraft}
                   onChange={(e) => setDictionaryToDraft(e.target.value)}
                   className="app-modal-input"

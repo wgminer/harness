@@ -83,7 +83,6 @@ export function MemorySettingsTab() {
           <label className="app-modal-field">
             <span className="app-modal-field__label">Pasted export</span>
             <textarea
-              placeholder="Paste the structured export from the other assistant…"
               value={memory.llmImportDraft}
               onChange={(e) => memory.setLlmImportDraft(e.target.value)}
               className="app-modal-input app-modal-input--multiline settings-llm-import-export"
@@ -132,7 +131,6 @@ export function MemorySettingsTab() {
             <span className="app-modal-field__label">Label</span>
             <input
               type="text"
-              placeholder="e.g. timezone"
               value={memory.newMemTitle}
               onChange={(e) => memory.setNewMemTitle(e.target.value)}
               className="app-modal-input"
@@ -142,7 +140,6 @@ export function MemorySettingsTab() {
           <label className="app-modal-field">
             <span className="app-modal-field__label">Detail</span>
             <textarea
-              placeholder="What to remember"
               value={memory.newMemDetail}
               onChange={(e) => memory.setNewMemDetail(e.target.value)}
               className="app-modal-input app-modal-input--multiline"

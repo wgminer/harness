@@ -21,6 +21,20 @@ enum LocalDataLayout {
         return "app-state/messages_\(safe).json"
     }
 
+    static func chatAttachmentPath(conversationId: String, attachmentId: String) -> String {
+        let safeConversation = conversationId.replacingOccurrences(
+            of: "[^a-zA-Z0-9_-]",
+            with: "_",
+            options: .regularExpression
+        )
+        let safeAttachment = attachmentId.replacingOccurrences(
+            of: "[^a-zA-Z0-9_-]",
+            with: "_",
+            options: .regularExpression
+        )
+        return "app-state/chat-attachments/\(safeConversation)/\(safeAttachment).jpg"
+    }
+
     /// Resolve a posix-style path under `local-data/` (e.g. `app-state/conversations.json`).
     static func fileURL(in localDataDir: URL, relativePath: String) -> URL {
         relativePath.split(separator: "/").reduce(localDataDir) { url, component in
@@ -41,6 +55,7 @@ enum LocalDataLayout {
         let fm = FileManager.default
         try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: appStateDir), withIntermediateDirectories: true)
         try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: "app-state/notes"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: "app-state/chat-attachments"), withIntermediateDirectories: true)
         try fm.createDirectory(at: fileURL(in: localDataDir, relativePath: "settings"), withIntermediateDirectories: true)
     }
 

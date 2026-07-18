@@ -285,6 +285,7 @@ pub struct GlobalRecordingStatus {
     pub hotkey_active: bool,
     pub session_mode: String,
     pub capture_backend: String,
+    pub microphone_permission: String,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -309,6 +310,9 @@ pub async fn recording_get_global_status(
         hotkey_active: *runtime.hotkey_active.lock().await,
         session_mode,
         capture_backend: "cpal".to_string(),
+        microphone_permission: crate::mic_permission::microphone_permission_status()
+            .as_str()
+            .to_string(),
     })
 }
 
