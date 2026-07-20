@@ -11,6 +11,7 @@ require("dotenv").config({ path: path.join(root, ".env") });
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const noTag = args.includes("--no-tag");
+const noBump = args.includes("--no-bump");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -80,14 +81,18 @@ function main() {
 
   // Real releases bump package.json + Cargo.toml + tauri.conf.json first.
   // Dry-run keeps the current version (for verifying the pipeline).
+  // --no-bump ships the already-committed version (e.g. a manual minor/major).
   const distArgs = ["--mac"];
-  if (!dryRun) {
+  if (!dryRun && !noBump) {
     distArgs.push("--bump");
   }
 
-  console.log(
-    `Releasing Harness${dryRun ? " (dry run — no bump/publish/tag)" : " (bump + publish)"}...`
-  );
+  const modeLabel = dryRun
+    ? " (dry run — no bump/publish/tag)"
+    : noBump
+      ? " (no bump — publish committed version)"
+      : " (bump + publish)";
+  console.log(`Releasing Harness${modeLabel}...`);
 
   run(process.execPath, [path.join(root, "scripts", "dist-runner.js"), ...distArgs], {
     env: (() => {

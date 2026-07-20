@@ -67,7 +67,7 @@ Building, shipping, and switching machines should not be a second project.
 |---|---|
 | **Success picture** | One-command release that never hangs on a password prompt; obvious which binary/data dir you are in (dev vs installed); bootstrap a second Mac without re-deriving tribal knowledge; sync credentials have a low-pain path. |
 | **Signals today** | `HARNESS_DEV` / **Harness Dev** separate Application Support dir; dist runner with timed steps; Tauri updater + GitHub `latest.json`; BUILD.md signing docs. |
-| **Gaps** | Non-interactive signing (env/keychain); single-source version bump; cross-machine bootstrap script/docs; **one sync QR** desktop→iOS pairing ([plan](plans/2026-07-14-sync-qr-pairing.md)); clearer dev-vs-prod affordances in UI. |
+| **Gaps** | Non-interactive signing (env/keychain); single-source version bump; cross-machine bootstrap script/docs; **one sync QR** desktop→iOS pairing; clearer dev-vs-prod affordances in UI. |
 | **Anti-goals** | Manual version edits across three manifests; hanging `dist` on interactive prompts; undocumented credential/signing setup. |
 
 ---
@@ -108,7 +108,7 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 
 - **Generated images as library objects** `[O1][O2]` — First-class peers to chats/notes; New → New image; canvas + right controls panel; `images` Rust module + `app-state/images/`.
 - **Sidebar object-library IA** `[O1]` — Unified library list (chats, dictations, notes, images); meta row Tasks · System; Editor-as-tab removed.
-- **Release line** — Desktop through **v0.7.10** region (see package / tauri / Cargo manifests).
+- **Release line** — Desktop through **v0.7.10**; **v0.8.0** is the consolidation cut (see package / tauri / Cargo manifests).
 
 ### 2026-06 — v0.7.0 — R2 sync, credentials, iOS polish, CI `[O1][O2][O3][O4]`
 
@@ -178,8 +178,6 @@ Before building (or when reviewing a PR), score the idea 0–2 per outcome (*0 =
 
 ## v0.8 — Consolidation (active)
 
-Execution plan: [plans/2026-07-14-consolidation.md](plans/2026-07-14-consolidation.md). Dedup mechanics: [plans/2026-07-12-deduplication-drift-proofing.md](plans/2026-07-12-deduplication-drift-proofing.md) (run **after** the cull). Sync QR pairing (C4): [plans/2026-07-14-sync-qr-pairing.md](plans/2026-07-14-sync-qr-pairing.md).
-
 ### Sequencing
 
 1. Finish in-flight polish / release (sidebar CSS unification, v0.7.x ship as needed).
@@ -213,11 +211,11 @@ Sync note: dropping `plans.json` from scopes must tolerate old bundles that stil
 - **Dev vs installed clarity** — documented `Harness Dev` vs `Harness` data dirs; icons unified; window title remains the Dev indicator.
 - **Release pipeline** — non-interactive signing; single-source version bump; one-command release that doesn’t hang.
 - **Cross-machine bootstrap** — scripted/docs path for signing keys, `TAURI_SIGNING_PRIVATE_KEY`, credentials, native helpers.
-- **Sync onboarding** — one Mac **Show sync QR** / phone **Set up sync** (R2 under the hood; no OpenAI-vs-R2 UX split). Plan: [plans/2026-07-14-sync-qr-pairing.md](plans/2026-07-14-sync-qr-pairing.md).
+- **Sync onboarding** — one Mac **Show sync QR** / phone **Set up sync** (R2 under the hood; no OpenAI-vs-R2 UX split).
 
 ### Workstream D — Paper cuts `[O1][O3]`
 
-Running checklist in the consolidation plan. Seeds:
+Seeds:
 
 - Sidebar CSS unification (Tasks/System → shared `.sidebar-item`).
 - CSS consolidation for fixed dark theme.

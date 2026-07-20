@@ -1,13 +1,13 @@
 # Harness — agent notes
 
-Concise guardrails for AI-assisted work in this repo. Full build/packaging detail lives in [BUILD.md](BUILD.md); execution queue in [plans/2026-07-14-consolidation.md](plans/2026-07-14-consolidation.md).
+Concise guardrails for AI-assisted work in this repo. Full build/packaging detail lives in [BUILD.md](BUILD.md).
 
 ## Single source of truth
 
 **Do not hand-copy cross-language contracts.** When a value is shared across TypeScript, Rust, and/or Swift, add or extend a file under [`resources/contracts/`](resources/contracts/) and wire consumers to read it.
 
 - **Today:** [`resources/contracts/tools.json`](resources/contracts/tools.json) — OpenAI tool schemas (desktop `include_str!`, iOS bundle resource, TS can import the same path).
-- **Planned:** prompts, model names, sync scopes, gated tool names, and other value contracts listed in [plans/2026-07-12-deduplication-drift-proofing.md](plans/2026-07-12-deduplication-drift-proofing.md) W1.
+- **Planned:** prompts, model names, sync scopes, gated tool names, and other shared value contracts.
 
 If code cannot share a file (logic mirrors), add a **parity test** that reads the real sources and fails on drift — same pattern as `src/shared/versionParity.test.ts` and `src/shared/ipcNames.test.ts`.
 

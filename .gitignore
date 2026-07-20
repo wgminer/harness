@@ -57,8 +57,6 @@ test-results/
 
 # Agent workflow (local only)
 .cursor/
-docs/plans/
-docs/superpowers/
 
 # macOS native helpers (built by prebuild)
 resources/HarnessSpeech

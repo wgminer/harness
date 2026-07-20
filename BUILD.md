@@ -246,6 +246,7 @@ Installed copies of Harness check GitHub on launch and show an **Update** button
 Optional flags:
 
 - `npm run release -- --dry-run` — build and verify the **current** version only; skip bump, publish, and git tag.
+- `npm run release -- --no-bump` — publish the already-committed version (use after a manual minor/major bump); still publishes and tags.
 - `npm run release -- --no-tag` — publish to GitHub but skip git tag push.
 
 Local dist without releasing:

@@ -36,7 +36,5 @@ Packaging: [BUILD.md](BUILD.md).
 ## Repo
 
 - [ROADMAP.md](ROADMAP.md): outcomes and execution (v0.8 Consolidation is active)
-- [plans/2026-07-14-consolidation.md](plans/2026-07-14-consolidation.md): consolidation execution queue
-- [plans/2026-07-14-sync-qr-pairing.md](plans/2026-07-14-sync-qr-pairing.md): one-QR desktop→iOS sync setup
 - [IDEAS.md](IDEAS.md): scratchpad
 
