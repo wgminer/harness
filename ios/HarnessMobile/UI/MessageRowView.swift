@@ -96,7 +96,10 @@ struct AssistantMessageView: View {
             }
             if !content.isEmpty || isStreaming {
                 Group {
-                    if isStreaming || !UserMessageCard.looksLikeMarkdown(content) {
+                    if isStreaming {
+                        StreamingMarkdownView(content: content)
+                            .equatable()
+                    } else if !UserMessageCard.looksLikeMarkdown(content) {
                         Text(content)
                             .font(.body)
                             .lineSpacing(4)

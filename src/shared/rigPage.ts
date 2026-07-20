@@ -4,11 +4,8 @@
  */
 export const RIG_PAGE_TITLE = "System";
 
-/** Tab label for theme and layout controls (`appearance` tab id). */
-export const RIG_APPEARANCE_TAB_LABEL = "Appearance";
-
-/** Tab label for user facts and related controls (`memory` tab id). */
-export const RIG_MEMORY_TAB_LABEL = "Memory";
+/** Tab label for notes windows and editor templates (`notes` tab id). */
+export const RIG_NOTES_TAB_LABEL = "Notes";
 
 /** Reference a section tab in errors and hints, e.g. "System → Tools". */
 export function rigSection(section: string): string {

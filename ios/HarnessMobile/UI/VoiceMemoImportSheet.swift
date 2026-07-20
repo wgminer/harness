@@ -86,7 +86,7 @@ struct VoiceMemoImportSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Open Voice Memos → share → Save to Files, or pick from iCloud Drive.", systemImage: "1.circle")
                 Label("Harness reads Apple's embedded transcript when available.", systemImage: "2.circle")
-                Label("Otherwise on-device Speech recognition is used, then Whisper if you have an API key.", systemImage: "3.circle")
+                Label("Otherwise on-device Speech recognition is used.", systemImage: "3.circle")
             }
             .font(.caption)
             .foregroundStyle(.secondary)

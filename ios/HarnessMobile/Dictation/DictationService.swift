@@ -5,20 +5,30 @@ enum TranscriptionSource: String, Equatable {
     case appleEmbedded
     /// On-device Apple Speech framework (SFSpeechRecognizer).
     case onDevice
-    /// OpenAI Whisper API (cloud fallback).
+    /// OpenAI Whisper API (explicit cloud option).
     case whisperAPI
+}
+
+enum TranscriptionEngine: Equatable {
+    /// Apple embedded transcript (optional) then on-device Speech only.
+    case onDevice
+    /// OpenAI Whisper only (requires API key).
+    case whisper
 }
 
 enum DictationServiceError: LocalizedError {
     case emptyTranscript
     case transcriptionUnavailable
+    case whisperUnavailable
 
     var errorDescription: String? {
         switch self {
         case .emptyTranscript:
             return "No speech was detected. Try recording again."
         case .transcriptionUnavailable:
-            return "Could not transcribe this recording. Try opening it in Voice Memos first so Apple can generate a transcript, or add an OpenAI API key for cloud transcription."
+            return "Could not transcribe this recording on-device. Retry, or open the recording in Voice Memos so Apple can generate a transcript."
+        case .whisperUnavailable:
+            return "Cloud transcription needs an OpenAI API key. Add one in Settings, then try again."
         }
     }
 }
@@ -26,6 +36,16 @@ enum DictationServiceError: LocalizedError {
 struct TranscriptionResult: Equatable {
     let text: String
     let source: TranscriptionSource
+}
+
+/// Pure routing helpers for tests — default path never selects Whisper.
+enum TranscriptionRouting {
+    static func defaultEngine() -> TranscriptionEngine { .onDevice }
+
+    static func whisperAvailable(apiKey: String?) -> Bool {
+        guard let apiKey else { return false }
+        return !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 @MainActor
@@ -42,11 +62,13 @@ final class DictationService: ObservableObject {
         transcribeTask = nil
     }
 
-    /// Transcribe audio using the best available method, then apply cleanup + dictionary.
-    ///
-    /// Priority: Apple embedded transcript → on-device Speech → OpenAI Whisper (if API key set).
+    /// Transcribe with on-device Speech (and optional embedded Voice Memo transcript).
+    /// Does not call Whisper — use `transcribeRecordingWithWhisper` from the error UI.
     func transcribeRecording(at audioURL: URL, preferEmbeddedTranscript: Bool = true) async throws -> String {
-        let result = try await transcribeRecordingDetailed(at: audioURL, preferEmbeddedTranscript: preferEmbeddedTranscript)
+        let result = try await transcribeRecordingDetailed(
+            at: audioURL,
+            preferEmbeddedTranscript: preferEmbeddedTranscript
+        )
         return result.text
     }
 
@@ -54,11 +76,42 @@ final class DictationService: ObservableObject {
         at audioURL: URL,
         preferEmbeddedTranscript: Bool = true
     ) async throws -> TranscriptionResult {
+        try await runTranscription(
+            at: audioURL,
+            engine: .onDevice,
+            preferEmbeddedTranscript: preferEmbeddedTranscript
+        )
+    }
+
+    /// Explicit Whisper path for the failure-screen “Use Whisper” action.
+    func transcribeRecordingWithWhisper(at audioURL: URL) async throws -> String {
+        let result = try await runTranscription(
+            at: audioURL,
+            engine: .whisper,
+            preferEmbeddedTranscript: false
+        )
+        return result.text
+    }
+
+    func loadSettings() -> TranscriptionSettings {
+        TranscriptionSettings.load(from: localDataDir)
+    }
+
+    var hasWhisperAPIKey: Bool {
+        TranscriptionRouting.whisperAvailable(apiKey: KeychainStore.loadAPIKey())
+    }
+
+    private func runTranscription(
+        at audioURL: URL,
+        engine: TranscriptionEngine,
+        preferEmbeddedTranscript: Bool
+    ) async throws -> TranscriptionResult {
         let settings = TranscriptionSettings.load(from: localDataDir)
 
         let task = Task<TranscriptionResult, Error> {
             let rawResult = try await resolveRawTranscript(
                 at: audioURL,
+                engine: engine,
                 preferEmbeddedTranscript: preferEmbeddedTranscript
             )
             let trimmed = rawResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -86,36 +139,38 @@ final class DictationService: ObservableObject {
         return try await task.value
     }
 
-    func loadSettings() -> TranscriptionSettings {
-        TranscriptionSettings.load(from: localDataDir)
-    }
-
     private func resolveRawTranscript(
         at audioURL: URL,
+        engine: TranscriptionEngine,
         preferEmbeddedTranscript: Bool
     ) async throws -> TranscriptionResult {
-        if preferEmbeddedTranscript, let embedded = VoiceMemoTranscriptExtractor.extract(from: audioURL) {
-            let trimmed = embedded.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                return TranscriptionResult(text: trimmed, source: .appleEmbedded)
+        switch engine {
+        case .onDevice:
+            if preferEmbeddedTranscript, let embedded = VoiceMemoTranscriptExtractor.extract(from: audioURL) {
+                let trimmed = embedded.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return TranscriptionResult(text: trimmed, source: .appleEmbedded)
+                }
             }
-        }
 
-        do {
-            let onDevice = try await OnDeviceTranscriber.transcribe(at: audioURL)
-            return TranscriptionResult(text: onDevice, source: .onDevice)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            // Fall through to cloud Whisper when on-device fails.
-        }
+            do {
+                let onDevice = try await OnDeviceTranscriber.transcribe(at: audioURL)
+                return TranscriptionResult(text: onDevice, source: .onDevice)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as OnDeviceTranscriberError {
+                throw error
+            } catch {
+                throw DictationServiceError.transcriptionUnavailable
+            }
 
-        guard let apiKey = KeychainStore.loadAPIKey(), !apiKey.isEmpty else {
-            throw DictationServiceError.transcriptionUnavailable
+        case .whisper:
+            guard let apiKey = KeychainStore.loadAPIKey(), !apiKey.isEmpty else {
+                throw DictationServiceError.whisperUnavailable
+            }
+            let client = OpenAIClient(apiKey: apiKey)
+            let whisper = try await client.transcribeAudio(at: audioURL)
+            return TranscriptionResult(text: whisper, source: .whisperAPI)
         }
-
-        let client = OpenAIClient(apiKey: apiKey)
-        let whisper = try await client.transcribeAudio(at: audioURL)
-        return TranscriptionResult(text: whisper, source: .whisperAPI)
     }
 }

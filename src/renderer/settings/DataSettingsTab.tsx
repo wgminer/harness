@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { appDataFolderButtonLabel } from "../../shared/dataStorageLayout";
-import { SyncQrModal } from "../SyncQrModal";
 import { Tooltip } from "../Tooltip";
 import { ClaudeImportModal } from "./ClaudeImportModal";
 import { SecretField } from "./SecretField";
@@ -10,11 +9,19 @@ import { SettingsField } from "./SettingsField";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";
 import { SettingsTabPanel } from "./SettingsTabPanel";
+import {
+  MemoryFactImportSection,
+  MemorySettingsSections,
+  useMemorySettings,
+} from "./MemorySettingsTab";
 import { useDataSettings } from "./useDataSettings";
 
 export interface DataSettingsTabProps {
   platform: NodeJS.Platform;
   apiKey: string;
+  setApiKey: (value: string) => void;
+  tavilyApiKey: string;
+  setTavilyApiKey: (value: string) => void;
   r2AccountId: string;
   setR2AccountId: (value: string) => void;
   r2Bucket: string;
@@ -34,6 +41,9 @@ export interface DataSettingsTabProps {
 export function DataSettingsTab({
   platform,
   apiKey,
+  setApiKey,
+  tavilyApiKey,
+  setTavilyApiKey,
   r2AccountId,
   setR2AccountId,
   r2Bucket,
@@ -50,6 +60,7 @@ export function DataSettingsTab({
   onRegisterRefresh,
 }: DataSettingsTabProps) {
   const data = useDataSettings({ onSyncComplete, onImportComplete });
+  const memory = useMemorySettings();
 
   useEffect(() => {
     onRegisterRefresh?.(data.refreshDataStatus);
@@ -58,49 +69,54 @@ export function DataSettingsTab({
   return (
     <>
       <SettingsTabPanel id="data">
+        <MemorySettingsSections memory={memory} />
+
         <SettingsGroup
-          title="Local data"
-          description="Harness stores conversations, notes, and settings on this device. Backup syncs everything except local recordings."
+          title="API keys"
+          description="Chat, polish, optional transcript cleanup, and web search. Voice transcription runs on your Mac without an OpenAI key."
+          collapsible
+          defaultOpen={false}
         >
-          <SettingsActions>
-            <button type="button" className="btn" onClick={() => window.harness.memory.openAppDataFolder()}>
-              {appDataFolderButtonLabel(platform)} <ExternalLink size={14} aria-hidden />
-            </button>
-            {data.dataStatus?.legacyMemoryExists && (
-              <button
-                type="button"
-                className="btn"
-                onClick={() => void data.runCleanupLegacyMemory()}
-                disabled={data.cleanupLegacyBusy}
-              >
-                {data.cleanupLegacyBusy ? "Cleaning…" : "Clean Legacy Memory Folder"}
-              </button>
-            )}
-          </SettingsActions>
-          {data.dataStatus?.legacyMemoryExists && data.cleanupLegacyMessage && (
-            <SettingsHint flush>{data.cleanupLegacyMessage}</SettingsHint>
-          )}
+          <SettingsField label="OpenAI" htmlFor="settings-api-key">
+            <SecretField
+              id="settings-api-key"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              onBlur={() => void persistSettings()}
+              ariaLabel="OpenAI API key"
+            />
+          </SettingsField>
+          <SettingsField label="Tavily" htmlFor="settings-tavily-key">
+            <SecretField
+              id="settings-tavily-key"
+              testId="settings-tavily-key"
+              value={tavilyApiKey}
+              onChange={(e) => setTavilyApiKey(e.target.value)}
+              onBlur={() => void persistSettings()}
+              ariaLabel="Tavily API key"
+            />
+          </SettingsField>
+          <SettingsHint>
+            Optional web search for the assistant. Free Tavily keys at{" "}
+            <a href="https://tavily.com" target="_blank" rel="noreferrer noopener">
+              tavily.com
+            </a>
+            .
+          </SettingsHint>
         </SettingsGroup>
 
         <SettingsGroup
-          title="Backup (R2)"
+          title="Backup"
           description={
             <>
-              Connect a Cloudflare R2 bucket. Harness stores <code>bundle.json.gz</code> and{" "}
+              Cloudflare R2 bucket for cloud backup. Harness stores <code>bundle.json.gz</code> and{" "}
               <code>manifest.json</code> under the prefix below. Enable object versioning in R2 for
-              free backup history.
+              free backup history. Sync runs automatically when configured.
             </>
           }
+          collapsible
+          defaultOpen={false}
         >
-          <SettingsActions>
-            <button type="button" className="btn btn-primary" onClick={() => data.setSyncQrOpen(true)}>
-              Show sync QR
-            </button>
-          </SettingsActions>
-          <SettingsHint>
-            Sync runs automatically when configured. Use Sync Now if another device looks behind.
-            Pair an iPhone by scanning this QR. Manual R2 fields below remain for advanced setup.
-          </SettingsHint>
           <SettingsField label="Account ID" htmlFor="settings-r2-account">
             <input
               id="settings-r2-account"
@@ -196,7 +212,12 @@ export function DataSettingsTab({
           </SettingsActions>
         </SettingsGroup>
 
-        <SettingsGroup title="Import chat history">
+        <SettingsGroup
+          title="Import"
+          description="Bring in chat history or facts distilled from another assistant."
+          collapsible
+          defaultOpen={false}
+        >
           <SettingsActions>
             <button type="button" className="btn" onClick={data.runImport} disabled={data.importing}>
               {data.importing ? "Importing…" : "Import From ChatGPT"}
@@ -265,6 +286,40 @@ export function DataSettingsTab({
               )}
             </div>
           )}
+          <MemoryFactImportSection memory={memory} />
+        </SettingsGroup>
+
+        <SettingsGroup
+          title="Paths"
+          description="On-disk folders for app data and local voice recordings. Backup syncs everything except recordings."
+          collapsible
+          defaultOpen={false}
+        >
+          <SettingsActions>
+            <button type="button" className="btn" onClick={() => window.harness.memory.openAppDataFolder()}>
+              {appDataFolderButtonLabel(platform)} <ExternalLink size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => window.harness.recording.openFolder()}
+            >
+              Show Recordings <ExternalLink size={14} aria-hidden />
+            </button>
+            {data.dataStatus?.legacyMemoryExists && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void data.runCleanupLegacyMemory()}
+                disabled={data.cleanupLegacyBusy}
+              >
+                {data.cleanupLegacyBusy ? "Cleaning…" : "Clean Legacy Memory Folder"}
+              </button>
+            )}
+          </SettingsActions>
+          {data.dataStatus?.legacyMemoryExists && data.cleanupLegacyMessage && (
+            <SettingsHint flush>{data.cleanupLegacyMessage}</SettingsHint>
+          )}
         </SettingsGroup>
       </SettingsTabPanel>
 
@@ -278,17 +333,6 @@ export function DataSettingsTab({
         onClose={data.closeClaudePreview}
         onConfirm={() => void data.confirmClaudeImport()}
         confirming={data.claudeConfirming}
-      />
-
-      <SyncQrModal
-        open={data.syncQrOpen}
-        onClose={() => data.setSyncQrOpen(false)}
-        accountId={r2AccountId}
-        bucket={r2Bucket}
-        prefix={r2Prefix}
-        accessKeyId={r2AccessKeyId}
-        secretAccessKey={r2SecretAccessKey}
-        openaiApiKey={apiKey}
       />
     </>
   );

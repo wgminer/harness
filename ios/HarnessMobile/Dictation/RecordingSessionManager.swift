@@ -7,9 +7,11 @@ final class RecordingSessionManager: ObservableObject {
 
     let recorder = AudioRecorder()
 
+    /// Bumped when a session starts or is cancelled so orphaned LA / start work cannot affect a newer session.
+    private var sessionID = 0
     private var liveActivity: Activity<DictationRecordingAttributes>?
-    /// Bumped when a session starts or is cancelled so orphaned start work cannot tear down a newer session.
-    private var sessionEpoch = 0
+    /// Serializes ActivityKit request/end so orphan Tasks do not race.
+    private var liveActivityTask: Task<Void, Never>?
 
     init() {
         // Intentionally do not forward recorder.objectWillChange — metering
@@ -24,34 +26,49 @@ final class RecordingSessionManager: ObservableObject {
         }
     }
 
+    /// Warm mic permission status + audio category (no capture). Safe from home/compose appear.
+    func prepareForDictation() {
+        recorder.prepare()
+    }
+
+    /// Whether the mic prompt can be skipped on the start critical path.
+    var hasRecordPermission: Bool {
+        recorder.hasRecordPermission
+    }
+
     func acknowledgeLiveActivityStopRequest() {
         liveActivityStopRequested = false
     }
 
+    /// Starts capture and returns as soon as the mic is live. Live Activity is deferred.
     func beginRecordingSession() async throws -> URL {
         liveActivityStopRequested = false
-        sessionEpoch += 1
-        let epoch = sessionEpoch
+        sessionID += 1
+        let id = sessionID
 
         do {
             let url = try await recorder.start()
-            guard epoch == sessionEpoch else {
+            guard id == sessionID else {
                 recorder.cancel()
                 throw CancellationError()
             }
 
-            await startLiveActivity(startedAt: Date())
-            guard epoch == sessionEpoch else {
-                recorder.cancel()
-                await endLiveActivity()
-                throw CancellationError()
+            let startedAt = Date()
+            enqueueLiveActivityWork { [weak self] in
+                guard let self, id == self.sessionID else { return }
+                await self.startLiveActivity(startedAt: startedAt)
+                if id != self.sessionID {
+                    await self.endLiveActivity()
+                }
             }
 
             return url
         } catch {
-            if epoch == sessionEpoch {
+            if id == sessionID {
                 recorder.cancel()
-                await endLiveActivity()
+                enqueueLiveActivityWork { [weak self] in
+                    await self?.endLiveActivity()
+                }
             }
             throw error
         }
@@ -59,14 +76,29 @@ final class RecordingSessionManager: ObservableObject {
 
     /// Tear down capture and Live Activity whether or not recording has fully started.
     func cancelRecordingSession() async {
-        sessionEpoch += 1
+        sessionID += 1
         liveActivityStopRequested = false
         recorder.cancel()
-        await endLiveActivity()
+        enqueueLiveActivityWork { [weak self] in
+            await self?.endLiveActivity()
+        }
     }
 
     func endRecordingSession() async {
-        await endLiveActivity()
+        // Don't await ActivityKit teardown on the stop/transcribe critical path.
+        enqueueLiveActivityWork { [weak self] in
+            await self?.endLiveActivity()
+        }
+    }
+
+    // MARK: - Live Activity (always off the mic critical path)
+
+    private func enqueueLiveActivityWork(_ work: @escaping @MainActor () async -> Void) {
+        let previous = liveActivityTask
+        liveActivityTask = Task { @MainActor in
+            _ = await previous?.value
+            await work()
+        }
     }
 
     private func startLiveActivity(startedAt: Date) async {

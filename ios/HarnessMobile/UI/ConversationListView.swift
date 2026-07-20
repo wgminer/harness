@@ -1,5 +1,27 @@
 import SwiftUI
 
+/// Windowing for the home conversation list — matches desktop sidebar More controls.
+enum ConversationListWindow {
+    /// Matches desktop `SIDEBAR_INITIAL_VISIBLE_COUNT`.
+    static let initialVisibleCount = 20
+    /// Matches desktop `SIDEBAR_MORE_INCREMENT`.
+    static let moreIncrement = 20
+
+    static func visibleItems<T>(_ items: [T], limit: Int, searching: Bool) -> [T] {
+        if searching { return items }
+        guard limit >= 0 else { return [] }
+        return Array(items.prefix(limit))
+    }
+
+    static func showsMoreControl(totalCount: Int, visibleCount: Int, searching: Bool) -> Bool {
+        !searching && visibleCount < totalCount
+    }
+
+    static func nextLimit(current: Int, totalCount: Int) -> Int {
+        min(totalCount, max(current, 0) + moreIncrement)
+    }
+}
+
 struct ConversationListView: View {
     /// Not `@ObservedObject` — observing `AppModel` rebuilds the list on chat route / sync chrome changes.
     let app: AppModel
@@ -9,6 +31,7 @@ struct ConversationListView: View {
     @State private var createError: String?
     @State private var showDictationSheet = false
     @State private var searchQuery = ""
+    @State private var visibleLimit = ConversationListWindow.initialVisibleCount
     @State private var conversationToRename: ConversationListItem?
     @State private var renameDraft = ""
     @State private var showRenameAlert = false
@@ -19,10 +42,22 @@ struct ConversationListView: View {
         self.onSelect = onSelect
     }
 
+    private var isSearching: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var filteredConversations: [ConversationListItem] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !query.isEmpty else { return store.conversations }
         return store.conversations.filter { $0.displayTitle.lowercased().contains(query) }
+    }
+
+    private var visibleConversations: [ConversationListItem] {
+        ConversationListWindow.visibleItems(
+            filteredConversations,
+            limit: visibleLimit,
+            searching: isSearching
+        )
     }
 
     var body: some View {
@@ -83,6 +118,12 @@ struct ConversationListView: View {
                 }
             )
         }
+        .task {
+            // Defer past first frame so launch/debug attach is not racing AVAudioSession setup.
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            app.recordingSession.prepareForDictation()
+        }
     }
 
     private var conversationList: some View {
@@ -108,8 +149,28 @@ struct ConversationListView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             } else {
-                ForEach(filteredConversations) { item in
+                ForEach(visibleConversations) { item in
                     conversationRow(item)
+                }
+                if ConversationListWindow.showsMoreControl(
+                    totalCount: filteredConversations.count,
+                    visibleCount: visibleConversations.count,
+                    searching: isSearching
+                ) {
+                    Button {
+                        visibleLimit = ConversationListWindow.nextLimit(
+                            current: visibleLimit,
+                            totalCount: filteredConversations.count
+                        )
+                    } label: {
+                        Text("More")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .accessibilityLabel(
+                        "Show \(ConversationListWindow.moreIncrement) more conversations"
+                    )
                 }
             }
         }

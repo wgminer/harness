@@ -1,17 +1,11 @@
-import { RIG_APPEARANCE_TAB_LABEL, RIG_MEMORY_TAB_LABEL } from "../../shared/rigPage";
+import { RIG_NOTES_TAB_LABEL } from "../../shared/rigPage";
 
-export type SettingsTabId =
-  | "general"
-  | "appearance"
-  | "voice"
-  | "memory"
-  | "data";
+export type SettingsTabId = "general" | "notes" | "voice" | "data";
 
 export type SettingsNavIconId =
   | "SlidersHorizontal"
-  | "Palette"
+  | "StickyNote"
   | "Mic"
-  | "Brain"
   | "Database";
 
 export const SETTINGS_NAV: Array<{
@@ -24,40 +18,38 @@ export const SETTINGS_NAV: Array<{
   {
     id: "general",
     label: "General",
-    subtitle: "API, tools & launch",
+    subtitle: "Theme & behavior",
     icon: "SlidersHorizontal",
-    keywords: [
-      "openai",
-      "api",
-      "key",
-      "launch",
-      "compose",
-      "tavily",
-      "web search",
-      "auto-send",
-      "facts",
-      "memory",
-      "injection",
-    ],
-  },
-  {
-    id: "appearance",
-    label: RIG_APPEARANCE_TAB_LABEL,
-    subtitle: "Accent & layout",
-    icon: "Palette",
     keywords: [
       "theme",
       "accent",
       "color",
       "hex",
-      "grid",
-      "overlay",
-      "template",
+      "launch",
+      "compose",
+      "auto-send",
+      "behavior",
+      "notes",
+      "window",
+      "sticky",
+      "fn",
+      "menu bar",
+      "accessibility",
+      "microphone",
+    ],
+  },
+  {
+    id: "notes",
+    label: RIG_NOTES_TAB_LABEL,
+    subtitle: "Templates",
+    icon: "StickyNote",
+    keywords: [
       "notes",
       "writing",
       "editor",
-      "window",
-      "sticky",
+      "template",
+      "grid",
+      "overlay",
     ],
   },
   {
@@ -65,21 +57,34 @@ export const SETTINGS_NAV: Array<{
     label: "Voice",
     subtitle: "Dictation & Fn",
     icon: "Mic",
-    keywords: ["transcription", "dictation", "cleanup", "fn", "accessibility", "recordings"],
-  },
-  {
-    id: "memory",
-    label: RIG_MEMORY_TAB_LABEL,
-    subtitle: "Facts & imports",
-    icon: "Brain",
-    keywords: ["memory", "context", "facts", "import", "system prompt", "prompt"],
+    keywords: ["transcription", "dictation", "cleanup"],
   },
   {
     id: "data",
     label: "Data",
-    subtitle: "Sync & backup",
+    subtitle: "Keys, memory, sync",
     icon: "Database",
-    keywords: ["sync", "backup", "icloud", "import", "chatgpt", "claude", "storage"],
+    keywords: [
+      "openai",
+      "api",
+      "key",
+      "tavily",
+      "web search",
+      "memory",
+      "facts",
+      "sync",
+      "backup",
+      "icloud",
+      "import",
+      "chatgpt",
+      "claude",
+      "storage",
+      "paths",
+      "finder",
+      "recordings",
+      "system prompt",
+      "prompt",
+    ],
   },
 ];
 
@@ -90,14 +95,9 @@ export const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = SETTIN
 
 export function normalizeSettingsTab(tab: string | undefined): SettingsTabId {
   if (tab === "tools") return "general";
-  if (tab === "notes") return "appearance";
-  if (
-    tab === "general" ||
-    tab === "appearance" ||
-    tab === "voice" ||
-    tab === "memory" ||
-    tab === "data"
-  ) {
+  if (tab === "appearance") return "general";
+  if (tab === "memory") return "data";
+  if (tab === "general" || tab === "notes" || tab === "voice" || tab === "data") {
     return tab;
   }
   return "general";

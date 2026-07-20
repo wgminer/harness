@@ -10,5 +10,10 @@ export { SecretField, type SecretFieldProps } from "./SecretField";
 export { SettingsTabPanel, type SettingsTabPanelProps } from "./SettingsTabPanel";
 export { SystemPromptPreviewPanel } from "./SystemPromptPreviewPanel";
 export { DataSettingsTab } from "./DataSettingsTab";
-export { MemorySettingsTab } from "./MemorySettingsTab";
+export {
+  MemorySettingsSections,
+  MemoryFactImportSection,
+  useMemorySettings,
+  type MemorySettingsController,
+} from "./MemorySettingsTab";
 export { AccentColorField, type AccentColorFieldProps } from "./AccentColorField";

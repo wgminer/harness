@@ -161,6 +161,11 @@ struct ChatThreadView: View {
                 }
             )
         }
+        .task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            app.recordingSession.prepareForDictation()
+        }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView(isPresented: $showCamera) { image in
                 pendingImage = image

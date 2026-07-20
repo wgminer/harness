@@ -103,6 +103,33 @@ final class RecordingSessionManagerTests: XCTestCase {
 
         XCTAssertFalse(manager.recorder.isRecording)
     }
+
+    func testPrepareForDictationDoesNotStartCapture() {
+        let manager = RecordingSessionManager()
+        manager.prepareForDictation()
+        XCTAssertFalse(manager.recorder.isRecording)
+        XCTAssertEqual(manager.recorder.elapsedMs, 0)
+        XCTAssertEqual(manager.recorder.audioLevel, 0)
+    }
+
+    func testCancelAfterBeginInvalidatesDeferredLiveActivitySession() async {
+        let manager = RecordingSessionManager()
+        manager.recorder.permissionProvider = { false }
+
+        do {
+            _ = try await manager.beginRecordingSession()
+            XCTFail("Expected permission denial")
+        } catch let error as AudioRecorderError {
+            XCTAssertEqual(error, .permissionDenied)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        // Cancel bumps sessionID so any deferred LA start from a prior attempt is orphaned.
+        await manager.cancelRecordingSession()
+        XCTAssertFalse(manager.recorder.isRecording)
+        XCTAssertFalse(manager.liveActivityStopRequested)
+    }
 }
 
 @MainActor
@@ -113,6 +140,60 @@ final class AudioRecorderCancelTests: XCTestCase {
         recorder.cancel()
         XCTAssertFalse(recorder.isRecording)
         XCTAssertEqual(recorder.elapsedMs, 0)
+    }
+
+    func testCancelDefaultsToIntentionalStop() {
+        let recorder = AudioRecorder()
+        recorder.cancel()
+        XCTAssertTrue(recorder.intentionalStop)
+        XCTAssertNil(recorder.preservedRecordingURL)
+    }
+
+    func testUnexpectedCancelClearsIntentionalStopFlag() {
+        let recorder = AudioRecorder()
+        recorder.cancel()
+        XCTAssertTrue(recorder.intentionalStop)
+
+        recorder.cancel(intentional: false)
+        XCTAssertFalse(recorder.intentionalStop)
+        XCTAssertFalse(recorder.isRecording)
+    }
+
+    func testUnexpectedCancelWithNoActiveTakeLeavesNoPreservedURL() {
+        let recorder = AudioRecorder()
+        recorder.cancel(intentional: false)
+        XCTAssertNil(recorder.preservedRecordingURL)
+        XCTAssertNil(recorder.consumePreservedRecordingURL())
+        XCTAssertFalse(recorder.intentionalStop)
+    }
+
+    func testConsumePreservedRecordingURLTransfersOwnershipWithoutDeleting() throws {
+        let recorder = AudioRecorder()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("preserved_rec_\(UUID().uuidString).m4a")
+        try Data([1, 2, 3]).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        recorder.testSeedPreservedRecordingURL(url)
+        XCTAssertEqual(recorder.consumePreservedRecordingURL(), url)
+        XCTAssertNil(recorder.preservedRecordingURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+
+        // Intentional cancel after consume must not delete the UI-owned file.
+        recorder.cancel()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testIntentionalCancelDeletesUnconsumedPreservedURL() throws {
+        let recorder = AudioRecorder()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("preserved_rec_\(UUID().uuidString).m4a")
+        try Data([1, 2, 3]).write(to: url)
+
+        recorder.testSeedPreservedRecordingURL(url)
+        recorder.cancel()
+        XCTAssertNil(recorder.preservedRecordingURL)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
     func testCancelDuringPermissionWaitThrowsCancellation() async {

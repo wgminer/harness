@@ -5,7 +5,13 @@ import { SettingsHint } from "./SettingsHint";
 
 type PreviewPlatform = "desktop" | "ios";
 
-export function SystemPromptPreviewPanel() {
+export function SystemPromptPreviewPanel({
+  collapsible = false,
+  defaultOpen = true,
+}: {
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+} = {}) {
   const [platform, setPlatform] = useState<PreviewPlatform>("desktop");
   const [preview, setPreview] = useState<SystemPromptPreview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,6 +40,8 @@ export function SystemPromptPreviewPanel() {
     <SettingsGroup
       title="System prompt"
       description="Read-only preview of the synced chat system prompt. Shared rules and formatting are identical on both platforms; each overlay adds platform identity and tools."
+      collapsible={collapsible}
+      defaultOpen={defaultOpen}
     >
       <div
         className="settings-system-prompt-toggle"

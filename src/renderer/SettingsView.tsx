@@ -16,20 +16,18 @@ import {
 } from "../shared/writing";
 import type { GlobalRecordingStatus } from "../shared/desktopAPI";
 import { Modal } from "./Modal";
+import { SyncQrModal } from "./SyncQrModal";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
   SettingsActions,
   SettingsEntryRow,
-  SettingsField,
   SettingsGroup,
   SettingsHint,
-  SecretField,
   SettingsSwitch,
   SettingsSwitchProvider,
   SettingsTabPanel,
   DataSettingsTab,
-  MemorySettingsTab,
   AccentColorField,
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
@@ -102,6 +100,102 @@ function SettingsSaveToast({
   );
 }
 
+function fnShortcutStatusLabel(
+  accessibilityTrusted: boolean | null,
+  status: GlobalRecordingStatus | null,
+): string {
+  const needs: string[] = [];
+  if (
+    accessibilityTrusted === false ||
+    status?.monitorHealth === "accessibility_denied"
+  ) {
+    needs.push("Accessibility");
+  }
+  const mic = status?.microphonePermission;
+  if (mic === "denied" || mic === "undetermined") {
+    needs.push("Microphone");
+  }
+  if (needs.length > 0) return `Needs ${needs.join(" · ")}`;
+  if (status?.monitorHealth === "running") return "Ready — press Fn to dictate";
+  if (status?.hotkeyActive) return "Starting…";
+  if (accessibilityTrusted === null || status == null) return "Checking…";
+  return "On — quit and reopen if Fn doesn’t respond";
+}
+
+function FnShortcutControls({
+  accessibilityTrusted,
+  setAccessibilityTrusted,
+  globalRecordingStatus,
+  refreshGlobalRecordingStatus,
+}: {
+  accessibilityTrusted: boolean | null;
+  setAccessibilityTrusted: (value: boolean | null) => void;
+  globalRecordingStatus: GlobalRecordingStatus | null;
+  refreshGlobalRecordingStatus: () => Promise<void>;
+}) {
+  const needsAccessibility =
+    accessibilityTrusted !== true ||
+    globalRecordingStatus?.monitorHealth === "accessibility_denied";
+  const mic = globalRecordingStatus?.microphonePermission;
+  const needsMicrophone = mic !== "granted" && mic !== "unsupported";
+  const showActions = needsAccessibility || needsMicrophone;
+
+  return (
+    <div className="settings-fn-controls">
+      <p className="settings-fn-controls__status" data-testid="settings-global-recording-status">
+        {fnShortcutStatusLabel(accessibilityTrusted, globalRecordingStatus)}
+      </p>
+      {showActions ? (
+        <SettingsActions>
+          {needsAccessibility ? (
+            <button
+              type="button"
+              className="btn"
+              data-testid="settings-accessibility-prompt"
+              onClick={() => {
+                void window.harness.system.requestAccessibilityPrompt();
+                void window.harness.system.openAccessibilitySettings();
+                setTimeout(() => {
+                  void window.harness.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+                }, 1200);
+              }}
+            >
+              Accessibility <ExternalLink size={14} aria-hidden />
+            </button>
+          ) : null}
+          {needsMicrophone ? (
+            <button
+              type="button"
+              className="btn"
+              data-testid="settings-microphone-prompt"
+              onClick={() => {
+                void window.harness.recording.requestMicrophoneAccess().then((ok) => {
+                  void refreshGlobalRecordingStatus();
+                  if (!ok) {
+                    void window.harness.system.openMicrophoneSettings();
+                  }
+                });
+              }}
+            >
+              Microphone <ExternalLink size={14} aria-hidden />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="btn"
+            data-testid="settings-open-speech-recognition"
+            onClick={() => {
+              void window.harness.system.openSpeechRecognitionSettings();
+            }}
+          >
+            Speech <ExternalLink size={14} aria-hidden />
+          </button>
+        </SettingsActions>
+      ) : null}
+    </div>
+  );
+}
+
 export function SettingsView({
   onImportComplete,
   onSyncComplete,
@@ -169,12 +263,12 @@ export function SettingsView({
   const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const tabButtonRefs = useRef<Record<SettingsTabId, HTMLButtonElement | null>>({
     general: null,
-    appearance: null,
+    notes: null,
     voice: null,
-    memory: null,
     data: null,
   });
   const [activeTab, setActiveTab] = useState<SettingsTabId>(normalizeSettingsTab(initialTab));
+  const [syncQrOpen, setSyncQrOpen] = useState(false);
 
   useEffect(() => {
     if (initialTab) setActiveTab(normalizeSettingsTab(initialTab));
@@ -262,13 +356,13 @@ export function SettingsView({
   }, []);
 
   useEffect(() => {
-    if (!isMac || activeTab !== "voice") return;
+    if (!isMac || activeTab !== "general" || !globalFnHotkey) return;
     void refreshGlobalRecordingStatus();
     const timer = setInterval(() => {
       void refreshGlobalRecordingStatus();
     }, 3000);
     return () => clearInterval(timer);
-  }, [activeTab, isMac, refreshGlobalRecordingStatus]);
+  }, [activeTab, globalFnHotkey, isMac, refreshGlobalRecordingStatus]);
 
   useEffect(() => {
     return () => {
@@ -654,44 +748,34 @@ export function SettingsView({
         <div className="workspace-content settings-content">
           {activeTab === "general" && <SettingsTabPanel id="general">
             <SettingsGroup
-              title="OpenAI"
-              description="Chat, polish, and optional transcript cleanup. Voice transcription runs on your Mac without a key."
+              title="Theme"
+              description="One accent color. Surfaces stay dark; muted and primary accents are derived from it."
             >
-              <SettingsField label="API key" htmlFor="settings-api-key">
-                <SecretField
-                  id="settings-api-key"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  onBlur={() => void persistSettings()}
-                  ariaLabel="OpenAI API key"
-                />
-              </SettingsField>
+              <AccentColorField value={accent} onChange={setAccent} />
             </SettingsGroup>
 
             <SettingsGroup
-              title="Tavily"
-              description={
-                <>
-                  Optional web search for the assistant. Free keys at{" "}
-                  <a href="https://tavily.com" target="_blank" rel="noreferrer noopener">tavily.com</a>.
-                </>
-              }
+              title="Sync"
+              description="Show a QR that pairs another device with your API keys and R2 backup settings."
             >
-              <SettingsField label="API key" htmlFor="settings-tavily-key">
-                <SecretField
-                  id="settings-tavily-key"
-                  testId="settings-tavily-key"
-                  value={tavilyApiKey}
-                  onChange={(e) => setTavilyApiKey(e.target.value)}
-                  onBlur={() => void persistSettings()}
-                  ariaLabel="Tavily API key"
-                />
-              </SettingsField>
+              <SettingsActions>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setSyncQrOpen(true)}
+                >
+                  Show sync QR
+                </button>
+              </SettingsActions>
+              <SettingsHint>
+                Scan on iPhone to apply synced credentials. Configure the R2 bucket under Data → Backup
+                if pairing fails.
+              </SettingsHint>
             </SettingsGroup>
 
             <SettingsGroup
-              title="Launch & sending"
-              description="Startup view and what happens after voice dictation."
+              title="Behavior"
+              description="How Harness starts, opens notes, and handles dictation."
             >
               <SettingsSwitch
                 id="openToComposeOnLaunchToggle"
@@ -707,21 +791,6 @@ export function SettingsView({
                 checked={autoSend}
                 onChange={(e) => setAutoSend(e.target.checked)}
               />
-            </SettingsGroup>
-          </SettingsTabPanel>}
-
-          {activeTab === "appearance" && <SettingsTabPanel id="appearance">
-            <SettingsGroup
-              title="Theme"
-              description="One accent color. Surfaces stay dark; muted and primary accents are derived from it."
-            >
-              <AccentColorField value={accent} onChange={setAccent} />
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Notes"
-              description="How new notes open from the sidebar New menu."
-            >
               <SettingsSwitch
                 id="openNoteInStickyWindowToggle"
                 testId="settings-open-note-in-window"
@@ -729,8 +798,29 @@ export function SettingsView({
                 checked={openNoteInStickyWindow}
                 onChange={(e) => onOpenNoteInStickyWindowChange?.(e.target.checked)}
               />
+              {isMac ? (
+                <>
+                  <SettingsSwitch
+                    id="globalFnHotkeyToggle"
+                    testId="settings-global-fn-hotkey"
+                    label="Menu bar shortcut"
+                    checked={globalFnHotkey}
+                    onChange={(e) => setGlobalFnHotkey(e.target.checked)}
+                  />
+                  {globalFnHotkey ? (
+                    <FnShortcutControls
+                      accessibilityTrusted={accessibilityTrusted}
+                      setAccessibilityTrusted={setAccessibilityTrusted}
+                      globalRecordingStatus={globalRecordingStatus}
+                      refreshGlobalRecordingStatus={refreshGlobalRecordingStatus}
+                    />
+                  ) : null}
+                </>
+              ) : null}
             </SettingsGroup>
+          </SettingsTabPanel>}
 
+          {activeTab === "notes" && <SettingsTabPanel id="notes">
             <SettingsGroup
               title="Editor templates"
               description="Edit note templates. The default is applied when you create a new note; non-blank templates appear in the picker on a fresh note."
@@ -786,7 +876,7 @@ export function SettingsView({
               ) : null}
               {cleanupEnabled && !apiKey.trim() ? (
                 <SettingsHint>
-                  Cleanup needs an OpenAI API key in General. On-device transcription still works without one.
+                  Cleanup needs an OpenAI API key in Data. On-device transcription still works without one.
                 </SettingsHint>
               ) : null}
             </SettingsGroup>
@@ -814,147 +904,7 @@ export function SettingsView({
                 </button>
               </SettingsActions>
             </SettingsGroup>
-
-            <SettingsGroup
-              title="Recordings"
-              description="Saved WAV files from voice dictation on this device."
-            >
-              <SettingsActions>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => window.harness.recording.openFolder()}
-                >
-                  Show Recordings <ExternalLink size={14} aria-hidden />
-                </button>
-              </SettingsActions>
-            </SettingsGroup>
-
-            {isMac && (
-              <SettingsGroup
-                title="Fn shortcut"
-                description={
-                  <>
-                    Press <strong>Fn</strong> to start recording, press again to stop. Needs{" "}
-                    <strong>Microphone</strong>, <strong>Speech Recognition</strong>, and{" "}
-                    <strong>Accessibility</strong> (allow <code>HarnessFnMonitor</code> if listed).
-                  </>
-                }
-              >
-                <SettingsSwitch
-                  id="globalFnHotkeyToggle"
-                  testId="settings-global-fn-hotkey"
-                  label="Menu bar shortcut"
-                  checked={globalFnHotkey}
-                  onChange={(e) => setGlobalFnHotkey(e.target.checked)}
-                />
-                {globalFnHotkey && (
-                  <>
-                    <SettingsHint flush>
-                      After changing permissions, quit and reopen the app. Use the buttons if macOS doesn’t prompt you.
-                    </SettingsHint>
-                    <SettingsActions>
-                      {accessibilityTrusted !== true && (
-                        <button
-                          type="button"
-                          className="btn"
-                          data-testid="settings-accessibility-prompt"
-                          onClick={() => {
-                            void window.harness.system.requestAccessibilityPrompt();
-                            setTimeout(() => {
-                              void window.harness.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
-                            }, 800);
-                          }}
-                        >
-                          Ask For Accessibility <ExternalLink size={14} aria-hidden />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn"
-                        data-testid="settings-open-accessibility"
-                        onClick={() => {
-                          void window.harness.system.openAccessibilitySettings();
-                          setTimeout(() => {
-                            void window.harness.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
-                          }, 1500);
-                        }}
-                      >
-                        Open Accessibility <ExternalLink size={14} aria-hidden />
-                      </button>
-                    </SettingsActions>
-                    <SettingsActions>
-                      {globalRecordingStatus?.microphonePermission !== "granted" && (
-                        <button
-                          type="button"
-                          className="btn"
-                          data-testid="settings-microphone-prompt"
-                          onClick={() => {
-                            void window.harness.recording.requestMicrophoneAccess().then(() => {
-                              void refreshGlobalRecordingStatus();
-                            });
-                          }}
-                        >
-                          Ask For Microphone
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn"
-                        data-testid="settings-open-microphone"
-                        onClick={() => {
-                          void window.harness.system.openMicrophoneSettings();
-                          setTimeout(() => {
-                            void refreshGlobalRecordingStatus();
-                          }, 1500);
-                        }}
-                      >
-                        Open Microphone <ExternalLink size={14} aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn"
-                        data-testid="settings-open-speech-recognition"
-                        onClick={() => {
-                          void window.harness.system.openSpeechRecognitionSettings();
-                        }}
-                      >
-                        Open Speech Recognition <ExternalLink size={14} aria-hidden />
-                      </button>
-                    </SettingsActions>
-                    <SettingsHint flush>
-                      {accessibilityTrusted === true
-                        ? "Accessibility looks good. If Fn still won’t work, restart and check both Harness and Fn Monitor."
-                        : accessibilityTrusted === false
-                          ? "Accessibility not enabled yet."
-                          : "Checking…"}
-                    </SettingsHint>
-                    <SettingsHint flush data-testid="settings-global-recording-status">
-                      Fn monitor:{" "}
-                      {globalRecordingStatus?.monitorHealth === "running"
-                        ? "running"
-                        : globalRecordingStatus?.monitorHealth === "accessibility_denied"
-                          ? "needs Accessibility"
-                          : globalRecordingStatus?.hotkeyActive
-                            ? "starting…"
-                            : "off"}
-                      {" · "}
-                      Microphone:{" "}
-                      {globalRecordingStatus?.microphonePermission === "granted"
-                        ? "allowed"
-                        : globalRecordingStatus?.microphonePermission === "denied"
-                          ? "denied — enable in System Settings"
-                          : globalRecordingStatus?.microphonePermission === "undetermined"
-                            ? "not asked yet — use Ask For Microphone"
-                            : "unknown"}
-                    </SettingsHint>
-                  </>
-                )}
-              </SettingsGroup>
-            )}
           </SettingsTabPanel>}
-
-          {activeTab === "memory" && <MemorySettingsTab />}
 
           <Modal
             open={cleanupPromptModalOpen}
@@ -1100,6 +1050,9 @@ export function SettingsView({
             <DataSettingsTab
               platform={platform}
               apiKey={apiKey}
+              setApiKey={setApiKey}
+              tavilyApiKey={tavilyApiKey}
+              setTavilyApiKey={setTavilyApiKey}
               r2AccountId={r2AccountId}
               setR2AccountId={setR2AccountId}
               r2Bucket={r2Bucket}
@@ -1116,6 +1069,17 @@ export function SettingsView({
               onRegisterRefresh={registerDataRefresh}
             />
           )}
+
+          <SyncQrModal
+            open={syncQrOpen}
+            onClose={() => setSyncQrOpen(false)}
+            accountId={r2AccountId}
+            bucket={r2Bucket}
+            prefix={r2Prefix}
+            accessKeyId={r2AccessKeyId}
+            secretAccessKey={r2SecretAccessKey}
+            openaiApiKey={apiKey}
+          />
         </div>
         </SettingsSwitchProvider>
       </div>

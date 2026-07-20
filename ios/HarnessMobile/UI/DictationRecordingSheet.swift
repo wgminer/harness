@@ -15,7 +15,8 @@ private enum DictationRecordingPhase: Equatable {
 }
 
 struct DictationRecordingSheet: View {
-    @ObservedObject var app: AppModel
+    /// Not observed — AppModel publishes sync/setup churn that must not rebuild the sheet.
+    let app: AppModel
     @ObservedObject private var recordingSession: RecordingSessionManager
     let mode: DictationRecordingMode
     @Binding var isPresented: Bool
@@ -27,6 +28,9 @@ struct DictationRecordingSheet: View {
     @State private var didAutoStart = false
     /// Invalidates in-flight stop/transcribe work when the user cancels.
     @State private var operationGeneration = 0
+    /// Latch so only one stop path (button / Live Activity / max duration) owns the stop.
+    @State private var isStopping = false
+    @State private var showFailedRecordingShareSheet = false
 
     init(
         app: AppModel,
@@ -41,6 +45,10 @@ struct DictationRecordingSheet: View {
         self._isPresented = isPresented
         self.onConversationCreated = onConversationCreated
         self.onTranscriptSent = onTranscriptSent
+        // Fast boot: skip the spinner chrome when mic permission is already granted.
+        if app.recordingSession.hasRecordPermission {
+            self._phase = State(initialValue: .recording)
+        }
     }
 
     private var recorder: AudioRecorder { recordingSession.recorder }
@@ -48,23 +56,42 @@ struct DictationRecordingSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Spacer()
-
                 switch phase {
                 case .starting:
+                    Spacer()
                     startingContent
                         .padding(.horizontal, 28)
+                    Spacer()
                 case .recording:
+                    Spacer()
                     recordingContent
+                    DictationCaptureWatchdog(
+                        recorder: recorder,
+                        onUnexpectedEnd: {
+                            // Only fail while we still believe capture is live.
+                            // A stale onChange can fire after stop has already moved us on.
+                            guard phase == .recording, !isStopping else { return }
+                            // Take ownership so a later start()/cancel won't delete this file.
+                            if savedAudioURL == nil {
+                                savedAudioURL = recorder.consumePreservedRecordingURL()
+                            }
+                            phase = .failed(
+                                AudioRecorderError.interrupted.errorDescription
+                                    ?? "Recording was interrupted."
+                            )
+                            Task { await recordingSession.endRecordingSession() }
+                        }
+                    )
+                    Spacer()
                 case .processing:
+                    Spacer()
                     processingContent
                         .padding(.horizontal, 28)
+                    Spacer()
                 case .failed(let message):
                     failedContent(message: message)
-                        .padding(.horizontal, 28)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-
-                Spacer()
             }
             .padding(.bottom, 32)
             .navigationTitle(navigationTitle)
@@ -75,19 +102,14 @@ struct DictationRecordingSheet: View {
                         Task { await cancelAndDismiss() }
                     }
                 }
-                if phase == .recording {
-                    ToolbarItem(placement: .principal) {
-                        DictationElapsedToolbarLabel(
-                            recorder: recorder,
-                            onMaxDuration: {
-                                Task { await stopAndTranscribe() }
-                            }
-                        )
-                    }
-                }
             }
         }
         .interactiveDismissDisabled(isRecordingOrProcessing)
+        .sheet(isPresented: $showFailedRecordingShareSheet) {
+            if let savedAudioURL {
+                ActivityShareSheet(items: [savedAudioURL])
+            }
+        }
         .task {
             guard !didAutoStart else { return }
             didAutoStart = true
@@ -97,6 +119,16 @@ struct DictationRecordingSheet: View {
             guard requested else { return }
             recordingSession.acknowledgeLiveActivityStopRequest()
             Task { await stopAndTranscribe() }
+        }
+        .onDisappear {
+            // Swipe-dismiss (allowed from .failed) must invalidate any in-flight transcribe
+            // so a background winner cannot commit a conversation after the user left.
+            operationGeneration += 1
+            app.dictationService.cancel()
+            // Failed takes are UI-owned after consume; delete on abandon so they do not orphan.
+            if case .failed = phase, let url = savedAudioURL {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
     }
 
@@ -131,9 +163,18 @@ struct DictationRecordingSheet: View {
     private var recordingContent: some View {
         VStack(spacing: 36) {
             // Observe AudioRecorder in a leaf so metering does not rebuild the sheet chrome.
-            DictationWaveformHost(recorder: recorder)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+            VStack(spacing: 12) {
+                DictationWaveformHost(recorder: recorder)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+
+                DictationElapsedLabel(
+                    recorder: recorder,
+                    onMaxDuration: {
+                        Task { await stopAndTranscribe() }
+                    }
+                )
+            }
 
             HStack(spacing: 28) {
                 Button {
@@ -160,6 +201,8 @@ struct DictationRecordingSheet: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Stop and transcribe")
+                .disabled(!recorder.isRecording)
+                .opacity(recorder.isRecording ? 1 : 0.45)
             }
             .padding(.horizontal, 28)
         }
@@ -175,39 +218,69 @@ struct DictationRecordingSheet: View {
         }
     }
 
+    private var canUseWhisper: Bool {
+        savedAudioURL != nil && app.dictationService.hasWhisperAPIKey
+    }
+
     private func failedContent(message: String) -> some View {
-        VStack(spacing: 16) {
-            Text(message)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            if let savedAudioURL {
-                DictationRecordingAccessBar(
-                    recordingURL: savedAudioURL,
-                    detail: "Your recording was not lost. Share or save it, then retry transcription when ready."
-                )
+        ContentUnavailableView {
+            Label("Something went wrong", systemImage: "waveform.badge.exclamationmark")
+        } description: {
+            VStack(spacing: 8) {
+                Text(message)
+                if savedAudioURL != nil {
+                    Text(
+                        canUseWhisper
+                            ? "Your recording is still saved. Retry on-device, or use Whisper."
+                            : "Your recording is still saved. Open it to keep a copy, or retry transcription."
+                    )
+                    .foregroundStyle(.secondary)
+                }
             }
-
+        } actions: {
             if savedAudioURL != nil {
-                Button("Retry transcription") {
+                Button("Retry Transcription") {
                     Task { await retryTranscription() }
                 }
                 .buttonStyle(.borderedProminent)
+
+                if canUseWhisper {
+                    Button("Use Whisper") {
+                        Task { await transcribeWithWhisper() }
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Button {
+                    showFailedRecordingShareSheet = true
+                } label: {
+                    Label("Open Recording", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
             }
 
-            Button("Record again") {
+            Button("Record Again") {
+                if let savedAudioURL {
+                    try? FileManager.default.removeItem(at: savedAudioURL)
+                }
                 savedAudioURL = nil
-                phase = .starting
+                showFailedRecordingShareSheet = false
+                phase = recordingSession.hasRecordPermission ? .recording : .starting
                 didAutoStart = false
                 Task { await startRecording() }
             }
-            .buttonStyle(.bordered)
         }
     }
 
     private func startRecording() async {
-        phase = .starting
+        isStopping = false
+        // Keep optimistic recording chrome when permission is already granted.
+        if !recordingSession.hasRecordPermission {
+            phase = .starting
+        } else if phase != .recording {
+            phase = .recording
+        }
+
         do {
             _ = try await recordingSession.beginRecordingSession()
             // Cancel may have completed between start returning and this resume.
@@ -232,41 +305,81 @@ struct DictationRecordingSheet: View {
     }
 
     private func stopAndTranscribe() async {
-        guard phase == .recording else { return }
+        guard phase == .recording, !isStopping else {
+            return
+        }
+        isStopping = true
         let generation = operationGeneration
+        let peakLevel = recorder.peakLevelDuringSession
+        let elapsedSeconds = TimeInterval(recorder.elapsedMs) / 1000.0
+
         do {
             let url = try recorder.stop()
             await recordingSession.endRecordingSession()
             guard generation == operationGeneration else { return }
             savedAudioURL = url
             phase = .processing
-            try await OnDeviceTranscriber.ensureAudioFileReady(at: url)
-            guard generation == operationGeneration else { return }
+
+            let failure = RecordingCaptureValidation.validate(
+                url: url,
+                peakLevelDuringSession: peakLevel,
+                // Prefer wall-clock elapsed — AVURLAsset.duration can be nil right after finalize.
+                duration: elapsedSeconds > 0 ? elapsedSeconds : nil
+            )
+            if let failure {
+                phase = .failed(RecordingCaptureValidation.userMessage(for: failure))
+                return
+            }
+
             await transcribeSavedAudio()
         } catch {
             await recordingSession.endRecordingSession()
             guard generation == operationGeneration else { return }
+            // A losing concurrent stop must not overwrite the winner's UI with a failure.
+            if case AudioRecorderError.notRecording = error {
+                return
+            }
             phase = .failed(error.localizedDescription)
         }
     }
 
     private func retryTranscription() async {
         guard let savedAudioURL else {
-            phase = .starting
+            phase = recordingSession.hasRecordPermission ? .recording : .starting
             return
         }
         phase = .processing
-        await transcribeSavedAudio(reusing: savedAudioURL)
+        await transcribeSavedAudio(reusing: savedAudioURL, engine: .onDevice)
     }
 
-    private func transcribeSavedAudio(reusing url: URL? = nil) async {
+    private func transcribeWithWhisper() async {
+        guard let savedAudioURL else { return }
+        phase = .processing
+        await transcribeSavedAudio(reusing: savedAudioURL, engine: .whisper)
+    }
+
+    private func transcribeSavedAudio(
+        reusing url: URL? = nil,
+        engine: TranscriptionEngine = .onDevice
+    ) async {
         guard let audioURL = url ?? savedAudioURL else {
             phase = .failed("No saved recording found.")
             return
         }
+        let generation = operationGeneration
 
         do {
-            let transcript = try await app.dictationService.transcribeRecording(at: audioURL)
+            let transcript: String
+            switch engine {
+            case .onDevice:
+                transcript = try await app.dictationService.transcribeRecording(at: audioURL)
+            case .whisper:
+                transcript = try await app.dictationService.transcribeRecordingWithWhisper(at: audioURL)
+            }
+            // Cancel / dismiss while transcribing must not commit a conversation afterwards.
+            guard generation == operationGeneration else {
+                return
+            }
             switch mode {
             case .createSession:
                 let conversationId = try app.createDictationConversation(
@@ -281,8 +394,10 @@ struct DictationRecordingSheet: View {
                 onTranscriptSent(transcript)
             }
         } catch is CancellationError {
-            phase = .failed("Transcription cancelled. Your recording is still saved on this device.")
+            guard generation == operationGeneration else { return }
+            phase = .failed("Transcription was cancelled.")
         } catch {
+            guard generation == operationGeneration else { return }
             phase = .failed(error.localizedDescription)
         }
     }
@@ -291,6 +406,10 @@ struct DictationRecordingSheet: View {
         operationGeneration += 1
         app.dictationService.cancel()
         await recordingSession.cancelRecordingSession()
+        if let url = savedAudioURL {
+            try? FileManager.default.removeItem(at: url)
+            savedAudioURL = nil
+        }
         isPresented = false
     }
 }
@@ -310,50 +429,50 @@ private struct DictationWaveformHost: View {
     @ObservedObject var recorder: AudioRecorder
 
     var body: some View {
-        LiveAudioWaveformView(
-            samples: recorder.waveformSamples,
-            level: recorder.audioLevel
-        )
+        LiveAudioWaveformView(level: recorder.audioLevel)
+            .frame(maxWidth: .infinity)
+            .frame(height: 320)
     }
 }
 
-private struct DictationElapsedToolbarLabel: View {
+/// Observes capture drops from interruption / media-reset without rebuilding sheet chrome on metering.
+private struct DictationCaptureWatchdog: View {
+    @ObservedObject var recorder: AudioRecorder
+    var onUnexpectedEnd: () -> Void
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .onChange(of: recorder.isRecording) { _, isRecording in
+                // Read intentionalStop from the recorder object at callback time —
+                // a SwiftUI `let expectRecordingEnd` can still be stale here.
+                let intentional = recorder.intentionalStop
+                guard !isRecording, !intentional else { return }
+                onUnexpectedEnd()
+            }
+    }
+}
+
+private struct DictationElapsedLabel: View {
     @ObservedObject var recorder: AudioRecorder
     var onMaxDuration: () -> Void
+    /// Elapsed keeps ticking past the limit; fire the stop exactly once.
+    @State private var didFireMaxDuration = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            RecordingPulseDot()
-            Text(DictationElapsedFormatting.string(ms: recorder.elapsedMs))
-                .font(.system(.body, design: .monospaced).weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(.primary)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Recording duration")
-        .accessibilityValue(DictationElapsedFormatting.string(ms: recorder.elapsedMs))
-        .onChange(of: recorder.elapsedMs) { _, ms in
-            if ms >= Int(RecordingStorage.maxRecordingDuration * 1000) {
-                onMaxDuration()
+        Text(DictationElapsedFormatting.string(ms: recorder.elapsedMs))
+            .font(.body.weight(.medium))
+            .monospacedDigit()
+            .foregroundStyle(.primary)
+            .accessibilityLabel("Recording duration")
+            .accessibilityValue(DictationElapsedFormatting.string(ms: recorder.elapsedMs))
+            .onChange(of: recorder.elapsedMs) { _, ms in
+                if ms >= Int(RecordingStorage.maxRecordingDuration * 1000), !didFireMaxDuration {
+                    didFireMaxDuration = true
+                    onMaxDuration()
+                }
             }
-        }
-    }
-}
-
-private struct RecordingPulseDot: View {
-    @State private var isPulsing = false
-
-    var body: some View {
-        Circle()
-            .fill(Color.red)
-            .frame(width: 6, height: 6)
-            .opacity(isPulsing ? 0.35 : 1)
-            .animation(
-                .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
-                value: isPulsing
-            )
-            .onAppear { isPulsing = true }
-            .accessibilityHidden(true)
     }
 }
 
