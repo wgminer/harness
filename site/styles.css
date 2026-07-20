@@ -80,17 +80,17 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  width: min(100%, 540px);
+  width: min(100%, 720px);
   text-align: left;
 }
 
 .stack__header {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-sm);
   width: 100%;
-  text-align: center;
+  text-align: left;
 }
 
 .stack__icon {
@@ -99,47 +99,35 @@ a:focus-visible {
   border-radius: var(--radius-xs);
 }
 
-.stack__title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.375rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.25;
+.tagline {
+  margin: var(--space-md) 0 0;
+  line-height: 1.65;
   color: var(--fg);
 }
 
-.manifesto {
-  display: grid;
+/* --- Download + system requirements --- */
+
+.download {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-md);
   width: 100%;
-  margin-top: var(--space-xl);
+  margin-top: var(--space-2xl);
 }
 
-.manifesto p {
-  margin: 0;
-  line-height: 1.65;
-  color: var(--fg-muted);
+/* --- Hero screenshot --- */
+
+.hero {
+  margin: var(--space-2xl) 0 0;
+  width: 100%;
 }
 
-.manifesto__lede {
-  color: var(--fg);
-}
-
-.manifesto em {
-  font-style: normal;
-  font-weight: 500;
-  color: var(--fg);
-}
-
-.manifesto a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.manifesto a:hover {
-  color: var(--fg);
+.hero__img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border-edge);
+  border-radius: var(--radius-sm);
 }
 
 /* --- Colophon --- */
@@ -147,14 +135,27 @@ a:focus-visible {
 .colophon {
   margin: var(--space-md) 0 0;
   width: 100%;
-  font-size: 0.8125rem;
+  font-size: 1rem;
   line-height: 1.65;
   color: var(--fg-faint);
-  text-align: left;
 }
 
-.colophon__label {
-  font-family: var(--font-mono);
+.site-credit {
+  margin: var(--space-md) 0 0;
+  width: 100%;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--fg-faint);
+}
+
+.site-credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.site-credit a:hover {
+  color: var(--fg);
 }
 
 /* --- CTA --- */
@@ -163,15 +164,12 @@ a:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: stretch;
-  width: 100%;
-  margin: var(--space-lg) 0 0;
-  padding: 0.75rem 1.5rem;
+  margin: 0;
+  padding: 0.75rem 1.75rem;
   border-radius: var(--radius-sm);
   font-family: var(--font-body);
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 500;
-  letter-spacing: 0.01em;
   text-decoration: none;
   color: var(--btn-primary-fg);
   background: linear-gradient(

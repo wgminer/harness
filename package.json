@@ -22,6 +22,7 @@
     "dist:mac:quick": "node scripts/dist-runner.js --mac --quick",
     "dist:mac:replace": "node scripts/dist-runner.js --mac --replace",
     "verify:mac-trust": "node scripts/verify-mac-trust.js",
+    "capture:hero": "bash scripts/capture-hero.sh",
     "icon:icns": "node build/make-icns.js",
     "build:speech-helper": "bash scripts/build-speech-helper.sh",
     "build:fn-monitor": "bash scripts/build-fn-monitor.sh",

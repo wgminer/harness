@@ -42,6 +42,8 @@ tmp/
 import/
 import_v2/
 backlog/
+media/.hero-profile/
+media/_full.png
 
 # Legacy v1 web app (ignore if a stray file remains locally)
 firebase.js

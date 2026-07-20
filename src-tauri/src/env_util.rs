@@ -25,7 +25,15 @@ pub fn app_display_name() -> &'static str {
 }
 
 /// Harness userData directory (NOT Tauri app_data_dir).
+///
+/// Override with `HARNESS_DATA_DIR` for screenshots, tests, or alternate profiles.
 pub fn user_data_dir() -> PathBuf {
+    if let Ok(path) = env::var("HARNESS_DATA_DIR") {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
     let base = dirs::data_dir().expect("data_dir");
     let name = if is_harness_dev() && !is_harness_e2e() {
         HARNESS_DEV_APP_NAME

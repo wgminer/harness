@@ -1,6 +1,6 @@
 # Harness — agent notes
 
-Concise guardrails for AI-assisted work in this repo. Full build/packaging detail lives in [BUILD.md](BUILD.md).
+Concise guardrails for AI-assisted work in this repo. Full build/packaging detail lives in [BUILD.md](BUILD.md); outcomes in [ROADMAP.md](ROADMAP.md).
 
 ## Single source of truth
 
