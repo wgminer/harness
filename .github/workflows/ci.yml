@@ -80,7 +80,44 @@ jobs:
       - name: Run iOS tests
         working-directory: ios
         run: |
+          # Runner images ship different iPhone / iOS Simulator combos; pick the newest available.
+          DESTINATION="$(
+            xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          data = json.load(sys.stdin)
+          candidates = []
+          for runtime, devices in data.get("devices", {}).items():
+              if "SimRuntime.iOS-" not in runtime:
+                  continue
+              m = re.search(r"iOS-(\d+(?:-\d+)*)", runtime)
+              ver = tuple(int(p) for p in m.group(1).split("-")) if m else (0,)
+              for device in devices:
+                  name = device.get("name", "")
+                  if not name.startswith("iPhone"):
+                      continue
+                  if device.get("isAvailable") is False:
+                      continue
+                  udid = device.get("udid")
+                  if udid:
+                      candidates.append((ver, name, udid))
+          if not candidates:
+              sys.exit("No available iPhone simulator found")
+          # Newest iOS first; prefer numbered iPhones (17, 16, …) over Air.
+          candidates.sort(
+              key=lambda item: (
+                  item[0],
+                  1 if re.match(r"iPhone \d", item[1]) else 0,
+                  item[1],
+              ),
+              reverse=True,
+          )
+          _ver, name, udid = candidates[0]
+          print(f"Using simulator: {name}", file=sys.stderr)
+          print(f"platform=iOS Simulator,id={udid}")
+          '
+          )"
+          echo "destination=${DESTINATION}"
           xcodebuild test \
             -scheme HarnessMobile \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' \
+            -destination "${DESTINATION}" \
             -quiet

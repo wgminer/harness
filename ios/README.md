@@ -69,9 +69,10 @@ If both Mac and phone edited since the last sync, the app **auto-merges** both s
 
 ```bash
 cd ios
-xcodebuild -scheme HarnessMobile \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' \
-  test
+# Use any available iPhone simulator (OS versions vary by Xcode).
+DESTINATION=$(xcrun simctl list devices available \
+  | awk -F '[()]' '/iPhone / { gsub(/^ +| +$/, "", $1); print "platform=iOS Simulator,id="$2; exit }')
+xcodebuild -scheme HarnessMobile -destination "$DESTINATION" test
 ```
 
 Unit tests assert the sync **revision hash** matches desktop (`syncBundle.test.ts` fixture).
