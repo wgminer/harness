@@ -333,21 +333,25 @@ button.sidebar-item {
 }
 
 .sidebar-item-delete {
-  position: relative;
+  position: absolute;
+  right: 8px;
+  top: 50%;
   z-index: 1;
-  flex-shrink: 0;
   width: 20px;
   height: 20px;
+  margin: 0;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--fg-muted);
   cursor: pointer;
   opacity: 0;
+  pointer-events: none;
   border-radius: var(--radius-xs);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transform: translateY(-50%);
   transition:
     opacity var(--motion-duration-ui) var(--motion-ease-standard),
     color var(--motion-duration-ui) var(--motion-ease-standard),
@@ -359,8 +363,10 @@ button.sidebar-item {
   height: var(--icon-size-sm);
 }
 
-.sidebar-item:hover .sidebar-item-delete {
+.sidebar-item:hover .sidebar-item-delete,
+.sidebar-item:focus-within .sidebar-item-delete {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .sidebar-item-delete:hover {
