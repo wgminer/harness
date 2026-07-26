@@ -82,7 +82,7 @@ export function ContextInspectorModal({
       footer={
         preview ? (
           <button type="button" className="btn" onClick={() => void copySystemPrompt()}>
-            {copied ? "Copied" : "Copy system prompt"}
+            {copied ? "Copied" : "Copy System Prompt"}
           </button>
         ) : null
       }
@@ -166,7 +166,7 @@ export function ContextInspectorModal({
                         className="btn btn-sm"
                         onClick={() => showRecordingInFinder(recording.path)}
                       >
-                        Show in Finder
+                        Show In Finder
                       </button>
                     ) : null}
                   </li>

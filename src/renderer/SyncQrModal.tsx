@@ -111,22 +111,22 @@ export function SyncQrModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Show sync QR"
+      title="Show Sync QR"
       data-testid="sync-qr-modal"
       footer={
         <>
           <button type="button" className="btn" onClick={() => void copyCode()} disabled={!encoded}>
-            {copied ? "Copied" : "Copy sync code"}
+            {copied ? "Copied" : "Copy Sync Code"}
           </button>
-          <button type="button" className="btn btn-primary" onClick={onClose}>
+          <button type="button" className="btn" onClick={onClose}>
             Done
           </button>
         </>
       }
     >
       <p className="settings-group__lead">
-        Scan with the iPhone <strong>Set up sync</strong> flow. Contains your sync credentials —
-        don’t screenshot or share. Expires in {formatCountdown(remaining)}.
+        Scan with <strong>Scan QR code</strong> on iPhone. Don’t screenshot or share — expires in{" "}
+        {formatCountdown(remaining)}.
       </p>
       {error ? (
         <p className="settings-import-status__errors" role="alert">

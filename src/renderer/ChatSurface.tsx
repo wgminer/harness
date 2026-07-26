@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { MutableRefObject, ReactNode, RefObject } from "react";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessageList } from "./ChatMessageList";
+import { ChatSelectionImagePopover } from "./ChatSelectionImagePopover";
 import {
   type Message,
   type ToolCallDisplay,
@@ -195,6 +196,7 @@ export function ChatSurface({
           inputRef={inputRef}
         />
       </div>
+      <ChatSelectionImagePopover containerRef={chatPaneRef} />
     </div>
   );
 }

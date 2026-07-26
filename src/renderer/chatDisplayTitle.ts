@@ -1,5 +1,5 @@
 export {
   conversationDisplayTitle,
-  formatNewChatLabel,
+  formatEmptyChatLabel,
   isConversationTitlePending,
 } from "../shared/conversationSession";

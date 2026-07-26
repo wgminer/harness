@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChatView } from "./ChatView";
 import { SettingsView } from "./SettingsView";
+import { setCachedAccessibilityTrusted, setCachedHasOpenAIApiKey, setCachedSettings } from "./settings/settingsSessionCache";
 import { TasksView } from "./TasksView";
 import { NotesView } from "./WritingSurfaceView";
 import { ImageCanvasView } from "./ImageCanvasView";
 import { Sidebar } from "./Sidebar";
 import { SetupNoticeModal } from "./SetupNoticeModal";
 import { HotkeyRecordingOverlay } from "./HotkeyRecordingOverlay";
-import { wireGlobalHotkeyActions } from "./globalHotkeyController";
+import { wireGlobalHotkeyActions, type GlobalHotkeyOverlayPhase } from "./globalHotkeyController";
 import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Settings } from "../shared/types";
 import { DEFAULT_UI_SESSION } from "../shared/uiSession";
 import type {} from "../shared/desktopAPI";
-import { isSidebarVisibleConversation } from "../shared/conversationSession";
+import { isSidebarVisibleConversation, isTimePlaceholderTitle } from "../shared/conversationSession";
 import {
   getDefaultNoteTemplate,
   normalizeDefaultNoteTemplateId,
@@ -30,6 +31,15 @@ import {
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { IDLE_UPDATE_STATUS, type UpdateStatus } from "../shared/updateStatus";
 
+function removeTitleAwaitingId(
+  prev: Record<string, true>,
+  id: string,
+): Record<string, true> {
+  if (!(id in prev)) return prev;
+  const next = { ...prev };
+  delete next[id];
+  return next;
+}
 export default function App() {
   const [view, setView] = useState<View>("chat");
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -46,7 +56,9 @@ export default function App() {
   const [activeChatProcessing, setActiveChatProcessing] = useState(false);
   /** Per-conversation refcount for async LLM thread title generation after a reply. */
   const [titleGenInFlight, setTitleGenInFlight] = useState<Record<string, number>>({});
-  /** Note id to open when entering Notes from chat message action, sidebar selection, or creation. */
+  /** Optimistic pending until Rust start/end settles — avoids Empty/Dictation flash before `started`. */
+  const [titleAwaitingIds, setTitleAwaitingIds] = useState<Record<string, true>>({});
+  const harnessE2eRef = useRef(false);  /** Note id to open when entering Notes from chat message action, sidebar selection, or creation. */
   const [pendingOpenNoteRequest, setPendingOpenNoteRequest] = useState<{
     id: string;
     nonce: number;
@@ -67,22 +79,39 @@ export default function App() {
   const [pendingHotkeyText, setPendingHotkeyText] = useState<string | null>(null);
   /** When true, hotkey text is always pre-filled (never auto-sent). Used for global recording while the app was unfocused. */
   const [pendingHotkeyDraftOnly, setPendingHotkeyDraftOnly] = useState(false);
-  const [globalHotkeyRecording, setGlobalHotkeyRecording] = useState(false);
-  const [globalHotkeyError, setGlobalHotkeyError] = useState<string | null>(null);
+  const [globalHotkeyOverlaySession, setGlobalHotkeyOverlaySession] = useState(false);
+  const [globalHotkeyOverlayPhase, setGlobalHotkeyOverlayPhase] =
+    useState<GlobalHotkeyOverlayPhase>("idle");
+  const [globalHotkeyError, setGlobalHotkeyErrorState] = useState<string | null>(null);
+  const [globalHotkeyRecordingPath, setGlobalHotkeyRecordingPath] = useState<string | null>(null);
+  const overlaySessionRef = useRef(false);
+
+  const setGlobalHotkeyError = useCallback((message: string | null, recordingPath?: string | null) => {
+    setGlobalHotkeyErrorState(message);
+    if (recordingPath !== undefined) {
+      setGlobalHotkeyRecordingPath(recordingPath);
+    }
+  }, []);
 
   const conversationIdRef = useRef(conversationId);
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+  useEffect(() => {
+    overlaySessionRef.current = globalHotkeyOverlaySession;
+  }, [globalHotkeyOverlaySession]);
 
   const refreshSetupState = useCallback(async () => {
-    const [, syncStatus, credentialStatus, platform] = await Promise.all([
+    const [settings, syncStatus, credentialStatus, platform] = await Promise.all([
       window.harness.settings.get() as Promise<Settings>,
       window.harness.sync.getStatus(),
       window.harness.credentials.getStatus(),
       window.harness.system.getPlatform(),
     ]);
+    setCachedSettings(settings);
+    setCachedHasOpenAIApiKey(credentialStatus.hasOpenAIApiKey);
     let accessibilityTrusted: boolean | null = null;
     if (platform === "darwin") {
       accessibilityTrusted = await window.harness.system.macosAccessibilityTrusted();
+      setCachedAccessibilityTrusted(accessibilityTrusted);
     }
     const gaps = collectSetupGaps({
       hasOpenAIApiKey: credentialStatus.hasOpenAIApiKey,
@@ -100,10 +129,19 @@ export default function App() {
   useEffect(() => {
     const prev = prevViewRef.current;
     if (prev === "settings" && view !== "settings") {
+      // Drop deep-link tab so the next System open defaults to General.
+      setSettingsInitialTab(undefined);
       void refreshSetupState();
     }
     prevViewRef.current = view;
   }, [view, refreshSetupState]);
+
+  const handleViewChange = useCallback((next: View) => {
+    if (next === "settings") {
+      setSettingsInitialTab(undefined);
+    }
+    setView(next);
+  }, []);
 
   const openSettingsForGap = useCallback((gap: SetupGap) => {
     setSettingsInitialTab(gap.settingsTab);
@@ -141,6 +179,7 @@ export default function App() {
       window.harness.uiSession.get(),
       window.harness.settings.get(),
     ]);
+    setCachedSettings(settings);
     const openToCompose =
       settings.chat?.openToComposeOnLaunch ?? DEFAULT_SETTINGS.chat!.openToComposeOnLaunch;
     setConversations(list);
@@ -156,8 +195,9 @@ export default function App() {
       if (session.imagesOpenImageId) {
         setActiveImageId(session.imagesOpenImageId);
       }
-      setOpenNoteInStickyWindow(session.openNoteInStickyWindow === true);
     }
+    // Preference, not restore target — always load, including when open-to-compose skips view restore.
+    setOpenNoteInStickyWindow(session.openNoteInStickyWindow === true);
     setUiSessionReady(true);
   }, [resolveConversationId]);
 
@@ -166,7 +206,24 @@ export default function App() {
     const list = await window.harness.memory.listConversations();
     setConversations(list);
     setConversationId((current) => resolveConversationId(list, current));
+    setTitleAwaitingIds((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of Object.keys(prev)) {
+        const row = list.find((c) => c.id === id);
+        if (row && !isTimePlaceholderTitle(row.title)) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, [resolveConversationId]);
+
+  const markTitleAwaiting = useCallback((id: string) => {
+    if (harnessE2eRef.current) return;
+    setTitleAwaitingIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
+  }, []);
 
   const loadNotesList = useCallback(async () => {
     const list = await window.harness.notes.list();
@@ -281,7 +338,16 @@ export default function App() {
       const next = { ...prev };
       if (n <= 0) delete next[id];
       else next[id] = n;
+      if (delta === -1 && n <= 0) {
+        setTitleAwaitingIds((awaiting) => removeTitleAwaitingId(awaiting, id));
+      }
       return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    void window.harness.env.isHarnessE2E().then((v) => {
+      harnessE2eRef.current = v;
     });
   }, []);
 
@@ -317,10 +383,14 @@ export default function App() {
   }, [updateStatus.status]);
 
   useEffect(() => {
-    window.harness.customization.getLayoutOptions().then(setLayout);
+    const normalizeLayout = (raw: LayoutOptions): LayoutOptions => ({
+      sidebar: raw.sidebar === "right" ? "right" : "left",
+      wideView: raw.wideView === "centered" ? "centered" : "scaled",
+    });
+    window.harness.customization.getLayoutOptions().then((raw) => setLayout(normalizeLayout(raw)));
     const unsub = window.harness.customization.onUpdated((p) => {
       if (p.type === "layout") {
-        window.harness.customization.getLayoutOptions().then(setLayout);
+        window.harness.customization.getLayoutOptions().then((raw) => setLayout(normalizeLayout(raw)));
       }
     });
     return unsub;
@@ -379,6 +449,7 @@ export default function App() {
 
   const handleAssignConversationId = useCallback((id: string) => {
     setConversationId(id);
+    markTitleAwaiting(id);
     setConversations((prev) => {
       if (prev.some((c) => c.id === id)) {
         return prev.map((c) => (c.id === id ? { ...c, hasMessages: true } : c));
@@ -388,7 +459,7 @@ export default function App() {
         ...prev,
       ];
     });
-  }, []);
+  }, [markTitleAwaiting]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -412,6 +483,13 @@ export default function App() {
     await window.harness.memory.deleteConversation(id);
     const remaining = conversations.filter((c) => c.id !== id);
     setConversations(remaining);
+    setTitleAwaitingIds((prev) => removeTitleAwaitingId(prev, id));
+    setTitleGenInFlight((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     if (conversationId === id) {
       setConversationId(remaining.find(isSidebarVisibleConversation)?.id ?? null);
     }
@@ -448,7 +526,8 @@ export default function App() {
 
   useEffect(() => {
     wireGlobalHotkeyActions({
-      setGlobalHotkeyRecording,
+      setGlobalHotkeyOverlaySession,
+      setGlobalHotkeyOverlayPhase,
       setGlobalHotkeyError,
       setView,
       setConversationId,
@@ -456,17 +535,20 @@ export default function App() {
       setPendingHotkeyText,
       setPendingHotkeyDraftOnly,
       setConversations,
-      loadConversations,
+      refreshConversations,
+      markTitleAwaiting,
       getConversationId: () => conversationIdRef.current,
+      getOverlaySession: () => overlaySessionRef.current,
     });
     return () => wireGlobalHotkeyActions(null);
-  }, [loadConversations]);
+  }, [markTitleAwaiting, refreshConversations, setGlobalHotkeyError]);
 
   useEffect(() => {
-    if (!globalHotkeyError) return;
-    const timer = window.setTimeout(() => setGlobalHotkeyError(null), 8000);
+    // Auto-clear focused-path error chips only (overlay failed stays until dismiss).
+    if (!globalHotkeyError || globalHotkeyOverlayPhase === "failed") return;
+    const timer = window.setTimeout(() => setGlobalHotkeyError(null, null), 8000);
     return () => window.clearTimeout(timer);
-  }, [globalHotkeyError]);
+  }, [globalHotkeyError, globalHotkeyOverlayPhase, setGlobalHotkeyError]);
 
   const sidebarConversations = useMemo(
     () => conversations.filter(isSidebarVisibleConversation),
@@ -485,104 +567,134 @@ export default function App() {
   void presetSmall;
 
   return (
-    <div className="app" data-sidebar={layout.sidebar}>
-      <Sidebar
-        conversations={sidebarConversations}
-        notes={notes}
-        images={images}
-        conversationId={conversationId}
-        activeNoteId={activeNoteId}
-        activeImageId={activeImageId}
-        view={view}
-        onViewChange={setView}
-        onConversationSelect={setConversationId}
-        onConversationDelete={handleConversationDelete}
-        onSelectNote={openNoteInMain}
-        onNoteDelete={handleNoteDelete}
-        onSelectImage={openImageInMain}
-        onImageDelete={handleImageDelete}
-        onNewChat={createNew}
-        onNewNote={() => void createNewNote()}
-        onNewImage={() => void createNewImage()}
-        activeChatProcessing={activeChatProcessing}
-        titleGenInFlight={titleGenInFlight}
-        appVersion={appVersion}
-        updateStatus={updateStatus}
-        onUpdateClick={handleUpdateClick}
-        onSyncComplete={refreshLibraryAfterSync}
-        onOpenDataSettings={openDataSettings}
-      />
-      <main className="main">
-        {(view === "chat" || activeChatProcessing) && (
-          <div className="main-chat-host" hidden={view !== "chat"}>
-            <ChatView
-              conversationId={conversationId}
-              displayTitle={
-                activeChatConversation
-                  ? conversationDisplayTitle(
-                      activeChatConversation.title,
-                      activeChatConversation.createdAt
-                    )
-                  : ""
-              }
-              titlePending={
-                activeChatConversation != null &&
-                isConversationTitlePending(
-                  activeChatConversation.title,
-                  (titleGenInFlight[activeChatConversation.id] ?? 0) > 0
-                )
-              }
-              onConversationCreated={refreshConversations}
-              onAssignConversationId={handleAssignConversationId}
-              pendingHotkeyText={pendingHotkeyText}
-              pendingHotkeyDraftOnly={pendingHotkeyDraftOnly}
-              onPendingHotkeyTextConsumed={() => {
-                setPendingHotkeyText(null);
-                setPendingHotkeyDraftOnly(false);
+    <div className="app" data-sidebar={layout.sidebar} data-wide-view={layout.wideView}>
+      <div className="app-frame">
+        <Sidebar
+          conversations={sidebarConversations}
+          notes={notes}
+          images={images}
+          conversationId={conversationId}
+          activeNoteId={activeNoteId}
+          activeImageId={activeImageId}
+          view={view}
+          onViewChange={handleViewChange}
+          onConversationSelect={setConversationId}
+          onConversationDelete={handleConversationDelete}
+          onSelectNote={openNoteInMain}
+          onNoteDelete={handleNoteDelete}
+          onSelectImage={openImageInMain}
+          onImageDelete={handleImageDelete}
+          onNewChat={createNew}
+          onNewNote={() => void createNewNote()}
+          onNewImage={() => void createNewImage()}
+          activeChatProcessing={activeChatProcessing}
+          titleGenInFlight={titleGenInFlight}
+          titleAwaitingIds={titleAwaitingIds}
+          appVersion={appVersion}
+          updateStatus={updateStatus}
+          onUpdateClick={handleUpdateClick}
+          onSyncComplete={refreshLibraryAfterSync}
+          onOpenDataSettings={openDataSettings}
+        />
+        <main className="main">
+          {(view === "chat" || activeChatProcessing) && (
+            <div className="main-chat-host" hidden={view !== "chat"}>
+              <ChatView
+                conversationId={conversationId}
+                displayTitle={
+                  activeChatConversation
+                    ? conversationDisplayTitle(
+                        activeChatConversation.title,
+                        activeChatConversation.createdAt
+                      )
+                    : ""
+                }
+                titlePending={
+                  activeChatConversation != null &&
+                  isConversationTitlePending(
+                    activeChatConversation.title,
+                    (titleGenInFlight[activeChatConversation.id] ?? 0) > 0 ||
+                      !!titleAwaitingIds[activeChatConversation.id]
+                  )
+                }
+                onConversationCreated={refreshConversations}
+                onAssignConversationId={handleAssignConversationId}
+                pendingHotkeyText={pendingHotkeyText}
+                pendingHotkeyDraftOnly={pendingHotkeyDraftOnly}
+                onPendingHotkeyTextConsumed={() => {
+                  setPendingHotkeyText(null);
+                  setPendingHotkeyDraftOnly(false);
+                }}
+                onChatActivityChange={handleChatActivityChange}
+                focusComposerNonce={focusComposerNonce}
+                onWindowSizeToggle={handleWindowSizeToggle}
+                onOpenNotesView={(noteId) => openNoteInMain(noteId)}
+                openAIConfigured={!setupStateLoaded || openAIConfigured}
+                mirrorGlobalFnRecording={view === "chat"}
+              />
+            </div>
+          )}
+          {view === "settings" && (
+            <SettingsView
+              initialTab={settingsInitialTab}
+              openNoteInStickyWindow={openNoteInStickyWindow}
+              onOpenNoteInStickyWindowChange={setOpenNoteInStickyWindow}
+              openAIConfigured={openAIConfigured}
+              onSettingsChanged={() => {
+                void refreshSetupState();
               }}
-              onChatActivityChange={handleChatActivityChange}
-              focusComposerNonce={focusComposerNonce}
-              onWindowSizeToggle={handleWindowSizeToggle}
-              onOpenNotesView={(noteId) => openNoteInMain(noteId)}
-              openAIConfigured={!setupStateLoaded || openAIConfigured}
+              onImportComplete={loadConversations}
+              onSyncComplete={refreshLibraryAfterSync}
             />
-          </div>
-        )}
-        {view === "settings" && (
-          <SettingsView
-            initialTab={settingsInitialTab}
-            openNoteInStickyWindow={openNoteInStickyWindow}
-            onOpenNoteInStickyWindowChange={setOpenNoteInStickyWindow}
-            onSettingsChanged={() => {
-              void refreshSetupState();
-            }}
-            onImportComplete={loadConversations}
-            onSyncComplete={refreshLibraryAfterSync}
-          />
-        )}
-        {view === "tasks" && <TasksView />}
-        {view === "notes" && (
-          <NotesView
-            notes={notes}
-            onNotesChange={setNotes}
-            initialOpenNoteId={pendingOpenNoteRequest?.id ?? null}
-            initialOpenNoteRequestNonce={pendingOpenNoteRequest?.nonce}
-            initialOpenNoteIsNew={pendingOpenNoteRequest?.isNew}
-            onInitialOpenNoteHandled={() => setPendingOpenNoteRequest(null)}
-            onActiveNoteChange={setActiveNoteId}
-          />
-        )}
-        {view === "images" && (
-          <ImageCanvasView imageId={activeImageId} onImageUpdated={handleImageUpdated} />
-        )}
-      </main>
+          )}
+          {view === "tasks" && <TasksView />}
+          {view === "notes" && (
+            <NotesView
+              notes={notes}
+              onNotesChange={setNotes}
+              initialOpenNoteId={pendingOpenNoteRequest?.id ?? null}
+              initialOpenNoteRequestNonce={pendingOpenNoteRequest?.nonce}
+              initialOpenNoteIsNew={pendingOpenNoteRequest?.isNew}
+              onInitialOpenNoteHandled={() => setPendingOpenNoteRequest(null)}
+              onActiveNoteChange={setActiveNoteId}
+            />
+          )}
+          {view === "images" && (
+            <ImageCanvasView imageId={activeImageId} onImageUpdated={handleImageUpdated} />
+          )}
+        </main>
+      </div>
       <SetupNoticeModal
         open={setupNoticeOpen && setupGaps.length > 0}
         gaps={setupGaps}
         onConfigure={openSettingsForGap}
         onDismiss={dismissSetupNotice}
       />
-      <HotkeyRecordingOverlay active={globalHotkeyRecording} error={globalHotkeyError} />
+      <HotkeyRecordingOverlay
+        phase={globalHotkeyOverlayPhase}
+        error={globalHotkeyError}
+        recordingPath={globalHotkeyRecordingPath}
+        onRetry={() => {
+          if (!globalHotkeyRecordingPath) return;
+          setGlobalHotkeyOverlayPhase("transcribing");
+          setGlobalHotkeyError(null, globalHotkeyRecordingPath);
+          void window.harness.recording.retryGlobalTranscription(globalHotkeyRecordingPath);
+        }}
+        onShowInFinder={() => {
+          if (!globalHotkeyRecordingPath) return;
+          void window.harness.recording.showInFolder(globalHotkeyRecordingPath);
+        }}
+        onDismiss={() => {
+          setGlobalHotkeyOverlaySession(false);
+          setGlobalHotkeyOverlayPhase("idle");
+          setGlobalHotkeyError(null, null);
+        }}
+      />
+      {globalHotkeyError && globalHotkeyOverlayPhase === "idle" ? (
+        <div className="hotkey-recording-overlay__error" data-testid="hotkey-recording-error" role="status">
+          {globalHotkeyError}
+        </div>
+      ) : null}
     </div>
   );
 }

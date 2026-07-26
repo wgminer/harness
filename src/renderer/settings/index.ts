@@ -17,3 +17,10 @@ export {
   type MemorySettingsController,
 } from "./MemorySettingsTab";
 export { AccentColorField, type AccentColorFieldProps } from "./AccentColorField";
+export {
+  getCachedSettings,
+  loadSettingsForSystemPage,
+  resetSettingsSessionCacheForTests,
+  setCachedSettings,
+  shouldLoadSettingsSecrets,
+} from "./settingsSessionCache";

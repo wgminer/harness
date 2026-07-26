@@ -33,8 +33,8 @@ enum ConversationTitlePolicy {
         return "Dictation @ \(formatter.string(from: date))"
     }
 
-    /// Mirrors `formatNewChatLabel` in `src/shared/conversationSession.ts`.
-    static func formatNewChatLabel(createdAtMs: Int64) -> String {
+    /// Mirrors `formatEmptyChatLabel` in `src/shared/conversationSession.ts`.
+    static func formatEmptyChatLabel(createdAtMs: Int64) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(createdAtMs) / 1000)
         let formatter = DateFormatter()
         formatter.locale = Locale.current
@@ -45,7 +45,7 @@ enum ConversationTitlePolicy {
     static func conversationDisplayTitle(title: String?, createdAtMs: Int64) -> String {
         let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmed.isEmpty { return trimmed }
-        return formatNewChatLabel(createdAtMs: createdAtMs)
+        return formatEmptyChatLabel(createdAtMs: createdAtMs)
     }
 
     static func buildContext(messages: [MessageRecord], maxChars: Int = 2400) -> String {

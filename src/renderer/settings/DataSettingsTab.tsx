@@ -71,12 +71,7 @@ export function DataSettingsTab({
       <SettingsTabPanel id="data">
         <MemorySettingsSections memory={memory} />
 
-        <SettingsGroup
-          title="API keys"
-          description="Chat, polish, optional transcript cleanup, and web search. Voice transcription runs on your Mac without an OpenAI key."
-          collapsible
-          defaultOpen={false}
-        >
+        <SettingsGroup title="API keys" collapsible defaultOpen={false}>
           <SettingsField label="OpenAI" htmlFor="settings-api-key">
             <SecretField
               id="settings-api-key"
@@ -107,13 +102,7 @@ export function DataSettingsTab({
 
         <SettingsGroup
           title="Backup"
-          description={
-            <>
-              Cloudflare R2 bucket for cloud backup. Harness stores <code>bundle.json.gz</code> and{" "}
-              <code>manifest.json</code> under the prefix below. Enable object versioning in R2 for
-              free backup history. Sync runs automatically when configured.
-            </>
-          }
+          description="Cloudflare R2 for cloud backup."
           collapsible
           defaultOpen={false}
         >
@@ -229,7 +218,7 @@ export function DataSettingsTab({
               onClick={() => void data.runClaudeImport()}
               disabled={data.claudeImporting || data.claudeConfirming}
             >
-              {data.claudeImporting ? "Reading export…" : "Import From Claude"}
+              {data.claudeImporting ? "Reading Export…" : "Import From Claude"}
             </button>
           </SettingsActions>
           {data.importStatus != null && (
@@ -289,12 +278,7 @@ export function DataSettingsTab({
           <MemoryFactImportSection memory={memory} />
         </SettingsGroup>
 
-        <SettingsGroup
-          title="Paths"
-          description="On-disk folders for app data and local voice recordings. Backup syncs everything except recordings."
-          collapsible
-          defaultOpen={false}
-        >
+        <SettingsGroup title="Paths" collapsible defaultOpen={false}>
           <SettingsActions>
             <button type="button" className="btn" onClick={() => window.harness.memory.openAppDataFolder()}>
               {appDataFolderButtonLabel(platform)} <ExternalLink size={14} aria-hidden />
@@ -309,7 +293,7 @@ export function DataSettingsTab({
             {data.dataStatus?.legacyMemoryExists && (
               <button
                 type="button"
-                className="btn"
+                className="btn btn-danger"
                 onClick={() => void data.runCleanupLegacyMemory()}
                 disabled={data.cleanupLegacyBusy}
               >
@@ -317,6 +301,7 @@ export function DataSettingsTab({
               </button>
             )}
           </SettingsActions>
+          <SettingsHint flush>Backup syncs everything except recordings.</SettingsHint>
           {data.dataStatus?.legacyMemoryExists && data.cleanupLegacyMessage && (
             <SettingsHint flush>{data.cleanupLegacyMessage}</SettingsHint>
           )}

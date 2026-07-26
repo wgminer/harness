@@ -7,7 +7,7 @@ export const RIG_PAGE_TITLE = "System";
 /** Tab label for notes windows and editor templates (`notes` tab id). */
 export const RIG_NOTES_TAB_LABEL = "Notes";
 
-/** Reference a section tab in errors and hints, e.g. "System → Tools". */
+/** Reference a section tab in errors and hints, e.g. "System → Data". */
 export function rigSection(section: string): string {
   return `${RIG_PAGE_TITLE} → ${section}`;
 }

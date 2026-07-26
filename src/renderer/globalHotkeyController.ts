@@ -1,17 +1,24 @@
 import { playCancelChime, playStartChime, playStopChime } from "./recordingUtils";
 import type { Conversation } from "./sidebarUtils";
 
+export type GlobalHotkeyOverlayPhase = "idle" | "recording" | "transcribing" | "failed";
+
 export type GlobalHotkeyActions = {
-  setGlobalHotkeyRecording: (active: boolean) => void;
-  setGlobalHotkeyError: (message: string | null) => void;
+  /** True while this Fn take uses the full-screen overlay (unfocused start). */
+  setGlobalHotkeyOverlaySession: (active: boolean) => void;
+  setGlobalHotkeyOverlayPhase: (phase: GlobalHotkeyOverlayPhase) => void;
+  setGlobalHotkeyError: (message: string | null, recordingPath?: string | null) => void;
   setView: (view: "chat") => void;
   setConversationId: (id: string | null) => void;
   setFocusComposerNonce: (updater: (n: number) => number) => void;
   setPendingHotkeyText: (text: string | null) => void;
   setPendingHotkeyDraftOnly: (value: boolean) => void;
   setConversations: (updater: (prev: Conversation[]) => Conversation[]) => void;
-  loadConversations: () => Promise<void>;
+  refreshConversations: () => Promise<void>;
+  markTitleAwaiting: (id: string) => void;
   getConversationId: () => string | null;
+  /** Whether the current take is showing the overlay session. */
+  getOverlaySession: () => boolean;
 };
 
 let actions: GlobalHotkeyActions | null = null;
@@ -25,30 +32,56 @@ export function resetGlobalHotkeyControllerForTests(): void {
   actions = null;
 }
 
+function clearOverlay(): void {
+  actions?.setGlobalHotkeyOverlaySession(false);
+  actions?.setGlobalHotkeyOverlayPhase("idle");
+  actions?.setGlobalHotkeyError(null, null);
+}
+
 export function createGlobalHotkeyController(): () => void {
-  const unsubStarted = window.harness.recording.onGlobalRecordingStarted(() => {
-    actions?.setGlobalHotkeyError(null);
-    actions?.setGlobalHotkeyRecording(true);
+  const unsubStarted = window.harness.recording.onGlobalRecordingStarted(({ focused }) => {
+    actions?.setGlobalHotkeyError(null, null);
+    if (focused) {
+      actions?.setGlobalHotkeyOverlaySession(false);
+      actions?.setGlobalHotkeyOverlayPhase("idle");
+    } else {
+      actions?.setGlobalHotkeyOverlaySession(true);
+      actions?.setGlobalHotkeyOverlayPhase("recording");
+    }
     void playStartChime();
   });
 
   const unsubStopped = window.harness.recording.onGlobalRecordingStopped(() => {
-    actions?.setGlobalHotkeyRecording(false);
+    // Overlay stays up until transcribing / ready / error; only chime here.
     void playStopChime();
   });
 
+  const unsubTranscribing = window.harness.recording.onGlobalRecordingTranscribing(({ recordingPath }) => {
+    if (!actions?.getOverlaySession()) return;
+    if (recordingPath) {
+      actions.setGlobalHotkeyError(null, recordingPath);
+    }
+    actions.setGlobalHotkeyOverlayPhase("transcribing");
+  });
+
   const unsubCancelled = window.harness.recording.onGlobalRecordingCancelled(() => {
-    actions?.setGlobalHotkeyRecording(false);
+    clearOverlay();
     void playCancelChime();
   });
 
-  const unsubError = window.harness.recording.onGlobalRecordingError((message) => {
-    actions?.setGlobalHotkeyRecording(false);
-    actions?.setGlobalHotkeyError(message);
+  const unsubError = window.harness.recording.onGlobalRecordingError(({ message, recordingPath }) => {
+    if (actions?.getOverlaySession()) {
+      actions.setGlobalHotkeyError(message, recordingPath ?? null);
+      actions.setGlobalHotkeyOverlayPhase("failed");
+      return;
+    }
+    // Focused path: lightweight chip (App auto-clears).
+    actions?.setGlobalHotkeyOverlayPhase("idle");
+    actions?.setGlobalHotkeyError(message, null);
   });
 
   const unsubTranscriptReady = window.harness.recording.onGlobalTranscriptReady((text) => {
-    actions?.setGlobalHotkeyError(null);
+    clearOverlay();
     actions?.setView("chat");
     if (!actions?.getConversationId()) {
       actions?.setConversationId(null);
@@ -60,16 +93,40 @@ export function createGlobalHotkeyController(): () => void {
 
   const unsubTranscriptDelivered = window.harness.recording.onGlobalTranscriptDelivered(
     (conversationId) => {
-      actions?.setGlobalHotkeyError(null);
+      clearOverlay();
       actions?.setView("chat");
       actions?.setConversationId(conversationId);
-      void actions?.loadConversations();
+      actions?.markTitleAwaiting(conversationId);
+      // Seed sidebar immediately so selection is not dropped before list refresh.
+      actions?.setConversations((prev) => {
+        if (prev.some((c) => c.id === conversationId)) {
+          return prev.map((c) =>
+            c.id === conversationId
+              ? { ...c, hasMessages: true, sessionKind: "dictation" as const }
+              : c,
+          );
+        }
+        return [
+          {
+            id: conversationId,
+            title: null,
+            createdAt: Date.now(),
+            sessionKind: "dictation",
+            hasMessages: true,
+          },
+          ...prev,
+        ];
+      });
+      // refreshConversations preserves the selected id; loadConversations would
+      // reset to compose when openToComposeOnLaunch is on.
+      void actions?.refreshConversations();
     },
   );
 
   return () => {
     unsubStarted();
     unsubStopped();
+    unsubTranscribing();
     unsubCancelled();
     unsubError();
     unsubTranscriptReady();

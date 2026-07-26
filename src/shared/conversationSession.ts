@@ -28,15 +28,15 @@ export function isSidebarVisibleConversation(row: ConversationListRow): boolean 
   return row.hasMessages === true;
 }
 
-/** Fallback when a conversation has no stored title (matches historical sidebar labels). */
-export function formatNewChatLabel(createdAt: number): string {
+/** Settled fallback when a conversation has no stored title (display-only; not written mid-flight). */
+export function formatEmptyChatLabel(createdAt: number): string {
   return (
     "Empty chat @ " +
     new Date(createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
   );
 }
 
-/** True while the title LLM runs — show a skeleton instead of placeholder text. */
+/** True while a real title is still expected — show a skeleton instead of any time-placeholder. */
 export function isConversationTitlePending(
   title: string | null | undefined,
   titleGenerating: boolean
@@ -51,8 +51,8 @@ export function conversationDisplayTitle(
 ): string {
   const t = title?.trim();
   if (t) return t;
-  if (createdAt != null) return formatNewChatLabel(createdAt);
-  return formatNewChatLabel(Date.now());
+  if (createdAt != null) return formatEmptyChatLabel(createdAt);
+  return formatEmptyChatLabel(Date.now());
 }
 
 /** Sidebar icon: mic for dictation-only, message bubble once it is or becomes a chat. */

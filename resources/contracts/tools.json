@@ -66,11 +66,16 @@
     "type": "function",
     "function": {
       "name": "set_layout",
-      "description": "Change app layout: sidebar position (left/right).",
+      "description": "Change app layout: sidebar position (left/right) and wide-window view (centered/scaled).",
       "parameters": {
         "type": "object",
         "properties": {
-          "sidebar": { "type": "string", "enum": ["left", "right"], "description": "Sidebar position" }
+          "sidebar": { "type": "string", "enum": ["left", "right"], "description": "Sidebar position" },
+          "wideView": {
+            "type": "string",
+            "enum": ["scaled", "centered"],
+            "description": "On large windows: stretch edge-to-edge, or center a readable chrome block (width and height)"
+          }
         }
       }
     }

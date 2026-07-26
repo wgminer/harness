@@ -83,6 +83,7 @@ Short list only — refresh when something ships.
 
 - [ ] **CSS consolidation** for the fixed dark theme (fewer one-off surfaces).
 - [ ] **Empty / loading / error** polish on primary desktop + iOS surfaces.
+- [x] **Desktop dictation transcription screen** — polish recording overlay / “Transcribing…” UI in dictation mode.
 - [ ] **iOS long-message** overflow / tap-to-expand.
 - [ ] **More shared contracts** under `resources/contracts/` (prompts, model names, sync scopes) + parity tests.
 - [ ] **God-file splits** — keep chipping `SettingsView.tsx` and `sync.rs`.
@@ -95,7 +96,7 @@ Short list only — refresh when something ships.
 ### 2026-07 — v0.8 Consolidation `[O2][O4][O5]`
 
 - **Cull** — Removed unfinished Plans objects, weather tool, nightly memory compile; theme studio already gone. Legacy `plans.json` ignored in sync merge.
-- **Sync QR pairing** — Desktop **Show sync QR** + iOS **Set up sync** (`pairingPayload`, `SyncQrModal`, `SyncPairingSheet`).
+- **Sync QR pairing** — Desktop **Show Sync QR** + iOS **Set up sync** (`pairingPayload`, `SyncQrModal`, `SyncPairingSheet`).
 - **Dev profile** — `HARNESS_DEV` → separate Application Support + **Harness Dev** window title.
 - **Release hygiene** — Non-interactive updater signing password default; single-source version bump; parity tests.
 - **Contracts** — `resources/contracts/tools.json` shared across TS/Rust/Swift; `ipcNames` ↔ `generate_handler!` guard.

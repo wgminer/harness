@@ -6,7 +6,8 @@ use tauri::{AppHandle, Emitter};
 use crate::credentials::resolve_openai_api_key;
 use crate::env_util::is_harness_e2e;
 use crate::memory::{
-    mark_voice_dictation_session, AppState, ConversationTitleSource, MessageRecord,
+  format_voice_dictation_title, mark_voice_dictation_session, AppState, ConversationMeta,
+  ConversationSessionKind, ConversationTitleSource, MessageRecord,
 };
 use crate::openai::generate_thread_title_with_openai;
 
@@ -54,6 +55,40 @@ pub fn fallback_title_from_messages(messages: &[MessageRecord]) -> Option<String
     truncated = cleaned.chars().take(FALLBACK_TITLE_MAX_CHARS).collect();
   }
   Some(truncated)
+}
+
+fn settled_fallback_title(messages: &[MessageRecord], meta: &ConversationMeta) -> Option<String> {
+  if let Some(from_messages) = fallback_title_from_messages(messages) {
+    return Some(from_messages);
+  }
+  if matches!(meta.session_kind, Some(ConversationSessionKind::Dictation)) {
+    return Some(format_voice_dictation_title());
+  }
+  None
+}
+
+async fn apply_fallback_title_if_placeholder(
+  app: &AppHandle,
+  state: &AppState,
+  conversation_id: &str,
+  generation: u64,
+  messages: &[MessageRecord],
+  meta: &ConversationMeta,
+) -> Result<(), String> {
+  if !is_current_title_refine_generation(conversation_id, generation) {
+    return Ok(());
+  }
+  if !is_time_placeholder_title(meta.title.as_deref()) {
+    return Ok(());
+  }
+  let Some(fallback) = settled_fallback_title(messages, meta) else {
+    return Ok(());
+  };
+  crate::memory::patch_conversation_auto_title(state, conversation_id, &fallback)
+    .await
+    .map_err(|e| e.to_string())?;
+  emit_conversation_title_updated(app, conversation_id);
+  Ok(())
 }
 
 pub fn should_refine_conversation_title(messages: &[MessageRecord], title: Option<&str>) -> bool {
@@ -112,15 +147,16 @@ pub fn emit_title_generation_ended(app: &AppHandle, conversation_id: &str) {
   );
 }
 
-/// Placeholder dictation title + async LLM refinement (single entry point for voice sessions).
+/// Mark dictation session kind + async LLM refinement (single entry point for voice sessions).
+/// Interim `Dictation @ …` is not written; that label is only a settled fallback.
 pub async fn finalize_voice_dictation_session(
-    app: AppHandle,
-    state: &AppState,
-    conversation_id: &str,
+  app: AppHandle,
+  state: &AppState,
+  conversation_id: &str,
 ) -> Result<String, std::io::Error> {
-    let title = mark_voice_dictation_session(state, conversation_id).await?;
-    schedule_conversation_title_refinement(app, state.clone(), conversation_id.to_string());
-    Ok(title)
+  mark_voice_dictation_session(state, conversation_id).await?;
+  schedule_conversation_title_refinement(app, state.clone(), conversation_id.to_string());
+  Ok(String::new())
 }
 
 /// Generation counter so a newer refine for the same conversation wins (user then assistant).
@@ -179,25 +215,25 @@ pub fn schedule_conversation_title_refinement(
       if context.trim().is_empty() {
         return Ok(());
       }
-      let openai_key = resolve_openai_api_key().await.trim().to_string();
-      if openai_key.is_empty() {
-        // Still give the sidebar something better than "Empty chat @ …".
-        if is_time_placeholder_title(meta.title.as_deref()) {
-          if let Some(fallback) = fallback_title_from_messages(&messages) {
-            if !is_current_title_refine_generation(&conversation_id, generation) {
-              return Ok(());
-            }
-            crate::memory::patch_conversation_auto_title(&state, &conversation_id, &fallback)
-              .await
-              .map_err(|e| e.to_string())?;
-            emit_conversation_title_updated(&app, &conversation_id);
-          }
-        }
-        return Ok(());
-      }
 
+      // Notify before the API key check so the UI shimmers for no-key fallback too.
       emit_title_generation_started(&app, &conversation_id);
       notified_start = true;
+
+      let openai_key = resolve_openai_api_key().await.trim().to_string();
+      if openai_key.is_empty() {
+        // Prefer a message snippet (or Dictation label) over a display-only empty-chat placeholder.
+        apply_fallback_title_if_placeholder(
+          &app,
+          &state,
+          &conversation_id,
+          generation,
+          &messages,
+          &meta,
+        )
+        .await?;
+        return Ok(());
+      }
 
       // Match iOS: don't treat time placeholders as a real previous title.
       let previous_title = meta
@@ -215,11 +251,11 @@ pub fn schedule_conversation_title_refinement(
       let mut title = clean_title(raw_title.as_deref().unwrap_or(""));
       if title.is_empty() {
         // UNCHANGED / empty model output: keep an existing real title; only fall back
-        // when the sidebar would otherwise stay on "Empty chat @ …".
+        // when storage is still untitled / time-placeholder.
         if !is_time_placeholder_title(meta.title.as_deref()) {
           return Ok(());
         }
-        title = fallback_title_from_messages(&messages).unwrap_or_default();
+        title = settled_fallback_title(&messages, &meta).unwrap_or_default();
       }
       if title.is_empty() {
         return Ok(());
@@ -239,24 +275,25 @@ pub fn schedule_conversation_title_refinement(
 
     if let Err(err) = result {
       eprintln!("[title] LLM title generation failed: {err}");
-      // Best-effort local title so new chats don't stay on "Empty chat @ …".
-      if is_current_title_refine_generation(&conversation_id, generation) {
-        if let Ok(messages) = crate::memory::get_messages(&state, &conversation_id).await {
-          if let Ok(Some(meta)) = crate::memory::get_conversation_meta_for_id(&state, &conversation_id).await {
-            if is_time_placeholder_title(meta.title.as_deref()) {
-              if let Some(fallback) = fallback_title_from_messages(&messages) {
-                if crate::memory::patch_conversation_auto_title(&state, &conversation_id, &fallback)
-                  .await
-                  .is_ok()
-                {
-                  emit_conversation_title_updated(&app, &conversation_id);
-                }
-              }
-            }
-          }
+      // Best-effort local title so untitled threads don't stay pending forever.
+      if let Ok(messages) = crate::memory::get_messages(&state, &conversation_id).await {
+        if let Ok(Some(meta)) =
+          crate::memory::get_conversation_meta_for_id(&state, &conversation_id).await
+        {
+          let _ = apply_fallback_title_if_placeholder(
+            &app,
+            &state,
+            &conversation_id,
+            generation,
+            &messages,
+            &meta,
+          )
+          .await;
         }
       }
     }
+    // Always pair ended with started so the UI refcount cannot stick; superseded gens
+    // still decrement, overlapping newer gens keep refcount > 0.
     if notified_start {
       emit_title_generation_ended(&app, &conversation_id);
     }
@@ -275,6 +312,21 @@ mod tests {
       timestamp: None,
       model: None,
       attachments: None,
+    }
+  }
+
+  fn meta(title: Option<&str>, kind: Option<ConversationSessionKind>) -> ConversationMeta {
+    ConversationMeta {
+      title: title.map(str::to_string),
+      created_at: 0,
+      is_from_chat_gpt: None,
+      chatgpt_id: None,
+      is_from_claude: None,
+      claude_id: None,
+      title_source: None,
+      session_kind: kind,
+      has_assistant_reply: None,
+      has_messages: None,
     }
   }
 
@@ -303,5 +355,25 @@ mod tests {
       &[msg("user", "hello")],
       None
     ));
+  }
+
+  #[test]
+  fn settled_fallback_prefers_message_snippet() {
+    let title = settled_fallback_title(
+      &[msg("user", "Buy milk")],
+      &meta(None, Some(ConversationSessionKind::Dictation)),
+    )
+    .unwrap();
+    assert_eq!(title, "Buy milk");
+  }
+
+  #[test]
+  fn settled_fallback_uses_dictation_label_when_no_user_text() {
+    let title = settled_fallback_title(
+      &[msg("assistant", "hi")],
+      &meta(None, Some(ConversationSessionKind::Dictation)),
+    )
+    .unwrap();
+    assert!(title.starts_with("Dictation @ "));
   }
 }

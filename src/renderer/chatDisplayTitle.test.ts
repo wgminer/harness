@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   conversationDisplayTitle,
-  formatNewChatLabel,
+  formatEmptyChatLabel,
   isConversationTitlePending,
 } from "./chatDisplayTitle";
 
@@ -15,14 +15,15 @@ describe("chatDisplayTitle", () => {
     expect(conversationDisplayTitle("New chat @ 3:45 PM")).toBe("New chat @ 3:45 PM");
   });
 
-  it("falls back to new chat label when title is empty", () => {
+  it("falls back to empty-chat label when title is empty and not pending", () => {
     const createdAt = 1_700_000_000_000;
-    expect(conversationDisplayTitle("   ", createdAt)).toBe(formatNewChatLabel(createdAt));
+    expect(conversationDisplayTitle("   ", createdAt)).toBe(formatEmptyChatLabel(createdAt));
   });
 
-  it("uses skeleton state while title LLM runs on a placeholder", () => {
+  it("uses skeleton state for any time-placeholder while a title is expected", () => {
     expect(isConversationTitlePending(null, true)).toBe(true);
     expect(isConversationTitlePending("Dictation @ 3:45 PM", true)).toBe(true);
+    expect(isConversationTitlePending("Empty chat @ 3:45 PM", true)).toBe(true);
     expect(isConversationTitlePending("Weekly plan", true)).toBe(false);
     expect(isConversationTitlePending(null, false)).toBe(false);
   });

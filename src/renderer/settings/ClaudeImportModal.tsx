@@ -61,19 +61,19 @@ export function ClaudeImportModal({
   const confirmLabel = (() => {
     if (confirming) return "Importing…";
     if (selectedExisting > 0 && selectedCount === selectedExisting) {
-      return `Refresh ${selectedCount} conversation${selectedCount !== 1 ? "s" : ""}`;
+      return `Refresh ${selectedCount} Conversation${selectedCount !== 1 ? "s" : ""}`;
     }
     if (selectedExisting > 0) {
-      return `Import / refresh ${selectedCount}`;
+      return `Import / Refresh ${selectedCount}`;
     }
-    return `Import ${selectedCount} conversation${selectedCount !== 1 ? "s" : ""}`;
+    return `Import ${selectedCount} Conversation${selectedCount !== 1 ? "s" : ""}`;
   })();
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Import from Claude"
+      title="Import From Claude"
       closeDisabled={confirming}
       variant="scrollable"
       size="lg"
@@ -122,11 +122,21 @@ export function ClaudeImportModal({
           ) : (
             <>
               <div className="claude-import-review__toolbar">
-                <button type="button" className="btn btn-sm" onClick={onSelectAll} disabled={confirming}>
-                  Select all
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  onClick={onSelectAll}
+                  disabled={confirming}
+                >
+                  Select All
                 </button>
-                <button type="button" className="btn btn-sm" onClick={onSelectNone} disabled={confirming}>
-                  Select none
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  onClick={onSelectNone}
+                  disabled={confirming}
+                >
+                  Select None
                 </button>
                 <span className="claude-import-review__count">
                   {selectedCount} of {total} selected

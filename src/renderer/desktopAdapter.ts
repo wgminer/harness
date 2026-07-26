@@ -205,6 +205,10 @@ export function createHarnessAdapter(): HarnessAPI {
     fileTools: {
       getAllowedRoots: () => invoke<string[]>(cmd("fileTools:getAllowedRoots")),
     },
+    search: {
+      lookupImage: (query: string) =>
+        invoke(cmd("search:lookupImage"), { query }),
+    },
     notes: {
       list: () => invoke(cmd("notes:list")),
       create: (title?: string, content?: string) =>
@@ -261,15 +265,40 @@ export function createHarnessAdapter(): HarnessAPI {
       pasteText: (text: string) => invoke(cmd("recording:pasteText"), { text }),
       getGlobalStatus: () =>
         invoke<GlobalRecordingStatus>(cmd("recording:getGlobalStatus")),
+      retryGlobalTranscription: (path: string) =>
+        invoke(cmd("recording:retryGlobalTranscription"), { path }),
+      cancelGlobalTranscription: () =>
+        invoke(cmd("recording:cancelGlobalTranscription")),
+      cancelGlobalSession: () => invoke(cmd("recording:cancelGlobalSession")),
+      stopGlobalRecording: () => invoke(cmd("recording:stopGlobalRecording")),
       onGlobalRecordingStarted: (cb) =>
-        subscribeToWire<Record<string, never>>("global-recording-started", () => cb()),
+        subscribeToWire<{ focused?: boolean }>("global-recording-started", (p) =>
+          cb({ focused: p?.focused === true }),
+        ),
       onGlobalRecordingStopped: (cb) =>
         subscribeToWire<Record<string, never>>("global-recording-stopped", () => cb()),
+      onGlobalRecordingTranscribing: (cb) =>
+        subscribeToWire<{ recordingPath?: string }>("global-recording-transcribing", (p) =>
+          cb({
+            recordingPath:
+              typeof p?.recordingPath === "string" && p.recordingPath.length > 0
+                ? p.recordingPath
+                : undefined,
+          }),
+        ),
       onGlobalRecordingCancelled: (cb) =>
         subscribeToWire<Record<string, never>>("global-recording-cancelled", () => cb()),
       onGlobalRecordingError: (cb) =>
-        subscribeToWire<{ message?: string }>("global-recording-error", (p) =>
-          cb(p?.message ?? "Recording failed."),
+        subscribeToWire<{ message?: string; recordingPath?: string }>(
+          "global-recording-error",
+          (p) =>
+            cb({
+              message: p?.message ?? "Recording failed.",
+              recordingPath:
+                typeof p?.recordingPath === "string" && p.recordingPath.length > 0
+                  ? p.recordingPath
+                  : undefined,
+            }),
         ),
       onGlobalRecordingLevel: (cb) =>
         subscribeToWire<{ level?: number }>("global-recording-level", (p) => {

@@ -43,7 +43,7 @@ export function SecretField({
         title={show ? "Hide key" : "Show key"}
         onClick={() => setShow((v) => !v)}
       >
-        {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
     </div>
   );

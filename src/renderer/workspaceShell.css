@@ -27,7 +27,7 @@
   margin: 0 auto;
   width: 100%;
   min-height: var(--input-height);
-  padding: 0 var(--space-4);
+  padding: 0 var(--shell-pad-inline);
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -58,7 +58,7 @@
 .workspace-content {
   max-width: var(--content-width);
   margin: 0 auto;
-  padding: var(--space-2) var(--space-4) var(--space-12);
+  padding: var(--space-2) var(--shell-pad-inline) var(--space-12);
 }
 
 /** Vertical stack for list pages (Tasks, Editor) — one gap token, no sibling margins. */

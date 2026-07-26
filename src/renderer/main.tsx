@@ -5,6 +5,7 @@ import type { Settings } from "../shared/types";
 import { createHarnessAdapter } from "./desktopAdapter";
 import { initGlobalHotkeyController } from "./globalHotkeyController";
 import { RootApp } from "./RootApp";
+import { setCachedSettings } from "./settings/settingsSessionCache";
 import { isCurrentStickyWindow } from "./stickyWindow";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
@@ -29,6 +30,7 @@ window.harness = createHarnessAdapter();
 void (async () => {
   try {
     const settings = (await window.harness.settings.get()) as Settings;
+    setCachedSettings(settings);
     applyAccent(settings.appearance?.accent);
   } catch {
     // Keep CSS default accent if settings fail to load.

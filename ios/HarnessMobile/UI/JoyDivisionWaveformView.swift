@@ -3,12 +3,14 @@ import UIKit
 /// Joy Division ridgeline drawn with Core Graphics. Owns row history and a CADisplayLink
 /// paint loop so SwiftUI never rebuilds paths or `@State` arrays on meter ticks.
 final class JoyDivisionWaveformView: UIView {
+    /// When set, each display-link tick samples `currentMeterLevel` (no SwiftUI publish path).
+    weak var meterSource: AudioRecorder?
     var level: CGFloat = 0
     var strokeColor: UIColor = .label {
         didSet { setNeedsDisplay() }
     }
 
-    var rowCount: Int = 28
+    var rowCount: Int = 18
     var pointsPerRow: Int = 32
     /// Matches desktop `PUSH_INTERVAL_MS` (70).
     var pushInterval: TimeInterval = 0.07
@@ -27,8 +29,8 @@ final class JoyDivisionWaveformView: UIView {
     private var lastPushAt: TimeInterval = 0
     private var lastFrameAt: TimeInterval = 0
     private var displayLink: CADisplayLink?
-    /// Match desktop `FRAME_MS = 1000 / 24`.
-    private let minFrameInterval: TimeInterval = 1.0 / 24.0
+    /// Prefer ~20 fps while recording to leave headroom for metering on the main run loop.
+    private let minFrameInterval: TimeInterval = 1.0 / 20.0
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -73,7 +75,7 @@ final class JoyDivisionWaveformView: UIView {
     private func startDisplayLink() {
         guard displayLink == nil else { return }
         let link = CADisplayLink(target: self, selector: #selector(tickDisplayLink(_:)))
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 30, preferred: 24)
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 24, preferred: 20)
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
@@ -84,14 +86,20 @@ final class JoyDivisionWaveformView: UIView {
     }
 
     @objc private func tickDisplayLink(_ link: CADisplayLink) {
-        let now = link.timestamp
-        if !UIAccessibility.isReduceMotionEnabled {
-            pushRowIfNeeded(level: level, at: now)
+        // CADisplayLink is on RunLoop.main — same isolation as AudioRecorder.
+        MainActor.assumeIsolated {
+            if let meterSource {
+                level = meterSource.currentMeterLevel
+            }
+            let now = link.timestamp
+            if !UIAccessibility.isReduceMotionEnabled {
+                pushRowIfNeeded(level: level, at: now)
+            }
+            guard now - lastFrameAt >= minFrameInterval else { return }
+            lastFrameAt = now
+            updateAccessibilityValue()
+            setNeedsDisplay()
         }
-        guard now - lastFrameAt >= minFrameInterval else { return }
-        lastFrameAt = now
-        updateAccessibilityValue()
-        setNeedsDisplay()
     }
 
     // MARK: - History
@@ -166,12 +174,14 @@ final class JoyDivisionWaveformView: UIView {
         let plotMaxY = plotMinY + plotHeight
 
         // Profiles reach up to ~1.55 (jaggedNoise clamp). Reserve that much headroom above
-        // the first baseline so tall peaks render inside the view instead of clipping at
-        // the top edge.
+        // the first baseline (plus a little for stroke/miter) so tall peaks render inside
+        // the view instead of clipping at the top edge.
         let maxProfileValue: CGFloat = 1.55
-        let rowSpacing = plotHeight / (CGFloat(rowCount - 1) + peakRowMultiples * maxProfileValue)
+        let strokePad: CGFloat = 2
+        let usableHeight = max(plotHeight - strokePad, 1)
+        let rowSpacing = usableHeight / (CGFloat(rowCount - 1) + peakRowMultiples * maxProfileValue)
         let peakScale = rowSpacing * peakRowMultiples
-        let firstBaselineY = plotMinY + peakScale * maxProfileValue
+        let firstBaselineY = plotMinY + strokePad + peakScale * maxProfileValue
         let occludeDepth = peakScale + rowSpacing
         let liveAmplitude = displayAmplitude(for: level, at: now)
         let occlusion = UIColor.systemBackground.cgColor

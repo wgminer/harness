@@ -23,8 +23,12 @@ const IDLE_THRESHOLD = 0.02;
 /** Mic peaks are often small; boost before shaping so speech moves the field. */
 const LEVEL_GAIN = 10;
 const PEAK_ROW_MULTIPLES = 6.2;
+/** Matches `jaggedNoise` clamp; used to reserve headroom above the first baseline. */
+const MAX_PROFILE_VALUE = 1.55;
 const STROKE = "#ffffff";
 const OCCLUSION = "#111111";
+/** Keep stroke/miter tips inside the canvas when peaks hit full amplitude. */
+const STROKE_PAD = 2;
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -174,8 +178,15 @@ export function JoyDivisionField({
       const insetY = height * 0.08;
       const plotW = width - insetX * 2;
       const plotH = height - insetY * 2;
-      const rowSpacing = plotH / (rowCount - 1);
+      const plotMaxY = insetY + plotH;
+      // Profiles reach up to MAX_PROFILE_VALUE. Reserve that much headroom above
+      // the first baseline so tall peaks render inside the canvas instead of
+      // clipping at the top edge (parity with iOS JoyDivisionWaveformView).
+      const usableHeight = Math.max(plotH - STROKE_PAD, 1);
+      const rowSpacing =
+        usableHeight / (rowCount - 1 + PEAK_ROW_MULTIPLES * MAX_PROFILE_VALUE);
       const peakScale = rowSpacing * PEAK_ROW_MULTIPLES;
+      const firstBaselineY = insetY + STROKE_PAD + peakScale * MAX_PROFILE_VALUE;
       const occludeDepth = peakScale + rowSpacing;
       const liveAmp = displayAmplitude(levelRef.current ?? 0, now);
 
@@ -183,14 +194,14 @@ export function JoyDivisionField({
 
       for (let index = 0; index < rows.length; index++) {
         const row = rows[index]!;
-        const baselineY = insetY + index * rowSpacing;
+        const baselineY = firstBaselineY + index * rowSpacing;
         const amplitude = index === rows.length - 1 ? liveAmp : row.level;
         const profile = row.profile;
         const lastIndex = profile.length - 1;
         if (lastIndex < 1) continue;
 
         const invLast = 1 / lastIndex;
-        const fillBottom = Math.min(insetY + plotH + 2, baselineY + occludeDepth);
+        const fillBottom = Math.min(plotMaxY + 2, baselineY + occludeDepth);
 
         ctx.beginPath();
         const x0 = insetX;

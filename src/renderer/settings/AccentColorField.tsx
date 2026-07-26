@@ -73,7 +73,7 @@ export function AccentColorField({ value, onChange }: AccentColorFieldProps) {
           {normalized !== DEFAULT_ACCENT ? (
             <button
               type="button"
-              className="btn settings-accent__reset"
+              className="btn btn-outline settings-accent__reset"
               onClick={() => commit(DEFAULT_ACCENT)}
             >
               Reset

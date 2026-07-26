@@ -119,10 +119,11 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     @Published private(set) var isRecording = false
     @Published private(set) var elapsedMs: Int = 0
-    /// Single metering publish for the waveform leaf (~12 Hz). History lives in the view.
-    @Published private(set) var audioLevel: CGFloat = 0
     /// Highest smoothed level seen while this take was recording (for pre-transcribe validation).
-    @Published private(set) var peakLevelDuringSession: CGFloat = 0
+    /// Not `@Published` — updated mid-record without waking SwiftUI observers.
+    private(set) var peakLevelDuringSession: CGFloat = 0
+    /// Latest smoothed meter for UIKit waveform sampling (CADisplayLink). Not `@Published`.
+    private(set) var currentMeterLevel: CGFloat = 0
     /// File left on disk after an unexpected teardown (interruption / media-reset / route fail).
     /// Cleared on the next intentional cancel or successful `start()`.
     private(set) var preservedRecordingURL: URL?
@@ -137,8 +138,6 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private var smoothedLevel: Float = 0
     private var heldPeak: Float = 0
     private var peakHoldRemaining = 0
-    /// Counts metering ticks so we can publish to SwiftUI at a lower rate.
-    private var publishTick = 0
     /// Bumped on every `cancel()` so an in-flight `start()` cannot leave the mic on after teardown.
     private var startGeneration = 0
     private var sessionObservers: [NSObjectProtocol] = []
@@ -188,32 +187,27 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
         try ensureStartStillValid(generation)
 
-        let session = AVAudioSession.sharedInstance()
-        try session.setActive(true)
-        try ensureStartStillValid(generation)
-
-        let url = try RecordingStorage.newRecordingURL()
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44_100,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-        ]
-
-        let recorder = try AVAudioRecorder(url: url, settings: settings)
-        recorder.delegate = self
-        recorder.isMeteringEnabled = true
-        guard recorder.record() else { throw AudioRecorderError.failedToStart }
+        // setActive / AVAudioRecorder init / record() are blocking media-server IPC —
+        // run them off the MainActor so sheet presentation stays smooth.
+        let capture: CaptureStartResult
+        do {
+            capture = try await Task.detached(priority: .userInitiated) {
+                try Self.activateAndBeginCapture()
+            }.value
+        } catch {
+            try ensureStartStillValid(generation)
+            throw error
+        }
 
         if generation != startGeneration || Task.isCancelled {
-            recorder.stop()
-            try? FileManager.default.removeItem(at: url)
+            Self.discardCapture(capture)
             deactivateSession()
             throw CancellationError()
         }
 
-        self.recorder = recorder
-        outputURL = url
+        capture.recorder.delegate = self
+        self.recorder = capture.recorder
+        outputURL = capture.url
         isRecording = true
         intentionalStop = false
         startedAt = Date()
@@ -221,7 +215,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         resetWaveform()
         installSessionObservers()
         startTimer()
-        return url
+        return capture.url
     }
 
     @discardableResult
@@ -237,7 +231,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         outputURL = nil
         preservedRecordingURL = nil
         // Keep peakLevelDuringSession until the caller validates / resets.
-        let level = audioLevel
+        let level = currentMeterLevel
         resetWaveformPublishing()
         // Preserve peak for validation after stop.
         peakLevelDuringSession = max(peakLevelDuringSession, level)
@@ -271,7 +265,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         } else if let url {
             // Finalize on disk; leave peak/elapsed so the failure UI can still validate/retry.
             preservedRecordingURL = url
-            let level = audioLevel
+            let level = currentMeterLevel
             resetWaveformPublishing()
             peakLevelDuringSession = max(peakLevelDuringSession, level)
         }
@@ -462,16 +456,49 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         try Task.checkCancellation()
     }
 
+    /// Blocking media-server work — must not run on the MainActor.
+    private struct CaptureStartResult: @unchecked Sendable {
+        let recorder: AVAudioRecorder
+        let url: URL
+    }
+
+    nonisolated private static func activateAndBeginCapture() throws -> CaptureStartResult {
+        let session = AVAudioSession.sharedInstance()
+        try session.setActive(true)
+
+        let url = try RecordingStorage.newRecordingURL()
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44_100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+        ]
+
+        let recorder = try AVAudioRecorder(url: url, settings: settings)
+        recorder.isMeteringEnabled = true
+        guard recorder.record() else {
+            try? FileManager.default.removeItem(at: url)
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
+            throw AudioRecorderError.failedToStart
+        }
+        return CaptureStartResult(recorder: recorder, url: url)
+    }
+
+    nonisolated private static func discardCapture(_ capture: CaptureStartResult) {
+        capture.recorder.stop()
+        try? FileManager.default.removeItem(at: capture.url)
+    }
+
     private func startTimer() {
         stopTimer()
-        // Tick metering often for smoothing, but publish to SwiftUI much less often.
+        // Tick metering often for smoothing; elapsed publishes at tenths resolution (~10 Hz).
         // Scheduled on RunLoop.main, so the callback is already on the main actor.
         let timer = Timer(timeInterval: 0.033, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let startedAt = self.startedAt else { return }
                 let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
-                // Elapsed label only needs ~4 Hz; avoid rebuilding chrome every tick.
-                if ms - self.elapsedMs >= 250 || ms < self.elapsedMs {
+                // Match tenths display (m:ss.t) — publish every 100ms.
+                if ms - self.elapsedMs >= 100 || ms < self.elapsedMs {
                     self.elapsedMs = ms
                 }
                 self.tickMetering()
@@ -507,22 +534,18 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
         smoothedLevel = AudioRecorderMetering.smooth(current: smoothedLevel, toward: heldPeak)
         let level = CGFloat(smoothedLevel)
+        // Non-published — UIKit waveform samples via currentMeterLevel on CADisplayLink.
+        currentMeterLevel = level
         if level > peakLevelDuringSession {
             peakLevelDuringSession = level
         }
-
-        publishTick += 1
-        // Publish ~12 Hz — enough for the waveform; avoids SwiftUI rebuild storms.
-        guard publishTick % 3 == 0 else { return }
-        audioLevel = level
     }
 
     private func resetWaveform() {
         smoothedLevel = 0
         heldPeak = 0
         peakHoldRemaining = 0
-        publishTick = 0
-        audioLevel = 0
+        currentMeterLevel = 0
         peakLevelDuringSession = 0
     }
 
@@ -530,7 +553,6 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         smoothedLevel = 0
         heldPeak = 0
         peakHoldRemaining = 0
-        publishTick = 0
-        audioLevel = 0
+        currentMeterLevel = 0
     }
 }

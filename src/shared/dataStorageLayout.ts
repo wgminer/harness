@@ -1,4 +1,4 @@
-/** Label for the Settings → Data action that reveals the app data folder. */
+/** Label for the System → Data action that reveals the app data folder. */
 export function appDataFolderButtonLabel(platform: NodeJS.Platform): string {
   if (platform === "darwin") return "Show In Finder";
   if (platform === "win32") return "Show In File Explorer";

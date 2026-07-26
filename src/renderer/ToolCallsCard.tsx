@@ -62,7 +62,7 @@ function ToolCallRow({
       </div>
       {isPending && (
         <span className="tool-card-actions">
-          <button type="button" className="btn btn-sm" onClick={() => onToolConfirm(call, "proceed")}>
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => onToolConfirm(call, "proceed")}>
             Proceed
           </button>
           <button type="button" className="btn btn-sm" onClick={() => onToolConfirm(call, "cancel")}>

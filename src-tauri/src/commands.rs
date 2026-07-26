@@ -3,6 +3,7 @@
 use serde_json::Value;
 use tauri::{command, AppHandle, Emitter, State, Window};
 
+use crate::assistant_tools::lookup_image;
 use crate::chat::ChatController;
 use crate::credentials::{
     get_credential_status, get_secrets_for_settings, set_credential, CredentialKey,
@@ -520,6 +521,12 @@ pub async fn notes_propose_edit(input: Value) -> Result<Value, String> {
 pub async fn notes_spell_check(input: Value) -> Result<Value, String> {
     let proposal = propose_note_spell_check(&input).await.map_err(map_err)?;
     serde_json::to_value(proposal).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn search_lookup_image(query: String) -> Result<Value, String> {
+    let payload = lookup_image(&query).await;
+    serde_json::to_value(payload).map_err(map_err)
 }
 
 #[command(rename_all = "camelCase")]

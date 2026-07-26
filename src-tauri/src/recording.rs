@@ -448,18 +448,18 @@ pub async fn recording_cancel_transcription(
     Ok(())
 }
 
-/// Transcribe WAV bytes for global Fn hotkey (no cancellation).
+/// Transcribe WAV bytes for global Fn hotkey (supports cancellation via `cancel`).
 pub async fn transcribe_wav_bytes(
     app_state: &crate::memory::AppState,
     data: &[u8],
+    cancel: &mut tokio::sync::watch::Receiver<bool>,
 ) -> Result<String, String> {
     if is_harness_e2e() {
         return Ok(HARNESS_E2E_TRANSCRIBE_TEXT.into());
     }
 
-    let (_cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
     let settings = get_settings(&app_state.write_chains).await;
-    let text = transcribe_with_apple_speech(data, &mut cancel_rx).await?;
+    let text = transcribe_with_apple_speech(data, cancel).await?;
     let dictionary: Vec<DictionaryEntry> = settings
         .get("transcription")
         .and_then(|v| v.get("dictionary"))

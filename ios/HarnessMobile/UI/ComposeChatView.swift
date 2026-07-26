@@ -66,6 +66,12 @@ struct ComposeChatView: View {
                 dictationConversationId = nil
             }
         }
+        // Wait for NavigationStack push (~0.35s) before focusing so keyboard and push don't fight.
+        .task {
+            try? await Task.sleep(nanoseconds: Self.composerAutofocusDelayNs)
+            guard !Task.isCancelled else { return }
+            isComposerFocused = true
+        }
         .task {
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
@@ -79,6 +85,9 @@ struct ComposeChatView: View {
         }
     }
 
+    /// Matches typical NavigationStack push duration so keyboard opens after the transition.
+    private static let composerAutofocusDelayNs: UInt64 = 350_000_000
+
     private static var quoteLineSpacing: CGFloat {
         let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .title2).pointSize, weight: .semibold)
         let targetLineHeight = font.pointSize * 1.5
@@ -89,7 +98,7 @@ struct ComposeChatView: View {
         ChatComposerView(
             conversationId: "compose",
             isStreaming: false,
-            autofocusOnAppear: true,
+            autofocusOnAppear: false,
             startsExpanded: true,
             allowsCollapse: false,
             initialDraft: app.composeDraft,

@@ -21,7 +21,7 @@ struct SyncPairingSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Scan the QR from Mac Settings → Data → Show sync QR, or paste the sync code.")
+                    Text("Scan the QR from Harness on your Mac.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -39,7 +39,7 @@ struct SyncPairingSheet: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Paste sync code")
+                        Text("Or paste the sync code.")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         TextField("harness-pair:1:…", text: $pasteCode, axis: .vertical)
@@ -57,7 +57,7 @@ struct SyncPairingSheet: View {
                 }
                 .padding(20)
             }
-            .navigationTitle("Set up sync")
+            .navigationTitle("Scan QR code")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

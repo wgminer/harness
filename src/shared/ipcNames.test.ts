@@ -49,6 +49,7 @@ describe("tauriCommandName", () => {
     expect(tauriCommandName("images:list")).toBe("images_list");
     expect(tauriCommandName("images:create")).toBe("images_create");
     expect(tauriCommandName("images:generate")).toBe("images_generate");
+    expect(tauriCommandName("search:lookupImage")).toBe("search_lookup_image");
     expect(tauriCommandName("chat:getContextPreview")).toBe("chat_get_context_preview");
     expect(tauriCommandName("memory:linkDictationRecording")).toBe("memory_link_dictation_recording");
     expect(tauriCommandName("memory:getConversationRecordings")).toBe(

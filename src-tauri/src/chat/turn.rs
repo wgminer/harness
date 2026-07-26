@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use regex::Regex;
 use serde::Serialize;
-use serde_json::json;
 
 use crate::memory::{get_messages, get_user_memory, pop_last_user_message, AppendMessageMeta};
 use crate::openai::{tool_definitions, ChatMessageParam};
@@ -10,6 +9,7 @@ use crate::recent_conversations::build_recent_conversations_block;
 use crate::settings;
 use crate::system_prompt::{
     build_system_prompt, fields_from_settings, SystemPromptPreview, SystemPromptPreviewFact,
+    SystemPromptPreviewTool,
 };
 use crate::conversation_title::schedule_conversation_title_refinement;
 
@@ -153,6 +153,9 @@ impl ChatController {
                 .map_err(|e| e.to_string())?;
         let temporal_context = format_temporal_context_block();
         let fields = fields_from_settings(&settings);
+        let shared = fields.shared.clone();
+        let platform_overlay =
+            crate::system_prompt::platform_overlay(&fields, platform).to_string();
         let static_prompt = crate::system_prompt::build_static_system_prompt(&fields, platform);
         let assembled_prompt = build_system_prompt(
             &fields,
@@ -163,6 +166,8 @@ impl ChatController {
         );
         Ok(SystemPromptPreview {
             platform: platform.to_string(),
+            shared,
+            platform_overlay,
             static_prompt,
             memory_block,
             recent_conversations_block,
@@ -171,6 +176,13 @@ impl ChatController {
             selected_facts: selected_memory
                 .into_iter()
                 .map(|(key, value)| SystemPromptPreviewFact { key, value })
+                .collect(),
+            tools: tool_summaries_for_platform(platform)
+                .into_iter()
+                .map(|tool| SystemPromptPreviewTool {
+                    name: tool.name,
+                    description: tool.description,
+                })
                 .collect(),
         })
     }
@@ -309,16 +321,25 @@ impl ChatController {
 }
 
 fn tool_summaries() -> Vec<ContextPreviewTool> {
+    tool_summaries_for_platform("desktop")
+}
+
+fn tool_summaries_for_platform(platform: &str) -> Vec<ContextPreviewTool> {
     let defs = tool_definitions();
     let Some(items) = defs.as_array() else {
         return Vec::new();
     };
+    let ios_only = platform == "ios";
     items
         .iter()
         .filter_map(|item| {
             let func = item.get("function")?;
+            let name = func.get("name")?.as_str()?.to_string();
+            if ios_only && !IOS_TOOL_NAMES.contains(&name.as_str()) {
+                return None;
+            }
             Some(ContextPreviewTool {
-                name: func.get("name")?.as_str()?.to_string(),
+                name,
                 description: func
                     .get("description")
                     .and_then(|v| v.as_str())
@@ -328,6 +349,20 @@ fn tool_summaries() -> Vec<ContextPreviewTool> {
         })
         .collect()
 }
+
+/// Tools iOS actually attaches to chat completions (see AssistantToolDefinitions / TaskToolDefinitions).
+const IOS_TOOL_NAMES: &[&str] = &[
+    "task_list",
+    "task_create",
+    "task_update",
+    "task_delete",
+    "task_clear_completed",
+    "memory_set_fact",
+    "memory_list_facts",
+    "memory_search_conversations",
+    "get_datetime",
+    "web_search",
+];
 
 pub(crate) fn format_temporal_context_block() -> String {
     let tz = iana_time_zone::get_timezone().unwrap_or_else(|_| "UTC".into());

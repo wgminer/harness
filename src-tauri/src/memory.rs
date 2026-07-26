@@ -936,20 +936,17 @@ pub async fn set_conversation_title(
 pub async fn mark_voice_dictation_session(
     state: &AppState,
     conversation_id: &str,
-) -> Result<String, std::io::Error> {
-    let title = format_voice_dictation_title();
+) -> Result<(), std::io::Error> {
+    // Defer "Dictation @ …" until refine settles without a better title so the UI can shimmer.
     patch_conversation_meta(
         state,
         conversation_id,
         ConversationMetaPatch {
-            title: Some(title.clone()),
-            title_source: Some(ConversationTitleSource::Auto),
             session_kind: Some(ConversationSessionKind::Dictation),
             ..Default::default()
         },
     )
-    .await?;
-    Ok(title)
+    .await
 }
 
 #[derive(Default)]

@@ -4,7 +4,7 @@ struct ContentView: View {
     @StateObject private var app: AppModel
     @StateObject private var chatRouter: ChatRouter
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showSetupSettings = false
+    @State private var showSetupPairing = false
 
     init(app: AppModel? = nil, initialChatRoute: ChatRoute? = nil) {
         _app = StateObject(wrappedValue: app ?? AppModel())
@@ -38,20 +38,12 @@ struct ContentView: View {
         .sheet(isPresented: setupNoticeBinding) {
             SetupNoticeSheet(app: app) {
                 app.dismissSetupNotice()
-                showSetupSettings = true
+                showSetupPairing = true
             }
         }
-        .sheet(isPresented: $showSetupSettings) {
-            NavigationStack {
-                MobileSettingsView(app: app)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") {
-                                showSetupSettings = false
-                                app.refreshSetupFlags()
-                            }
-                        }
-                    }
+        .sheet(isPresented: $showSetupPairing) {
+            SyncPairingSheet(app: app, isPresented: $showSetupPairing) {
+                app.refreshSetupFlags()
             }
         }
     }

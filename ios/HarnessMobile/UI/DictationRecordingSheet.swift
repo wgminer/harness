@@ -31,6 +31,8 @@ struct DictationRecordingSheet: View {
     /// Latch so only one stop path (button / Live Activity / max duration) owns the stop.
     @State private var isStopping = false
     @State private var showFailedRecordingShareSheet = false
+    /// Local mic-live latch — parent does not observe AudioRecorder for meter churn.
+    @State private var isMicLive = false
 
     init(
         app: AppModel,
@@ -71,6 +73,7 @@ struct DictationRecordingSheet: View {
                             // Only fail while we still believe capture is live.
                             // A stale onChange can fire after stop has already moved us on.
                             guard phase == .recording, !isStopping else { return }
+                            isMicLive = false
                             // Take ownership so a later start()/cancel won't delete this file.
                             if savedAudioURL == nil {
                                 savedAudioURL = recorder.consumePreservedRecordingURL()
@@ -201,8 +204,8 @@ struct DictationRecordingSheet: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Stop and transcribe")
-                .disabled(!recorder.isRecording)
-                .opacity(recorder.isRecording ? 1 : 0.45)
+                .disabled(!isMicLive)
+                .opacity(isMicLive ? 1 : 0.45)
             }
             .padding(.horizontal, 28)
         }
@@ -265,6 +268,7 @@ struct DictationRecordingSheet: View {
                 }
                 savedAudioURL = nil
                 showFailedRecordingShareSheet = false
+                isMicLive = false
                 phase = recordingSession.hasRecordPermission ? .recording : .starting
                 didAutoStart = false
                 Task { await startRecording() }
@@ -274,6 +278,7 @@ struct DictationRecordingSheet: View {
 
     private func startRecording() async {
         isStopping = false
+        isMicLive = false
         // Keep optimistic recording chrome when permission is already granted.
         if !recordingSession.hasRecordPermission {
             phase = .starting
@@ -285,21 +290,25 @@ struct DictationRecordingSheet: View {
             _ = try await recordingSession.beginRecordingSession()
             // Cancel may have completed between start returning and this resume.
             guard recorder.isRecording else {
+                isMicLive = false
                 if isPresented {
                     isPresented = false
                 }
                 return
             }
             phase = .recording
+            isMicLive = true
             // Distinct from the mic-open tap: confirms the session is actually live.
             HapticFeedback.medium()
         } catch is CancellationError {
+            isMicLive = false
             // Cancelled mid-start; session manager already tore down. Avoid a stuck "Starting…" UI
             // if cancellation came from task teardown rather than the Cancel button.
             if isPresented {
                 isPresented = false
             }
         } catch {
+            isMicLive = false
             phase = .failed(error.localizedDescription)
         }
     }
@@ -309,6 +318,7 @@ struct DictationRecordingSheet: View {
             return
         }
         isStopping = true
+        isMicLive = false
         let generation = operationGeneration
         let peakLevel = recorder.peakLevelDuringSession
         let elapsedSeconds = TimeInterval(recorder.elapsedMs) / 1000.0
@@ -404,6 +414,7 @@ struct DictationRecordingSheet: View {
 
     private func cancelAndDismiss() async {
         operationGeneration += 1
+        isMicLive = false
         app.dictationService.cancel()
         await recordingSession.cancelRecordingSession()
         if let url = savedAudioURL {
@@ -424,50 +435,57 @@ private enum DictationElapsedFormatting {
     }
 }
 
-/// Isolates AudioRecorder observation so metering does not rebuild the sheet body.
+/// Thin shell — UIKit samples the meter on CADisplayLink (no SwiftUI meter publishes).
 private struct DictationWaveformHost: View {
-    @ObservedObject var recorder: AudioRecorder
+    let recorder: AudioRecorder
 
     var body: some View {
-        LiveAudioWaveformView(level: recorder.audioLevel)
+        LiveAudioWaveformView(meterSource: recorder)
             .frame(maxWidth: .infinity)
             .frame(height: 320)
     }
 }
 
-/// Observes capture drops from interruption / media-reset without rebuilding sheet chrome on metering.
+/// Observes capture drops from interruption / media-reset without rebuilding on elapsed ticks.
 private struct DictationCaptureWatchdog: View {
-    @ObservedObject var recorder: AudioRecorder
+    let recorder: AudioRecorder
     var onUnexpectedEnd: () -> Void
+    @State private var isRecording = false
 
     var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
-            .onChange(of: recorder.isRecording) { _, isRecording in
+            .onAppear { isRecording = recorder.isRecording }
+            .onReceive(recorder.$isRecording) { recording in
+                let wasRecording = isRecording
+                isRecording = recording
+                guard wasRecording, !recording else { return }
                 // Read intentionalStop from the recorder object at callback time —
                 // a SwiftUI `let expectRecordingEnd` can still be stale here.
-                let intentional = recorder.intentionalStop
-                guard !isRecording, !intentional else { return }
+                guard !recorder.intentionalStop else { return }
                 onUnexpectedEnd()
             }
     }
 }
 
 private struct DictationElapsedLabel: View {
-    @ObservedObject var recorder: AudioRecorder
+    let recorder: AudioRecorder
     var onMaxDuration: () -> Void
+    @State private var elapsedMs = 0
     /// Elapsed keeps ticking past the limit; fire the stop exactly once.
     @State private var didFireMaxDuration = false
 
     var body: some View {
-        Text(DictationElapsedFormatting.string(ms: recorder.elapsedMs))
+        Text(DictationElapsedFormatting.string(ms: elapsedMs))
             .font(.body.weight(.medium))
             .monospacedDigit()
             .foregroundStyle(.primary)
             .accessibilityLabel("Recording duration")
-            .accessibilityValue(DictationElapsedFormatting.string(ms: recorder.elapsedMs))
-            .onChange(of: recorder.elapsedMs) { _, ms in
+            .accessibilityValue(DictationElapsedFormatting.string(ms: elapsedMs))
+            .onAppear { elapsedMs = recorder.elapsedMs }
+            .onReceive(recorder.$elapsedMs) { ms in
+                elapsedMs = ms
                 if ms >= Int(RecordingStorage.maxRecordingDuration * 1000), !didFireMaxDuration {
                     didFireMaxDuration = true
                     onMaxDuration()

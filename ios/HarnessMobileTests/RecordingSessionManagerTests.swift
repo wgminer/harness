@@ -109,7 +109,7 @@ final class RecordingSessionManagerTests: XCTestCase {
         manager.prepareForDictation()
         XCTAssertFalse(manager.recorder.isRecording)
         XCTAssertEqual(manager.recorder.elapsedMs, 0)
-        XCTAssertEqual(manager.recorder.audioLevel, 0)
+        XCTAssertEqual(manager.recorder.currentMeterLevel, 0)
     }
 
     func testCancelAfterBeginInvalidatesDeferredLiveActivitySession() async {

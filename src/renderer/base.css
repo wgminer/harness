@@ -117,6 +117,11 @@
   --sidebar-width: calc(var(--grid) * 70);
   --content-width: calc(var(--grid) * 150);
   --layout-viewport-max: calc(var(--sidebar-width) + var(--content-width));
+  /* Matches default / large window height (1024×768). */
+  --layout-viewport-max-height: calc(var(--grid) * 192);
+  /* Wide breakpoint for centered chrome — keep in sync with @media (min-width: 1600px) below. */
+  --layout-wide-min: 1600px;
+  --shell-pad-inline: var(--space-4);
 
   /* --- Motion (shared across themes) --- */
   --motion-duration-fast: 120ms;
@@ -215,10 +220,19 @@ hr {
   height: 0;
 }
 
-/* Buttons – single source of truth for all app buttons */
+/* Buttons – single source of truth for all app buttons
+ *
+ * Roles:
+ *   Affirm / commit     = .btn.btn-primary
+ *   Default action      = .btn
+ *   Quiet utility       = .btn.btn-outline
+ *   Destructive         = .btn.btn-danger
+ *   Icon-only           = .btn.btn-icon / .btn-icon-sm
+ * Labels: Title Case. Type: 14px.
+ */
 .btn {
   font-family: var(--font-family);
-  font-size: var(--font-size-ui);
+  font-size: 14px;
   height: var(--input-height);
   background: var(--btn-bg);
   color: var(--fg);
@@ -322,16 +336,16 @@ hr {
 
 /* Compact quiet control (chat secondary row, setup notice) */
 .btn-compact {
-  font-size: var(--font-size-caption);
+  font-size: 14px;
   padding: 0 var(--space-3);
   height: calc(var(--grid) * 8 - var(--space-1));
 }
 
 /* Small control (tool cards, notes aside) */
 .btn-sm {
-  font-size: var(--font-size-caption);
+  font-size: 14px;
   padding: var(--space-1) var(--space-2);
-  height: var(--space-6);
+  height: var(--space-7);
 }
 
 /* Single icon-only button: 36×36 */
@@ -436,15 +450,68 @@ hr {
 /* Layout */
 .app {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template: 1fr / 1fr;
   height: 100%;
   width: 100%;
-  /* Separates the native titlebar from the in-app header, which shares its background. */
+  /* Separates the native titlebar from the in-app header, which shares its background.
+   * Stays full-bleed at the window top (not on the chrome frame). */
   border-top: 1px solid var(--border-edge);
 }
 
-/* Narrow viewport (768px): sidebar hidden; type and column width tighten. */
+/* Sidebar + main unit. No outer box border — gutters share --bg with .app. */
+.app-frame {
+  grid-area: 1 / 1;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  justify-self: stretch;
+  align-self: stretch;
+}
+
+/* Overlays sit in the same grid cell; fixed positioning covers the full window. */
+.app > .app-modal-backdrop,
+.app > .hotkey-recording-overlay {
+  grid-area: 1 / 1;
+}
+
+/* Centered chrome only at the wide breakpoint (split/laptop always fill). */
+@media (min-width: 1600px) {
+  .app[data-wide-view="centered"] .app-frame {
+    width: min(100%, var(--layout-viewport-max));
+    height: min(100%, var(--layout-viewport-max-height));
+    justify-self: center;
+    align-self: center;
+  }
+
+  /* Sidebar as a complete floating card (full border + radius). */
+  .app[data-wide-view="centered"] .sidebar-dock {
+    padding: var(--shell-pad-inline) var(--space-2) var(--shell-pad-inline) var(--shell-pad-inline);
+    box-sizing: border-box;
+  }
+
+  .app[data-sidebar="right"][data-wide-view="centered"] .sidebar-dock {
+    padding: var(--shell-pad-inline) var(--shell-pad-inline) var(--shell-pad-inline) var(--space-2);
+  }
+
+  .app[data-wide-view="centered"] .sidebar {
+    border: 1px solid var(--border-edge);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+}
+
+/* Narrow viewport (768px): sidebar hidden; shell pad tightens. */
 @media (max-width: 768px) {
+  :root {
+    --shell-pad-inline: var(--space-3);
+  }
+
   .sidebar-dock {
     flex: 0 0 0;
     width: 0;
@@ -523,11 +590,64 @@ hr {
   pointer-events: none;
 }
 
+.hotkey-recording-overlay[data-interactive="true"] {
+  pointer-events: auto;
+}
+
 .hotkey-recording-overlay__field {
   display: block;
 }
 
+.hotkey-recording-overlay__transcribing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--fg);
+}
+
+.hotkey-recording-overlay__spinner {
+  animation: motion-spin var(--motion-duration-loading) var(--motion-ease-linear) infinite;
+}
+
+.hotkey-recording-overlay__failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: min(28rem, calc(100vw - var(--space-8)));
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-edge);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+}
+
+.hotkey-recording-overlay__error-text {
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--fg);
+  text-align: center;
+}
+
+.hotkey-recording-overlay__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
 .hotkey-recording-overlay__error {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-8);
+  transform: translateX(-50%);
+  z-index: 1501;
   max-width: min(28rem, calc(100vw - var(--space-8)));
   padding: var(--space-3) var(--space-4);
   font-family: var(--font-family);
@@ -539,6 +659,7 @@ hr {
   border: 1px solid var(--border-edge);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow);
+  pointer-events: none;
 }
 
 @keyframes title-skeleton-pulse {

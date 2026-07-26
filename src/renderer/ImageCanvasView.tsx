@@ -378,7 +378,7 @@ export function ImageCanvasView({ imageId, onImageUpdated }: ImageCanvasViewProp
 
           <button
             type="button"
-            className="btn image-canvas__generate"
+            className="btn btn-primary image-canvas__generate"
             onClick={() => void generate()}
             disabled={status.kind === "loading" || !prompt.trim() || Boolean(sizeError)}
           >

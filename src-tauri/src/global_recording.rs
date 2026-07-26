@@ -6,7 +6,7 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, State,
+    AppHandle, Emitter, State,
 };
 use tokio::sync::Mutex;
 
@@ -16,7 +16,8 @@ use crate::env_util::{app_display_name, is_global_hotkey_disabled, is_harness_e2
 use crate::fn_monitor::{resolve_fn_monitor_path, FnMonitorCallbacks, FnMonitorProcess};
 use crate::global_recording_capture::NativeCapture;
 use crate::global_recording_effects::{
-    load_tray_image, run_recording_effects, show_and_focus_main, unregister_escape,
+    load_tray_image, run_recording_effects, run_stop_pipeline_from_path, show_and_focus_main,
+    unregister_escape, set_tray_state, TrayIconState,
 };
 use crate::global_recording_session::{
     create_initial_fn_recording_state, reduce_escape, reduce_fn_edge, FnEdge, FnRecordingState,
@@ -44,6 +45,7 @@ pub struct GlobalRecordingRuntime {
     session_lock: Mutex<()>,
     pub(crate) escape_registered: StdMutex<bool>,
     pub(crate) transcribing: Mutex<bool>,
+    pub(crate) transcription_cancel: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
     pub(crate) capture: StdMutex<Option<NativeCapture>>,
 }
 
@@ -60,6 +62,7 @@ impl GlobalRecordingRuntime {
             session_lock: Mutex::new(()),
             escape_registered: StdMutex::new(false),
             transcribing: Mutex::new(false),
+            transcription_cancel: Mutex::new(None),
             capture: StdMutex::new(None),
         }
     }
@@ -111,6 +114,11 @@ pub(crate) async fn cancel_active_recording(
 ) {
     let _guard = runtime.session_lock.lock().await;
 
+    if *runtime.transcribing.lock().await {
+        cancel_global_transcription_inner(app, runtime).await;
+        return;
+    }
+
     let state = *runtime.fn_state.lock().await;
     if state.session == SessionMode::None {
         return;
@@ -118,6 +126,17 @@ pub(crate) async fn cancel_active_recording(
     let (next, effects) = reduce_escape(state);
     *runtime.fn_state.lock().await = next;
     run_recording_effects(app, runtime, effects).await;
+}
+
+/// Abort in-flight global transcription (Escape during Transcribing…).
+async fn cancel_global_transcription_inner(app: &AppHandle, runtime: &GlobalRecordingRuntime) {
+    if let Some(tx) = runtime.transcription_cancel.lock().await.take() {
+        let _ = tx.send(true);
+    }
+    *runtime.transcribing.lock().await = false;
+    unregister_escape(app, runtime);
+    let _ = app.emit("global-recording-cancelled", serde_json::json!({}));
+    set_tray_state(app, runtime, TrayIconState::Ready).await;
 }
 
 async fn start_fn_monitor(app: AppHandle, runtime: Arc<GlobalRecordingRuntime>) {
@@ -323,6 +342,75 @@ pub async fn recording_signal_frontend_ready(
 ) -> Result<(), String> {
     *runtime.frontend_ready.lock().await = true;
     start_fn_monitor_if_ready(app, runtime.inner().clone()).await;
+    Ok(())
+}
+
+/// Re-run transcription on a saved wav from the failed overlay (unfocused delivery).
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_retry_global_transcription(
+    app: AppHandle,
+    runtime: State<'_, Arc<GlobalRecordingRuntime>>,
+    path: String,
+) -> Result<(), String> {
+    if *runtime.transcribing.lock().await {
+        return Err("Transcription already in progress.".into());
+    }
+    let wav = tokio::fs::read(&path)
+        .await
+        .map_err(|e| format!("Could not read recording: {e}"))?;
+    let path_buf = std::path::PathBuf::from(path);
+    let runtime = runtime.inner().clone();
+    tauri::async_runtime::spawn(async move {
+        run_stop_pipeline_from_path(app, runtime, false, wav, Some(path_buf)).await;
+    });
+    Ok(())
+}
+
+/// Cancel in-flight global transcription (also triggered by Escape).
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_cancel_global_transcription(
+    app: AppHandle,
+    runtime: State<'_, Arc<GlobalRecordingRuntime>>,
+) -> Result<(), String> {
+    let _guard = runtime.session_lock.lock().await;
+    if !*runtime.transcribing.lock().await {
+        return Ok(());
+    }
+    cancel_global_transcription_inner(&app, &runtime).await;
+    Ok(())
+}
+
+/// Cancel active global recording or in-flight transcription (composer Cancel / Escape).
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_cancel_global_session(
+    app: AppHandle,
+    runtime: State<'_, Arc<GlobalRecordingRuntime>>,
+) -> Result<(), String> {
+    cancel_active_recording(&app, &runtime).await;
+    Ok(())
+}
+
+/// Stop an active global recording (composer checkmark while Fn is mirrored).
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_stop_global_recording(
+    app: AppHandle,
+    runtime: State<'_, Arc<GlobalRecordingRuntime>>,
+) -> Result<(), String> {
+    let _guard = runtime.session_lock.lock().await;
+    if *runtime.transcribing.lock().await {
+        return Ok(());
+    }
+    let state = *runtime.fn_state.lock().await;
+    if state.session != SessionMode::Recording {
+        return Ok(());
+    }
+    *runtime.fn_state.lock().await = create_initial_fn_recording_state();
+    run_recording_effects(
+        &app,
+        &runtime,
+        vec![crate::global_recording_session::GlobalRecordingEffect::StopRecording],
+    )
+    .await;
     Ok(())
 }
 

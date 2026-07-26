@@ -46,7 +46,7 @@ function MemoryFactRow({
           aria-label={`Edit ${memoryKey}`}
           title="Edit"
         >
-          <Pencil size={14} />
+          <Pencil size={16} />
         </button>
         <button
           type="button"
@@ -56,7 +56,7 @@ function MemoryFactRow({
           aria-label={`Remove ${memoryKey}`}
           title="Remove"
         >
-          <Trash2 size={14} />
+          <Trash2 size={16} />
         </button>
       </div>
     </div>
@@ -103,7 +103,7 @@ function MemoryFactsList({ memory }: { memory: MemorySettingsController }) {
             data-testid="settings-add-memory"
             onClick={memory.openAddMemoryModal}
           >
-            Add Entry
+            Add Fact
           </button>
         </SettingsActions>
         {showPager ? (
@@ -152,9 +152,11 @@ export function MemorySettingsSections({ memory }: { memory: MemorySettingsContr
         title="Memory"
         description={
           count > 0
-            ? `${count} facts stored locally and synced with backup. Keys are usually snake_case labels; values can be a short phrase or a longer note.`
-            : "Stable facts stored locally and synced with your backup. Keys are usually snake_case labels; values can be a short phrase or a longer note."
+            ? `${count} facts stored locally and synced with backup.`
+            : "Facts stored locally and synced with backup."
         }
+        collapsible
+        defaultOpen={false}
       >
         <MemoryFactsList memory={memory} />
       </SettingsGroup>
@@ -220,13 +222,12 @@ export function MemoryFactImportSection({ memory }: { memory: MemorySettingsCont
     <>
       <SettingsHint>
         Run the export prompt in ChatGPT, Claude, or another assistant, paste the result below, then
-        import. Harness uses your OpenAI API key to distill entries into your facts (same merge rules
-        as learn from past chats).
+        import. Harness uses your OpenAI API key to distill entries into your facts.
       </SettingsHint>
       <SettingsActions>
         <button
           type="button"
-          className="btn"
+          className="btn btn-outline"
           onClick={() => memory.setExportPromptOpen((open) => !open)}
           aria-expanded={memory.exportPromptOpen}
         >

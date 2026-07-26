@@ -16,7 +16,8 @@ pub fn default_settings() -> Value {
         "openai": { "apiKey": "" },
         "recording": {
             "autoSend": true,
-            "globalFnHotkey": true
+            "globalFnHotkey": true,
+            "bringToFrontOnBackgroundDictation": false
         },
         "transcription": {
             "cleanup": {
@@ -352,6 +353,17 @@ pub fn parse_settings(data: &Value) -> Value {
                         .and_then(|v| v.get("globalFnHotkey"))
                         .and_then(|v| v.as_bool())
                         .unwrap_or(true)
+                }),
+            "bringToFrontOnBackgroundDictation": obj
+                .and_then(|o| o.get("recording"))
+                .and_then(|v| v.get("bringToFrontOnBackgroundDictation"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or_else(|| {
+                    defaults
+                        .get("recording")
+                        .and_then(|v| v.get("bringToFrontOnBackgroundDictation"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
                 })
         },
         "transcription": parse_transcription(obj.and_then(|o| o.get("transcription")), &defaults),
@@ -494,7 +506,7 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
         next["recording"] = merge_object_fields(
             current.get("recording").unwrap_or(&json!({})),
             recording,
-            &["autoSend", "globalFnHotkey"],
+            &["autoSend", "globalFnHotkey", "bringToFrontOnBackgroundDictation"],
         );
     }
 

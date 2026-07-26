@@ -41,7 +41,7 @@ Prior chats may appear in [RECENT_CONVERSATIONS] below. Call memory_search_conve
 
 pub const DEFAULT_DESKTOP: &str = r#"[CORE_INSTRUCTIONS]
 You are a helpful assistant running in a local desktop app.
-Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); set_layout (sidebar position); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (search all prior chats — call proactively when recall would help, not only on explicit search requests); get_datetime (for the current date and time, optionally in a specific IANA timezone); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat; short saved snippets belong in a note titled "Clippings" as a numbered markdown list, optionally with inline #tags). Call them when appropriate.
+Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); set_layout (sidebar position, wide-window centered/scaled view); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (search all prior chats — call proactively when recall would help, not only on explicit search requests); get_datetime (for the current date and time, optionally in a specific IANA timezone); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat; short saved snippets belong in a note titled "Clippings" as a numbered markdown list, optionally with inline #tags). Call them when appropriate.
 
 Long replies: when a response will exceed ~3 short paragraphs, call note_create with title and summary (1-3 sentences). Leave content empty and write the full body in your following output — it streams into the note and appears inline in chat. Do not put the long body in normal chat prose. One inline write-up per turn."#;
 
@@ -60,12 +60,16 @@ pub struct SystemPromptFields {
 #[serde(rename_all = "camelCase")]
 pub struct SystemPromptPreview {
     pub platform: String,
+    pub shared: String,
+    pub platform_overlay: String,
     pub static_prompt: String,
     pub memory_block: String,
     pub recent_conversations_block: String,
     pub temporal_context: String,
     pub assembled_prompt: String,
     pub selected_facts: Vec<SystemPromptPreviewFact>,
+    /// Tool schemas attached to the chat request (not part of the system prompt text).
+    pub tools: Vec<SystemPromptPreviewTool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -73,6 +77,13 @@ pub struct SystemPromptPreview {
 pub struct SystemPromptPreviewFact {
     pub key: String,
     pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemPromptPreviewTool {
+    pub name: String,
+    pub description: String,
 }
 
 pub fn default_system_prompt_value() -> Value {

@@ -1,6 +1,6 @@
 /* Shared modal shell — use with Modal.tsx
  *
- * Footer button conventions:
+ * Footer button conventions (Title Case labels; 14px via .btn):
  *   Dismiss / secondary = .btn
  *   Affirm / save       = .btn-primary
  *   Destroy / delete    = .btn-danger

@@ -70,12 +70,13 @@ interface SidebarProps {
   onNewImage: () => void;
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
+  titleAwaitingIds: Record<string, true>;
   appVersion: string | null;
   updateStatus: UpdateStatus;
   onUpdateClick: () => void;
   /** Called after sync when local conversation data may have changed. */
   onSyncComplete?: () => void;
-  /** Open Settings → Data (error recovery / sync setup). */
+  /** Open System → Data (error recovery / sync setup). */
   onOpenDataSettings?: () => void;
 }
 
@@ -114,6 +115,7 @@ export function Sidebar({
   onNewImage,
   activeChatProcessing,
   titleGenInFlight,
+  titleAwaitingIds,
   appVersion,
   updateStatus,
   onUpdateClick,
@@ -401,7 +403,8 @@ export function Sidebar({
       }
       const c = row as Conversation;
       const isActive = conversationId === c.id && view === "chat";
-      const titleGenerating = (titleGenInFlight[c.id] ?? 0) > 0;
+      const titleGenerating =
+        (titleGenInFlight[c.id] ?? 0) > 0 || !!titleAwaitingIds[c.id];
       const titlePending = isConversationTitlePending(c.title, titleGenerating);
       const chatStreaming =
         view === "chat" && conversationId === c.id && activeChatProcessing;
@@ -467,6 +470,7 @@ export function Sidebar({
       onSelectNote,
       onViewChange,
       titleGenInFlight,
+      titleAwaitingIds,
       view,
     ]
   );
@@ -769,7 +773,7 @@ export function Sidebar({
             disabled={syncBusy && syncConfigured}
             aria-label={
               !syncConfigured
-                ? "Set up sync"
+                ? "Set Up Sync"
                 : syncBusy
                   ? "Syncing"
                   : syncHasError
@@ -779,7 +783,7 @@ export function Sidebar({
             title={syncTooltip}
           >
             {!syncConfigured ? (
-              "Set up sync"
+              "Set Up Sync"
             ) : syncBusy ? (
               <Loader2 size={14} className="voice-spinner" />
             ) : syncHasError ? (

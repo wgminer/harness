@@ -53,6 +53,22 @@ struct WebSearchResultPayload {
     error: Option<String>,
 }
 
+/// UI selection → image lookup (not the assistant `web_search` tool).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LookupImagePayload {
+    pub query: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+const LOOKUP_IMAGE_MIN_CHARS: usize = 2;
+const LOOKUP_IMAGE_MAX_CHARS: usize = 120;
+
 pub fn is_assistant_tool_name(name: &str) -> bool {
     matches!(
         name,
@@ -299,6 +315,139 @@ async fn fetch_web_search(args: &Value) -> WebSearchResultPayload {
     search_web_tavily(&api_key, &query, max_results).await
 }
 
+/// Pick the first usable image from a Tavily `include_images` response.
+pub fn pick_tavily_image(raw: &Value) -> Option<(String, Option<String>)> {
+    fn from_entry(entry: &Value) -> Option<(String, Option<String>)> {
+        if let Some(url) = entry.as_str() {
+            let url = url.trim();
+            if url.is_empty() {
+                return None;
+            }
+            return Some((url.to_string(), None));
+        }
+        let url = entry
+            .get("url")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())?;
+        let description = entry
+            .get("description")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        Some((url.to_string(), description))
+    }
+
+    if let Some(images) = raw.get("images").and_then(|v| v.as_array()) {
+        for entry in images {
+            if let Some(found) = from_entry(entry) {
+                return Some(found);
+            }
+        }
+    }
+
+    if let Some(results) = raw.get("results").and_then(|v| v.as_array()) {
+        for row in results {
+            if let Some(images) = row.get("images").and_then(|v| v.as_array()) {
+                for entry in images {
+                    if let Some(found) = from_entry(entry) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+pub async fn lookup_image(query: &str) -> LookupImagePayload {
+    let trimmed = query.trim();
+    let q: String = trimmed.chars().take(LOOKUP_IMAGE_MAX_CHARS).collect();
+    let q = q.trim().to_string();
+
+    if q.chars().count() < LOOKUP_IMAGE_MIN_CHARS {
+        return LookupImagePayload {
+            query: q,
+            image_url: None,
+            description: None,
+            error: Some("Selection is too short".into()),
+        };
+    }
+
+    let api_key = resolve_tavily_api_key().await;
+    if api_key.trim().is_empty() {
+        return LookupImagePayload {
+            query: q,
+            image_url: None,
+            description: None,
+            error: Some(format!(
+                "Tavily API key is not set. Add it in {RIG_SECTION_GENERAL}."
+            )),
+        };
+    }
+
+    let client = Client::new();
+    let response = client
+        .post(TAVILY_SEARCH_URL)
+        .json(&json!({
+            "api_key": api_key.trim(),
+            "query": q,
+            "search_depth": "basic",
+            "max_results": 3,
+            "include_answer": false,
+            "include_images": true,
+            "include_image_descriptions": true
+        }))
+        .timeout(Duration::from_secs(45))
+        .send()
+        .await;
+
+    let response = match response {
+        Ok(r) => r,
+        Err(err) => {
+            return LookupImagePayload {
+                query: q,
+                image_url: None,
+                description: None,
+                error: Some(err.to_string()),
+            };
+        }
+    };
+
+    let status = response.status();
+    let raw: Value = response.json().await.unwrap_or_else(|_| json!({}));
+    if !status.is_success() {
+        let detail = raw
+            .get("detail")
+            .and_then(|v| v.as_str())
+            .or_else(|| raw.get("message").and_then(|v| v.as_str()))
+            .unwrap_or("request failed");
+        return LookupImagePayload {
+            query: q,
+            image_url: None,
+            description: None,
+            error: Some(format!("Tavily error: {detail}")),
+        };
+    }
+
+    match pick_tavily_image(&raw) {
+        Some((image_url, description)) => LookupImagePayload {
+            query: q,
+            image_url: Some(image_url),
+            description,
+            error: None,
+        },
+        None => LookupImagePayload {
+            query: q,
+            image_url: None,
+            description: None,
+            error: None,
+        },
+    }
+}
+
 async fn execute_note_tool(state: &AppState, name: &str, args: &Value) -> Value {
     match name {
         "note_list" => match notes::list_notes(state).await {
@@ -392,3 +541,48 @@ pub async fn execute_assistant_tool(
 }
 
 pub type TasksPayloadExport = TasksPayload;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pick_tavily_image_prefers_top_level_object() {
+        let raw = json!({
+            "images": [
+                { "url": "https://example.com/a.jpg", "description": "Alpha" }
+            ],
+            "results": [
+                {
+                    "images": [
+                        { "url": "https://example.com/b.jpg", "description": "Beta" }
+                    ]
+                }
+            ]
+        });
+        let (url, desc) = pick_tavily_image(&raw).expect("image");
+        assert_eq!(url, "https://example.com/a.jpg");
+        assert_eq!(desc.as_deref(), Some("Alpha"));
+    }
+
+    #[test]
+    fn pick_tavily_image_falls_back_to_result_images() {
+        let raw = json!({
+            "images": [],
+            "results": [
+                {
+                    "images": ["https://example.com/c.png"]
+                }
+            ]
+        });
+        let (url, desc) = pick_tavily_image(&raw).expect("image");
+        assert_eq!(url, "https://example.com/c.png");
+        assert!(desc.is_none());
+    }
+
+    #[test]
+    fn pick_tavily_image_returns_none_when_empty() {
+        let raw = json!({ "images": [], "results": [{ "images": [] }] });
+        assert!(pick_tavily_image(&raw).is_none());
+    }
+}

@@ -46,12 +46,24 @@ export interface SystemPromptPreviewFact {
 
 export interface SystemPromptPreview {
   platform: "desktop" | "ios";
+  /** Shared instructions from settings.systemPrompt.shared. */
+  shared: string;
+  /** Platform overlay from settings.systemPrompt.desktop | ios. */
+  platformOverlay: string;
+  /** shared + platform overlay (static portion before runtime blocks). */
   staticPrompt: string;
   memoryBlock: string;
   recentConversationsBlock: string;
   temporalContext: string;
   assembledPrompt: string;
   selectedFacts: SystemPromptPreviewFact[];
+  /** Tool schemas on the chat request — sibling to the system prompt, not inside it. */
+  tools: SystemPromptPreviewTool[];
+}
+
+export interface SystemPromptPreviewTool {
+  name: string;
+  description: string;
 }
 
 export interface MessageAttachment {
@@ -101,6 +113,8 @@ export interface Settings {
     autoSend: boolean;
     /** macOS menu bar icon + global Fn dictation hotkey. */
     globalFnHotkey: boolean;
+    /** When Fn dictation starts while Harness is unfocused, raise/activate the main window. */
+    bringToFrontOnBackgroundDictation: boolean;
   };
   transcription?: {
     cleanup?: {
@@ -152,12 +166,17 @@ export interface SearchResult {
   snippetMatchRange: [number, number];
 }
 
+export type WideView = "centered" | "scaled";
+
 export interface LayoutOptions {
   sidebar: "left" | "right";
+  /** On large windows (≥1600px): cap+center chrome (width and height), or fill edge-to-edge. */
+  wideView: WideView;
 }
 
 export const DEFAULT_LAYOUT: LayoutOptions = {
   sidebar: "left",
+  wideView: "scaled",
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -168,6 +187,7 @@ export const DEFAULT_SETTINGS: Settings = {
   recording: {
     autoSend: true,
     globalFnHotkey: true,
+    bringToFrontOnBackgroundDictation: false,
   },
   transcription: {
     cleanup: {

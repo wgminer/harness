@@ -29,7 +29,7 @@ R2 credentials you configure are used to read and write your backup bucket. Buck
 
 ### Mac → phone sync QR
 
-Desktop **Show sync QR** embeds R2 credentials and (when present) the OpenAI API key in a short-lived `harness-pair:1:…` string (~10 minutes). Treat the QR like a password: don’t screenshot or share it. Dismiss the modal when finished. Documented under Settings → Data on desktop and Settings → Set up sync on iOS.
+Desktop **Show Sync QR** embeds R2 credentials and (when present) the OpenAI API key in a short-lived `harness-pair:1:…` string (~10 minutes). Treat the QR like a password: don’t screenshot or share it. Dismiss the modal when finished. Documented under Settings → General on desktop and Settings → Set up sync on iOS.
 
 ## iOS companion
 

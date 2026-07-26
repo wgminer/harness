@@ -103,7 +103,7 @@ write_messages(
     state / "messages_conv_hero_sync.json",
     [
         ("user", "How do I pair the phone?"),
-        ("assistant", "On Mac: System → Show sync QR. On iOS: Set up sync. Credentials stay short-lived."),
+        ("assistant", "On Mac: System → Show Sync QR. On iOS: Set up sync. Credentials stay short-lived."),
     ],
 )
 write_messages(

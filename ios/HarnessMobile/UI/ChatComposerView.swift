@@ -16,7 +16,7 @@ struct ChatComposerView: View {
     let conversationId: String
     let isStreaming: Bool
     let autofocusOnAppear: Bool
-    /// When true, requests keyboard focus on appear (compose screen, pending outbound).
+    /// When true, starts in the expanded (non-collapsed) layout on appear.
     let startsExpanded: Bool
     let allowsCollapse: Bool
     let initialDraft: String
@@ -128,8 +128,10 @@ struct ChatComposerView: View {
             }
         }
         .onAppear {
-            if autofocusOnAppear || startsExpanded {
+            if startsExpanded {
                 heldExpanded = true
+            }
+            if autofocusOnAppear {
                 scheduleAutofocus()
             }
         }

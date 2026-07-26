@@ -212,6 +212,15 @@ export interface HarnessAPI {
   fileTools: {
     getAllowedRoots: () => Promise<string[]>;
   };
+  /** Tavily-backed lookups used by the desktop UI (not assistant tools). */
+  search: {
+    lookupImage: (query: string) => Promise<{
+      query: string;
+      imageUrl?: string;
+      description?: string;
+      error?: string;
+    }>;
+  };
   /** Multi-note Notes surface, separate from chat conversations. */
   notes: {
     list: () => Promise<NoteSummary[]>;
@@ -262,10 +271,19 @@ export interface HarnessAPI {
     cancelTranscription: (requestId: string) => Promise<void>;
     pasteText: (text: string) => Promise<void>;
     getGlobalStatus: () => Promise<GlobalRecordingStatus>;
-    onGlobalRecordingStarted: (cb: () => void) => () => void;
+    retryGlobalTranscription: (path: string) => Promise<void>;
+    cancelGlobalTranscription: () => Promise<void>;
+    cancelGlobalSession: () => Promise<void>;
+    stopGlobalRecording: () => Promise<void>;
+    onGlobalRecordingStarted: (cb: (info: { focused: boolean }) => void) => () => void;
     onGlobalRecordingStopped: (cb: () => void) => () => void;
+    onGlobalRecordingTranscribing: (
+      cb: (info: { recordingPath?: string }) => void,
+    ) => () => void;
     onGlobalRecordingCancelled: (cb: () => void) => () => void;
-    onGlobalRecordingError: (cb: (message: string) => void) => () => void;
+    onGlobalRecordingError: (
+      cb: (info: { message: string; recordingPath?: string }) => void,
+    ) => () => void;
     onGlobalRecordingLevel: (cb: (level: number) => void) => () => void;
     onGlobalTranscriptReady: (cb: (text: string) => void) => () => void;
     onGlobalTranscriptDelivered: (cb: (conversationId: string) => void) => () => void;

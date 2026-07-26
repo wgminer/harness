@@ -61,4 +61,37 @@ struct TranscriptionSettings: Equatable {
 
         return settings
     }
+
+    /// Writes only `recording.autoSend` and `transcription.cleanup.enabled`, preserving other settings keys.
+    static func updatePhoneToggles(
+        autoSend: Bool,
+        cleanupEnabled: Bool,
+        in localDataDir: URL
+    ) throws {
+        try LocalDataLayout.ensureDirectories(at: localDataDir)
+        let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.settingsFile)
+
+        var root: [String: Any] = [:]
+        if FileManager.default.fileExists(atPath: path.path),
+           let data = try? LocalDataLayout.readRegularFileData(at: path),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            root = existing
+        }
+
+        var recording = root["recording"] as? [String: Any] ?? [:]
+        recording["autoSend"] = autoSend
+        root["recording"] = recording
+
+        var transcription = root["transcription"] as? [String: Any] ?? [:]
+        var cleanup = transcription["cleanup"] as? [String: Any] ?? [:]
+        cleanup["enabled"] = cleanupEnabled
+        if cleanup["prompt"] == nil {
+            cleanup["prompt"] = defaults.cleanup.prompt
+        }
+        transcription["cleanup"] = cleanup
+        root["transcription"] = transcription
+
+        let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: path, options: .atomic)
+    }
 }

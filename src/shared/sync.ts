@@ -119,7 +119,7 @@ export function formatSyncStatusLine(input: {
   lastError: string | null;
   configured: boolean;
 }): string | null {
-  if (!input.configured) return "Connect R2 in Settings → Data to enable sync.";
+  if (!input.configured) return `Connect R2 in ${rigSection("Data")} to enable sync.`;
   if (input.isSyncing) return "Syncing…";
   if (input.lastError) return input.lastError;
   if (input.lastSuccessAt) {

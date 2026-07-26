@@ -25,6 +25,11 @@ export interface UseChatComposerOptions {
   /** Allow hotkey injection when no conversation is open (compose splash). */
   allowHotkeyWithoutConversation?: boolean;
   hasConversation?: boolean;
+  /**
+   * When true, mirror focused Fn global recording into composer voice chrome
+   * (timer / mic / Transcribing…) without starting a second local capture.
+   */
+  mirrorGlobalFnRecording?: boolean;
 }
 
 export function useChatComposer({
@@ -37,6 +42,7 @@ export function useChatComposer({
   submitDisabled = false,
   allowHotkeyWithoutConversation = false,
   hasConversation = true,
+  mirrorGlobalFnRecording = false,
 }: UseChatComposerOptions) {
   const [input, setInput] = useState("");
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -52,6 +58,7 @@ export function useChatComposer({
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const transcriptionRequestIdRef = useRef<string | null>(null);
   const transcriptionCancelledRef = useRef(false);
+  const mirroringGlobalRef = useRef(false);
   const onSubmitRef = useRef(onSubmit);
 
   const recorder = useRecorder();
@@ -59,6 +66,82 @@ export function useChatComposer({
   useEffect(() => {
     onSubmitRef.current = onSubmit;
   });
+
+  useEffect(() => {
+    if (!mirrorGlobalFnRecording) {
+      if (mirroringGlobalRef.current) {
+        mirroringGlobalRef.current = false;
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        setVoiceState("idle");
+        setRecordingMs(0);
+      }
+      return;
+    }
+
+    const clearMirrorTimer = () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    };
+
+    const endMirror = () => {
+      if (!mirroringGlobalRef.current) return;
+      mirroringGlobalRef.current = false;
+      clearMirrorTimer();
+      setVoiceState("idle");
+      setRecordingMs(0);
+    };
+
+    const unsubStarted = window.harness.recording.onGlobalRecordingStarted(({ focused }) => {
+      if (!focused) return;
+      mirroringGlobalRef.current = true;
+      setVoiceError(null);
+      setRecordingMs(0);
+      setVoiceState("recording");
+      recordingStartRef.current = Date.now();
+      clearMirrorTimer();
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingMs(Date.now() - recordingStartRef.current);
+      }, 33);
+    });
+
+    const unsubStopped = window.harness.recording.onGlobalRecordingStopped(() => {
+      if (!mirroringGlobalRef.current) return;
+      clearMirrorTimer();
+      setVoiceState("processing");
+    });
+
+    const unsubCancelled = window.harness.recording.onGlobalRecordingCancelled(() => {
+      endMirror();
+    });
+
+    const unsubError = window.harness.recording.onGlobalRecordingError(({ message }) => {
+      if (!mirroringGlobalRef.current) return;
+      endMirror();
+      setVoiceError(message);
+    });
+
+    const unsubReady = window.harness.recording.onGlobalTranscriptReady(() => {
+      endMirror();
+    });
+
+    const unsubDelivered = window.harness.recording.onGlobalTranscriptDelivered(() => {
+      endMirror();
+    });
+
+    return () => {
+      unsubStarted();
+      unsubStopped();
+      unsubCancelled();
+      unsubError();
+      unsubReady();
+      unsubDelivered();
+    };
+  }, [mirrorGlobalFnRecording]);
 
   useEffect(() => {
     if (focusComposerNonce == null || focusComposerNonce < 1) return;
@@ -178,6 +261,15 @@ export function useChatComposer({
   ]);
 
   const stopAndTranscribe = useCallback(async () => {
+    if (mirroringGlobalRef.current) {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      setVoiceState("processing");
+      await window.harness.recording.stopGlobalRecording().catch(() => {});
+      return;
+    }
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
@@ -210,6 +302,7 @@ export function useChatComposer({
   }, [applyTranscriptToComposer, recorder]);
 
   const startRecording = useCallback(async () => {
+    if (mirroringGlobalRef.current) return;
     setVoiceError(null);
     setRecordingMs(0);
     try {
@@ -234,6 +327,18 @@ export function useChatComposer({
   }, [recorder, stopAndTranscribe]);
 
   const cancelRecording = useCallback(async () => {
+    if (mirroringGlobalRef.current) {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      mirroringGlobalRef.current = false;
+      setVoiceState("idle");
+      setVoiceError(null);
+      setRecordingMs(0);
+      await window.harness.recording.cancelGlobalSession().catch(() => {});
+      return;
+    }
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;

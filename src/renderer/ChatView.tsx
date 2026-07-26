@@ -48,6 +48,8 @@ interface ChatViewProps {
   onOpenNotesView?: (noteId: string) => void;
   /** When false, chat/polish/reply are blocked with a setup message. */
   openAIConfigured?: boolean;
+  /** Mirror focused Fn recording into the composer mic chrome. */
+  mirrorGlobalFnRecording?: boolean;
 }
 
 export function ChatView({
@@ -64,6 +66,7 @@ export function ChatView({
   onWindowSizeToggle,
   onOpenNotesView,
   openAIConfigured = true,
+  mirrorGlobalFnRecording = false,
 }: ChatViewProps) {
   /** Set synchronously on first send so thread UI mounts before parent re-renders. */
   const [draftConversationId, setDraftConversationId] = useState<string | null>(null);
@@ -664,6 +667,7 @@ export function ChatView({
     submitDisabled: sending,
     allowHotkeyWithoutConversation: true,
     hasConversation: effectiveConversationId != null,
+    mirrorGlobalFnRecording,
   });
 
   resetComposerInputRef.current = composer.resetComposerInput;

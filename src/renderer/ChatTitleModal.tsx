@@ -27,7 +27,7 @@ export function ChatTitleModal({
         <>
           <button
             type="button"
-            className="btn btn-danger"
+            className="btn"
             onClick={onClose}
             disabled={saving}
           >

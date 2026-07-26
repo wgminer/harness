@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, Settings as SettingsIcon } from "lucide-react";
-import { RIG_PAGE_TITLE } from "../shared/rigPage";
-import { DEFAULT_SETTINGS } from "../shared/types";
-import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
+import { RIG_PAGE_TITLE, rigSection } from "../shared/rigPage";
+import { DEFAULT_SETTINGS, DEFAULT_LAYOUT } from "../shared/types";
+import type { Settings, TranscriptDictionaryEntry, WideView } from "../shared/types";
 import { DEFAULT_ACCENT, applyAccent, normalizeAccentHex } from "../shared/accent";
 import {
   DEFAULT_NOTE_TEMPLATE_ID,
@@ -32,6 +32,19 @@ import {
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
+import {
+  getCachedAccessibilityTrusted,
+  getCachedSecrets,
+  getCachedSettings,
+  loadSettingsForSystemPage,
+  nonSecretHydrationFromSettings,
+  setCachedAccessibilityTrusted,
+  setCachedHasOpenAIApiKey,
+  setCachedSecrets,
+  setCachedSettings,
+  shouldLoadSettingsSecrets,
+  type CachedSettingsSecrets,
+} from "./settings/settingsSessionCache";
 
 interface SettingsViewProps {
   /** After ChatGPT import (new conversations in sidebar). */
@@ -45,6 +58,8 @@ interface SettingsViewProps {
   /** When true, "New note" opens a windowed note instead of the main Editor. */
   openNoteInStickyWindow?: boolean;
   onOpenNoteInStickyWindowChange?: (value: boolean) => void;
+  /** Known from app setup; used for Voice cleanup hint before secrets load. */
+  openAIConfigured?: boolean;
 }
 
 const SAVE_DEBOUNCE_MS = 500;
@@ -57,6 +72,7 @@ type PersistedFormState = {
   r2SecretAccessKey: string;
   autoSend: boolean;
   globalFnHotkey: boolean;
+  bringToFrontOnBackgroundDictation: boolean;
   openToComposeOnLaunch: boolean;
   cleanupEnabled: boolean;
   cleanupPrompt: string;
@@ -100,28 +116,6 @@ function SettingsSaveToast({
   );
 }
 
-function fnShortcutStatusLabel(
-  accessibilityTrusted: boolean | null,
-  status: GlobalRecordingStatus | null,
-): string {
-  const needs: string[] = [];
-  if (
-    accessibilityTrusted === false ||
-    status?.monitorHealth === "accessibility_denied"
-  ) {
-    needs.push("Accessibility");
-  }
-  const mic = status?.microphonePermission;
-  if (mic === "denied" || mic === "undetermined") {
-    needs.push("Microphone");
-  }
-  if (needs.length > 0) return `Needs ${needs.join(" · ")}`;
-  if (status?.monitorHealth === "running") return "Ready — press Fn to dictate";
-  if (status?.hotkeyActive) return "Starting…";
-  if (accessibilityTrusted === null || status == null) return "Checking…";
-  return "On — quit and reopen if Fn doesn’t respond";
-}
-
 function FnShortcutControls({
   accessibilityTrusted,
   setAccessibilityTrusted,
@@ -133,65 +127,68 @@ function FnShortcutControls({
   globalRecordingStatus: GlobalRecordingStatus | null;
   refreshGlobalRecordingStatus: () => Promise<void>;
 }) {
+  // Avoid flashing action buttons while macOS permission checks are still in flight.
+  if (accessibilityTrusted === null || globalRecordingStatus == null) {
+    return null;
+  }
+
   const needsAccessibility =
     accessibilityTrusted !== true ||
-    globalRecordingStatus?.monitorHealth === "accessibility_denied";
-  const mic = globalRecordingStatus?.microphonePermission;
+    globalRecordingStatus.monitorHealth === "accessibility_denied";
+  const mic = globalRecordingStatus.microphonePermission;
   const needsMicrophone = mic !== "granted" && mic !== "unsupported";
-  const showActions = needsAccessibility || needsMicrophone;
+  if (!needsAccessibility && !needsMicrophone) return null;
 
   return (
     <div className="settings-fn-controls">
-      <p className="settings-fn-controls__status" data-testid="settings-global-recording-status">
-        {fnShortcutStatusLabel(accessibilityTrusted, globalRecordingStatus)}
-      </p>
-      {showActions ? (
-        <SettingsActions>
-          {needsAccessibility ? (
-            <button
-              type="button"
-              className="btn"
-              data-testid="settings-accessibility-prompt"
-              onClick={() => {
-                void window.harness.system.requestAccessibilityPrompt();
-                void window.harness.system.openAccessibilitySettings();
-                setTimeout(() => {
-                  void window.harness.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
-                }, 1200);
-              }}
-            >
-              Accessibility <ExternalLink size={14} aria-hidden />
-            </button>
-          ) : null}
-          {needsMicrophone ? (
-            <button
-              type="button"
-              className="btn"
-              data-testid="settings-microphone-prompt"
-              onClick={() => {
-                void window.harness.recording.requestMicrophoneAccess().then((ok) => {
-                  void refreshGlobalRecordingStatus();
-                  if (!ok) {
-                    void window.harness.system.openMicrophoneSettings();
-                  }
-                });
-              }}
-            >
-              Microphone <ExternalLink size={14} aria-hidden />
-            </button>
-          ) : null}
+      <SettingsActions>
+        {needsAccessibility ? (
           <button
             type="button"
             className="btn"
-            data-testid="settings-open-speech-recognition"
+            data-testid="settings-accessibility-prompt"
             onClick={() => {
-              void window.harness.system.openSpeechRecognitionSettings();
+              void window.harness.system.requestAccessibilityPrompt();
+              void window.harness.system.openAccessibilitySettings();
+              setTimeout(() => {
+                void window.harness.system.macosAccessibilityTrusted().then((trusted) => {
+                  setCachedAccessibilityTrusted(trusted);
+                  setAccessibilityTrusted(trusted);
+                });
+              }, 1200);
             }}
           >
-            Speech <ExternalLink size={14} aria-hidden />
+            Accessibility <ExternalLink size={14} aria-hidden />
           </button>
-        </SettingsActions>
-      ) : null}
+        ) : null}
+        {needsMicrophone ? (
+          <button
+            type="button"
+            className="btn"
+            data-testid="settings-microphone-prompt"
+            onClick={() => {
+              void window.harness.recording.requestMicrophoneAccess().then((ok) => {
+                void refreshGlobalRecordingStatus();
+                if (!ok) {
+                  void window.harness.system.openMicrophoneSettings();
+                }
+              });
+            }}
+          >
+            Microphone <ExternalLink size={14} aria-hidden />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="btn"
+          data-testid="settings-open-speech-recognition"
+          onClick={() => {
+            void window.harness.system.openSpeechRecognitionSettings();
+          }}
+        >
+          Speech <ExternalLink size={14} aria-hidden />
+        </button>
+      </SettingsActions>
     </div>
   );
 }
@@ -203,15 +200,28 @@ export function SettingsView({
   onSettingsChanged,
   openNoteInStickyWindow = false,
   onOpenNoteInStickyWindowChange,
+  openAIConfigured = false,
 }: SettingsViewProps) {
-  const [apiKey, setApiKey] = useState(D.openai?.apiKey ?? "");
+  const initialCached = getCachedSettings();
+  const initialNonSecret = initialCached
+    ? nonSecretHydrationFromSettings(initialCached)
+    : null;
+  const initialSecrets = getCachedSecrets();
+
+  const [apiKey, setApiKey] = useState(initialSecrets?.openaiApiKey ?? "");
   const [switchAnimationsReady, setSwitchAnimationsReady] = useState(false);
 
-  const [cleanupEnabled, setCleanupEnabled] = useState(D.transcription?.cleanup?.enabled ?? false);
-  const [cleanupPrompt, setCleanupPrompt] = useState(D.transcription?.cleanup?.prompt ?? "");
-  const [cleanupPromptDraft, setCleanupPromptDraft] = useState(D.transcription?.cleanup?.prompt ?? "");
+  const [cleanupEnabled, setCleanupEnabled] = useState(
+    initialNonSecret?.cleanupEnabled ?? D.transcription?.cleanup?.enabled ?? false,
+  );
+  const [cleanupPrompt, setCleanupPrompt] = useState(
+    initialNonSecret?.cleanupPrompt ?? D.transcription?.cleanup?.prompt ?? "",
+  );
+  const [cleanupPromptDraft, setCleanupPromptDraft] = useState(
+    initialNonSecret?.cleanupPrompt ?? D.transcription?.cleanup?.prompt ?? "",
+  );
   const [transcriptDictionary, setTranscriptDictionary] = useState<TranscriptDictionaryEntry[]>(
-    D.transcription?.dictionary ?? [],
+    initialNonSecret?.transcriptDictionary ?? D.transcription?.dictionary ?? [],
   );
   const [dictionaryModalOpen, setDictionaryModalOpen] = useState(false);
   const [editingDictionaryFrom, setEditingDictionaryFrom] = useState<string | null>(null);
@@ -219,26 +229,42 @@ export function SettingsView({
   const [dictionaryToDraft, setDictionaryToDraft] = useState("");
   const [cleanupPromptModalOpen, setCleanupPromptModalOpen] = useState(false);
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
-    DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
+    initialNonSecret?.noteTemplates ?? DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
   );
-  const [defaultNoteTemplateId, setDefaultNoteTemplateId] = useState(DEFAULT_NOTE_TEMPLATE_ID);
+  const [defaultNoteTemplateId, setDefaultNoteTemplateId] = useState(
+    initialNonSecret?.defaultNoteTemplateId ?? DEFAULT_NOTE_TEMPLATE_ID,
+  );
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateTitleDraft, setTemplateTitleDraft] = useState("");
   const [templateContentDraft, setTemplateContentDraft] = useState("");
   const [templateIsDefaultDraft, setTemplateIsDefaultDraft] = useState(false);
 
-  const [autoSend, setAutoSend] = useState(true);
-  const [globalFnHotkey, setGlobalFnHotkey] = useState(D.recording!.globalFnHotkey);
-  const [openToComposeOnLaunch, setOpenToComposeOnLaunch] = useState(D.chat!.openToComposeOnLaunch);
-  const [tavilyApiKey, setTavilyApiKey] = useState(D.search?.tavilyApiKey ?? "");
+  const [autoSend, setAutoSend] = useState(initialNonSecret?.autoSend ?? true);
+  const [globalFnHotkey, setGlobalFnHotkey] = useState(
+    initialNonSecret?.globalFnHotkey ?? D.recording!.globalFnHotkey,
+  );
+  const [bringToFrontOnBackgroundDictation, setBringToFrontOnBackgroundDictation] = useState(
+    initialNonSecret?.bringToFrontOnBackgroundDictation ??
+      D.recording!.bringToFrontOnBackgroundDictation,
+  );
+  const [openToComposeOnLaunch, setOpenToComposeOnLaunch] = useState(
+    initialNonSecret?.openToComposeOnLaunch ?? D.chat!.openToComposeOnLaunch,
+  );
+  const [tavilyApiKey, setTavilyApiKey] = useState(initialSecrets?.tavilyApiKey ?? "");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const [r2AccountId, setR2AccountId] = useState(D.sync!.accountId);
-  const [r2Bucket, setR2Bucket] = useState(D.sync!.bucket);
-  const [r2Prefix, setR2Prefix] = useState(D.sync!.prefix);
-  const [r2AccessKeyId, setR2AccessKeyId] = useState(D.sync!.accessKeyId);
-  const [r2SecretAccessKey, setR2SecretAccessKey] = useState("");
-  const [accent, setAccent] = useState(D.appearance?.accent ?? DEFAULT_ACCENT);
+  const [r2AccountId, setR2AccountId] = useState(initialNonSecret?.r2AccountId ?? D.sync!.accountId);
+  const [r2Bucket, setR2Bucket] = useState(initialNonSecret?.r2Bucket ?? D.sync!.bucket);
+  const [r2Prefix, setR2Prefix] = useState(initialNonSecret?.r2Prefix ?? D.sync!.prefix);
+  const [r2AccessKeyId, setR2AccessKeyId] = useState(
+    initialNonSecret?.r2AccessKeyId ?? D.sync!.accessKeyId,
+  );
+  const [r2SecretAccessKey, setR2SecretAccessKey] = useState(
+    initialSecrets?.r2SecretAccessKey ?? "",
+  );
+  const [accent, setAccent] = useState(initialNonSecret?.accent ?? D.appearance?.accent ?? DEFAULT_ACCENT);
+  const [wideView, setWideView] = useState<WideView>(DEFAULT_LAYOUT.wideView);
+  const [secretsLoaded, setSecretsLoaded] = useState(initialSecrets != null);
   const dataRefreshRef = useRef<(() => Promise<void>) | null>(null);
   const registerDataRefresh = useCallback((refresh: () => Promise<void>) => {
     dataRefreshRef.current = refresh;
@@ -250,13 +276,36 @@ export function SettingsView({
     return "linux";
   }, []);
   const isMac = platform === "darwin";
-  const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(null);
+  const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | null>(() =>
+    isMac ? getCachedAccessibilityTrusted() : null,
+  );
   const [globalRecordingStatus, setGlobalRecordingStatus] = useState<GlobalRecordingStatus | null>(
     null,
   );
-  const settingsHydratedRef = useRef(false);
+  const settingsHydratedRef = useRef(!!initialCached);
+  const secretsLoadedRef = useRef(initialSecrets != null);
   const skipAutosaveRef = useRef(false);
-  const lastPersistedRef = useRef("");
+  const lastPersistedRef = useRef(
+    initialNonSecret
+      ? serializeFormState({
+          apiKey: initialSecrets?.openaiApiKey ?? "",
+          tavilyApiKey: initialSecrets?.tavilyApiKey ?? "",
+          r2SecretAccessKey: initialSecrets?.r2SecretAccessKey ?? "",
+          autoSend: initialNonSecret.autoSend,
+          globalFnHotkey: initialNonSecret.globalFnHotkey,
+          bringToFrontOnBackgroundDictation: initialNonSecret.bringToFrontOnBackgroundDictation,
+          openToComposeOnLaunch: initialNonSecret.openToComposeOnLaunch,
+          cleanupEnabled: initialNonSecret.cleanupEnabled,
+          cleanupPrompt: initialNonSecret.cleanupPrompt,
+          transcriptDictionary: initialNonSecret.transcriptDictionary,
+          r2AccountId: initialNonSecret.r2AccountId,
+          r2Bucket: initialNonSecret.r2Bucket,
+          r2Prefix: initialNonSecret.r2Prefix,
+          r2AccessKeyId: initialNonSecret.r2AccessKeyId,
+          accent: initialNonSecret.accent,
+        })
+      : "",
+  );
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistSettingsRef = useRef<() => Promise<boolean>>(async () => true);
   const flushSettingsOnUnmountRef = useRef(false);
@@ -270,9 +319,77 @@ export function SettingsView({
   const [activeTab, setActiveTab] = useState<SettingsTabId>(normalizeSettingsTab(initialTab));
   const [syncQrOpen, setSyncQrOpen] = useState(false);
 
+  const applySecretsToForm = useCallback((secrets: CachedSettingsSecrets) => {
+    skipAutosaveRef.current = true;
+    setApiKey(secrets.openaiApiKey);
+    setTavilyApiKey(secrets.tavilyApiKey);
+    setR2SecretAccessKey(secrets.r2SecretAccessKey);
+    setCachedHasOpenAIApiKey(secrets.openaiApiKey.trim().length > 0);
+    const prev = JSON.parse(lastPersistedRef.current || "{}") as Partial<PersistedFormState>;
+    lastPersistedRef.current = serializeFormState({
+      apiKey: secrets.openaiApiKey,
+      tavilyApiKey: secrets.tavilyApiKey,
+      r2SecretAccessKey: secrets.r2SecretAccessKey,
+      autoSend: prev.autoSend ?? autoSend,
+      globalFnHotkey: prev.globalFnHotkey ?? globalFnHotkey,
+      bringToFrontOnBackgroundDictation:
+        prev.bringToFrontOnBackgroundDictation ?? bringToFrontOnBackgroundDictation,
+      openToComposeOnLaunch: prev.openToComposeOnLaunch ?? openToComposeOnLaunch,
+      cleanupEnabled: prev.cleanupEnabled ?? cleanupEnabled,
+      cleanupPrompt: prev.cleanupPrompt ?? cleanupPrompt,
+      transcriptDictionary: prev.transcriptDictionary ?? transcriptDictionary,
+      r2AccountId: prev.r2AccountId ?? r2AccountId,
+      r2Bucket: prev.r2Bucket ?? r2Bucket,
+      r2Prefix: prev.r2Prefix ?? r2Prefix,
+      r2AccessKeyId: prev.r2AccessKeyId ?? r2AccessKeyId,
+      accent: prev.accent ?? accent,
+    });
+    secretsLoadedRef.current = true;
+    setSecretsLoaded(true);
+  }, [
+    accent,
+    autoSend,
+    cleanupEnabled,
+    cleanupPrompt,
+    globalFnHotkey,
+    bringToFrontOnBackgroundDictation,
+    openToComposeOnLaunch,
+    r2AccessKeyId,
+    r2AccountId,
+    r2Bucket,
+    r2Prefix,
+    transcriptDictionary,
+  ]);
+
   useEffect(() => {
-    if (initialTab) setActiveTab(normalizeSettingsTab(initialTab));
+    setActiveTab(normalizeSettingsTab(initialTab));
   }, [initialTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.harness.customization.getLayoutOptions().then((layout) => {
+      if (!cancelled && (layout.wideView === "centered" || layout.wideView === "scaled")) {
+        setWideView(layout.wideView);
+      }
+    });
+    const unsub = window.harness.customization.onUpdated((p) => {
+      if (p.type !== "layout") return;
+      void window.harness.customization.getLayoutOptions().then((layout) => {
+        if (!cancelled && (layout.wideView === "centered" || layout.wideView === "scaled")) {
+          setWideView(layout.wideView);
+        }
+      });
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
+
+  const handleWideViewChange = useCallback((next: WideView) => {
+    setWideView(next);
+    void window.harness.customization.setLayout({ wideView: next });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -283,67 +400,116 @@ export function SettingsView({
         });
       });
     };
-    void Promise.all([
-      window.harness.settings.get(),
-      window.harness.credentials.getSecretsForSettings(),
-    ])
-      .then(([s, secrets]) => {
-        if (cancelled) return;
-        skipAutosaveRef.current = true;
-        const S = s as Settings;
-        const hydrated: PersistedFormState = {
-          apiKey: secrets.openaiApiKey,
-          tavilyApiKey: secrets.tavilyApiKey,
-          r2SecretAccessKey: secrets.r2SecretAccessKey,
-          autoSend: S.recording?.autoSend ?? D.recording!.autoSend,
-          globalFnHotkey: S.recording?.globalFnHotkey ?? D.recording!.globalFnHotkey,
-          openToComposeOnLaunch:
-            S.chat?.openToComposeOnLaunch ??
-            (S.chat as { composeFirst?: boolean } | undefined)?.composeFirst ??
-            D.chat!.openToComposeOnLaunch,
-          cleanupEnabled: S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false,
-          cleanupPrompt: S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "",
-          transcriptDictionary: S.transcription?.dictionary ?? D.transcription?.dictionary ?? [],
-          r2AccountId: S.sync?.accountId ?? D.sync!.accountId,
-          r2Bucket: S.sync?.bucket ?? D.sync!.bucket,
-          r2Prefix: S.sync?.prefix ?? D.sync!.prefix,
-          r2AccessKeyId: S.sync?.accessKeyId ?? D.sync!.accessKeyId,
-          accent: normalizeAccentHex(S.appearance?.accent ?? D.appearance?.accent),
-        };
+
+    const applyNonSecrets = (S: Settings, secrets: CachedSettingsSecrets | null) => {
+      skipAutosaveRef.current = true;
+      const nonSecret = nonSecretHydrationFromSettings(S);
+      const hydrated: PersistedFormState = {
+        apiKey: secrets?.openaiApiKey ?? "",
+        tavilyApiKey: secrets?.tavilyApiKey ?? "",
+        r2SecretAccessKey: secrets?.r2SecretAccessKey ?? "",
+        autoSend: nonSecret.autoSend,
+        globalFnHotkey: nonSecret.globalFnHotkey,
+        bringToFrontOnBackgroundDictation: nonSecret.bringToFrontOnBackgroundDictation,
+        openToComposeOnLaunch: nonSecret.openToComposeOnLaunch,
+        cleanupEnabled: nonSecret.cleanupEnabled,
+        cleanupPrompt: nonSecret.cleanupPrompt,
+        transcriptDictionary: nonSecret.transcriptDictionary,
+        r2AccountId: nonSecret.r2AccountId,
+        r2Bucket: nonSecret.r2Bucket,
+        r2Prefix: nonSecret.r2Prefix,
+        r2AccessKeyId: nonSecret.r2AccessKeyId,
+        accent: nonSecret.accent,
+      };
+      if (secrets) {
         setApiKey(hydrated.apiKey);
         setTavilyApiKey(hydrated.tavilyApiKey);
         setR2SecretAccessKey(hydrated.r2SecretAccessKey);
-        setAutoSend(hydrated.autoSend);
-        setGlobalFnHotkey(hydrated.globalFnHotkey);
-        setOpenToComposeOnLaunch(hydrated.openToComposeOnLaunch);
-        setCleanupEnabled(hydrated.cleanupEnabled);
-        setCleanupPrompt(hydrated.cleanupPrompt);
-        setCleanupPromptDraft(hydrated.cleanupPrompt);
-        setTranscriptDictionary(hydrated.transcriptDictionary);
-        setR2AccountId(hydrated.r2AccountId);
-        setR2Bucket(hydrated.r2Bucket);
-        setR2Prefix(hydrated.r2Prefix);
-        setR2AccessKeyId(hydrated.r2AccessKeyId);
-        setAccent(hydrated.accent);
-        applyAccent(hydrated.accent);
-        setNoteTemplates(normalizeNoteTemplates(S.notes?.templates));
-        setDefaultNoteTemplateId(
-          normalizeDefaultNoteTemplateId(S.notes?.defaultTemplateId, normalizeNoteTemplates(S.notes?.templates)),
-        );
-        lastPersistedRef.current = serializeFormState(hydrated);
-      })
-      .finally(() => {
-        if (!cancelled) settingsHydratedRef.current = true;
-        enableSwitchAnimations();
-      });
+        secretsLoadedRef.current = true;
+        setSecretsLoaded(true);
+      }
+      setAutoSend(hydrated.autoSend);
+      setGlobalFnHotkey(hydrated.globalFnHotkey);
+      setBringToFrontOnBackgroundDictation(hydrated.bringToFrontOnBackgroundDictation);
+      setOpenToComposeOnLaunch(hydrated.openToComposeOnLaunch);
+      setCleanupEnabled(hydrated.cleanupEnabled);
+      setCleanupPrompt(hydrated.cleanupPrompt);
+      setCleanupPromptDraft(hydrated.cleanupPrompt);
+      setTranscriptDictionary(hydrated.transcriptDictionary);
+      setR2AccountId(hydrated.r2AccountId);
+      setR2Bucket(hydrated.r2Bucket);
+      setR2Prefix(hydrated.r2Prefix);
+      setR2AccessKeyId(hydrated.r2AccessKeyId);
+      setAccent(hydrated.accent);
+      applyAccent(hydrated.accent);
+      setNoteTemplates(nonSecret.noteTemplates);
+      setDefaultNoteTemplateId(nonSecret.defaultNoteTemplateId);
+      lastPersistedRef.current = serializeFormState(hydrated);
+    };
+
+    void (async () => {
+      try {
+        const { settings, fetched } = await loadSettingsForSystemPage({
+          getCached: getCachedSettings,
+          fetchSettings: () => window.harness.settings.get() as Promise<Settings>,
+          setCache: setCachedSettings,
+        });
+        if (cancelled) return;
+        // Warm cache already seeded React state on mount; only apply after a cold fetch.
+        if (fetched) {
+          applyNonSecrets(settings, getCachedSecrets());
+        }
+      } finally {
+        if (!cancelled) {
+          settingsHydratedRef.current = true;
+          enableSwitchAnimations();
+        }
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
   }, []);
 
   useEffect(() => {
+    if (!shouldLoadSettingsSecrets(activeTab, syncQrOpen, secretsLoadedRef.current)) return;
+    let cancelled = false;
+    void window.harness.credentials
+      .getSecretsForSettings()
+      .then((secrets) => {
+        if (cancelled) return;
+        setCachedSecrets(secrets);
+        applySecretsToForm(secrets);
+      })
+      .catch((err) => {
+        console.error("[Settings] secrets load failed", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, applySecretsToForm, syncQrOpen]);
+
+  useEffect(() => {
     if (!isMac) return;
-    void window.harness.system.macosAccessibilityTrusted().then(setAccessibilityTrusted);
+    let cancelled = false;
+    const cached = getCachedAccessibilityTrusted();
+    if (cached != null) setAccessibilityTrusted(cached);
+    const outer = requestAnimationFrame(() => {
+      const inner = requestAnimationFrame(() => {
+        void window.harness.system.macosAccessibilityTrusted().then((trusted) => {
+          if (cancelled) return;
+          setCachedAccessibilityTrusted(trusted);
+          setAccessibilityTrusted(trusted);
+        });
+      });
+      // Stash inner id on outer cancellation via closed-over flag only.
+      void inner;
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(outer);
+    };
   }, [isMac]);
 
   const refreshGlobalRecordingStatus = useCallback(async () => {
@@ -357,11 +523,22 @@ export function SettingsView({
 
   useEffect(() => {
     if (!isMac || activeTab !== "general" || !globalFnHotkey) return;
-    void refreshGlobalRecordingStatus();
-    const timer = setInterval(() => {
-      void refreshGlobalRecordingStatus();
-    }, 3000);
-    return () => clearInterval(timer);
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const outer = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        void refreshGlobalRecordingStatus();
+        timer = setInterval(() => {
+          void refreshGlobalRecordingStatus();
+        }, 3000);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(outer);
+      if (timer) clearInterval(timer);
+    };
   }, [activeTab, globalFnHotkey, isMac, refreshGlobalRecordingStatus]);
 
   useEffect(() => {
@@ -377,6 +554,7 @@ export function SettingsView({
       r2SecretAccessKey,
       autoSend,
       globalFnHotkey,
+      bringToFrontOnBackgroundDictation,
       openToComposeOnLaunch,
       cleanupEnabled,
       cleanupPrompt,
@@ -406,6 +584,7 @@ export function SettingsView({
     try {
       if (next.apiKey !== (prev.apiKey ?? "")) {
         await window.harness.credentials.setOpenAIApiKey(next.apiKey.trim());
+        setCachedHasOpenAIApiKey(next.apiKey.trim().length > 0);
       }
       if (next.tavilyApiKey !== (prev.tavilyApiKey ?? "")) {
         await window.harness.credentials.setTavilyApiKey(next.tavilyApiKey.trim());
@@ -414,7 +593,11 @@ export function SettingsView({
         await window.harness.credentials.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
       }
       await window.harness.settings.set({
-        recording: { autoSend: next.autoSend, globalFnHotkey: next.globalFnHotkey },
+        recording: {
+          autoSend: next.autoSend,
+          globalFnHotkey: next.globalFnHotkey,
+          bringToFrontOnBackgroundDictation: next.bringToFrontOnBackgroundDictation,
+        },
         chat: { openToComposeOnLaunch: next.openToComposeOnLaunch },
         transcription: {
           cleanup: {
@@ -431,6 +614,19 @@ export function SettingsView({
         },
         appearance: { accent: normalizeAccentHex(next.accent) },
       });
+      try {
+        const refreshed = (await window.harness.settings.get()) as Settings;
+        setCachedSettings(refreshed);
+      } catch {
+        // Keep prior cache if refresh fails; form state is still authoritative.
+      }
+      if (secretsLoadedRef.current) {
+        setCachedSecrets({
+          openaiApiKey: next.apiKey,
+          tavilyApiKey: next.tavilyApiKey,
+          r2SecretAccessKey: next.r2SecretAccessKey,
+        });
+      }
       const r2Changed =
         next.r2AccountId !== prev.r2AccountId ||
         next.r2Bucket !== prev.r2Bucket ||
@@ -459,6 +655,7 @@ export function SettingsView({
     apiKey,
     autoSend,
     globalFnHotkey,
+    bringToFrontOnBackgroundDictation,
     openToComposeOnLaunch,
     cleanupEnabled,
     cleanupPrompt,
@@ -497,6 +694,7 @@ export function SettingsView({
       r2SecretAccessKey,
       autoSend,
       globalFnHotkey,
+      bringToFrontOnBackgroundDictation,
       openToComposeOnLaunch,
       cleanupEnabled,
       cleanupPrompt,
@@ -532,6 +730,7 @@ export function SettingsView({
       r2SecretAccessKey,
       autoSend,
       globalFnHotkey,
+      bringToFrontOnBackgroundDictation,
       openToComposeOnLaunch,
       cleanupEnabled,
       cleanupPrompt,
@@ -554,6 +753,7 @@ export function SettingsView({
   }, [
     autoSend,
     globalFnHotkey,
+    bringToFrontOnBackgroundDictation,
     openToComposeOnLaunch,
     cleanupEnabled,
     cleanupPrompt,
@@ -747,36 +947,55 @@ export function SettingsView({
         <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
           {activeTab === "general" && <SettingsTabPanel id="general">
-            <SettingsGroup
-              title="Theme"
-              description="One accent color. Surfaces stay dark; muted and primary accents are derived from it."
-            >
+            <SettingsGroup title="Theme" description="One accent color. Surfaces stay dark.">
               <AccentColorField value={accent} onChange={setAccent} />
             </SettingsGroup>
 
             <SettingsGroup
-              title="Sync"
-              description="Show a QR that pairs another device with your API keys and R2 backup settings."
+              title="Large window"
+              description="On large windows, keep the interface as a readable block in the middle, or stretch it to the edges."
             >
+              <div
+                className="settings-segmented"
+                role="radiogroup"
+                aria-label="Large window layout"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  className={`settings-segment${wideView === "scaled" ? " settings-segment--active" : ""}`}
+                  aria-checked={wideView === "scaled"}
+                  data-testid="settings-wide-view-scaled"
+                  onClick={() => handleWideViewChange("scaled")}
+                >
+                  Scaled
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  className={`settings-segment${wideView === "centered" ? " settings-segment--active" : ""}`}
+                  aria-checked={wideView === "centered"}
+                  data-testid="settings-wide-view-centered"
+                  onClick={() => handleWideViewChange("centered")}
+                >
+                  Centered
+                </button>
+              </div>
+            </SettingsGroup>
+
+            <SettingsGroup title="Sync">
               <SettingsActions>
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="btn"
                   onClick={() => setSyncQrOpen(true)}
                 >
-                  Show sync QR
+                  Show Sync QR
                 </button>
               </SettingsActions>
-              <SettingsHint>
-                Scan on iPhone to apply synced credentials. Configure the R2 bucket under Data → Backup
-                if pairing fails.
-              </SettingsHint>
             </SettingsGroup>
 
-            <SettingsGroup
-              title="Behavior"
-              description="How Harness starts, opens notes, and handles dictation."
-            >
+            <SettingsGroup title="Behavior">
               <SettingsSwitch
                 id="openToComposeOnLaunchToggle"
                 testId="settings-open-to-compose-on-launch"
@@ -787,9 +1006,16 @@ export function SettingsView({
               <SettingsSwitch
                 id="autoSendToggle"
                 testId="settings-auto-send"
-                label="Auto-send after dictation"
+                label="Send after dictation"
                 checked={autoSend}
                 onChange={(e) => setAutoSend(e.target.checked)}
+              />
+              <SettingsSwitch
+                id="bringToFrontOnBackgroundDictationToggle"
+                testId="settings-bring-to-front-background-dictation"
+                label="Bring Harness to front for background dictation"
+                checked={bringToFrontOnBackgroundDictation}
+                onChange={(e) => setBringToFrontOnBackgroundDictation(e.target.checked)}
               />
               <SettingsSwitch
                 id="openNoteInStickyWindowToggle"
@@ -821,10 +1047,7 @@ export function SettingsView({
           </SettingsTabPanel>}
 
           {activeTab === "notes" && <SettingsTabPanel id="notes">
-            <SettingsGroup
-              title="Editor templates"
-              description="Edit note templates. The default is applied when you create a new note; non-blank templates appear in the picker on a fresh note."
-            >
+            <SettingsGroup title="Editor templates" description="Edit note templates.">
               <div className="settings-entry-list">
                 {noteTemplates.map((template) => (
                   <SettingsEntryRow
@@ -841,25 +1064,10 @@ export function SettingsView({
           </SettingsTabPanel>}
 
           {activeTab === "voice" && <SettingsTabPanel id="voice">
-            {isMac ? (
-              <SettingsGroup
-                title="On-device transcription"
-                description="Voice dictation uses Apple's Speech framework on this Mac. No model download is required."
-              >
-                <SettingsHint>
-                  Enable Speech Recognition for Harness in System Settings if prompted. On macOS versions before 26,
-                  also install the dictation language under Keyboard → Dictation.
-                </SettingsHint>
-              </SettingsGroup>
-            ) : null}
-
-            <SettingsGroup
-              title="Voice & transcription"
-              description="Spoken audio is turned into text on this device. Optional cleanup uses your API key."
-            >
+            <SettingsGroup title="Voice & transcription">
               <SettingsSwitch
                 id="transcriptCleanupToggle"
-                label="Automatically tidy up dictation text"
+                label="Clean up transcripts"
                 checked={cleanupEnabled}
                 onChange={(e) => {
                   const enabled = e.target.checked;
@@ -874,17 +1082,15 @@ export function SettingsView({
                   </button>
                 </SettingsActions>
               ) : null}
-              {cleanupEnabled && !apiKey.trim() ? (
+              {cleanupEnabled &&
+              !(secretsLoaded ? apiKey.trim().length > 0 : openAIConfigured) ? (
                 <SettingsHint>
-                  Cleanup needs an OpenAI API key in Data. On-device transcription still works without one.
+                  Cleanup needs an OpenAI API key in {rigSection("Data")}.
                 </SettingsHint>
               ) : null}
             </SettingsGroup>
 
-            <SettingsGroup
-              title="Transcript corrections"
-              description="Deterministic fixes applied after transcription (kept separate from cleanup prompt)."
-            >
+            <SettingsGroup title="Transcript corrections">
               <div className="settings-entry-list">
                 {transcriptDictionary.map((entry) => (
                   <SettingsEntryRow
@@ -916,8 +1122,8 @@ export function SettingsView({
                 <button type="button" className="btn" onClick={closeCleanupPromptModal}>
                   Cancel
                 </button>
-                <button type="button" className="btn" onClick={resetCleanupPromptDraft}>
-                  Reset To Default
+                <button type="button" className="btn btn-outline" onClick={resetCleanupPromptDraft}>
+                  Reset to Default
                 </button>
                 <button
                   type="button"
@@ -1071,7 +1277,7 @@ export function SettingsView({
           )}
 
           <SyncQrModal
-            open={syncQrOpen}
+            open={syncQrOpen && secretsLoaded}
             onClose={() => setSyncQrOpen(false)}
             accountId={r2AccountId}
             bucket={r2Bucket}

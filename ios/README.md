@@ -36,7 +36,7 @@ Simulator builds often work without a paid team; device builds require your own 
 ## First-run setup on iPhone
 
 1. Build and run on a device (iOS 17+). Camera QR scanning needs a real device; paste-code works on simulator.
-2. On the Mac: Settings → Data → **Show sync QR** (R2 must already be working and sync’d at least once).
+2. On the Mac: Settings → General → **Show Sync QR** (R2 must already be working and sync’d at least once).
 3. On the phone: Settings → **Set up sync** → scan that QR (or paste the sync code).
 4. Phone saves credentials, tests the connection, and pulls the backup. Chats appear without filling OpenAI or R2 forms.
 

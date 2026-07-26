@@ -14,9 +14,9 @@ final class RecordingSessionManager: ObservableObject {
     private var liveActivityTask: Task<Void, Never>?
 
     init() {
-        // Intentionally do not forward recorder.objectWillChange — metering
-        // publishes ~12×/sec and would rebuild every view that observes this
-        // session. Dictation UI observes AudioRecorder in leaf views instead.
+        // Intentionally do not forward recorder.objectWillChange — elapsed publishes
+        // ~10×/sec and would rebuild every view that observes this session.
+        // Dictation UI observes AudioRecorder publishers in leaf views instead.
         NotificationCenter.default.addObserver(
             forName: .dictationLiveActivityStopRequested,
             object: nil,
@@ -56,6 +56,9 @@ final class RecordingSessionManager: ObservableObject {
             let startedAt = Date()
             enqueueLiveActivityWork { [weak self] in
                 guard let self, id == self.sessionID else { return }
+                // Let first metering / display frames settle before ActivityKit IPC.
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard id == self.sessionID else { return }
                 await self.startLiveActivity(startedAt: startedAt)
                 if id != self.sessionID {
                     await self.endLiveActivity()
@@ -95,7 +98,7 @@ final class RecordingSessionManager: ObservableObject {
 
     private func enqueueLiveActivityWork(_ work: @escaping @MainActor () async -> Void) {
         let previous = liveActivityTask
-        liveActivityTask = Task { @MainActor in
+        liveActivityTask = Task(priority: .utility) { @MainActor in
             _ = await previous?.value
             await work()
         }

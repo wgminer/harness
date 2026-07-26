@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   conversationSidebarIconKind,
-  formatNewChatLabel,
+  formatEmptyChatLabel,
   formatVoiceDictationTitle,
   isSidebarVisibleConversation,
   isTimePlaceholderTitle,
@@ -17,7 +17,7 @@ describe("conversationSession", () => {
   });
 
   it("formats empty chat labels with Empty chat @ prefix", () => {
-    const title = formatNewChatLabel(Date.parse("2026-06-10T15:45:00"));
+    const title = formatEmptyChatLabel(Date.parse("2026-06-10T15:45:00"));
     expect(title.startsWith("Empty chat @ ")).toBe(true);
     expect(isTimePlaceholderTitle(title)).toBe(true);
   });

@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { JoyDivisionField } from "./JoyDivisionField";
+import type { GlobalHotkeyOverlayPhase } from "./globalHotkeyController";
 
 interface HotkeyRecordingOverlayProps {
-  active: boolean;
+  phase: GlobalHotkeyOverlayPhase;
   error?: string | null;
+  recordingPath?: string | null;
+  onRetry?: () => void;
+  onShowInFinder?: () => void;
+  onDismiss?: () => void;
 }
 
 function recordingFieldSize(): { width: number; height: number } {
@@ -15,54 +21,124 @@ function recordingFieldSize(): { width: number; height: number } {
 }
 
 /**
- * Full-screen recording status. When active, shows a white Joy Division field
- * driven by `global-recording-level` (subscribed here so App is not re-rendered at meter rate).
+ * Full-screen Fn dictation chrome for unfocused captures.
+ * Recording: Joy Division field. Transcribing: spinner. Failed: actions.
  */
-export function HotkeyRecordingOverlay({ active, error }: HotkeyRecordingOverlayProps) {
+export function HotkeyRecordingOverlay({
+  phase,
+  error,
+  recordingPath,
+  onRetry,
+  onShowInFinder,
+  onDismiss,
+}: HotkeyRecordingOverlayProps) {
   const levelRef = useRef(0);
   const [fieldSize, setFieldSize] = useState(recordingFieldSize);
+  const recording = phase === "recording";
+  const interactive = phase === "failed";
 
   useEffect(() => {
-    if (!active) {
+    if (!recording) {
       levelRef.current = 0;
       return;
     }
     return window.harness.recording.onGlobalRecordingLevel((level) => {
       levelRef.current = level;
     });
-  }, [active]);
+  }, [recording]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!recording) return;
     const sync = () => setFieldSize(recordingFieldSize());
     sync();
     window.addEventListener("resize", sync);
     return () => window.removeEventListener("resize", sync);
-  }, [active]);
+  }, [recording]);
 
-  if (!active && !error) return null;
+  useEffect(() => {
+    if (phase !== "failed" && phase !== "transcribing") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      if (phase === "failed") {
+        onDismiss?.();
+      } else if (phase === "transcribing") {
+        void window.harness.recording.cancelGlobalTranscription();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [phase, onDismiss]);
+
+  if (phase === "idle") return null;
 
   return (
     <div
       className="hotkey-recording-overlay"
       data-testid="hotkey-recording-overlay"
-      data-recording={active ? "true" : "false"}
+      data-recording={recording ? "true" : "false"}
+      data-phase={phase}
+      data-interactive={interactive ? "true" : "false"}
       role="status"
       aria-live="polite"
-      aria-label={error ?? (active ? "Recording" : "Recording status")}
+      aria-label={
+        error ??
+        (phase === "recording"
+          ? "Recording"
+          : phase === "transcribing"
+            ? "Transcribing"
+            : "Recording status")
+      }
     >
-      {active ? (
+      {phase === "recording" ? (
         <JoyDivisionField
-          active={active}
+          active={recording}
           levelRef={levelRef}
           width={fieldSize.width}
           height={fieldSize.height}
           className="hotkey-recording-overlay__field"
         />
       ) : null}
-      {error ? (
-        <div className="hotkey-recording-overlay__error" data-testid="hotkey-recording-error">
-          {error}
+
+      {phase === "transcribing" ? (
+        <div className="hotkey-recording-overlay__transcribing" data-testid="hotkey-recording-transcribing">
+          <Loader2 size={28} className="hotkey-recording-overlay__spinner" aria-hidden />
+          <span>Transcribing…</span>
+        </div>
+      ) : null}
+
+      {phase === "failed" ? (
+        <div className="hotkey-recording-overlay__failed" data-testid="hotkey-recording-failed">
+          <p className="hotkey-recording-overlay__error-text">{error ?? "Something went wrong."}</p>
+          <div className="hotkey-recording-overlay__actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              data-testid="hotkey-recording-retry"
+              onClick={() => onRetry?.()}
+              disabled={!recordingPath}
+            >
+              Retry
+            </button>
+            {recordingPath ? (
+              <button
+                type="button"
+                className="btn"
+                data-testid="hotkey-recording-show-in-finder"
+                onClick={() => onShowInFinder?.()}
+              >
+                Show in Finder
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="btn"
+              data-testid="hotkey-recording-dismiss"
+              onClick={() => onDismiss?.()}
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       ) : null}
     </div>
