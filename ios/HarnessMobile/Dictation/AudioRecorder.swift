@@ -122,7 +122,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     /// Highest smoothed level seen while this take was recording (for pre-transcribe validation).
     /// Not `@Published` — updated mid-record without waking SwiftUI observers.
     private(set) var peakLevelDuringSession: CGFloat = 0
-    /// Latest smoothed meter for UIKit waveform sampling (CADisplayLink). Not `@Published`.
+    /// Latest smoothed meter for peak tracking / validation. Not `@Published`.
     private(set) var currentMeterLevel: CGFloat = 0
     /// File left on disk after an unexpected teardown (interruption / media-reset / route fail).
     /// Cleared on the next intentional cancel or successful `start()`.
@@ -223,6 +223,9 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard let recorder, let url = outputURL else { throw AudioRecorderError.notRecording }
         // Mark before flipping isRecording so any observer sees an intentional end.
         intentionalStop = true
+        if let startedAt {
+            elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        }
         stopTimer()
         removeSessionObservers()
         recorder.stop()
@@ -491,14 +494,14 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     private func startTimer() {
         stopTimer()
-        // Tick metering often for smoothing; elapsed publishes at tenths resolution (~10 Hz).
+        // ~10 Hz is enough for peak/silence validation + second-resolution elapsed UI.
         // Scheduled on RunLoop.main, so the callback is already on the main actor.
-        let timer = Timer(timeInterval: 0.033, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let startedAt = self.startedAt else { return }
                 let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
-                // Match tenths display (m:ss.t) — publish every 100ms.
-                if ms - self.elapsedMs >= 100 || ms < self.elapsedMs {
+                // Match m:ss display — publish every second.
+                if ms - self.elapsedMs >= 1000 || ms < self.elapsedMs {
                     self.elapsedMs = ms
                 }
                 self.tickMetering()
@@ -534,7 +537,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
         smoothedLevel = AudioRecorderMetering.smooth(current: smoothedLevel, toward: heldPeak)
         let level = CGFloat(smoothedLevel)
-        // Non-published — UIKit waveform samples via currentMeterLevel on CADisplayLink.
+        // Non-published — used only for peak/silence validation after stop.
         currentMeterLevel = level
         if level > peakLevelDuringSession {
             peakLevelDuringSession = level

@@ -24,7 +24,7 @@ impl MicPermissionStatus {
 }
 
 pub const MICROPHONE_PERMISSION_DENIED_MESSAGE: &str =
-    "Microphone access is required. Enable Harness in System Settings → Privacy & Security → Microphone, then quit and reopen. If Harness is not listed, install a build that includes the microphone entitlement and try Ask For Microphone again.";
+    "Microphone access is required. Enable Here in System Settings → Privacy & Security → Microphone, then quit and reopen. If Here is not listed, install a build that includes the microphone entitlement and try Ask For Microphone again.";
 
 /// Current Microphone TCC status without prompting.
 pub fn microphone_permission_status() -> MicPermissionStatus {

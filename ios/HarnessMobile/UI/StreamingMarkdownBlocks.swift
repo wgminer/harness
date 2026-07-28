@@ -7,6 +7,56 @@ struct StreamingMarkdownBlocks: Equatable {
     var trailing: String
 
     static func split(_ content: String) -> StreamingMarkdownBlocks {
+        split(content, previous: nil)
+    }
+
+    /// Incremental split: when `content` still begins with `previous.completed.joined()`,
+    /// only re-scan the remainder so settled blocks stay identity-stable for MarkdownUI.
+    static func split(_ content: String, previous: StreamingMarkdownBlocks?) -> StreamingMarkdownBlocks {
+        if let previous, !previous.completed.isEmpty {
+            let prefix = previous.completed.joined()
+            if content.hasPrefix(prefix) {
+                var remainder = String(content.dropFirst(prefix.count))
+                var completed = previous.completed
+
+                // Full split attaches blank-line separators to the preceding segment when a
+                // new segment starts. Mirror that when growing past a fully-consumed trailing.
+                if previous.trailing.isEmpty,
+                   let absorbed = absorbLeadingBlankLineSeparators(from: &remainder),
+                   !absorbed.isEmpty {
+                    completed[completed.count - 1] += absorbed
+                }
+
+                let remainderSplit = splitFull(remainder)
+                return StreamingMarkdownBlocks(
+                    completed: completed + remainderSplit.completed,
+                    trailing: remainderSplit.trailing
+                )
+            }
+        }
+        return splitFull(content)
+    }
+
+    /// If `text` starts with one or more blank lines and then more content, move those
+    /// separator lines out of `text` and return them. EOF-only blank lines are left alone.
+    private static func absorbLeadingBlankLineSeparators(from text: inout String) -> String? {
+        guard !text.isEmpty else { return nil }
+        var index = text.startIndex
+        var absorbed = ""
+        while index < text.endIndex {
+            let lineEnd = text[index...].firstIndex(of: "\n").map { text.index(after: $0) } ?? text.endIndex
+            let line = String(text[index..<lineEnd])
+            let body = line.hasSuffix("\n") ? String(line.dropLast()) : line
+            guard isBlankLine(body) else { break }
+            absorbed += line
+            index = lineEnd
+        }
+        guard !absorbed.isEmpty, index < text.endIndex else { return nil }
+        text = String(text[index...])
+        return absorbed
+    }
+
+    private static func splitFull(_ content: String) -> StreamingMarkdownBlocks {
         guard !content.isEmpty else {
             return StreamingMarkdownBlocks(completed: [], trailing: "")
         }

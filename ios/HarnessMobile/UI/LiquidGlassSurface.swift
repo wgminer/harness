@@ -37,25 +37,9 @@ struct LiquidGlassSurface: ViewModifier {
                                 lineWidth: 1
                             )
                     }
-                    .overlay(alignment: .top) {
-                        ContinuousGlassShape(cornerRadius: cornerRadius)
-                            .stroke(
-                                Color.white.opacity(colorScheme == .dark ? 0.12 : 0.35),
-                                lineWidth: 1
-                            )
-                            .blur(radius: 0.5)
-                            .mask {
-                                LinearGradient(
-                                    colors: [.white, .clear],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                )
-                            }
-                            .allowsHitTesting(false)
-                    }
                     .shadow(
-                        color: .black.opacity(colorScheme == .dark ? 0.35 : 0.14),
-                        radius: 24,
+                        color: .black.opacity(colorScheme == .dark ? 0.22 : 0.08),
+                        radius: 8,
                         y: shadowOffsetY
                     )
             }

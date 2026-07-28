@@ -19,7 +19,7 @@ pub async fn print_html(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let job = job_name.unwrap_or("Harness Note");
+    let job = job_name.unwrap_or("Here Note");
     let script = format!(
         r#"
         (async () => {{

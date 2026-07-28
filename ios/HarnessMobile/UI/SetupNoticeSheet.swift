@@ -17,7 +17,7 @@ struct SetupNoticeSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
             }
-            .navigationTitle("Welcome to Harness")
+            .navigationTitle("Welcome to Here")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

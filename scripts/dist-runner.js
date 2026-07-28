@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unified dist runner for Harness (Tauri).
+ * Unified dist runner for Here (Tauri).
  *
  * Steps: icon -> speech-helper -> fn-monitor -> vite build -> tauri build
  */
@@ -224,8 +224,8 @@ async function runStep(ctx, idx, total, label, fn) {
 
 function findBuiltApp() {
   const candidates = [
-    path.join(root, "src-tauri", "target", "release", "bundle", "macos", "Harness.app"),
-    path.join(root, "dist", "mac-arm64", "Harness.app"),
+    path.join(root, "src-tauri", "target", "release", "bundle", "macos", "Here.app"),
+    path.join(root, "dist", "mac-arm64", "Here.app"),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
@@ -270,7 +270,7 @@ function printArtifactSummary() {
 }
 
 function installToApplications(appPath) {
-  const dest = "/Applications/Harness.app";
+  const dest = "/Applications/Here.app";
   if (fs.existsSync(dest)) {
     fs.rmSync(dest, { recursive: true, force: true });
   }
@@ -285,7 +285,7 @@ async function main() {
     shouldBumpVersion() && "bump",
   ].filter(Boolean);
   console.log(
-    color("bold", `\n▸ Harness dist (tauri${modeExtras.length ? ` + ${modeExtras.join(" + ")}` : ""})`)
+    color("bold", `\n▸ Here dist (tauri${modeExtras.length ? ` + ${modeExtras.join(" + ")}` : ""})`)
   );
   if (quick) {
     console.log(color("yellow", "  quick: adhoc signing (APPLE_SIGNING_IDENTITY=-) — for local testing only"));
@@ -352,7 +352,7 @@ async function main() {
 
   if (replace) {
     const appPath = findBuiltApp();
-    if (!appPath) throw new Error("Built Harness.app not found");
+    if (!appPath) throw new Error("Built Here.app not found");
     installToApplications(appPath);
   }
 

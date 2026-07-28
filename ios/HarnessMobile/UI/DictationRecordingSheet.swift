@@ -165,11 +165,19 @@ struct DictationRecordingSheet: View {
 
     private var recordingContent: some View {
         VStack(spacing: 36) {
-            // Observe AudioRecorder in a leaf so metering does not rebuild the sheet chrome.
+            // Observe AudioRecorder only in the elapsed leaf — no waveform redraw loop.
             VStack(spacing: 12) {
-                DictationWaveformHost(recorder: recorder)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                    Text("Recording")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Recording")
 
                 DictationElapsedLabel(
                     recorder: recorder,
@@ -430,19 +438,7 @@ private enum DictationElapsedFormatting {
         let totalSeconds = ms / 1000
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
-        let tenths = (ms % 1000) / 100
-        return String(format: "%d:%02d.%d", minutes, seconds, tenths)
-    }
-}
-
-/// Thin shell — UIKit samples the meter on CADisplayLink (no SwiftUI meter publishes).
-private struct DictationWaveformHost: View {
-    let recorder: AudioRecorder
-
-    var body: some View {
-        LiveAudioWaveformView(meterSource: recorder)
-            .frame(maxWidth: .infinity)
-            .frame(height: 320)
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 

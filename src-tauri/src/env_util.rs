@@ -1,8 +1,13 @@
 use std::env;
 use std::path::PathBuf;
 
-pub const HARNESS_DEV_APP_NAME: &str = "Harness Dev";
-pub const HARNESS_PROD_APP_NAME: &str = "Harness";
+/// Dock / menu / tray display name (user-visible brand).
+pub const HERE_DEV_DISPLAY_NAME: &str = "Here Dev";
+pub const HERE_PROD_DISPLAY_NAME: &str = "Here";
+
+/// Application Support folder names — keep stable so existing profiles are found.
+pub const HARNESS_DEV_DATA_DIR_NAME: &str = "Harness Dev";
+pub const HARNESS_PROD_DATA_DIR_NAME: &str = "Harness";
 
 pub fn is_harness_dev() -> bool {
     env::var("HARNESS_DEV").ok().as_deref() == Some("1")
@@ -18,14 +23,15 @@ pub fn is_global_hotkey_disabled() -> bool {
 
 pub fn app_display_name() -> &'static str {
     if is_harness_dev() && !is_harness_e2e() {
-        HARNESS_DEV_APP_NAME
+        HERE_DEV_DISPLAY_NAME
     } else {
-        HARNESS_PROD_APP_NAME
+        HERE_PROD_DISPLAY_NAME
     }
 }
 
 /// Harness userData directory (NOT Tauri app_data_dir).
 ///
+/// Folder names stay `Harness` / `Harness Dev` even though the display brand is Here.
 /// Override with `HARNESS_DATA_DIR` for screenshots, tests, or alternate profiles.
 pub fn user_data_dir() -> PathBuf {
     if let Ok(path) = env::var("HARNESS_DATA_DIR") {
@@ -36,9 +42,9 @@ pub fn user_data_dir() -> PathBuf {
     }
     let base = dirs::data_dir().expect("data_dir");
     let name = if is_harness_dev() && !is_harness_e2e() {
-        HARNESS_DEV_APP_NAME
+        HARNESS_DEV_DATA_DIR_NAME
     } else {
-        HARNESS_PROD_APP_NAME
+        HARNESS_PROD_DATA_DIR_NAME
     };
     base.join(name)
 }

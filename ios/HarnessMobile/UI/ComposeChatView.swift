@@ -2,7 +2,8 @@ import SwiftUI
 import UIKit
 
 struct ComposeChatView: View {
-    @ObservedObject var app: AppModel
+    /// Not observed — AppModel sync/setup publishes must not rebuild compose chrome.
+    let app: AppModel
 
     @State private var sendError: String?
     @State private var showDictationSheet = false
@@ -71,11 +72,6 @@ struct ComposeChatView: View {
             try? await Task.sleep(nanoseconds: Self.composerAutofocusDelayNs)
             guard !Task.isCancelled else { return }
             isComposerFocused = true
-        }
-        .task {
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-            app.recordingSession.prepareForDictation()
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView(isPresented: $showCamera) { image in

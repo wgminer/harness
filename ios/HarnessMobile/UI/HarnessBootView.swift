@@ -4,11 +4,11 @@ struct HarnessBootView: View {
     var body: some View {
         ZStack {
             Color(.systemBackground).ignoresSafeArea()
-            Text("Harness")
+            Text("Here")
                 .font(.largeTitle.weight(.semibold))
                 .foregroundStyle(.primary)
         }
-        .accessibilityLabel("Harness")
+        .accessibilityLabel("Here")
     }
 }
 

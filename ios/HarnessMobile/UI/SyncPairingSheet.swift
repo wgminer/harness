@@ -21,7 +21,7 @@ struct SyncPairingSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Scan the QR from Harness on your Mac.")
+                    Text("Scan the QR from Here on your Mac.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -144,7 +144,7 @@ struct SyncPairingSheet: View {
     private func decodeMessage(_ error: PairingPayload.DecodeError) -> String {
         switch error {
         case .badPrefix:
-            return "That doesn’t look like a Harness sync code."
+            return "That doesn’t look like a Here sync code."
         case .badEncoding, .badJSON:
             return "Couldn’t read the sync code."
         case .badVersion:

@@ -10,7 +10,7 @@ describe("DEFAULT_SETTINGS.systemPrompt", () => {
   it("includes shared, desktop, and ios defaults", () => {
     expect(DEFAULT_SETTINGS.systemPrompt?.shared).toBe(DEFAULT_SYSTEM_PROMPT.shared);
     expect(DEFAULT_SETTINGS.systemPrompt?.desktop).toContain("[CORE_INSTRUCTIONS]");
-    expect(DEFAULT_SETTINGS.systemPrompt?.ios).toContain("Harness Mobile");
+    expect(DEFAULT_SETTINGS.systemPrompt?.ios).toContain("Here Mobile");
   });
 });
 
@@ -31,6 +31,6 @@ describe("assembleStaticSystemPrompt", () => {
     expect(desktop.startsWith(DEFAULT_SYSTEM_PROMPT_SHARED)).toBe(true);
     expect(ios.startsWith(DEFAULT_SYSTEM_PROMPT_SHARED)).toBe(true);
     expect(desktop).toContain("local desktop app");
-    expect(ios).toContain("Harness Mobile");
+    expect(ios).toContain("Here Mobile");
   });
 });

@@ -67,7 +67,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var setupNoticeDismissed = false
     @Published var lastSuccessfulSyncAt: Date?
     @Published private(set) var hasCompletedInitialLoad = false
-    @Published private(set) var headerQuoteRotationIndex = 0
 
     let localDataDir: URL
     let store: ConversationStore
@@ -286,6 +285,13 @@ final class AppModel: ObservableObject {
         refreshSetupFlags()
         maybePresentSetupNotice()
 
+        // Warm mic category once after first paint path — not on every list/compose/thread appear.
+        Task(priority: .utility) { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            self?.recordingSession.prepareForDictation()
+        }
+
         Task(priority: .utility) { [weak self] in
             await self?.store.refreshPendingSyncState()
         }
@@ -314,13 +320,8 @@ final class AppModel: ObservableObject {
     }
 
     func syncOnForeground() async {
-        bumpHeaderQuoteRotation()
         guard R2SettingsStore.isConfigured else { return }
         await performSync()
-    }
-
-    func bumpHeaderQuoteRotation() {
-        headerQuoteRotationIndex += 1
     }
 
     func markInitialLoadCompleteForPreviews() {

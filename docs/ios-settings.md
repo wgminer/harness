@@ -118,7 +118,7 @@ QR-first. No “go enter an API key in Settings.”
 
 | Element | Draft |
 | --- | --- |
-| Title | `Welcome to Harness` |
+| Title | `Welcome to Here` |
 | Body | `Chat needs an OpenAI key from your Mac. Scan the sync QR to pull credentials and back up this phone.` |
 | Primary | `Scan QR code` → opens Settings (or pairing sheet directly) |
 | Secondary | `Not now` |

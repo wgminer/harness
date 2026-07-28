@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Copy, Maximize2, SquarePen, X } from "lucide-react";
+import { Check, Copy, FileText, Loader2, Printer, SquarePen, X } from "lucide-react";
+import { buildNotePrintHtml } from "../shared/notePrint";
 import { MarkdownContent } from "./chatHelpers";
 import type { InlineWriteupPayload, LiveNoteStream } from "./chatHelpers";
 
@@ -9,6 +10,7 @@ const SCROLL_PIN_THRESHOLD_PX = 24;
 interface DocumentCardProps {
   title: string;
   body: string;
+  summary?: string;
   noteId?: string;
   loading?: boolean;
   error?: string | null;
@@ -16,78 +18,116 @@ interface DocumentCardProps {
   onOpenInEditor?: (noteId: string) => void;
 }
 
+function countWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+function formatWordCount(count: number): string {
+  return `${count.toLocaleString()} ${count === 1 ? "word" : "words"}`;
+}
+
+function documentPillMeta({
+  summary,
+  body,
+  loading,
+  error,
+  streaming,
+}: {
+  summary?: string;
+  body: string;
+  loading: boolean;
+  error: string | null;
+  streaming: boolean;
+}): string {
+  if (error) return error;
+  if (loading) return "Loading note…";
+
+  const parts: string[] = ["Note"];
+  if (streaming) {
+    parts.push("Writing…");
+    const words = countWords(body);
+    if (words > 0) parts.push(formatWordCount(words));
+  } else {
+    const words = countWords(body);
+    if (words > 0) parts.push(formatWordCount(words));
+  }
+
+  const summaryText = summary?.trim();
+  if (summaryText) parts.push(summaryText);
+
+  return parts.join(" · ");
+}
+
 function useScrollFollow(
   scrollRef: React.RefObject<HTMLDivElement | null>,
   body: string,
   streaming: boolean,
+  active: boolean,
 ) {
   const [pinnedToBottom, setPinnedToBottom] = useState(true);
-  const [showFade, setShowFade] = useState(false);
-
-  const updateFade = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setShowFade(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
-  }, [scrollRef]);
 
   useEffect(() => {
+    if (!active) return;
     const el = scrollRef.current;
     if (!el) return;
     const onScroll = () => {
       const atBottom =
         el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_PIN_THRESHOLD_PX;
       setPinnedToBottom(atBottom);
-      updateFade();
     };
     el.addEventListener("scroll", onScroll, { passive: true });
-    updateFade();
     return () => el.removeEventListener("scroll", onScroll);
-  }, [scrollRef, updateFade]);
+  }, [active, scrollRef]);
 
   useEffect(() => {
-    updateFade();
-  }, [body, updateFade]);
-
-  useEffect(() => {
-    if (!streaming || !pinnedToBottom) return;
+    if (!active || !streaming || !pinnedToBottom) return;
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-    updateFade();
-  }, [body, streaming, pinnedToBottom, scrollRef, updateFade]);
-
-  return { showFade };
+  }, [active, body, streaming, pinnedToBottom, scrollRef]);
 }
 
 export function DocumentCard({
   title,
   body,
+  summary,
   noteId,
   loading = false,
   error = null,
   streaming = false,
   onOpenInEditor,
 }: DocumentCardProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const inlineScrollRef = useRef<HTMLDivElement>(null);
-  const modalScrollRef = useRef<HTMLDivElement>(null);
-  const { showFade: inlineFade } = useScrollFollow(inlineScrollRef, body, streaming);
-  const { showFade: modalFade } = useScrollFollow(modalScrollRef, body, streaming && expanded);
+  const [printing, setPrinting] = useState(false);
+  const sheetScrollRef = useRef<HTMLDivElement>(null);
+  const wasStreamingRef = useRef(false);
+
+  useScrollFollow(sheetScrollRef, body, streaming, open);
+
+  // Auto-open while a writeup is streaming so the user can watch it land.
+  useEffect(() => {
+    if (streaming && !wasStreamingRef.current) {
+      setOpen(true);
+    }
+    wasStreamingRef.current = streaming;
+  }, [streaming]);
 
   useEffect(() => {
-    if (!expanded) return;
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        setExpanded(false);
+        setOpen(false);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [expanded]);
+  }, [open]);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     if (!body.trim()) return;
     try {
       await navigator.clipboard.writeText(body);
@@ -96,54 +136,22 @@ export function DocumentCard({
     } catch {
       /* ignore */
     }
-  };
+  }, [body]);
 
-  const toolbarButtons = (includeExpand: boolean) => (
-    <>
-      {noteId && onOpenInEditor && !streaming ? (
-        <button
-          type="button"
-          className="md-code-block__btn"
-          onClick={() => onOpenInEditor(noteId)}
-          title="Open in Editor"
-          aria-label="Open in Editor"
-        >
-          <SquarePen size={12} />
-        </button>
-      ) : null}
-      {includeExpand ? (
-        <button
-          type="button"
-          className="md-code-block__btn"
-          onClick={() => setExpanded(true)}
-          title="Expand"
-          aria-label="Open full screen"
-        >
-          <Maximize2 size={12} />
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="md-code-block__btn"
-          onClick={() => setExpanded(false)}
-          title="Close"
-          aria-label="Close full screen"
-        >
-          <X size={12} />
-        </button>
-      )}
-      <button
-        type="button"
-        className="md-code-block__btn"
-        onClick={() => void handleCopy()}
-        disabled={!body.trim()}
-        title={copied ? "Copied!" : "Copy"}
-        aria-label={copied ? "Copied!" : "Copy note content"}
-      >
-        {copied ? <Check size={12} /> : <Copy size={12} />}
-      </button>
-    </>
-  );
+  const handlePrint = useCallback(async () => {
+    if (!body.trim() || printing) return;
+    setPrinting(true);
+    try {
+      const html = buildNotePrintHtml(title, body);
+      await window.harness.notes.print(html, title.trim() || "Note");
+    } catch {
+      /* ignore */
+    } finally {
+      setPrinting(false);
+    }
+  }, [body, printing, title]);
+
+  const canAct = !loading && !error && !!body.trim();
 
   const bodyContent = loading ? (
     <p className="document-card__placeholder">Loading note…</p>
@@ -153,49 +161,116 @@ export function DocumentCard({
     <MarkdownContent content={body} />
   );
 
-  const expandedModal =
-    expanded &&
+  const overlay =
+    open &&
     createPortal(
       <div
-        className="document-card-modal-backdrop"
+        className="document-card-overlay-backdrop"
         role="presentation"
         onClick={(e) => {
-          if (e.target === e.currentTarget) setExpanded(false);
+          if (e.target === e.currentTarget) setOpen(false);
         }}
       >
         <div
-          className="document-card-modal"
+          className="document-card-overlay"
           role="dialog"
           aria-modal="true"
           aria-label={title}
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="document-card__label">{title}</span>
-          <div className="document-card__surface document-card__surface--modal">
-            <div className="md-code-block__toolbar">{toolbarButtons(false)}</div>
-            <div className="document-card__body" ref={modalScrollRef}>
-              {bodyContent}
+          <div className="document-card-overlay__chrome">
+            <div className="document-card-overlay__chrome-title">
+              <FileText size={14} aria-hidden />
+              <span>{title}</span>
             </div>
-            {modalFade && <div className="document-card__fade" aria-hidden />}
+            <div className="document-card-overlay__actions">
+              {noteId && onOpenInEditor && !streaming ? (
+                <button
+                  type="button"
+                  className="btn btn-icon-sm"
+                  onClick={() => onOpenInEditor(noteId)}
+                  title="Open in Editor"
+                  aria-label="Open in Editor"
+                >
+                  <SquarePen size={14} />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-icon-sm"
+                onClick={() => void handlePrint()}
+                disabled={!canAct || printing}
+                title="Print"
+                aria-label="Print note"
+              >
+                <Printer size={14} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-icon-sm"
+                onClick={() => void handleCopy()}
+                disabled={!canAct}
+                title={copied ? "Copied!" : "Copy"}
+                aria-label={copied ? "Copied!" : "Copy note content"}
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+              <button
+                type="button"
+                className="btn btn-icon-sm"
+                onClick={() => setOpen(false)}
+                title="Close"
+                aria-label="Close note"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
+
+          <article className="document-card-overlay__sheet" ref={sheetScrollRef}>
+            <header className="document-card-overlay__masthead">
+              <h1 className="document-card-overlay__heading">{title}</h1>
+            </header>
+            <div className="document-card-overlay__body">{bodyContent}</div>
+          </article>
         </div>
       </div>,
       document.body,
     );
 
+  const pillTitle = error ? "Couldn't open note" : loading ? "Loading note…" : title;
+  const pillMeta = documentPillMeta({ summary, body, loading, error, streaming });
+  const pillBusy = loading || streaming;
+
   return (
     <>
       <div className="document-card">
-        <span className="document-card__label">{title}</span>
-        <div className="document-card__surface">
-          <div className="md-code-block__toolbar">{toolbarButtons(true)}</div>
-          <div className="document-card__body" ref={inlineScrollRef}>
-            {bodyContent}
-          </div>
-          {inlineFade && <div className="document-card__fade" aria-hidden />}
-        </div>
+        <button
+          type="button"
+          className={[
+            "document-card__pill",
+            error ? "document-card__pill--error" : null,
+            streaming ? "document-card__pill--streaming" : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          title={error ?? [title, summary?.trim()].filter(Boolean).join(" — ")}
+        >
+          {pillBusy ? (
+            <Loader2 size={18} className="document-card__pill-spinner" aria-hidden />
+          ) : (
+            <FileText size={18} aria-hidden />
+          )}
+          <span className="document-card__pill-text">
+            <span className="document-card__pill-title">{pillTitle}</span>
+            <span className="document-card__pill-meta">{pillMeta}</span>
+          </span>
+        </button>
       </div>
-      {expandedModal}
+      {overlay}
     </>
   );
 }
@@ -225,6 +300,9 @@ export function InlineWriteupCard({
   const body = isLive
     ? liveStream!.body || writeup.body || ""
     : writeup.body ?? fetchedBody ?? "";
+  const summary = isLive
+    ? liveStream!.summary || writeup.summary
+    : writeup.summary;
 
   useEffect(() => {
     if (isLive || writeup.body || !writeup.noteId) return;
@@ -257,6 +335,7 @@ export function InlineWriteupCard({
     <DocumentCard
       title={writeup.title}
       body={body}
+      summary={summary}
       noteId={writeup.noteId}
       loading={loading && !body}
       error={error}

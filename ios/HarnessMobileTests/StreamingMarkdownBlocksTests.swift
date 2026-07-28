@@ -112,4 +112,41 @@ final class StreamingMarkdownBlocksTests: XCTestCase {
         XCTAssertEqual(blocks.completed, ["```\ncode\n```"])
         XCTAssertEqual(blocks.trailing, "")
     }
+
+    func testIncrementalMatchesFullSplit() {
+        var previous = StreamingMarkdownBlocks(completed: [], trailing: "")
+        let steps = [
+            "Para one",
+            "Para one\n\n",
+            "Para one\n\nPara two",
+            "Para one\n\nPara two\n\n",
+            "Para one\n\nPara two\n\nPara three",
+            "Intro\n\n```swift\nlet x = 1\n",
+            "Intro\n\n```swift\nlet x = 1\n```",
+            "Intro\n\n```swift\nlet x = 1\n```\n\nOutro",
+        ]
+        for step in steps {
+            previous = StreamingMarkdownBlocks.split(step, previous: previous)
+            let full = StreamingMarkdownBlocks.split(step)
+            XCTAssertEqual(previous.completed, full.completed, "completed mismatch at: \(step)")
+            XCTAssertEqual(previous.trailing, full.trailing, "trailing mismatch at: \(step)")
+            XCTAssertEqual(previous.completed.joined() + previous.trailing, step)
+        }
+    }
+
+    func testIncrementalKeepsCompletedIdentity() {
+        let mid = "Para one\n\nPara two"
+        let first = StreamingMarkdownBlocks.split(mid)
+        XCTAssertEqual(first.completed, ["Para one\n\n"])
+        let grown = StreamingMarkdownBlocks.split(mid + " more", previous: first)
+        XCTAssertEqual(grown.completed, first.completed)
+        XCTAssertEqual(grown.trailing, "Para two more")
+    }
+
+    func testIncrementalFallsBackWhenPrefixBreaks() {
+        let previous = StreamingMarkdownBlocks.split("Para one\n\nPara two")
+        let replaced = StreamingMarkdownBlocks.split("Brand new", previous: previous)
+        XCTAssertEqual(replaced.completed, [])
+        XCTAssertEqual(replaced.trailing, "Brand new")
+    }
 }

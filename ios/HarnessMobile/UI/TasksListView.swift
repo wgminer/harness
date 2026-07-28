@@ -1,22 +1,14 @@
 import SwiftUI
 
-private enum TaskCompleteTiming {
-    /// Keep in sync with `src/shared/motion.ts`.
-    static let holdSeconds: Double = 2.0
-    static let tvSeconds: Double = 0.36
-}
-
 struct TasksListView: View {
-    @ObservedObject var app: AppModel
+    /// Not observed — sync status is read after pull-to-refresh, not in the view body.
+    let app: AppModel
     @ObservedObject private var tasksStore: TasksStore
 
     @FocusState private var isComposerFocused: Bool
     @State private var searchQuery = ""
     @State private var activeOpen = true
     @State private var completedOpen = false
-    @State private var completingIds: Set<String> = []
-    @State private var dismissingIds: Set<String> = []
-    @State private var completionTasks: [String: Task<Void, Never>] = [:]
     @State private var modalTask: TaskItem?
     @State private var modalTitle = ""
     @State private var modalStatus: TaskStatus = .pending
@@ -70,11 +62,7 @@ struct TasksListView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(activeTasks) { task in
-                            taskRow(
-                                task,
-                                completing: completingIds.contains(task.id),
-                                dismissing: dismissingIds.contains(task.id)
-                            )
+                            taskRow(task)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         deleteTask(task.id)
@@ -120,7 +108,7 @@ struct TasksListView: View {
                 Section {
                     DisclosureGroup(isExpanded: completedExpandedBinding) {
                         ForEach(completedTasks) { task in
-                            taskRow(task, completing: false)
+                            taskRow(task)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         deleteTask(task.id)
@@ -250,9 +238,9 @@ struct TasksListView: View {
         .padding(.bottom, BottomBarMetrics.bottomInset)
     }
 
-    private func taskRow(_ task: TaskItem, completing: Bool, dismissing: Bool = false) -> some View {
+    private func taskRow(_ task: TaskItem) -> some View {
         let status = TaskStatusPolicy.resolveStatus(for: task)
-        let done = TaskStatusPolicy.taskIsDone(status) || completing
+        let done = TaskStatusPolicy.taskIsDone(status)
         return HStack(alignment: .top, spacing: 12) {
             Button {
                 toggleDone(task)
@@ -262,7 +250,6 @@ struct TasksListView: View {
                     .foregroundStyle(done ? .primary : .secondary)
             }
             .buttonStyle(.plain)
-            .disabled(dismissing)
 
             Button {
                 openModal(task)
@@ -289,17 +276,7 @@ struct TasksListView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            .disabled(completing)
         }
-        .scaleEffect(y: dismissing ? 0.01 : 1, anchor: .center)
-        .opacity(dismissing ? 0 : 1)
-        .animation(
-            dismissing
-                ? .easeIn(duration: TaskCompleteTiming.tvSeconds)
-                : .easeOut(duration: 0.15),
-            value: dismissing
-        )
-        .animation(.easeOut(duration: 0.15), value: completing)
     }
 
     private func editSheet(_ task: TaskItem) -> some View {
@@ -366,40 +343,8 @@ struct TasksListView: View {
 
     private func toggleDone(_ task: TaskItem) {
         let status = TaskStatusPolicy.resolveStatus(for: task)
-        if TaskStatusPolicy.taskIsDone(status) {
-            patchStatus(task.id, status: TaskStatusPolicy.toggleTaskCompleted(status))
-            return
-        }
-
-        // Undo during hold (before TV-out).
-        if completingIds.contains(task.id) {
-            guard !dismissingIds.contains(task.id) else { return }
-            completionTasks[task.id]?.cancel()
-            completionTasks.removeValue(forKey: task.id)
-            completingIds.remove(task.id)
-            return
-        }
-
         HapticFeedback.success()
-
-        if UIAccessibility.isReduceMotionEnabled {
-            patchStatus(task.id, status: TaskStatusPolicy.toggleTaskCompleted(status))
-            return
-        }
-
-        completingIds.insert(task.id)
-        let work = Task {
-            try? await Task.sleep(for: .seconds(TaskCompleteTiming.holdSeconds))
-            guard !Task.isCancelled else { return }
-            dismissingIds.insert(task.id)
-            try? await Task.sleep(for: .seconds(TaskCompleteTiming.tvSeconds))
-            guard !Task.isCancelled else { return }
-            patchStatus(task.id, status: TaskStatusPolicy.toggleTaskCompleted(status))
-            completingIds.remove(task.id)
-            dismissingIds.remove(task.id)
-            completionTasks.removeValue(forKey: task.id)
-        }
-        completionTasks[task.id] = work
+        patchStatus(task.id, status: TaskStatusPolicy.toggleTaskCompleted(status))
     }
 
     private func setStatus(_ id: String, status: TaskStatus) {

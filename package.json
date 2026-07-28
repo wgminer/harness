@@ -4,7 +4,7 @@
   "private": false,
   "license": "MIT",
   "author": "Will Miner",
-  "description": "Personal all-in-one desktop harness for LLMs (chat, memory, tasks, tools)",
+  "description": "Personal all-in-one desktop app for LLMs (chat, memory, tasks, tools)",
   "repository": {
     "type": "git",
     "url": "https://github.com/wgminer/harness.git"

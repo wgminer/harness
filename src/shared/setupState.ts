@@ -54,7 +54,7 @@ export function collectSetupGaps(input: {
       kind: "macos_accessibility",
       title: "Accessibility permission",
       detail:
-        "Required for the global Fn dictation shortcut when Harness is in the background.",
+        "Required for the global Fn dictation shortcut when Here is in the background.",
       settingsTab: "general",
       severity: "recommended",
     });

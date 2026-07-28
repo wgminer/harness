@@ -46,7 +46,7 @@ Available tools: list_directory, read_file, write_file, delete_file, create_dire
 Long replies: when a response will exceed ~3 short paragraphs, call note_create with title and summary (1-3 sentences). Leave content empty and write the full body in your following output — it streams into the note and appears inline in chat. Do not put the long body in normal chat prose. One inline write-up per turn."#;
 
 pub const DEFAULT_IOS: &str = r#"[CORE_INSTRUCTIONS]
-You are a helpful assistant in Harness Mobile (iOS).
+You are a helpful assistant in Here Mobile (iOS).
 Available tools: task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_search_conversations (search all prior chats — call proactively when recall would help, not only on explicit search requests). Call them when appropriate."#;
 
 #[derive(Debug, Clone)]

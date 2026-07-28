@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Capture the Harness desktop window as the README hero image.
+# Capture the Here desktop window as the README hero image.
 #
 # Uses a throwaway profile (HARNESS_DATA_DIR) so real conversations never leak
 # into media/hero.png. Requires macOS Screen Recording permission for the
@@ -144,7 +144,7 @@ window_id_via_cg() {
   # Prefer CGWindowList — System Events often cannot read Tauri window ids.
   swift -e '
 import Cocoa
-let owners = ["harness", "Harness", "Harness Dev"]
+let owners = ["here", "Here", "Here Dev", "harness", "Harness", "Harness Dev"]
 let opts = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
 guard let info = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] else { exit(1) }
 var bestId = 0
@@ -182,7 +182,7 @@ resolve_window_id() {
 bring_to_front() {
   osascript <<'EOF' >/dev/null 2>&1 || true
 tell application "System Events"
-  repeat with n in {"harness", "Harness", "Harness Dev"}
+  repeat with n in {"here", "Here", "Here Dev", "harness", "Harness", "Harness Dev"}
     if exists process (n as string) then
       set frontmost of process (n as string) to true
       exit repeat
@@ -192,7 +192,7 @@ end tell
 EOF
 }
 
-# Move + resize the Harness window to fill the built-in MBP display
+# Move + resize the Here window to fill the built-in MBP display
 # (visible frame: below the menu bar). Returns "WxH" in backing pixels.
 fill_builtin_screen() {
   swift -e '
@@ -211,7 +211,7 @@ guard let screen = builtinScreen() else {
 let visible = screen.visibleFrame // bottom-left origin, AppKit points
 let scale = screen.backingScaleFactor
 
-let owners: Set<String> = ["harness", "Harness", "Harness Dev"]
+let owners: Set<String> = ["here", "Here", "Here Dev", "harness", "Harness", "Harness Dev"]
 let opts = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
 guard let info = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] else {
   fputs("error: cannot list windows\n", stderr)
@@ -274,8 +274,14 @@ print("\(backingW)x\(backingH)")
 quit_harness() {
   osascript <<'EOF' >/dev/null 2>&1 || true
 tell application "System Events"
-  repeat with n in {"harness", "Harness", "Harness Dev"}
+  repeat with n in {"here", "Here", "Here Dev", "harness", "Harness", "Harness Dev"}
     if exists process (n as string) then
+      try
+        tell process (n as string) to click menu item "Quit Here" of menu "Here" of menu bar 1
+      end try
+      try
+        tell process (n as string) to click menu item "Quit Here Dev" of menu "Here Dev" of menu bar 1
+      end try
       try
         tell process (n as string) to click menu item "Quit Harness" of menu "Harness" of menu bar 1
       end try
@@ -284,6 +290,8 @@ tell application "System Events"
 end tell
 EOF
   pkill -x harness 2>/dev/null || true
+  pkill -x here 2>/dev/null || true
+  pkill -x "Here Dev" 2>/dev/null || true
   pkill -x "Harness Dev" 2>/dev/null || true
   sleep 1
 }
@@ -298,17 +306,17 @@ for arg in "$@"; do
       cat <<EOF
 Usage: $(basename "$0") [--launch] [--keep]
 
-Captures a seeded Harness window to:
+Captures a seeded Here window to:
   $OUT
 
-  --launch   Quit any running Harness, seed a demo profile, start the app, capture
+  --launch   Quit any running Here, seed a demo profile, start the app, capture
   --keep     Leave the demo app running after capture
 
 Env:
   HARNESS_HERO_OUT      Output path (default: media/hero.png)
   HARNESS_HERO_PROFILE  Throwaway profile dir (default: media/.hero-profile)
   HARNESS_HERO_WAIT     Seconds to wait for window (default: 180)
-  HARNESS_HERO_BIN      Optional path to harness binary (else npm run dev)
+  HARNESS_HERO_BIN      Optional path to app binary (else npm run tauri dev)
 EOF
       exit 0
       ;;
@@ -329,7 +337,7 @@ if [[ "$LAUNCH" -eq 1 ]]; then
   quit_harness
   seed_demo_profile
 
-  echo "Starting Harness with demo profile…"
+  echo "Starting Here with demo profile…"
   if [[ -n "$APP_BIN" && -x "$APP_BIN" ]]; then
     HARNESS_DATA_DIR="$PROFILE" HARNESS_DISABLE_GLOBAL_HOTKEY=1 "$APP_BIN" \
       >/tmp/harness-capture-hero.log 2>&1 &
@@ -337,8 +345,8 @@ if [[ "$LAUNCH" -eq 1 ]]; then
   else
     (
       cd "$ROOT"
-      # Use production productName/title ("Harness"), not `npm run dev`
-      # which forces HARNESS_DEV=1 → "Harness Dev". Profile is still isolated
+      # Use production productName/title ("Here"), not `npm run dev`
+      # which forces HARNESS_DEV=1 → "Here Dev". Profile is still isolated
       # via HARNESS_DATA_DIR.
       HARNESS_DATA_DIR="$PROFILE" HARNESS_DISABLE_GLOBAL_HOTKEY=1 \
         npx tauri dev
@@ -365,8 +373,8 @@ else
 fi
 
 if [[ -z "${WID:-}" ]]; then
-  echo "error: no Harness window found." >&2
-  echo "Re-run with --launch (builds/starts the app), or open Harness first." >&2
+  echo "error: no Here window found." >&2
+  echo "Re-run with --launch (builds/starts the app), or open Here first." >&2
   echo "Log: /tmp/harness-capture-hero.log" >&2
   exit 1
 fi
@@ -383,7 +391,7 @@ sleep 1
 bring_to_front
 WID="$(resolve_window_id || true)"
 if [[ -z "${WID:-}" ]]; then
-  echo "error: lost Harness window after resize." >&2
+  echo "error: lost Here window after resize." >&2
   exit 1
 fi
 

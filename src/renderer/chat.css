@@ -1160,65 +1160,98 @@
 
 .document-card {
   margin-top: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
 }
 
-.document-card__label {
-  font-size: var(--font-size-caption);
+.document-card__pill {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--fg);
+  font-family: var(--font-family);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard),
+    border-color var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.document-card__pill:hover {
+  background: var(--hover-bg-strong);
+  border-color: var(--border-light);
+}
+
+.document-card__pill:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.document-card__pill--error {
+  color: var(--danger-fg);
+  border-color: color-mix(in oklab, var(--danger-fg) 35%, var(--border-input));
+}
+
+.document-card__pill--streaming {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--border-input));
+}
+
+.document-card__pill > svg,
+.document-card__pill-spinner {
+  flex-shrink: 0;
+  margin-top: 2px;
   color: var(--fg-muted);
+}
+
+.document-card__pill-spinner {
+  animation: motion-spin var(--motion-duration-loading) var(--motion-ease-linear) infinite;
+}
+
+.document-card__pill--error > svg,
+.document-card__pill--error .document-card__pill-spinner {
+  color: var(--danger-fg);
+}
+
+.document-card__pill-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.document-card__pill-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-weight: 500;
+  color: var(--fg);
 }
 
-.document-card__surface {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 240px;
-  background: #000;
-  border-radius: var(--radius-md);
+.document-card__pill-meta {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  color: var(--fg-muted);
 }
 
-.document-card__surface--modal {
-  flex: 1;
-  min-height: 0;
-  height: auto;
-}
-
-.document-card__surface:hover .md-code-block__toolbar,
-.document-card__surface:focus-within .md-code-block__toolbar {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.document-card__body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--space-3);
-}
-
-.document-card__body .markdown-content > p:first-child {
-  margin-top: 0;
-}
-
-.document-card__fade {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--space-4);
-  pointer-events: none;
-  background: linear-gradient(to bottom, transparent, #000);
+.document-card__pill--error .document-card__pill-meta {
+  color: var(--danger-fg);
 }
 
 .document-card__placeholder {
   margin: 0;
-  color: var(--fg-muted);
+  color: #777;
   font-size: var(--font-size-caption);
 }
 
@@ -1226,24 +1259,227 @@
   color: var(--danger-fg);
 }
 
-/* Full-bleed document expand — shares scrim/padding with .app-modal-backdrop; not the dialog shell. */
-.document-card-modal-backdrop {
+/* Letter-shaped document viewer over chat. */
+.document-card-overlay-backdrop {
   position: fixed;
   inset: 0;
   z-index: 2100;
   display: flex;
-  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
   padding: var(--space-4);
-  background: var(--scrim);
+  background: rgb(0 0 0 / 0.72);
+  -webkit-backdrop-filter: blur(12px) saturate(0.85);
+  backdrop-filter: blur(12px) saturate(0.85);
 }
 
-.document-card-modal {
-  flex: 1;
-  min-height: 0;
+.document-card-overlay {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-3);
+  /* ~letter readable width at desktop density */
+  width: min(100%, 42rem);
+  min-height: 0;
+  max-height: 100%;
+}
+
+.document-card-overlay__chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.document-card-overlay__chrome-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--fg);
+  font-size: var(--font-size-caption);
+}
+
+.document-card-overlay__chrome-title span {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-card-overlay__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.document-card-overlay__sheet {
+  --document-fg: #1c1c1c;
+  --document-muted: #666;
+  --document-rule: #e2e2e0;
+  --document-code-bg: #f0f0ee;
+
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Letter page: readable column width lives on the overlay shell. */
+  background: #f7f7f5;
+  color: var(--document-fg);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.35) inset,
+    0 18px 48px rgb(0 0 0 / 0.45),
+    0 2px 8px rgb(0 0 0 / 0.3);
+  scrollbar-color: #b0b0ae #ececea;
+}
+
+.document-card-overlay__sheet::-webkit-scrollbar-track {
+  background: #ececea;
+}
+
+.document-card-overlay__sheet::-webkit-scrollbar-thumb {
+  background: #b0b0ae;
+}
+
+.document-card-overlay__masthead {
+  padding: var(--space-8) var(--space-8) var(--space-4);
+  border-bottom: 1px solid var(--document-rule);
+}
+
+.document-card-overlay__heading {
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: var(--font-size-title);
+  font-weight: 600;
+  line-height: var(--line-height-title);
+  color: var(--document-fg);
+  letter-spacing: -0.01em;
+}
+
+.document-card-overlay__body {
+  padding: var(--space-6) var(--space-8) var(--space-10);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-prose);
+  color: var(--document-fg);
+}
+
+.document-card-overlay__body > :first-child {
+  margin-top: 0;
+}
+
+.document-card-overlay__body > :last-child {
+  margin-bottom: 0;
+}
+
+.document-card-overlay__body p {
+  margin: 0 0 var(--space-4);
+}
+
+.document-card-overlay__body p:last-child {
+  margin-bottom: 0;
+}
+
+.document-card-overlay__body strong {
+  font-weight: 600;
+}
+
+.document-card-overlay__body ul,
+.document-card-overlay__body ol {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-5);
+}
+
+.document-card-overlay__body li {
+  margin: var(--space-1) 0;
+}
+
+.document-card-overlay__body li > p {
+  margin: 0;
+}
+
+.document-card-overlay__body li > p + p {
+  margin-top: var(--space-2);
+}
+
+.document-card-overlay__body a {
+  color: #1a5fb4;
+}
+
+.document-card-overlay__body code {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-caption);
+  padding: 1px var(--space-1);
+  background: var(--document-code-bg);
+  border: 1px solid var(--document-rule);
+  border-radius: var(--radius-xs);
+  color: var(--document-fg);
+}
+
+.document-card-overlay__body .md-code-block {
+  position: relative;
+  margin: var(--space-4) 0;
+  background: #111;
+  border-radius: var(--radius-md);
+  color: #ccc;
+}
+
+.document-card-overlay__body .md-code-block pre {
+  margin: 0;
+  padding: var(--space-3);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  background: transparent;
+  border: none;
+}
+
+.document-card-overlay__body .md-code-block pre code,
+.document-card-overlay__body .md-code-block pre code.hljs {
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: inherit;
+  white-space: pre-wrap;
+}
+
+.document-card-overlay__body .md-code-block:hover .md-code-block__toolbar,
+.document-card-overlay__body .md-code-block:focus-within .md-code-block__toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.document-card-overlay__body blockquote {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--document-rule);
+  color: var(--document-muted);
+}
+
+.document-card-overlay__body hr {
+  margin: var(--space-5) 0;
+  border-top-color: var(--document-rule);
+}
+
+.document-card-overlay__body table {
+  width: 100%;
+  margin: 0 0 var(--space-4);
+  border-collapse: collapse;
+  font-size: var(--font-size-caption);
+}
+
+.document-card-overlay__body th,
+.document-card-overlay__body td {
+  padding: var(--space-2);
+  border: 1px solid var(--document-rule);
+  text-align: left;
+}
+
+.document-card-overlay__body th {
+  background: var(--document-code-bg);
+  font-weight: 600;
 }
 
 .context-inspector-sections {

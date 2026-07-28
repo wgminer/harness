@@ -109,7 +109,7 @@ enum LocalDataLayoutError: LocalizedError {
         case .unreadableFile(let name):
             return "\(name) is not available yet. If it is in iCloud, open Files and wait for the download to finish."
         case .invalidConversationsFormat(let detail):
-            return "conversations.json is not valid Harness data (\(detail))."
+            return "conversations.json is not valid Here data (\(detail))."
         }
     }
 }

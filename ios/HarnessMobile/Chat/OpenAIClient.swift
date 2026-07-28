@@ -242,6 +242,18 @@ final class OpenAIClient {
 
         var accumulated = PartialAssistantMessage()
         var content = ""
+        var pendingChunk = ""
+        var lastFlush = ContinuousClock.now
+        let flushInterval: Duration = .milliseconds(40)
+
+        func flushPendingChunks() async {
+            guard !pendingChunk.isEmpty else { return }
+            let toSend = pendingChunk
+            pendingChunk = ""
+            lastFlush = .now
+            await MainActor.run { onChunk(toSend) }
+        }
+
         for try await line in bytes.lines {
             try Task.checkCancellation()
             guard line.hasPrefix("data: ") else { continue }
@@ -256,9 +268,13 @@ final class OpenAIClient {
             accumulated.merge(delta: delta)
             if let chunk = delta["content"] as? String, !chunk.isEmpty {
                 content += chunk
-                await MainActor.run { onChunk(chunk) }
+                pendingChunk += chunk
+                if ContinuousClock.now - lastFlush >= flushInterval {
+                    await flushPendingChunks()
+                }
             }
         }
+        await flushPendingChunks()
 
         return StreamIteration(content: content, toolCalls: accumulated.toolCalls)
     }

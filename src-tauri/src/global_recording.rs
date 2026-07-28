@@ -231,7 +231,7 @@ async fn start_tray_and_monitor(app: AppHandle, runtime: Arc<GlobalRecordingRunt
         Image::from_bytes(include_bytes!("../icons/icon.png")).expect("default tray icon")
     });
 
-    let show_item = MenuItem::with_id(&app, "show", "Show Harness", true, None::<&str>)
+    let show_item = MenuItem::with_id(&app, "show", "Show Here", true, None::<&str>)
         .expect("show menu item");
     let menu = Menu::with_items(&app, &[&show_item]).expect("tray menu");
 

@@ -318,16 +318,10 @@ export function summarizeToolCalls(calls: ToolCallDisplay[]): string {
 
 export function toolCallLabel(call: ToolCallDisplay): string {
   if (call.toolName === "note_create") {
-    const parsed = parseNoteCreatePayload(call.payload);
-    if (parsed?.attachedToMessage && parsed.note?.title?.trim()) {
-      return parsed.note.title.trim();
-    }
     return "Created note";
   }
   if (call.toolName === "open_long_response") {
-    const legacy = parseLegacyDocumentPayload(call.payload);
-    if (legacy?.title) return legacy.title;
-    return "Long write-up";
+    return "Created note";
   }
   return toolLabel(call.toolName);
 }

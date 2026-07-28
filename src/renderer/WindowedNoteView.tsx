@@ -191,7 +191,7 @@ export function WindowedNoteView({ noteId }: WindowedNoteViewProps) {
           className="btn btn-icon windowed-note__action"
           onClick={() => void popIn()}
           aria-label="Open note in main window"
-          title="Open in Harness"
+          title="Open in Here"
           data-testid="windowed-note-pop-in"
         >
           <SquareArrowDownLeft size={14} aria-hidden />

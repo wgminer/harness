@@ -1,7 +1,7 @@
-<h1 align="center">Harness</h1>
+<h1 align="center">Here</h1>
 
 <p align="center">
-  A personal harness around a language model — voice-first, offline, and yours to control from input to output.
+  A personal place around a language model — voice-first, offline, and yours to control from input to output.
 </p>
 
 <p align="center">
@@ -13,12 +13,12 @@
 </p>
 
 <p align="center">
-  <img src="media/hero.png" alt="Harness desktop app — sidebar library and chat" width="920" />
+  <img src="media/hero.png" alt="Here desktop app — sidebar library and chat" width="920" />
 </p>
 
 ---
 
-An LLM harness I built for myself: dictation, chat without the persona, notes, and tasks. Offline-first. Full control over the inputs, the outputs, and everything in between. Commercial tools optimize for a mainstream audience and lock-in — this one is personal, portable, and legible, built to understand agentic systems by making one.
+An app I built for myself: dictation, chat without the persona, notes, and tasks. Offline-first. Full control over the inputs, the outputs, and everything in between. Commercial tools optimize for a mainstream audience and lock-in — this one is personal, portable, and legible, built to understand agentic systems by making one.
 
 ## Principles
 
@@ -38,7 +38,7 @@ Needs Rust. On macOS, Xcode Command Line Tools for the speech helpers.
 
 ```bash
 npm run dist:mac          # signed DMG — see BUILD.md
-npm run capture:hero      # refresh media/hero.png from a running Harness Dev window
+npm run capture:hero      # refresh media/hero.png from a running Here Dev window
 ```
 
 `capture:hero` uses macOS `screencapture`. Pass `--launch` to start `npm run dev` if the window isn’t open yet.

@@ -66,7 +66,7 @@ struct ConversationListView: View {
             await app.performSync()
             Self.hapticForSyncOutcome(configured: R2SettingsStore.isConfigured, kind: app.syncStatus.kind)
         }
-        .navigationTitle("Harness")
+        .navigationTitle("Here")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -117,12 +117,6 @@ struct ConversationListView: View {
                     onSelect(conversationId)
                 }
             )
-        }
-        .task {
-            // Defer past first frame so launch/debug attach is not racing AVAudioSession setup.
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-            app.recordingSession.prepareForDictation()
         }
     }
 

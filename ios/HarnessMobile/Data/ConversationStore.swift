@@ -571,10 +571,11 @@ final class ConversationStore: ObservableObject {
             hasMessages: hasMessages
         )
         if let index = conversations.firstIndex(where: { $0.id == conversationId }) {
+            guard conversations[index] != item else { return }
             conversations[index] = item
         } else {
             conversations.append(item)
+            conversations.sort { $0.createdAt > $1.createdAt }
         }
-        conversations.sort { $0.createdAt > $1.createdAt }
     }
 }

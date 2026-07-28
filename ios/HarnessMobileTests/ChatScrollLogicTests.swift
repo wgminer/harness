@@ -25,47 +25,17 @@ final class ChatScrollLogicTests: XCTestCase {
         XCTAssertFalse(ChatScrollLogic.shouldFollowTranscriptResize(mode: .free, userTookOver: true))
     }
 
-    func testShouldUnlockWhenUserScrollsUp() {
-        XCTAssertTrue(ChatScrollLogic.shouldUnlockFromScrollDelta(prevOffset: 500, nextOffset: 400))
-        XCTAssertFalse(ChatScrollLogic.shouldUnlockFromScrollDelta(prevOffset: 400, nextOffset: 500))
-        XCTAssertFalse(ChatScrollLogic.shouldUnlockFromScrollDelta(prevOffset: 400, nextOffset: 399))
-    }
-
-    func testShouldRepinOnlyWhenUserScrollsDownToLiveEdge() {
+    func testShouldRepinWhenNearLiveEdgeWhileFree() {
         XCTAssertEqual(
-            ChatScrollLogic.shouldRepinFromUserScroll(
-                mode: .free,
-                prevOffset: 460,
-                nextOffset: 480,
-                nearLiveEdge: true
-            ),
+            ChatScrollLogic.shouldRepinNearLiveEdge(mode: .free, nearLiveEdge: true),
             .pinned
         )
         XCTAssertEqual(
-            ChatScrollLogic.shouldRepinFromUserScroll(
-                mode: .free,
-                prevOffset: 480,
-                nextOffset: 460,
-                nearLiveEdge: true
-            ),
+            ChatScrollLogic.shouldRepinNearLiveEdge(mode: .free, nearLiveEdge: false),
             .free
         )
         XCTAssertEqual(
-            ChatScrollLogic.shouldRepinFromUserScroll(
-                mode: .free,
-                prevOffset: 460,
-                nextOffset: 480,
-                nearLiveEdge: false
-            ),
-            .free
-        )
-        XCTAssertEqual(
-            ChatScrollLogic.shouldRepinFromUserScroll(
-                mode: .pinned,
-                prevOffset: 460,
-                nextOffset: 480,
-                nearLiveEdge: true
-            ),
+            ChatScrollLogic.shouldRepinNearLiveEdge(mode: .pinned, nearLiveEdge: true),
             .pinned
         )
     }

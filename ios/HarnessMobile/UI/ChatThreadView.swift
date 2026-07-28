@@ -161,11 +161,6 @@ struct ChatThreadView: View {
                 }
             )
         }
-        .task {
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-            app.recordingSession.prepareForDictation()
-        }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView(isPresented: $showCamera) { image in
                 pendingImage = image
@@ -178,8 +173,6 @@ struct ChatThreadView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    ChatScrollOffsetTracker()
-
                     if centerSingleMessage {
                         Spacer(minLength: 0)
                     }

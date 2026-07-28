@@ -92,7 +92,7 @@ function main() {
     : noBump
       ? " (no bump — publish committed version)"
       : " (bump + publish)";
-  console.log(`Releasing Harness${modeLabel}...`);
+  console.log(`Releasing Here${modeLabel}...`);
 
   run(process.execPath, [path.join(root, "scripts", "dist-runner.js"), ...distArgs], {
     env: (() => {
@@ -106,7 +106,7 @@ function main() {
     stdio: ["ignore", "pipe", "pipe"],
   });
   const tag = `v${version}`;
-  console.log(`Built Harness ${tag}${dryRun ? " (dry run)" : ""}.`);
+  console.log(`Built Here ${tag}${dryRun ? " (dry run)" : ""}.`);
 
   console.log("Verifying notarization and Gatekeeper trust...");
   run("npm", ["run", "verify:mac-trust"]);

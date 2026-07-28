@@ -1013,7 +1013,7 @@ export function SettingsView({
               <SettingsSwitch
                 id="bringToFrontOnBackgroundDictationToggle"
                 testId="settings-bring-to-front-background-dictation"
-                label="Bring Harness to front for background dictation"
+                label="Bring Here to front for background dictation"
                 checked={bringToFrontOnBackgroundDictation}
                 onChange={(e) => setBringToFrontOnBackgroundDictation(e.target.checked)}
               />

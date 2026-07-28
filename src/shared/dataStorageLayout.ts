@@ -5,8 +5,8 @@ export function appDataFolderButtonLabel(platform: NodeJS.Platform): string {
   return "Open Data Folder";
 }
 
-/** ASCII overview of Harness on-disk layout (shown on System → Data). */
-export const DATA_STORAGE_DIAGRAM = `Harness app data folder
+/** ASCII overview of Here on-disk layout (shown on System → Data). */
+export const DATA_STORAGE_DIAGRAM = `Here app data folder
 │
 ├─ local-data/ ........................ primary storage
 │  ├─ app-state/

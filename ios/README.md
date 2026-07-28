@@ -1,12 +1,12 @@
-# Harness Mobile (iOS)
+# Here Mobile (iOS)
 
-Native SwiftUI chat companion for Harness desktop. It syncs through the **same Cloudflare R2 bucket** as the Mac app and calls **OpenAI** with your API key. Chat supports **task tools** (create, update, list, delete, clear completed) with confirmation for destructive actions, **chat history search** (`memory_search_conversations`) so the agent can recall prior conversations, plus a dedicated **Tasks** view synced with desktop.
+Native SwiftUI chat companion for Here desktop. It syncs through the **same Cloudflare R2 bucket** as the Mac app and calls **OpenAI** with your API key. Chat supports **task tools** (create, update, list, delete, clear completed) with confirmation for destructive actions, **chat history search** (`memory_search_conversations`) so the agent can recall prior conversations, plus a dedicated **Tasks** view synced with desktop.
 
 **Voice dictation** is back: tap the red mic on the home screen to record. **Import Voice Memo** lives in Settings for pulling in recordings from Apple's Voice Memos app (via Files).
 
 ## Prerequisites
 
-1. **Desktop Harness** configured with Cloudflare R2 (Settings → Data).
+1. **Desktop Here** configured with Cloudflare R2 (Settings → Data).
 2. At least one successful **Sync now** on the Mac so `bundle.json.gz` and `manifest.json` exist in the bucket.
 3. An **OpenAI API key** (same as desktop Settings, or enter it only on the phone).
 
@@ -53,15 +53,15 @@ Simulator builds often work without a paid team; device builds require your own 
 
 **Transcription order:** (1) Apple's embedded Voice Memos transcript (`tsrp` atom in the `.m4a`), (2) on-device `SFSpeechRecognizer`, (3) OpenAI Whisper if an API key is set.
 
-To import a memo recorded in Voice Memos: open the memo → **Share** → **Save to Files** (or pick it from iCloud Drive in Files), then import in Harness.
+To import a memo recorded in Voice Memos: open the memo → **Share** → **Save to Files** (or pick it from iCloud Drive in Files), then import in Here.
 
 ## Daily workflow (desktop ↔ phone)
 
 | Step | Where |
 |------|--------|
-| Chat on phone | Harness Mobile |
+| Chat on phone | Here Mobile |
 | App backgrounds or you tap Sync | Phone pushes `bundle.json.gz` + `manifest.json` to R2 |
-| **Sync now** | Desktop Harness → Settings → Data |
+| **Sync now** | Desktop Here → Settings → Data |
 
 If both Mac and phone edited since the last sync, the app **auto-merges** both sides (combining conversations, messages, tasks, notes, and settings) and pushes the result. Mergeable JSON stores are unioned; binary files that cannot be merged keep this device's copy.
 

@@ -3,13 +3,13 @@ import SwiftUI
 /// Renders streaming assistant markdown as stable completed blocks plus a cheap trailing partial.
 struct StreamingMarkdownView: View, Equatable {
     let content: String
+    @State private var blocks = StreamingMarkdownBlocks(completed: [], trailing: "")
 
     static func == (lhs: StreamingMarkdownView, rhs: StreamingMarkdownView) -> Bool {
         lhs.content == rhs.content
     }
 
     var body: some View {
-        let blocks = StreamingMarkdownBlocks.split(content)
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(blocks.completed.enumerated()), id: \.offset) { _, block in
                 StableStreamingMarkdownBlock(content: block)
@@ -25,6 +25,9 @@ struct StreamingMarkdownView: View, Equatable {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: content, initial: true) { _, newContent in
+            blocks = StreamingMarkdownBlocks.split(newContent, previous: blocks)
+        }
     }
 }
 

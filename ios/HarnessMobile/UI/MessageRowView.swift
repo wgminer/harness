@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 
 struct MessageRowView: View, Equatable {
     let message: MessageRecord
@@ -62,9 +63,27 @@ struct MessageRowView: View, Equatable {
             guard attachment.mimeType.hasPrefix("image/") else { return nil }
             return LocalDataLayout.fileURL(in: localDataDir, relativePath: attachment.relativePath).path
         }
+        // Match UserMessageCard thumbnail frame (160pt); scale for screen density.
+        let maxPixelSize = Int(160 * UIScreen.main.scale)
         return await Task.detached(priority: .utility) {
-            paths.compactMap { UIImage(contentsOfFile: $0) }
+            paths.compactMap { Self.downsampledImage(atPath: $0, maxPixelSize: maxPixelSize) }
         }.value
+    }
+
+    private static func downsampledImage(atPath path: String, maxPixelSize: Int) -> UIImage? {
+        let url = URL(fileURLWithPath: path)
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            return UIImage(contentsOfFile: path)
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return UIImage(contentsOfFile: path)
+        }
+        return UIImage(cgImage: cgImage)
     }
 }
 

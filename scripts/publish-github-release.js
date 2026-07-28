@@ -35,15 +35,15 @@ function findDmg(bundleRoot) {
 }
 
 function findApp(bundleRoot) {
-  const appPath = path.join(bundleRoot, "macos", "Harness.app");
+  const appPath = path.join(bundleRoot, "macos", "Here.app");
   return fs.existsSync(appPath) ? appPath : null;
 }
 
 function findUpdaterArtifacts(bundleRoot) {
   const macosDir = path.join(bundleRoot, "macos");
   if (!fs.existsSync(macosDir)) return null;
-  const tarGz = path.join(macosDir, "Harness.app.tar.gz");
-  const sig = path.join(macosDir, "Harness.app.tar.gz.sig");
+  const tarGz = path.join(macosDir, "Here.app.tar.gz");
+  const sig = path.join(macosDir, "Here.app.tar.gz.sig");
   if (!fs.existsSync(tarGz) || !fs.existsSync(sig)) return null;
   return { tarGz, sig };
 }
@@ -76,7 +76,7 @@ function collectReleaseAssets(version) {
 
   const appPath = findApp(bundleRoot);
   if (!appPath) {
-    console.error(`Harness.app not found under ${path.join(bundleRoot, "macos")}.`);
+    console.error(`Here.app not found under ${path.join(bundleRoot, "macos")}.`);
     process.exit(1);
   }
 
@@ -98,7 +98,7 @@ function collectReleaseAssets(version) {
     const signature = fs.readFileSync(sigDest, "utf8").trim();
     const latestJson = {
       version,
-      notes: `Harness v${version} for macOS.`,
+      notes: `Here v${version} for macOS.`,
       pub_date: new Date().toISOString(),
       platforms: {
         "darwin-aarch64": {
@@ -112,7 +112,7 @@ function collectReleaseAssets(version) {
     assets.push(latestJsonPath);
   } else {
     console.warn(
-      "Updater artifacts not found (Harness.app.tar.gz + .sig). " +
+      "Updater artifacts not found (Here.app.tar.gz + .sig). " +
         "Set TAURI_SIGNING_PRIVATE_KEY before building to enable in-app updates."
     );
   }
@@ -133,7 +133,7 @@ function publishGithubRelease(version) {
   const repo = getGithubRepo();
   const tag = `v${version}`;
   const title = version;
-  const notes = `Harness v${version} for macOS.`;
+  const notes = `Here v${version} for macOS.`;
 
   console.log(`Collecting release assets for ${tag}...`);
   const assets = collectReleaseAssets(version);

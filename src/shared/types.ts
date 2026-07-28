@@ -113,7 +113,7 @@ export interface Settings {
     autoSend: boolean;
     /** macOS menu bar icon + global Fn dictation hotkey. */
     globalFnHotkey: boolean;
-    /** When Fn dictation starts while Harness is unfocused, raise/activate the main window. */
+    /** When Fn dictation starts while Here is unfocused, raise/activate the main window. */
     bringToFrontOnBackgroundDictation: boolean;
   };
   transcription?: {

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Harness</string>
+	<string>Here</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -25,11 +25,11 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Harness uses the camera to take photos for chat and to scan a sync QR code from your Mac.</string>
+	<string>Here uses the camera to take photos for chat and to scan a sync QR code from your Mac.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Harness uses the microphone to record voice dictation.</string>
+	<string>Here uses the microphone to record voice dictation.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Harness transcribes voice recordings on-device using Apple Speech recognition.</string>
+	<string>Here transcribes voice recordings on-device using Apple Speech recognition.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

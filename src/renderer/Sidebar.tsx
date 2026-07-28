@@ -744,7 +744,7 @@ export function Sidebar({
         <div className="sidebar-footer">
           <div className="sidebar-footer__meta">
             {appVersion != null && appVersion !== "" ? (
-              <span className="sidebar-version" title={`Harness ${appVersion}`}>
+              <span className="sidebar-version" title={`Here ${appVersion}`}>
                 v{appVersion}
               </span>
             ) : null}

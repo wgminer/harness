@@ -1,5 +1,5 @@
 /**
- * Verify a packaged Harness.app is signed, passes Gatekeeper assessment, and has a stapled notarization ticket.
+ * Verify a packaged Here.app is signed, passes Gatekeeper assessment, and has a stapled notarization ticket.
  * Run after `npm run dist:mac` on macOS. Optional: pass path to .app as first argument.
  */
 const fs = require("fs");
@@ -8,10 +8,10 @@ const { spawnSync } = require("child_process");
 
 function findBuiltApp(root) {
   const candidates = [
-    path.join(root, "src-tauri", "target", "release", "bundle", "macos", "Harness.app"),
-    path.join(root, "dist", "mac-universal", "Harness.app"),
-    path.join(root, "dist", "mac-arm64", "Harness.app"),
-    path.join(root, "dist", "mac", "Harness.app"),
+    path.join(root, "src-tauri", "target", "release", "bundle", "macos", "Here.app"),
+    path.join(root, "dist", "mac-universal", "Here.app"),
+    path.join(root, "dist", "mac-arm64", "Here.app"),
+    path.join(root, "dist", "mac", "Here.app"),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
@@ -57,7 +57,7 @@ function main() {
 
   if (!appPath || !fs.existsSync(appPath)) {
     console.error(
-      "Could not find Harness.app. Run npm run dist:mac first, or pass the path:\n  npm run verify:mac-trust -- /path/to/Harness.app"
+      "Could not find Here.app. Run npm run dist:mac first, or pass the path:\n  npm run verify:mac-trust -- /path/to/Here.app"
     );
     process.exit(1);
   }

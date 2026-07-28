@@ -222,7 +222,7 @@ export function MemoryFactImportSection({ memory }: { memory: MemorySettingsCont
     <>
       <SettingsHint>
         Run the export prompt in ChatGPT, Claude, or another assistant, paste the result below, then
-        import. Harness uses your OpenAI API key to distill entries into your facts.
+        import. Here uses your OpenAI API key to distill entries into your facts.
       </SettingsHint>
       <SettingsActions>
         <button
