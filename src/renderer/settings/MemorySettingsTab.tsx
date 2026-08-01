@@ -19,7 +19,7 @@ function collapseToSingleLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function MemoryFactRow({
+function MemoryRow({
   memoryKey,
   value,
   onEdit,
@@ -63,7 +63,7 @@ function MemoryFactRow({
   );
 }
 
-function MemoryFactsList({ memory }: { memory: MemorySettingsController }) {
+function MemoriesList({ memory }: { memory: MemorySettingsController }) {
   const entries = useMemo(() => sortedMemoryEntries(memory.userMemory), [memory.userMemory]);
   const total = entries.length;
   const pageCount = Math.max(1, Math.ceil(total / MEMORY_PAGE_SIZE) || 1);
@@ -81,11 +81,11 @@ function MemoryFactsList({ memory }: { memory: MemorySettingsController }) {
   return (
     <>
       {total === 0 ? (
-        <SettingsHint flush>No facts yet.</SettingsHint>
+        <SettingsHint flush>No memories yet.</SettingsHint>
       ) : (
         <div className="settings-memory-list" data-testid="settings-memory-list">
           {pageEntries.map(([k, v]) => (
-            <MemoryFactRow
+            <MemoryRow
               key={k}
               memoryKey={k}
               value={v}
@@ -103,7 +103,7 @@ function MemoryFactsList({ memory }: { memory: MemorySettingsController }) {
             data-testid="settings-add-memory"
             onClick={memory.openAddMemoryModal}
           >
-            Add Fact
+            Add Memory
           </button>
         </SettingsActions>
         {showPager ? (
@@ -134,7 +134,7 @@ function MemoryFactsList({ memory }: { memory: MemorySettingsController }) {
           </div>
         ) : total > 0 ? (
           <span className="settings-memory-pager__status" data-testid="settings-memory-page-status">
-            {total} {total === 1 ? "fact" : "facts"}
+            {total} {total === 1 ? "memory" : "memories"}
           </span>
         ) : null}
       </div>
@@ -142,23 +142,17 @@ function MemoryFactsList({ memory }: { memory: MemorySettingsController }) {
   );
 }
 
-/** Facts list + system prompt + add/edit modal. Used inside Data. */
+/** Memories list + system prompt + add/edit modal. Used inside Data. */
 export function MemorySettingsSections({ memory }: { memory: MemorySettingsController }) {
-  const count = Object.keys(memory.userMemory).length;
-
   return (
     <>
       <SettingsGroup
         title="Memory"
-        description={
-          count > 0
-            ? `${count} facts stored locally and synced with backup.`
-            : "Facts stored locally and synced with backup."
-        }
+        description="Synced with backup."
         collapsible
         defaultOpen={false}
       >
-        <MemoryFactsList memory={memory} />
+        <MemoriesList memory={memory} />
       </SettingsGroup>
 
       <SystemPromptPreviewPanel collapsible defaultOpen={false} />
@@ -166,7 +160,7 @@ export function MemorySettingsSections({ memory }: { memory: MemorySettingsContr
       <Modal
         open={memory.memoryModalOpen}
         onClose={memory.closeMemoryModal}
-        title={memory.editingMemoryKey ? "Edit fact" : "Add fact"}
+        title={memory.editingMemoryKey ? "Edit memory" : "Add memory"}
         data-testid="settings-memory-modal"
         footer={
           <>
@@ -188,8 +182,7 @@ export function MemorySettingsSections({ memory }: { memory: MemorySettingsContr
           <label className="app-modal-field">
             <span className="app-modal-field__label">Key</span>
             <p className="app-modal-field__hint">
-              Short label used as the fact id (often <code>snake_case</code>). Reusing a key updates
-              that fact.
+              Id for this memory. Same key overwrites.
             </p>
             <input
               type="text"
@@ -216,61 +209,91 @@ export function MemorySettingsSections({ memory }: { memory: MemorySettingsContr
   );
 }
 
-/** Fact import UI for the Data → Import section. */
-export function MemoryFactImportSection({ memory }: { memory: MemorySettingsController }) {
+/** Memory import UI for the Data → Import → Memories subsection. */
+export function MemoryImportSection({ memory }: { memory: MemorySettingsController }) {
   return (
-    <>
-      <SettingsHint>
-        Run the export prompt in ChatGPT, Claude, or another assistant, paste the result below, then
-        import. Here uses your OpenAI API key to distill entries into your facts.
-      </SettingsHint>
-      <SettingsActions>
-        <button
-          type="button"
-          className="btn btn-outline"
-          onClick={() => memory.setExportPromptOpen((open) => !open)}
-          aria-expanded={memory.exportPromptOpen}
-        >
-          {memory.exportPromptOpen ? "Hide Export Prompt" : "Show Export Prompt"}
-        </button>
-        <button type="button" className="btn" onClick={() => void memory.copyExportPrompt()}>
-          Copy Export Prompt
-        </button>
-      </SettingsActions>
-      {memory.exportPromptOpen && (
+    <div className="settings-memory-import">
+      <div className="settings-memory-import__step">
+        <div className="settings-memory-import__step-head">
+          <span className="settings-memory-import__step-index" aria-hidden>
+            1
+          </span>
+          <div className="settings-memory-import__step-copy">
+            <span className="settings-memory-import__step-title">Export prompt</span>
+          </div>
+        </div>
+        <SettingsActions>
+          <button type="button" className="btn" onClick={() => void memory.copyExportPrompt()}>
+            Copy Export Prompt
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => memory.setExportPromptOpen((open) => !open)}
+            aria-expanded={memory.exportPromptOpen}
+          >
+            {memory.exportPromptOpen ? "Hide Prompt" : "Show Prompt"}
+          </button>
+        </SettingsActions>
+        {memory.exportPromptOpen ? (
+          <label className="app-modal-field">
+            <span className="app-modal-field__label">Export prompt</span>
+            <textarea
+              readOnly
+              value={LLM_CONTEXT_EXPORT_PROMPT}
+              className="app-modal-input app-modal-input--multiline settings-llm-import-prompt"
+              rows={12}
+              aria-label="Export prompt for other assistants"
+            />
+          </label>
+        ) : null}
+      </div>
+
+      <div className="settings-memory-import__step">
+        <div className="settings-memory-import__step-head">
+          <span className="settings-memory-import__step-index" aria-hidden>
+            2
+          </span>
+          <div className="settings-memory-import__step-copy">
+            <span className="settings-memory-import__step-title">Paste result</span>
+          </div>
+        </div>
         <label className="app-modal-field">
-          <span className="app-modal-field__label">Export prompt</span>
+          <span className="app-modal-field__label">Pasted export</span>
           <textarea
-            readOnly
-            value={LLM_CONTEXT_EXPORT_PROMPT}
-            className="app-modal-input app-modal-input--multiline settings-llm-import-prompt"
-            rows={12}
-            aria-label="Export prompt for other assistants"
+            value={memory.llmImportDraft}
+            onChange={(e) => memory.setLlmImportDraft(e.target.value)}
+            className="app-modal-input app-modal-input--multiline settings-llm-import-export"
+            rows={10}
+            data-testid="settings-llm-import-export"
           />
         </label>
-      )}
-      <label className="app-modal-field">
-        <span className="app-modal-field__label">Pasted export</span>
-        <textarea
-          value={memory.llmImportDraft}
-          onChange={(e) => memory.setLlmImportDraft(e.target.value)}
-          className="app-modal-input app-modal-input--multiline settings-llm-import-export"
-          rows={14}
-          data-testid="settings-llm-import-export"
-        />
-      </label>
-      <SettingsActions>
-        <button
-          type="button"
-          className="btn btn-primary"
-          data-testid="settings-import-llm-context"
-          onClick={() => void memory.runLlmContextImport()}
-          disabled={memory.llmImportBusy || !memory.llmImportDraft.trim()}
-        >
-          {memory.llmImportBusy ? "Importing…" : "Import Facts"}
-        </button>
-      </SettingsActions>
-      {memory.llmImportMessage && <SettingsHint flush>{memory.llmImportMessage}</SettingsHint>}
-    </>
+      </div>
+
+      <div className="settings-memory-import__step">
+        <div className="settings-memory-import__step-head">
+          <span className="settings-memory-import__step-index" aria-hidden>
+            3
+          </span>
+          <div className="settings-memory-import__step-copy">
+            <span className="settings-memory-import__step-title">Import</span>
+          </div>
+        </div>
+        <SettingsActions>
+          <button
+            type="button"
+            className="btn btn-primary"
+            data-testid="settings-import-llm-context"
+            onClick={() => void memory.runLlmContextImport()}
+            disabled={memory.llmImportBusy || !memory.llmImportDraft.trim()}
+          >
+            {memory.llmImportBusy ? "Importing…" : "Import Memories"}
+          </button>
+        </SettingsActions>
+        {memory.llmImportMessage ? (
+          <SettingsHint flush>{memory.llmImportMessage}</SettingsHint>
+        ) : null}
+      </div>
+    </div>
   );
 }

@@ -43,8 +43,8 @@ final class ComposerCollapsePolicyTests: XCTestCase {
     }
 
     func testCollapsedLabelShowsPlaceholderWhenEmpty() {
-        XCTAssertEqual(ComposerCollapsePolicy.collapsedLabel(draft: ""), "Type a message…")
-        XCTAssertEqual(ComposerCollapsePolicy.collapsedLabel(draft: "   "), "Type a message…")
+        XCTAssertEqual(ComposerCollapsePolicy.collapsedLabel(draft: ""), "Write a message…")
+        XCTAssertEqual(ComposerCollapsePolicy.collapsedLabel(draft: "   "), "Write a message…")
     }
 
     func testCollapsedLabelShowsDraftPreview() {

@@ -25,20 +25,6 @@
   padding: var(--space-4);
 }
 
-/* Footer of the editor column — must stay in normal flex flow so the
-   full-bleed CodeMirror surface (z-index: 1) cannot cover it. */
-.notes-surface__inline-templates {
-  flex-shrink: 0;
-  padding: var(--space-3);
-  background: var(--bg);
-  border-top: 1px solid var(--border-edge);
-  z-index: 2;
-}
-
-.notes-surface__inline-templates .workspace-section-label {
-  margin: 0 0 var(--space-2);
-}
-
 .notes-surface__notes {
   list-style: none;
   margin: 0 calc(-1 * var(--space-3));
@@ -48,66 +34,114 @@
   gap: 0;
 }
 
-/* Templates row: flexbox so cards fill their slot edge-to-edge and wrap on
-   narrow widths instead of cramping below a legible width. The 12px gap
-   matches the label-to-content rhythm so the small-spacing unit is consistent
-   throughout the templates region. */
+/* Template cards sit below the editor in the center column (fresh notes only). */
+.notes-surface__inline-templates {
+  flex-shrink: 0;
+  z-index: 2;
+  padding: var(--space-3) var(--notes-editor-inline-pad) var(--space-4);
+  background: var(--bg);
+}
+
+.notes-surface__templates-label {
+  margin: 0 0 var(--space-3);
+  color: var(--fg-muted);
+  font-size: var(--font-size-caption);
+  font-weight: 500;
+  line-height: var(--line-height-tight);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 .notes-surface__templates {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
   gap: var(--space-3);
   margin: 0;
 }
 
-/* Calm card style. Template cards stay elevated; recent rows use flat list-item hover. */
-.notes-surface__template-btn {
-  flex: 1 1 160px;
-  min-width: 0;
-  min-height: calc(var(--grid) * 10);
+.notes-surface__template-card {
+  appearance: none;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
   padding: var(--space-3);
   border: 1px solid var(--border-input);
   border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--fg);
+  background: var(--bg);
+  color: inherit;
   text-align: left;
   font: inherit;
   cursor: pointer;
   transition:
-    background-color var(--motion-duration-normal) var(--motion-ease-standard),
-    border-color var(--motion-duration-normal) var(--motion-ease-standard);
+    background-color var(--motion-duration-ui) var(--motion-ease-standard),
+    border-color var(--motion-duration-ui) var(--motion-ease-standard),
+    transform var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
-.notes-surface__template-btn:hover:not(:disabled),
-.notes-surface__template-btn:focus-visible:not(:disabled) {
-  outline: none;
+.notes-surface__template-card:hover:not(:disabled) {
   background: var(--overlay-subtle);
-  border: 1px solid var(--border-input);
+  border-color: var(--border-light);
+  transform: translateY(-1px);
 }
 
-.notes-surface__template-btn:focus-visible:not(:disabled) {
-  border: 1px solid var(--border-input);
+.notes-surface__template-card:focus-visible:not(:disabled) {
   outline: 2px solid var(--accent-tint);
   outline-offset: 0;
+  border-color: var(--border-input-focus);
 }
 
-.notes-surface__template-btn:active:not(:disabled) {
+.notes-surface__template-card:active:not(:disabled) {
+  transform: none;
   background: var(--overlay-strong);
 }
 
-.notes-surface__template-btn:disabled {
+.notes-surface__template-card:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
 .notes-surface__template-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--font-size);
   line-height: var(--line-height-snug);
   font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.notes-surface__template-preview {
+  position: relative;
+  flex: 1;
+  min-height: calc(var(--grid) * 12);
+  max-height: calc(var(--grid) * 16);
+  overflow: hidden;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-edge);
+  color: var(--fg-muted);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.notes-surface__template-preview::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: var(--space-8);
+  background: linear-gradient(to bottom, transparent, var(--bg-secondary));
+  pointer-events: none;
 }
 
 .notes-surface__new-note {
@@ -118,8 +152,9 @@
 
 .notes-surface__header-new-note {
   margin-left: auto;
-  height: 24px;
-  min-height: 24px;
+  --control-size: var(--space-6);
+  height: var(--control-size);
+  min-height: var(--control-size);
   padding: 0 8px;
   gap: var(--space-1);
   font-size: var(--font-size-caption);
@@ -580,13 +615,8 @@
 
 @media (max-width: 768px) {
   .notes-surface__templates {
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
     gap: var(--space-2);
-  }
-
-  .notes-surface__template-btn {
-    flex-basis: calc(50% - var(--space-1));
-    min-height: calc(var(--grid) * 14);
-    padding: var(--space-3);
   }
 
   .notes-selection-menu {

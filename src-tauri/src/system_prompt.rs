@@ -1,53 +1,38 @@
+use serde::Deserialize;
 use serde::Serialize;
-use serde_json::{json, Value};
+use std::sync::OnceLock;
 
-pub const DEFAULT_SHARED: &str = r#"Prefer concise, practical, high-signal responses.
-For complex writing/thinking tasks, start with structure (questions, outline, tradeoffs) unless the user explicitly asks for a full draft immediately.
+const SYSTEM_PROMPT_JSON: &str = include_str!("../../resources/contracts/systemPrompt.json");
 
-[FORMATTING_CAPABILITIES]
-Standard markdown (bold, italic, lists, tables, fenced code, blockquotes) is supported. Use plain prose by default. Only reach for the layout blocks below when they add genuine clarity over a paragraph or list. Never wrap an entire reply in a single block.
+#[derive(Debug, Deserialize)]
+struct SystemPromptContract {
+    shared: String,
+    desktop: String,
+    ios: String,
+}
 
-Callouts — one sentence of emphasis, not a heading replacement:
-  :::tip
-  Short suggestion.
-  :::
-  (variants: :::tip, :::note, :::warning, :::danger)
+fn contract() -> &'static SystemPromptContract {
+    static CONTRACT: OnceLock<SystemPromptContract> = OnceLock::new();
+    CONTRACT.get_or_init(|| {
+        serde_json::from_str(SYSTEM_PROMPT_JSON)
+            .expect("resources/contracts/systemPrompt.json must parse")
+    })
+}
 
-Collapsible — fold away long context or sources the user may not need:
-  :::details{summary="Sources"}
-  Long content.
-  :::
+/// Default shared system prompt (from `resources/contracts/systemPrompt.json`).
+pub fn default_shared() -> &'static str {
+    &contract().shared
+}
 
-Inline chip — a short status tag inside a sentence:
-  Build is :chip[failing]{tone=danger}.
-  (tones: info, warn, danger, success, neutral)
+/// Default desktop overlay (from `resources/contracts/systemPrompt.json`).
+pub fn default_desktop() -> &'static str {
+    &contract().desktop
+}
 
-Link card — only when surfacing a single primary URL the user should open:
-  :::link{url="https://example.com" title="Example" desc="One-line summary." site="example.com"}
-  :::
-
-Options — 2-5 short labels the user can tap to reply. Only title is shown; no body text, recommended flag, or section title. Outer fence uses FOUR colons:
-  ::::options
-  :::option{title="Plain-English walkthrough"}
-  :::
-  :::option{title="Full Express demo"}
-  :::
-  ::::
-
-Rules of thumb: prefer plain prose first; use at most one layout block per reply unless the user is explicitly asking for a comparison; do not use callouts as section headers.
-
-[CONVERSATION_RECALL]
-Prior chats may appear in [RECENT_CONVERSATIONS] below. Call memory_search_conversations whenever names, continuity, prior decisions, or cross-thread context would help — not only when the user explicitly asks to search or find something in chat history."#;
-
-pub const DEFAULT_DESKTOP: &str = r#"[CORE_INSTRUCTIONS]
-You are a helpful assistant running in a local desktop app.
-Available tools: list_directory, read_file, write_file, delete_file, create_directory (for file operations); set_layout (sidebar position, wide-window centered/scaled view); task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_set_fact, memory_list_facts, memory_search_conversations (search all prior chats — call proactively when recall would help, not only on explicit search requests); get_datetime (for the current date and time, optionally in a specific IANA timezone); web_search (Tavily web search for current information outside the user's local data); note_list, note_create, note_read, note_save, note_delete (for persistent notes separate from chat; short saved snippets belong in a note titled "Clippings" as a numbered markdown list, optionally with inline #tags). Call them when appropriate.
-
-Long replies: when a response will exceed ~3 short paragraphs, call note_create with title and summary (1-3 sentences). Leave content empty and write the full body in your following output — it streams into the note and appears inline in chat. Do not put the long body in normal chat prose. One inline write-up per turn."#;
-
-pub const DEFAULT_IOS: &str = r#"[CORE_INSTRUCTIONS]
-You are a helpful assistant in Here Mobile (iOS).
-Available tools: task_list, task_create, task_update, task_delete, task_clear_completed (persistent tasks with status pending/in_progress/completed/cancelled plus filterable tags; use task_update status for completion, tags/add_tags/remove_tags for labels); memory_search_conversations (search all prior chats — call proactively when recall would help, not only on explicit search requests). Call them when appropriate."#;
+/// Default iOS overlay (from `resources/contracts/systemPrompt.json`).
+pub fn default_ios() -> &'static str {
+    &contract().ios
+}
 
 #[derive(Debug, Clone)]
 pub struct SystemPromptFields {
@@ -63,18 +48,21 @@ pub struct SystemPromptPreview {
     pub shared: String,
     pub platform_overlay: String,
     pub static_prompt: String,
+    /// Desktop chat-mode overlay (`decide` / `write` / `refine`); empty for chat / iOS.
+    pub mode_overlay: String,
+    pub chat_mode: String,
     pub memory_block: String,
     pub recent_conversations_block: String,
     pub temporal_context: String,
     pub assembled_prompt: String,
-    pub selected_facts: Vec<SystemPromptPreviewFact>,
+    pub selected_memories: Vec<SystemPromptPreviewMemory>,
     /// Tool schemas attached to the chat request (not part of the system prompt text).
     pub tools: Vec<SystemPromptPreviewTool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SystemPromptPreviewFact {
+pub struct SystemPromptPreviewMemory {
     pub key: String,
     pub value: String,
 }
@@ -86,64 +74,12 @@ pub struct SystemPromptPreviewTool {
     pub description: String,
 }
 
-pub fn default_system_prompt_value() -> Value {
-    json!({
-        "shared": DEFAULT_SHARED,
-        "desktop": DEFAULT_DESKTOP,
-        "ios": DEFAULT_IOS,
-    })
-}
-
-fn field_or_default(raw: Option<&str>, default: &str) -> String {
-    raw.map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or(default)
-        .to_string()
-}
-
-pub fn parse_system_prompt(raw: Option<&Value>, defaults: &Value) -> Value {
-    let default_sp = defaults
-        .get("systemPrompt")
-        .cloned()
-        .unwrap_or_else(default_system_prompt_value);
-    let obj = raw.and_then(|v| v.as_object());
-    json!({
-        "shared": field_or_default(
-            obj.and_then(|o| o.get("shared")).and_then(|v| v.as_str()),
-            default_sp.get("shared").and_then(|v| v.as_str()).unwrap_or(DEFAULT_SHARED),
-        ),
-        "desktop": field_or_default(
-            obj.and_then(|o| o.get("desktop")).and_then(|v| v.as_str()),
-            default_sp.get("desktop").and_then(|v| v.as_str()).unwrap_or(DEFAULT_DESKTOP),
-        ),
-        "ios": field_or_default(
-            obj.and_then(|o| o.get("ios")).and_then(|v| v.as_str()),
-            default_sp.get("ios").and_then(|v| v.as_str()).unwrap_or(DEFAULT_IOS),
-        ),
-    })
-}
-
-pub fn fields_from_settings(settings: &Value) -> SystemPromptFields {
-    let sp = settings
-        .get("systemPrompt")
-        .cloned()
-        .unwrap_or_else(default_system_prompt_value);
+/// Static prompt fields from `resources/contracts/systemPrompt.json` (not settings-overridable).
+pub fn contract_fields() -> SystemPromptFields {
     SystemPromptFields {
-        shared: sp
-            .get("shared")
-            .and_then(|v| v.as_str())
-            .unwrap_or(DEFAULT_SHARED)
-            .to_string(),
-        desktop: sp
-            .get("desktop")
-            .and_then(|v| v.as_str())
-            .unwrap_or(DEFAULT_DESKTOP)
-            .to_string(),
-        ios: sp
-            .get("ios")
-            .and_then(|v| v.as_str())
-            .unwrap_or(DEFAULT_IOS)
-            .to_string(),
+        shared: default_shared().to_string(),
+        desktop: default_desktop().to_string(),
+        ios: default_ios().to_string(),
     }
 }
 
@@ -170,7 +106,29 @@ pub fn build_system_prompt(
     recent_conversations_block: &str,
     temporal_context: &str,
 ) -> String {
+    build_system_prompt_with_mode(
+        fields,
+        platform,
+        "",
+        memory_block,
+        recent_conversations_block,
+        temporal_context,
+    )
+}
+
+pub fn build_system_prompt_with_mode(
+    fields: &SystemPromptFields,
+    platform: &str,
+    mode_overlay: &str,
+    memory_block: &str,
+    recent_conversations_block: &str,
+    temporal_context: &str,
+) -> String {
     let mut out = build_static_system_prompt(fields, platform);
+    if !mode_overlay.trim().is_empty() {
+        out.push_str("\n\n");
+        out.push_str(mode_overlay.trim());
+    }
     if !memory_block.is_empty() {
         out.push_str("\n\n");
         out.push_str(memory_block);
@@ -189,24 +147,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn absent_system_prompt_uses_defaults() {
-        let defaults = default_settings();
-        let parsed = parse_system_prompt(None, &defaults);
-        assert_eq!(parsed["shared"].as_str().unwrap(), DEFAULT_SHARED);
-        assert_eq!(parsed["desktop"].as_str().unwrap(), DEFAULT_DESKTOP);
-        assert_eq!(parsed["ios"].as_str().unwrap(), DEFAULT_IOS);
+    fn contract_has_expected_sections() {
+        assert!(default_shared().contains("[CONVERSATION_RECALL]"));
+        assert!(!default_shared().contains("[FORMATTING_CAPABILITIES]"));
+        assert!(default_desktop().contains("[CORE_INSTRUCTIONS]"));
+        assert!(default_desktop().contains("[FORMATTING_CAPABILITIES]"));
+        assert!(default_ios().contains("[CORE_INSTRUCTIONS]"));
+        assert!(!default_ios().contains("[FORMATTING_CAPABILITIES]"));
+        assert!(default_ios().contains("Here Mobile"));
     }
 
     #[test]
-    fn partial_system_prompt_merges_missing_keys() {
-        let defaults = default_settings();
-        let parsed = parse_system_prompt(
-            Some(&json!({ "shared": "custom shared" })),
-            &defaults,
-        );
-        assert_eq!(parsed["shared"].as_str().unwrap(), "custom shared");
-        assert_eq!(parsed["desktop"].as_str().unwrap(), DEFAULT_DESKTOP);
-        assert_eq!(parsed["ios"].as_str().unwrap(), DEFAULT_IOS);
+    fn contract_fields_match_defaults() {
+        let fields = contract_fields();
+        assert_eq!(fields.shared, default_shared());
+        assert_eq!(fields.desktop, default_desktop());
+        assert_eq!(fields.ios, default_ios());
     }
 
     #[test]
@@ -225,22 +181,41 @@ mod tests {
 
     #[test]
     fn build_system_prompt_appends_memory_and_temporal() {
-        let fields = fields_from_settings(&json!({}));
+        let fields = contract_fields();
         let prompt = build_system_prompt(
             &fields,
             "desktop",
-            "[USER_MEMORY_CONTEXT]\nfact",
+            "[USER_MEMORY_CONTEXT]\nmemory",
             "[RECENT_CONVERSATIONS]\nrecent",
             "[TEMPORAL_CONTEXT]\nnow",
         );
-        assert!(prompt.contains(DEFAULT_SHARED));
-        assert!(prompt.contains(DEFAULT_DESKTOP));
+        assert!(prompt.contains(default_shared()));
+        assert!(prompt.contains(default_desktop()));
         assert!(prompt.contains("[USER_MEMORY_CONTEXT]"));
         assert!(prompt.contains("[RECENT_CONVERSATIONS]"));
         assert!(prompt.contains("[TEMPORAL_CONTEXT]"));
     }
 
-    fn default_settings() -> Value {
-        crate::settings::default_settings()
+    #[test]
+    fn build_system_prompt_with_mode_inserts_overlay_before_memory() {
+        let fields = SystemPromptFields {
+            shared: "SHARED".into(),
+            desktop: "DESKTOP".into(),
+            ios: "IOS".into(),
+        };
+        let prompt = build_system_prompt_with_mode(
+            &fields,
+            "desktop",
+            "[CHAT_MODE: decide]\noverlay",
+            "[USER_MEMORY_CONTEXT]\nmemory",
+            "",
+            "[TEMPORAL_CONTEXT]\nnow",
+        );
+        let mode_at = prompt.find("[CHAT_MODE: decide]").unwrap();
+        let memory_at = prompt.find("[USER_MEMORY_CONTEXT]").unwrap();
+        assert!(mode_at < memory_at);
+        assert!(prompt.contains("SHARED"));
+        assert!(prompt.contains("DESKTOP"));
     }
+
 }

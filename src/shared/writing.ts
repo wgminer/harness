@@ -175,27 +175,40 @@ export function interpolateNoteTemplateTitle(
 }
 
 export function normalizeNoteTemplates(input: unknown): NoteTemplateConfig[] {
-  if (!Array.isArray(input) || input.length !== DEFAULT_NOTE_TEMPLATES.length) {
+  if (!Array.isArray(input)) {
     return DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t }));
   }
-  const byId = new Map(
-    input
-      .map((item) => {
-        if (!item || typeof item !== "object") return null;
-        const candidate = item as Record<string, unknown>;
-        const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
-        const title = typeof candidate.title === "string" ? candidate.title.trim() : "";
-        const content = typeof candidate.content === "string" ? candidate.content : "";
-        if (!id || !title) return null;
-        return { id, title, content };
-      })
-      .filter((entry): entry is NoteTemplateConfig => entry != null)
-      .map((entry) => [entry.id, entry]),
-  );
-  return DEFAULT_NOTE_TEMPLATES.map((base) => {
+
+  const parsed: NoteTemplateConfig[] = [];
+  const seen = new Set<string>();
+  for (const item of input) {
+    if (!item || typeof item !== "object") continue;
+    const candidate = item as Record<string, unknown>;
+    const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
+    const title = typeof candidate.title === "string" ? candidate.title.trim() : "";
+    const content = typeof candidate.content === "string" ? candidate.content : "";
+    if (!id || !title || seen.has(id)) continue;
+    seen.add(id);
+    parsed.push({ id, title, content });
+  }
+
+  const byId = new Map(parsed.map((entry) => [entry.id, entry]));
+  const defaultIds = new Set(DEFAULT_NOTE_TEMPLATES.map((template) => template.id));
+  const merged: NoteTemplateConfig[] = DEFAULT_NOTE_TEMPLATES.map((base) => {
     const match = byId.get(base.id);
     return match ? { ...match } : { ...base };
   });
+  for (const entry of parsed) {
+    if (!defaultIds.has(entry.id)) {
+      merged.push({ ...entry });
+    }
+  }
+  return merged;
+}
+
+/** True when the id belongs to a shipped built-in template (not user-created). */
+export function isBuiltInNoteTemplateId(id: string): boolean {
+  return DEFAULT_NOTE_TEMPLATES.some((template) => template.id === id);
 }
 
 /** Resolves a stored default-template id against the available templates. */

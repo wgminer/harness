@@ -9,6 +9,7 @@ import {
   DEFAULT_NOTE_TEMPLATE_ID,
   getDefaultNoteTemplate,
   interpolateNoteTemplateTitle,
+  isBuiltInNoteTemplateId,
   normalizeDefaultNoteTemplateId,
   normalizeNoteTemplates,
   parseMarkdownHeadingLine,
@@ -79,6 +80,37 @@ describe("normalizeNoteTemplates", () => {
       content: "# Note\n",
     });
   });
+
+  it("keeps custom templates after the built-ins", () => {
+    const base = normalizeNoteTemplates(undefined);
+    const templates = normalizeNoteTemplates([
+      ...base,
+      { id: "custom-1", title: "Standup", content: "# Standup\n" },
+    ]);
+    expect(templates.map((t) => t.id)).toEqual([
+      "blank",
+      "one-on-one",
+      "daily-log",
+      "custom-1",
+    ]);
+    expect(templates.find((t) => t.id === "custom-1")).toEqual({
+      id: "custom-1",
+      title: "Standup",
+      content: "# Standup\n",
+    });
+  });
+
+  it("still merges built-ins when only customs are stored", () => {
+    const templates = normalizeNoteTemplates([
+      { id: "custom-1", title: "Standup", content: "# Standup\n" },
+    ]);
+    expect(templates[0]?.id).toBe("blank");
+    expect(templates.at(-1)).toEqual({
+      id: "custom-1",
+      title: "Standup",
+      content: "# Standup\n",
+    });
+  });
 });
 
 describe("getDefaultNoteTemplate", () => {
@@ -110,6 +142,17 @@ describe("normalizeDefaultNoteTemplateId", () => {
 
   it("keeps a valid template id", () => {
     expect(normalizeDefaultNoteTemplateId("one-on-one")).toBe("one-on-one");
+  });
+});
+
+describe("isBuiltInNoteTemplateId", () => {
+  it("recognizes shipped templates", () => {
+    expect(isBuiltInNoteTemplateId("blank")).toBe(true);
+    expect(isBuiltInNoteTemplateId("daily-log")).toBe(true);
+  });
+
+  it("rejects custom ids", () => {
+    expect(isBuiltInNoteTemplateId("custom-1")).toBe(false);
   });
 });
 

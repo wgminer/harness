@@ -42,9 +42,10 @@
 }
 
 .windowed-note__action {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
+  --control-size: var(--space-6);
+  width: var(--control-size);
+  min-width: var(--control-size);
+  height: var(--control-size);
   color: var(--fg-muted);
   opacity: 0.75;
 }

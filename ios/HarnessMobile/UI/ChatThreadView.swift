@@ -301,13 +301,11 @@ struct ChatThreadView: View {
         isLoadingThread = true
         defer { isLoadingThread = false }
         do {
-            let loaded = try await Task.detached(priority: .userInitiated) {
-                let messages = try ConversationStore.loadMessages(localDataDir: dir, conversationId: id)
-                let meta = try ConversationStore.loadConversationMapRaw(localDataDir: dir)[id]
-                return (messages, meta)
+            let loadedMessages = try await Task.detached(priority: .userInitiated) {
+                try ConversationStore.loadMessages(localDataDir: dir, conversationId: id)
             }.value
-            messages = loaded.0
-            isDictationSession = loaded.1?.sessionKind == "dictation"
+            messages = loadedMessages
+            isDictationSession = (try? app.store.loadConversationMeta(conversationId: id))?.sessionKind == "dictation"
             refreshConversationTitle()
         } catch {
             loadError = error.localizedDescription

@@ -60,10 +60,16 @@ To import a memo recorded in Voice Memos: open the memo → **Share** → **Save
 | Step | Where |
 |------|--------|
 | Chat on phone | Here Mobile |
-| App backgrounds or you tap Sync | Phone pushes `bundle.json.gz` + `manifest.json` to R2 |
+| Pull-to-refresh, Settings **Sync now**, or return from background (after ~30s idle) | Phone pulls/pushes `bundle.json.gz` + `manifest.json` via R2 |
 | **Sync now** | Desktop Here → Settings → Data |
 
+Backgrounding the app **flushes composer drafts** and allows an in-flight sync to finish via a short background task. It does **not** start a new sync by itself. Dictation uses the `audio` background mode so lock/home during a take can keep capture alive.
+
 If both Mac and phone edited since the last sync, the app **auto-merges** both sides (combining conversations, messages, tasks, notes, and settings) and pushes the result. Mergeable JSON stores are unioned; binary files that cannot be merged keep this device's copy.
+
+## Device QA
+
+See [QA.md](QA.md) for the short manual checklist (nav, New Chat sheet, dictate, lock, Control Center).
 
 ## Run tests
 

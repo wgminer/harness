@@ -102,8 +102,9 @@
 }
 
 .app-modal-check {
+  position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-2);
   margin: 0;
   cursor: pointer;
@@ -113,9 +114,52 @@
   line-height: var(--line-height-normal);
 }
 
+.app-modal-check:has(.app-modal-check__icon) .app-modal-check__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .app-modal-check__input {
-  margin: 0.2em 0 0;
+  margin: 0;
   flex-shrink: 0;
+}
+
+.app-modal-check__icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+}
+
+.app-modal-check__icon svg {
+  display: block;
+}
+
+.app-modal-check:hover:not(:has(.app-modal-check__input:disabled)) .app-modal-check__icon {
+  color: var(--fg);
+}
+
+.app-modal-check:has(.app-modal-check__input:checked) .app-modal-check__icon {
+  color: var(--accent-readable);
+}
+
+.app-modal-check:has(.app-modal-check__input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.app-modal-check:has(.app-modal-check__input:focus-visible) .app-modal-check__icon {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .app-modal-check__text {
@@ -131,7 +175,7 @@
   background: var(--bg-secondary);
   color: var(--fg);
   border: 1px solid var(--border-input);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
 }
 
 .app-modal-body select:focus {
@@ -147,7 +191,7 @@
   padding: 0 var(--space-3);
   background: var(--bg-secondary);
   color: var(--fg);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border-input);
 }
 

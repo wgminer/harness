@@ -6,8 +6,8 @@ Concise guardrails for AI-assisted work in this repo. Full build/packaging detai
 
 **Do not hand-copy cross-language contracts.** When a value is shared across TypeScript, Rust, and/or Swift, add or extend a file under [`resources/contracts/`](resources/contracts/) and wire consumers to read it.
 
-- **Today:** [`resources/contracts/tools.json`](resources/contracts/tools.json) — OpenAI tool schemas (desktop `include_str!`, iOS bundle resource, TS can import the same path).
-- **Planned:** prompts, model names, sync scopes, gated tool names, and other shared value contracts.
+- **Today:** [`resources/contracts/tools.json`](resources/contracts/tools.json) — OpenAI tool schemas (desktop `include_str!`, iOS bundle resource, TS can import the same path). [`resources/contracts/systemPrompt.json`](resources/contracts/systemPrompt.json) — shared / desktop / iOS system prompt fields (contract-only; not settings-overridable). [`resources/contracts/chatModes.json`](resources/contracts/chatModes.json) — desktop chat mode labels/overlays. [`resources/contracts/chatStreamBatch.json`](resources/contracts/chatStreamBatch.json) — coarse chat/note stream UI flush thresholds.
+- **Planned:** model names, sync scopes, gated tool names, and other shared value contracts.
 
 If code cannot share a file (logic mirrors), add a **parity test** that reads the real sources and fails on drift — same pattern as `src/shared/versionParity.test.ts` and `src/shared/ipcNames.test.ts`.
 
@@ -25,7 +25,7 @@ Run before landing cross-surface changes:
 npm test
 ```
 
-Vitest includes version parity, ipcNames ↔ `generate_handler!` parity, sync-merge fixtures, and other guards under `src/shared/*.test.ts`. CI runs the same `npm test` in the static job.
+Vitest includes version parity, ipcNames ↔ `generate_handler!` parity, sync-merge fixtures, **iOS app size budget** (`iosAppBudget.test.ts`), and other guards under `src/shared/*.test.ts`. CI runs the same `npm test` in the static job.
 
 ## Dev vs installed data dirs
 
@@ -37,6 +37,8 @@ When reporting a finished desktop dist or release build in chat, always include 
 
 ## Border radius
 
-Desktop radius lives in [`src/renderer/base.css`](src/renderer/base.css): `--radius-xs` (2px), `--radius-sm` / `--radius-md` / `--radius-lg` (4px grid), `--radius-pill`. Prefer these over hardcoded px. Leave `0`, `50%`, and rare hairline `1px` literals when they are intentional.
+Desktop radius lives in [`src/renderer/base.css`](src/renderer/base.css): `--radius-xs` (2px), `--radius-sm` / `--radius-md` / `--radius-lg` (4px grid), `--radius-pill`, plus `--radius-control` / `--radius-control-sm` (¼ of 36px / 24px control height). Prefer these over hardcoded px. Leave `0`, `50%`, and rare hairline `1px` literals when they are intentional.
+
+`.btn` radius scales with `--control-size` (`min(lg, size/4)`). Size variants and height overrides must set `--control-size` so corners stay soft without going pill-shaped.
 
 **iOS is out of this scale** — keep platform-native shapes (`Capsule`, `Circle`, continuous rounded rects, liquid-glass bar metrics). Do not port desktop `--radius-*` values to Swift or chase pixel parity with the desktop app.

@@ -1,6 +1,7 @@
 pub mod assistant_tools;
 pub mod canonical_json;
 pub mod chat;
+pub mod chat_modes;
 pub mod commands;
 pub mod conversation_title;
 pub mod credentials;
@@ -15,7 +16,7 @@ pub mod global_recording_effects;
 pub mod global_recording_session;
 pub mod import;
 pub mod memory;
-pub mod memory_facts;
+pub mod memory_distill;
 pub mod memory_import;
 pub mod mic_permission;
 pub mod images;
@@ -100,8 +101,6 @@ pub fn run() {
             commands::app_get_version,
             commands::env_is_harness_dev,
             commands::env_is_harness_e2e,
-            commands::window_get_size,
-            commands::window_toggle_size,
             commands::settings_get,
             commands::settings_set,
             commands::settings_get_system_prompt_preview,
@@ -111,6 +110,7 @@ pub fn run() {
             commands::credentials_set_tavily_api_key,
             commands::credentials_set_r2_secret_access_key,
             commands::memory_create_conversation,
+            commands::memory_set_conversation_chat_mode,
             commands::memory_get_conversation,
             commands::memory_list_conversations,
             commands::memory_delete_conversation,

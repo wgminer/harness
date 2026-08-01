@@ -1,7 +1,6 @@
 use serde_json::{json, Value};
 
 use crate::credentials::{migrate_secrets_from_settings_raw, set_credential, CredentialKey};
-use crate::system_prompt::{default_system_prompt_value, parse_system_prompt};
 use crate::paths::{ensure_local_data_migration, get_local_data_settings_path};
 use crate::storage::{atomic_write_utf8, file_exists, read_json_object_file, WriteChains};
 
@@ -40,7 +39,6 @@ pub fn default_settings() -> Value {
         "chat": {
             "openToComposeOnLaunch": true
         },
-        "systemPrompt": default_system_prompt_value(),
         "appearance": {
             "accent": DEFAULT_ACCENT
         }
@@ -69,15 +67,14 @@ fn default_note_templates() -> Value {
 
 pub fn normalize_note_templates(input: Option<&Value>) -> Value {
     let defaults = default_note_templates();
+    let default_arr = defaults.as_array().cloned().unwrap_or_default();
 
     let Some(items) = input.and_then(|v| v.as_array()) else {
         return defaults;
     };
-    if items.len() != defaults.as_array().map(|a| a.len()).unwrap_or(0) {
-        return defaults;
-    }
 
     let mut by_id = std::collections::HashMap::new();
+    let mut custom_order: Vec<String> = Vec::new();
     for item in items {
         let Some(obj) = item.as_object() else {
             continue;
@@ -89,7 +86,7 @@ pub fn normalize_note_templates(input: Option<&Value>) -> Value {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        if id.is_empty() || title.is_empty() {
+        if id.is_empty() || title.is_empty() || by_id.contains_key(id) {
             continue;
         }
         by_id.insert(
@@ -100,18 +97,31 @@ pub fn normalize_note_templates(input: Option<&Value>) -> Value {
                 "content": content
             }),
         );
+        custom_order.push(id.to_string());
     }
 
-    let merged: Vec<Value> = defaults
-        .as_array()
-        .cloned()
-        .unwrap_or_default()
+    let default_ids: std::collections::HashSet<String> = default_arr
+        .iter()
+        .filter_map(|base| base.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()))
+        .collect();
+
+    let mut merged: Vec<Value> = default_arr
         .into_iter()
         .map(|base| {
             let id = base.get("id").and_then(|v| v.as_str()).unwrap_or("");
             by_id.get(id).cloned().unwrap_or(base)
         })
         .collect();
+
+    for id in custom_order {
+        if default_ids.contains(&id) {
+            continue;
+        }
+        if let Some(entry) = by_id.get(&id) {
+            merged.push(entry.clone());
+        }
+    }
+
     Value::Array(merged)
 }
 
@@ -369,10 +379,6 @@ pub fn parse_settings(data: &Value) -> Value {
         "transcription": parse_transcription(obj.and_then(|o| o.get("transcription")), &defaults),
         "sync": parse_sync(obj.and_then(|o| o.get("sync")), &defaults),
         "chat": { "openToComposeOnLaunch": open_to_compose },
-        "systemPrompt": parse_system_prompt(
-            obj.and_then(|o| o.get("systemPrompt")),
-            &defaults,
-        ),
         "appearance": parse_appearance(obj.and_then(|o| o.get("appearance"))),
     })
 }
@@ -424,7 +430,12 @@ async fn migrate_settings_file_at_path(chains: &WriteChains, path: &std::path::P
     let migrated_secrets = migrate_secrets_from_settings_raw(&mut raw).await;
     let stripped_before = raw.clone();
     strip_settings_secrets(&mut raw);
-    if !migrated_secrets && raw == stripped_before {
+    // Drop legacy settings.systemPrompt — static prompt text lives in the contract only.
+    let removed_system_prompt = raw
+        .as_object_mut()
+        .map(|obj| obj.remove("systemPrompt").is_some())
+        .unwrap_or(false);
+    if !migrated_secrets && !removed_system_prompt && raw == stripped_before {
         return Ok(());
     }
     let pretty = serde_json::to_string_pretty(&raw).unwrap_or_default();
@@ -566,18 +577,6 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
             current.get("chat").unwrap_or(&json!({})),
             chat,
             &["openToComposeOnLaunch"],
-        );
-    }
-
-    if let Some(system_prompt) = partial.get("systemPrompt") {
-        let current_sp = current
-            .get("systemPrompt")
-            .cloned()
-            .unwrap_or_else(default_system_prompt_value);
-        next["systemPrompt"] = merge_object_fields(
-            &current_sp,
-            system_prompt,
-            &["shared", "desktop", "ios"],
         );
     }
 

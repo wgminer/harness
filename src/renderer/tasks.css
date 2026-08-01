@@ -168,7 +168,7 @@
   width: 24px;
   height: 24px;
   min-width: unset;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   background: transparent;
   border: none;
   color: var(--fg-muted);
@@ -331,7 +331,7 @@
   background: var(--bg-secondary);
   color: var(--fg);
   border: 1px solid var(--border-input);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
 }
 
 .tasks-tags-input:focus {

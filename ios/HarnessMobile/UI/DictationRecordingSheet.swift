@@ -60,21 +60,15 @@ struct DictationRecordingSheet: View {
             VStack(spacing: 24) {
                 switch phase {
                 case .starting:
-                    Spacer()
-                    startingContent
-                        .padding(.horizontal, 28)
-                    Spacer()
+                    centeredStatus { startingContent }
                 case .recording:
                     Spacer()
                     recordingContent
                     DictationCaptureWatchdog(
                         recorder: recorder,
                         onUnexpectedEnd: {
-                            // Only fail while we still believe capture is live.
-                            // A stale onChange can fire after stop has already moved us on.
                             guard phase == .recording, !isStopping else { return }
                             isMicLive = false
-                            // Take ownership so a later start()/cancel won't delete this file.
                             if savedAudioURL == nil {
                                 savedAudioURL = recorder.consumePreservedRecordingURL()
                             }
@@ -87,10 +81,7 @@ struct DictationRecordingSheet: View {
                     )
                     Spacer()
                 case .processing:
-                    Spacer()
-                    processingContent
-                        .padding(.horizontal, 28)
-                    Spacer()
+                    centeredStatus { processingContent }
                 case .failed(let message):
                     failedContent(message: message)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -124,14 +115,20 @@ struct DictationRecordingSheet: View {
             Task { await stopAndTranscribe() }
         }
         .onDisappear {
-            // Swipe-dismiss (allowed from .failed) must invalidate any in-flight transcribe
-            // so a background winner cannot commit a conversation after the user left.
             operationGeneration += 1
             app.dictationService.cancel()
-            // Failed takes are UI-owned after consume; delete on abandon so they do not orphan.
             if case .failed = phase, let url = savedAudioURL {
                 try? FileManager.default.removeItem(at: url)
             }
+        }
+    }
+
+    private func centeredStatus<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack {
+            Spacer()
+            content()
+                .padding(.horizontal, 28)
+            Spacer()
         }
     }
 
@@ -165,7 +162,7 @@ struct DictationRecordingSheet: View {
 
     private var recordingContent: some View {
         VStack(spacing: 36) {
-            // Observe AudioRecorder only in the elapsed leaf — no waveform redraw loop.
+            // Elapsed leaf observes AudioRecorder.
             VStack(spacing: 12) {
                 HStack(spacing: 8) {
                     Circle()
@@ -435,10 +432,12 @@ struct DictationRecordingSheet: View {
 
 private enum DictationElapsedFormatting {
     static func string(ms: Int) -> String {
-        let totalSeconds = ms / 1000
+        let clamped = max(0, ms)
+        let totalSeconds = clamped / 1000
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        let tenths = (clamped % 1000) / 100
+        return String(format: "%d:%02d.%d", minutes, seconds, tenths)
     }
 }
 

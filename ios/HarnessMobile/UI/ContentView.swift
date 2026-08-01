@@ -29,10 +29,13 @@ struct ContentView: View {
             await app.bootstrap()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
+            switch phase {
+            case .active:
                 Task { await app.syncOnForeground() }
-            } else if phase == .background {
-                app.flushComposerDrafts()
+            case .background:
+                app.markEnteredBackground()
+            default:
+                break
             }
         }
         .sheet(isPresented: setupNoticeBinding) {
@@ -55,8 +58,6 @@ struct ContentView: View {
                 .equatable()
                 .navigationDestination(item: chatRouteBinding) { route in
                     switch route {
-                    case .compose:
-                        ComposeChatView(app: app)
                     case .thread(let conversationId):
                         ChatThreadView(app: app, conversationId: conversationId)
                     }
@@ -74,12 +75,7 @@ struct ContentView: View {
     private var chatRouteBinding: Binding<ChatRoute?> {
         Binding(
             get: { chatRouter.route },
-            set: { newValue in
-                if newValue == nil, case .compose = chatRouter.route {
-                    app.clearComposeDraft()
-                }
-                chatRouter.route = newValue
-            }
+            set: { chatRouter.route = $0 }
         )
     }
 }

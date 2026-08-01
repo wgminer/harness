@@ -333,6 +333,9 @@ export function toolLabel(name: string): string {
     task_update: "Updated task",
     task_delete: "Deleted task",
     task_clear_completed: "Cleared completed",
+    memory_set: "Updated context",
+    memory_list: "Listed context",
+    // Display aliases for older tool IDs in chat history.
     memory_set_fact: "Updated context",
     memory_list_facts: "Listed context",
     memory_search_conversations: "Searched history",

@@ -1,6 +1,6 @@
 import { snapToGrid } from "../shared/grid";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Circle, CircleCheck, ListTodo, Trash2, X } from "lucide-react";
+import { CheckLine, ChevronRight, Circle, CircleCheck, Trash2, X } from "lucide-react";
 import type { TaskItem, TasksPayload } from "../shared/desktopAPI";
 import { normalizeTags } from "../shared/tags";
 import {
@@ -12,7 +12,6 @@ import {
   toggleTaskCompleted,
   type TaskStatus,
 } from "../shared/taskStatus";
-import { useScrolledHeader } from "./useScrolledHeader";
 import { Modal } from "./Modal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceListSearch } from "./WorkspaceListSearch";
@@ -97,7 +96,6 @@ export function TasksView() {
   const [tagInput, setTagInput] = useState("");
   const [modalSaving, setModalSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
   const tagFieldRef = useRef<HTMLInputElement>(null);
   const [activeOpen, setActiveOpen] = useState(true);
   const [completedOpen, setCompletedOpen] = useState(false);
@@ -352,8 +350,8 @@ export function TasksView() {
 
   return (
     <div ref={tasksPaneRef} className="workspace-page tasks-page">
-      <WorkspaceHeader title="Tasks" icon={<ListTodo size={16} />} scrolled={headerScrolled} />
-      <div ref={scrollRef} className="workspace-scroll tasks-scroll" onScroll={onScroll}>
+      <div className="workspace-scroll tasks-scroll">
+        <WorkspaceHeader title="Tasks" icon={<CheckLine size={24} />} />
         <div className="workspace-content workspace-stack tasks-content">
           <WorkspaceListSearch
             value={searchQuery}

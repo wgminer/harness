@@ -45,9 +45,9 @@ export function SettingsGroup({
       <span className="settings-group__title">{title}</span>
     </button>
   ) : (
-    <h3 className="settings-group__title" id={headingId}>
+    <h2 className="settings-group__title" id={headingId}>
       {title}
-    </h3>
+    </h2>
   );
 
   return (

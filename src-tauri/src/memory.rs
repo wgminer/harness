@@ -80,6 +80,9 @@ pub struct ConversationMeta {
     pub has_assistant_reply: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_messages: Option<bool>,
+    /// Desktop cognitive mode (`chat` | `decide` | `write` | `refine`). Omitted = chat.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chat_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,6 +141,8 @@ pub struct ConversationSummary {
     pub has_assistant_reply: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_messages: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chat_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -347,8 +352,21 @@ async fn save_messages_in(
 }
 
 pub async fn create_conversation(state: &AppState) -> Result<String, std::io::Error> {
+    create_conversation_with_mode(state, None).await
+}
+
+pub async fn create_conversation_with_mode(
+    state: &AppState,
+    chat_mode: Option<&str>,
+) -> Result<String, std::io::Error> {
     let memory_dir = get_memory_dir();
     let id = generate_id("conv");
+    let mode = crate::chat_modes::ChatMode::parse(chat_mode);
+    let chat_mode_field = if mode == crate::chat_modes::ChatMode::Chat {
+        None
+    } else {
+        Some(mode.as_str().to_string())
+    };
     let mut conv = load_conversations_map(state, &memory_dir).await;
     conv.insert(
         id.clone(),
@@ -363,11 +381,47 @@ pub async fn create_conversation(state: &AppState) -> Result<String, std::io::Er
             session_kind: Some(ConversationSessionKind::Chat),
             has_assistant_reply: None,
             has_messages: None,
+            chat_mode: chat_mode_field,
         },
     );
     save_conversations_map(state, &memory_dir, &conv).await?;
     save_messages_in(state, &memory_dir, &id, &[]).await?;
     Ok(id)
+}
+
+pub async fn set_conversation_chat_mode(
+    state: &AppState,
+    conversation_id: &str,
+    chat_mode: &str,
+) -> Result<(), std::io::Error> {
+    let mode = crate::chat_modes::ChatMode::parse(Some(chat_mode));
+    let value = if mode == crate::chat_modes::ChatMode::Chat {
+        // Store None for default chat — clear by writing None via patch sentinel.
+        None
+    } else {
+        Some(mode.as_str().to_string())
+    };
+    patch_conversation_meta(
+        state,
+        conversation_id,
+        ConversationMetaPatch {
+            chat_mode: Some(ChatModePatch::Set(value)),
+            ..Default::default()
+        },
+    )
+    .await
+}
+
+pub async fn get_conversation_chat_mode(
+    state: &AppState,
+    conversation_id: &str,
+) -> Result<crate::chat_modes::ChatMode, std::io::Error> {
+    let memory_dir = get_memory_dir();
+    let conv = load_conversations_map(state, &memory_dir).await;
+    Ok(crate::chat_modes::ChatMode::parse(
+        conv.get(conversation_id)
+            .and_then(|m| m.chat_mode.as_deref()),
+    ))
 }
 
 /// One message inside a ChatGPT / Claude import batch.
@@ -473,6 +527,7 @@ pub async fn import_conversations(
                 session_kind: Some(ConversationSessionKind::Chat),
                 has_assistant_reply: if has_assistant_reply { Some(true) } else { None },
                 has_messages: if has_messages { Some(true) } else { None },
+                chat_mode: None,
             },
         );
         if let Some(claude_id) = item.claude_id.as_ref() {
@@ -503,6 +558,7 @@ pub async fn get_conversation(
         session_kind: c.session_kind,
         has_assistant_reply: c.has_assistant_reply,
         has_messages: c.has_messages,
+        chat_mode: c.chat_mode.clone(),
     }))
 }
 
@@ -518,6 +574,7 @@ pub async fn list_conversations(state: &AppState) -> Result<Vec<ConversationSumm
             session_kind: c.session_kind,
             has_assistant_reply: c.has_assistant_reply,
             has_messages: c.has_messages,
+            chat_mode: c.chat_mode,
         })
         .collect();
     rows.sort_by(|a, b| b.created_at.cmp(&a.created_at));
@@ -956,6 +1013,11 @@ struct ConversationMetaPatch {
     session_kind: Option<ConversationSessionKind>,
     has_assistant_reply: Option<bool>,
     has_messages: Option<bool>,
+    chat_mode: Option<ChatModePatch>,
+}
+
+enum ChatModePatch {
+    Set(Option<String>),
 }
 
 async fn patch_conversation_meta(
@@ -982,6 +1044,9 @@ async fn patch_conversation_meta(
     }
     if let Some(has_messages) = patch.has_messages {
         meta.has_messages = Some(has_messages);
+    }
+    if let Some(ChatModePatch::Set(chat_mode)) = patch.chat_mode {
+        meta.chat_mode = chat_mode;
     }
     save_conversations_map(state, &memory_dir, &conv).await
 }

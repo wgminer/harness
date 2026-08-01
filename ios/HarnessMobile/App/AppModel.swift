@@ -1,8 +1,8 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 enum ChatRoute: Hashable {
-    case compose
     case thread(id: String)
 }
 
@@ -101,11 +101,16 @@ final class AppModel: ObservableObject {
     private static let autoSyncDelayNs: UInt64 = 2_500_000_000
     private static let pendingStateRefreshDelayNs: UInt64 = 200_000_000
     private static let draftPersistDelayNs: UInt64 = 300_000_000
+    /// Skip Control Center flickers; only sync after a real background.
+    private static let foregroundSyncMinInterval: TimeInterval = 30
 
     private var scheduledSyncTask: Task<Void, Never>?
     private var pendingStateRefreshTask: Task<Void, Never>?
     private var threadDraftPersistTask: Task<Void, Never>?
     private var composeDraftPersistTask: Task<Void, Never>?
+    private var syncBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var lastForegroundSyncAt: Date?
+    private var didEnterBackground = false
     @Published private(set) var hasScheduledSync = false
 
     private func wireContentChangeHandlers() {
@@ -254,10 +259,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func openCompose() {
-        chatRouter?.openCompose()
-    }
-
     func openThread(id: String) {
         chatRouter?.openThread(id: id)
     }
@@ -297,7 +298,7 @@ final class AppModel: ObservableObject {
         }
 
         if R2SettingsStore.isConfigured {
-            await syncOnForeground()
+            await performSync()
         }
     }
 
@@ -319,8 +320,20 @@ final class AppModel: ObservableObject {
         showSetupNotice = false
     }
 
+    func markEnteredBackground() {
+        didEnterBackground = true
+        flushComposerDrafts()
+        beginSyncBackgroundTaskIfNeeded()
+    }
+
+    /// Sync after a real background, not Control Center `.inactive` flickers.
     func syncOnForeground() async {
-        guard R2SettingsStore.isConfigured else { return }
+        guard R2SettingsStore.isConfigured, didEnterBackground else { return }
+        didEnterBackground = false
+        if let last = lastForegroundSyncAt,
+           Date().timeIntervalSince(last) < Self.foregroundSyncMinInterval {
+            return
+        }
         await performSync()
     }
 
@@ -336,11 +349,16 @@ final class AppModel: ObservableObject {
         scheduledSyncTask?.cancel()
         clearScheduledSync()
         isSyncing = true
-        defer { isSyncing = false }
+        beginSyncBackgroundTaskIfNeeded()
+        defer {
+            isSyncing = false
+            endSyncBackgroundTaskIfNeeded()
+        }
 
         do {
             let outcome = try await syncEngine.syncNow(forcePull: forcePull)
             applyOutcome(outcome)
+            lastForegroundSyncAt = Date()
             if outcome.localDataChanged {
                 try await store.reloadAsync()
                 try tasksStore.reload()
@@ -356,6 +374,19 @@ final class AppModel: ObservableObject {
             await store.refreshPendingSyncState()
             chatService.refreshClient()
         }
+    }
+
+    private func beginSyncBackgroundTaskIfNeeded() {
+        guard syncBackgroundTask == .invalid else { return }
+        syncBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "HereSync") { [weak self] in
+            self?.endSyncBackgroundTaskIfNeeded()
+        }
+    }
+
+    private func endSyncBackgroundTaskIfNeeded() {
+        guard syncBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(syncBackgroundTask)
+        syncBackgroundTask = .invalid
     }
 
     func pushAfterChat() async {

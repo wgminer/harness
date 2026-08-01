@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { SystemPromptPreview } from "../../shared/types";
+import { CHAT_MODES, DEFAULT_CHAT_MODE, type ChatModeId } from "../../shared/chatModes";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";
 
 type PreviewPlatform = "desktop" | "ios";
 
-type LayerKind = "shared" | "platform" | "memory" | "recent" | "temporal";
+type LayerKind = "shared" | "platform" | "mode" | "memory" | "recent" | "temporal";
 
 interface PromptLayer {
   id: LayerKind;
   title: string;
-  source: string;
   body: string;
   optional: boolean;
   meta?: string;
@@ -58,7 +58,6 @@ function PromptLayerCard({
         </span>
         <span className="settings-prompt-layer__titles">
           <span className="settings-prompt-layer__title">{layer.title}</span>
-          <span className="settings-prompt-layer__source">{layer.source}</span>
         </span>
         <span className="settings-prompt-layer__meta">
           {skipped ? (
@@ -91,9 +90,7 @@ function PromptLayerCard({
         className="settings-prompt-layer__body"
       >
         {skipped ? (
-          <p className="settings-prompt-layer__empty">
-            Nothing to inject for this layer right now.
-          </p>
+          <p className="settings-prompt-layer__empty">Empty for this preview.</p>
         ) : (
           <pre
             className="settings-prompt-layer__pre"
@@ -115,6 +112,7 @@ export function SystemPromptPreviewPanel({
   defaultOpen?: boolean;
 } = {}) {
   const [platform, setPlatform] = useState<PreviewPlatform>("desktop");
+  const [previewMode, setPreviewMode] = useState<ChatModeId>(DEFAULT_CHAT_MODE);
   const [preview, setPreview] = useState<SystemPromptPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,12 +123,15 @@ export function SystemPromptPreviewPanel({
   const toolsPanelId = useId();
   const toolsHeadingId = useId();
 
-  const loadPreview = useCallback(async (nextPlatform: PreviewPlatform) => {
+  const loadPreview = useCallback(async (nextPlatform: PreviewPlatform, nextMode: ChatModeId) => {
     if (!window.harness?.settings?.getSystemPromptPreview) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await window.harness.settings.getSystemPromptPreview(nextPlatform);
+      const result = await window.harness.settings.getSystemPromptPreview(
+        nextPlatform,
+        nextPlatform === "desktop" ? nextMode : undefined,
+      );
       setPreview(result);
     } catch (e) {
       setPreview(null);
@@ -141,8 +142,8 @@ export function SystemPromptPreviewPanel({
   }, []);
 
   useEffect(() => {
-    void loadPreview(platform);
-  }, [loadPreview, platform]);
+    void loadPreview(platform, previewMode);
+  }, [loadPreview, platform, previewMode]);
 
   const layers = useMemo((): PromptLayer[] => {
     if (!preview) return [];
@@ -151,39 +152,41 @@ export function SystemPromptPreviewPanel({
       {
         id: "shared",
         title: "Shared instructions",
-        source: "settings · systemPrompt.shared",
         body: preview.shared,
         optional: false,
       },
       {
         id: "platform",
         title: `${platformLabel} overlay`,
-        source: `settings · systemPrompt.${platform}`,
         body: preview.platformOverlay,
         optional: false,
       },
       {
+        id: "mode",
+        title: "Chat mode",
+        body: preview.modeOverlay ?? "",
+        optional: true,
+        meta: preview.chatMode && preview.chatMode !== "chat" ? preview.chatMode : undefined,
+      },
+      {
         id: "memory",
-        title: "Memory facts",
-        source: "runtime · selected facts",
+        title: "Memory",
         body: preview.memoryBlock,
         optional: true,
         meta:
-          preview.selectedFacts.length > 0
-            ? `${preview.selectedFacts.length} fact${preview.selectedFacts.length === 1 ? "" : "s"}`
+          preview.selectedMemories.length > 0
+            ? `${preview.selectedMemories.length} ${preview.selectedMemories.length === 1 ? "memory" : "memories"}`
             : undefined,
       },
       {
         id: "recent",
         title: "Recent conversations",
-        source: "runtime · chat index",
         body: preview.recentConversationsBlock,
         optional: true,
       },
       {
         id: "temporal",
         title: "Temporal context",
-        source: "runtime · local clock",
         body: preview.temporalContext,
         optional: false,
       },
@@ -197,35 +200,71 @@ export function SystemPromptPreviewPanel({
   return (
     <SettingsGroup
       title="System prompt"
-      description="How the chat system message is stacked — tool schemas ride alongside it on the request, not inside the text."
       collapsible={collapsible}
       defaultOpen={defaultOpen}
     >
       <div
-        className="settings-system-prompt-toggle"
-        role="tablist"
-        aria-label="System prompt platform preview"
+        className="settings-prompt-preview-controls"
+        aria-label="System prompt preview filters"
       >
-        <button
-          type="button"
-          role="tab"
-          className={`settings-system-prompt-toggle__btn${platform === "desktop" ? " settings-system-prompt-toggle__btn--active" : ""}`}
-          aria-selected={platform === "desktop"}
-          data-testid="settings-system-prompt-desktop"
-          onClick={() => setPlatform("desktop")}
-        >
-          Desktop
-        </button>
-        <button
-          type="button"
-          role="tab"
-          className={`settings-system-prompt-toggle__btn${platform === "ios" ? " settings-system-prompt-toggle__btn--active" : ""}`}
-          aria-selected={platform === "ios"}
-          data-testid="settings-system-prompt-ios"
-          onClick={() => setPlatform("ios")}
-        >
-          iOS
-        </button>
+        <div className="settings-prompt-preview-controls__group">
+          <span className="settings-prompt-preview-controls__label" id="settings-prompt-platform-label">
+            Platform
+          </span>
+          <div
+            className="settings-system-prompt-toggle"
+            role="tablist"
+            aria-labelledby="settings-prompt-platform-label"
+          >
+            <button
+              type="button"
+              role="tab"
+              className={`settings-system-prompt-toggle__btn${platform === "desktop" ? " settings-system-prompt-toggle__btn--active" : ""}`}
+              aria-selected={platform === "desktop"}
+              data-testid="settings-system-prompt-desktop"
+              onClick={() => setPlatform("desktop")}
+            >
+              Desktop
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={`settings-system-prompt-toggle__btn${platform === "ios" ? " settings-system-prompt-toggle__btn--active" : ""}`}
+              aria-selected={platform === "ios"}
+              data-testid="settings-system-prompt-ios"
+              onClick={() => setPlatform("ios")}
+            >
+              iOS
+            </button>
+          </div>
+        </div>
+
+        {platform === "desktop" ? (
+          <div className="settings-prompt-preview-controls__group settings-prompt-preview-controls__group--mode">
+            <span className="settings-prompt-preview-controls__label" id="settings-prompt-mode-label">
+              Mode
+            </span>
+            <div
+              className="settings-system-prompt-toggle"
+              role="tablist"
+              aria-labelledby="settings-prompt-mode-label"
+            >
+              {CHAT_MODES.map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  role="tab"
+                  className={`settings-system-prompt-toggle__btn${previewMode === mode.id ? " settings-system-prompt-toggle__btn--active" : ""}`}
+                  aria-selected={previewMode === mode.id}
+                  data-testid={`settings-system-prompt-mode-${mode.id}`}
+                  onClick={() => setPreviewMode(mode.id)}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {loading && <SettingsHint flush>Loading preview…</SettingsHint>}
@@ -274,7 +313,7 @@ export function SystemPromptPreviewPanel({
                   <span className="settings-prompt-layer__titles">
                     <span className="settings-prompt-layer__title">Full assembled prompt</span>
                     <span className="settings-prompt-layer__source">
-                      Concatenated in order above, sent as the system message
+                      Sent as the system message
                     </span>
                   </span>
                   <span className="settings-prompt-layer__meta">
@@ -332,9 +371,6 @@ export function SystemPromptPreviewPanel({
                   </span>
                   <span className="settings-prompt-layer__titles">
                     <span className="settings-prompt-layer__title">Tool schemas</span>
-                    <span className="settings-prompt-layer__source">
-                      request · tools[] from resources/contracts/tools.json — not inside the prompt text
-                    </span>
                   </span>
                   <span className="settings-prompt-layer__meta">
                     <span className="settings-prompt-layer__badge">

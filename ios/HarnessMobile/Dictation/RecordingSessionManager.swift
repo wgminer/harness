@@ -14,9 +14,7 @@ final class RecordingSessionManager: ObservableObject {
     private var liveActivityTask: Task<Void, Never>?
 
     init() {
-        // Intentionally do not forward recorder.objectWillChange — elapsed publishes
-        // ~10×/sec and would rebuild every view that observes this session.
-        // Dictation UI observes AudioRecorder publishers in leaf views instead.
+        // Do not forward recorder.objectWillChange — leaf views observe elapsed/isRecording.
         NotificationCenter.default.addObserver(
             forName: .dictationLiveActivityStopRequested,
             object: nil,

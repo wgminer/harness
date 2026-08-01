@@ -336,6 +336,9 @@ export function NotesView({
     onActiveNoteChange?.(selectedNoteId);
   }, [onActiveNoteChange, selectedNoteId]);
 
+  const dirty = draft !== savedDraft;
+  const showInlineTemplates = isFreshNote && !dirty;
+
   useEffect(() => {
     if (!pendingEditorFocusRef.current) return;
     if (status.kind === "loading" || status.kind === "deleting") return;
@@ -372,8 +375,6 @@ export function NotesView({
     };
   }, [noteToolbarMenuOpen]);
 
-  const dirty = draft !== savedDraft;
-
   useEffect(() => {
     if (dirty) setIsFreshNote(false);
   }, [dirty]);
@@ -408,6 +409,7 @@ export function NotesView({
     (template: NoteTemplateConfig) => {
       const { content, cursorOffset } = resolveNoteTemplateContent(template.content);
       setDraft(content);
+      setIsFreshNote(false);
       const caret = Math.max(0, Math.min(cursorOffset ?? content.length, content.length));
       scheduleEditorFocus(caret);
     },
@@ -670,8 +672,6 @@ export function NotesView({
     return () => window.removeEventListener("pointerdown", onPointerDown, true);
   }, [asideExpanded, dismissAside]);
 
-  const showInlineTemplates = isFreshNote && !dirty;
-
   return (
     <div className="workspace-page notes-surface">
       <div
@@ -797,6 +797,42 @@ export function NotesView({
                   onSelectionChange={updateSelectionState}
                   onScroll={handleEditorScroll}
                 />
+                {showInlineTemplates ? (
+                  <div
+                    className="notes-surface__inline-templates"
+                    aria-labelledby="notes-templates-label"
+                  >
+                    <h3 id="notes-templates-label" className="notes-surface__templates-label">
+                      Start from a template
+                    </h3>
+                    <div
+                      className="notes-surface__templates"
+                      role="group"
+                      aria-labelledby="notes-templates-label"
+                    >
+                      {noteTemplates
+                        .filter((template) => template.id !== DEFAULT_NOTE_TEMPLATE_ID)
+                        .map((template) => {
+                          const preview = template.content.replace(/\s+$/, "");
+                          return (
+                            <button
+                              key={template.id}
+                              type="button"
+                              className="notes-surface__template-card"
+                              onClick={() => applyTemplate(template)}
+                              disabled={status.kind === "saving" || status.kind === "deleting"}
+                              aria-label={`Start from ${template.title} template`}
+                            >
+                              <span className="notes-surface__template-title">{template.title}</span>
+                              <span className="notes-surface__template-preview" aria-hidden>
+                                {preview.length > 0 ? preview : "Empty"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ) : null}
                 {showSelectionMenu ? (
                   <div
                     ref={selectionMenuRef}
@@ -1008,31 +1044,6 @@ export function NotesView({
                       )}
                     </div>
                   </section>
-                ) : null}
-                {showInlineTemplates ? (
-                  <div
-                    className="notes-surface__inline-templates workspace-section"
-                    aria-labelledby="notes-templates-label"
-                  >
-                    <h3 id="notes-templates-label" className="workspace-section-label">
-                      Start from a template
-                    </h3>
-                    <div className="notes-surface__templates" role="group" aria-labelledby="notes-templates-label">
-                      {noteTemplates
-                        .filter((template) => template.id !== DEFAULT_NOTE_TEMPLATE_ID)
-                        .map((template) => (
-                          <button
-                            key={template.id}
-                            type="button"
-                            className={`notes-surface__template-btn notes-surface__template-btn--${template.id}`}
-                            onClick={() => applyTemplate(template)}
-                            disabled={status.kind === "saving" || status.kind === "deleting"}
-                          >
-                            <span className="notes-surface__template-title">{template.title}</span>
-                          </button>
-                        ))}
-                    </div>
-                  </div>
                 ) : null}
               </div>
               {status.kind === "error" ? <p className="notes-surface__error">{status.message}</p> : null}

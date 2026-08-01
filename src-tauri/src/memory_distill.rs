@@ -4,19 +4,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DistilledFact {
+pub struct DistilledMemory {
     pub key: String,
     pub value: String,
 }
 
 #[async_trait::async_trait]
 pub trait MemoryCompileLlm: Send + Sync {
-    async fn distill(&self, transcripts: &str) -> Result<Vec<DistilledFact>, String>;
+    async fn distill(&self, transcripts: &str) -> Result<Vec<DistilledMemory>, String>;
 }
 
-pub fn merge_facts(
+pub fn merge_memories(
     existing: &HashMap<String, String>,
-    facts: &[DistilledFact],
+    memories: &[DistilledMemory],
 ) -> (HashMap<String, String>, usize, usize) {
     let mut merged = existing.clone();
     let mut lower_to_key = HashMap::new();
@@ -28,9 +28,9 @@ pub fn merge_facts(
     let mut updated = 0usize;
     let mut seen_lower_keys = HashSet::new();
 
-    for fact in facts {
-        let raw_key = fact.key.trim();
-        let raw_value = fact.value.trim();
+    for memory in memories {
+        let raw_key = memory.key.trim();
+        let raw_value = memory.value.trim();
         if raw_key.is_empty() || raw_value.is_empty() {
             continue;
         }
@@ -55,7 +55,7 @@ pub fn merge_facts(
     (merged, added, updated)
 }
 
-pub fn parse_facts_response(raw: &str) -> Vec<DistilledFact> {
+pub fn parse_memories_response(raw: &str) -> Vec<DistilledMemory> {
     if raw.trim().is_empty() {
         return Vec::new();
     }
@@ -73,17 +73,17 @@ pub fn parse_facts_response(raw: &str) -> Vec<DistilledFact> {
         Ok(v) => v,
         Err(_) => return Vec::new(),
     };
-    let facts = parsed
-        .get("facts")
+    let memories = parsed
+        .get("memories")
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
     let mut out = Vec::new();
-    for f in facts {
-        let key = f.get("key").and_then(|v| v.as_str());
-        let value = f.get("value").and_then(|v| v.as_str());
+    for m in memories {
+        let key = m.get("key").and_then(|v| v.as_str());
+        let value = m.get("value").and_then(|v| v.as_str());
         if let (Some(key), Some(value)) = (key, value) {
-            out.push(DistilledFact {
+            out.push(DistilledMemory {
                 key: key.to_string(),
                 value: value.to_string(),
             });

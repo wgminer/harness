@@ -2,12 +2,25 @@ import { describe, expect, it } from "vitest";
 import {
   groupConversations,
   nextSidebarListSortMode,
-  pickSidebarConversationsForList,
-  SIDEBAR_INITIAL_VISIBLE_COUNT,
-  SIDEBAR_MORE_INCREMENT,
+  pickSidebarLibraryRows,
+  SIDEBAR_VISIBLE_LIMIT,
 } from "./sidebarUtils";
 
 describe("sidebarUtils", () => {
+  it("limits the library list to the newest 50 items and keeps the active row", () => {
+    expect(SIDEBAR_VISIBLE_LIMIT).toBe(50);
+    const list = Array.from({ length: 60 }, (_, i) => ({
+      id: `id-${i}`,
+      title: `t${i}`,
+      createdAt: i * 100,
+    }));
+    const picked = pickSidebarLibraryRows(list, "id-0");
+    expect(picked).toHaveLength(50);
+    expect(picked.map((r) => r.id)).toContain("id-0");
+    expect(picked.map((r) => r.id)).toContain("id-59");
+    expect(picked.map((r) => r.id)).not.toContain("id-1");
+  });
+
   it("groups conversations into a flat Recent list when requested", () => {
     const now = Date.now();
     const day = 24 * 60 * 60 * 1000;
@@ -41,9 +54,9 @@ describe("sidebarUtils", () => {
   });
 
   it("cycles sidebar list sort modes", () => {
-    expect(nextSidebarListSortMode("date")).toBe("recent");
-    expect(nextSidebarListSortMode("recent")).toBe("day");
-    expect(nextSidebarListSortMode("day")).toBe("date");
+    expect(nextSidebarListSortMode("recent")).toBe("date");
+    expect(nextSidebarListSortMode("date")).toBe("day");
+    expect(nextSidebarListSortMode("day")).toBe("recent");
   });
 
   it("groups conversations by recency buckets", () => {
@@ -82,20 +95,5 @@ describe("sidebarUtils", () => {
     const monthIdx = groups.findIndex((g) => g.key.startsWith("month:"));
     expect(monthIdx).toBeGreaterThan(labels.indexOf("2 weeks ago"));
     expect(groups[monthIdx].items.map((c) => c.id)).toEqual(["monthish"]);
-  });
-
-  it("always includes active conversation in preview", () => {
-    const list = [
-      { id: "a", title: "a", createdAt: 300 },
-      { id: "b", title: "b", createdAt: 200 },
-      { id: "c", title: "c", createdAt: 100 },
-    ];
-    const picked = pickSidebarConversationsForList(list, "c", 2);
-    expect(picked.map((c) => c.id)).toEqual(["a", "c"]);
-  });
-
-  it("defaults to 20 visible conversations with 20 more per click", () => {
-    expect(SIDEBAR_INITIAL_VISIBLE_COUNT).toBe(20);
-    expect(SIDEBAR_MORE_INCREMENT).toBe(20);
   });
 });

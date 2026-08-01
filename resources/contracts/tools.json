@@ -159,8 +159,8 @@
   {
     "type": "function",
     "function": {
-      "name": "memory_set_fact",
-      "description": "Store a stable user fact or preference in persistent memory.",
+      "name": "memory_set",
+      "description": "Store a stable user memory or preference in persistent memory.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -174,8 +174,8 @@
   {
     "type": "function",
     "function": {
-      "name": "memory_list_facts",
-      "description": "List all stored persistent user facts and preferences.",
+      "name": "memory_list",
+      "description": "List all stored persistent user memories and preferences.",
       "parameters": { "type": "object", "properties": {} }
     }
   },

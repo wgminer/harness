@@ -1,4 +1,4 @@
-import { rigSection } from "./rigPage";
+import { settingsSection } from "./settingsPage";
 
 export type SetupGapKind = "openai_api_key" | "sync_r2" | "macos_accessibility";
 
@@ -12,11 +12,11 @@ export interface SetupGap {
 }
 
 export function transcriptCleanupSkippedMessage(): string {
-  return `Transcript cleanup needs an OpenAI API key (${rigSection("Data")}). Using the raw transcription.`;
+  return `Transcript cleanup needs an OpenAI API key (${settingsSection("Data")}). Using the raw transcription.`;
 }
 
 export function chatRequiresApiKeyMessage(): string {
-  return `Chat needs an OpenAI API key in ${rigSection("Data")}.`;
+  return `Chat needs an OpenAI API key in ${settingsSection("Data")}.`;
 }
 
 export function collectSetupGaps(input: {

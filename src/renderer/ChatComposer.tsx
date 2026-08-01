@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, type MutableRefObject, type ReactNode } from "react";
 import { Mic, Check, Loader2, X, Paperclip, ArrowUp } from "lucide-react";
 import type { VoiceState } from "./chatHelpers";
+import { useTypedPlaceholder } from "./useTypedPlaceholder";
 
 interface ChatComposerProps {
   input: string;
@@ -21,6 +22,10 @@ interface ChatComposerProps {
   onRemoveAttachedAudio: () => void;
   focusComposerNonce?: number;
   inputRef?: MutableRefObject<HTMLTextAreaElement | null>;
+  placeholder?: string;
+  modeControl?: ReactNode;
+  /** Shift+Tab in the composer cycles chat modes. */
+  onCycleMode?: () => void;
 }
 
 export function ChatComposer({
@@ -42,9 +47,13 @@ export function ChatComposer({
   onRemoveAttachedAudio,
   focusComposerNonce,
   inputRef: externalInputRef,
+  placeholder = "Write a message…",
+  modeControl,
+  onCycleMode,
 }: ChatComposerProps) {
   const inputRef = useRef<HTMLTextAreaElement | null>(null) as MutableRefObject<HTMLTextAreaElement | null>;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typedPlaceholder = useTypedPlaceholder(placeholder);
 
   // Auto-grow textarea to fit content (up to CSS max-height)
   const adjustInputHeight = useCallback(() => {
@@ -71,7 +80,15 @@ export function ChatComposer({
       {attachmentError && (
         <div className="voice-error">{attachmentError}</div>
       )}
-      <div className="chat-composer-inner">
+      <div
+        className="chat-composer-inner"
+        onKeyDown={(e) => {
+          if (e.key === "Tab" && e.shiftKey && onCycleMode && !e.altKey && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            if (!sending) onCycleMode();
+          }
+        }}
+      >
         <input
           ref={fileInputRef}
           type="file"
@@ -122,14 +139,15 @@ export function ChatComposer({
               onSend();
             }
           }}
-          placeholder="Type a message..."
+          placeholder={typedPlaceholder}
           disabled={voiceState === "recording" || voiceState === "processing" || attachmentTranscribing}
           rows={1}
         />
         <div className="input-actions">
+          {modeControl ? <div className="chat-composer-mode-row">{modeControl}</div> : null}
           {voiceState === "recording" && (
             <span className="voice-timer">
-              {`${Math.floor(recordingMs / 60000)}:${String(Math.floor((recordingMs % 60000) / 1000)).padStart(2, "0")}.${String(recordingMs % 1000).padStart(3, "0")}`}
+              {`${Math.floor(recordingMs / 60000)}:${String(Math.floor((recordingMs % 60000) / 1000)).padStart(2, "0")}.${Math.floor((recordingMs % 1000) / 100)}`}
             </span>
           )}
           {voiceState === "processing" && (

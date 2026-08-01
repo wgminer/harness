@@ -15,11 +15,11 @@ use crate::tasks::{
 };
 
 const TAVILY_SEARCH_URL: &str = "https://api.tavily.com/search";
-const RIG_SECTION_GENERAL: &str = "System → General";
+const SETTINGS_SECTION_GENERAL: &str = "System → General";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct MemoryFactsPayload {
+struct MemoryToolPayload {
     last_action: String,
     memory: HashMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,8 +77,8 @@ pub fn is_assistant_tool_name(name: &str) -> bool {
             | "task_update"
             | "task_delete"
             | "task_clear_completed"
-            | "memory_set_fact"
-            | "memory_list_facts"
+            | "memory_set"
+            | "memory_list"
             | "memory_search_conversations"
             | "get_datetime"
             | "web_search"
@@ -90,7 +90,7 @@ pub fn is_assistant_tool_name(name: &str) -> bool {
     )
 }
 
-async fn set_memory_fact(state: &AppState, args: &Value) -> Result<MemoryFactsPayload, std::io::Error> {
+async fn set_memory(state: &AppState, args: &Value) -> Result<MemoryToolPayload, std::io::Error> {
     let key = args
         .get("key")
         .and_then(|v| v.as_str())
@@ -106,8 +106,8 @@ async fn set_memory_fact(state: &AppState, args: &Value) -> Result<MemoryFactsPa
 
     if key.is_empty() {
         let current = crate::memory::get_user_memory(state).await?;
-        return Ok(MemoryFactsPayload {
-            last_action: "set_fact".into(),
+        return Ok(MemoryToolPayload {
+            last_action: "set_memory".into(),
             memory: current,
             key: Some(key),
         });
@@ -115,17 +115,17 @@ async fn set_memory_fact(state: &AppState, args: &Value) -> Result<MemoryFactsPa
 
     crate::memory::set_user_memory(state, &key, &value).await?;
     let memory = crate::memory::get_user_memory(state).await?;
-    Ok(MemoryFactsPayload {
-        last_action: "set_fact".into(),
+    Ok(MemoryToolPayload {
+        last_action: "set_memory".into(),
         memory,
         key: Some(key),
     })
 }
 
-async fn list_memory_facts(state: &AppState) -> Result<MemoryFactsPayload, std::io::Error> {
+async fn list_memories(state: &AppState) -> Result<MemoryToolPayload, std::io::Error> {
     let memory = crate::memory::get_user_memory(state).await?;
-    Ok(MemoryFactsPayload {
-        last_action: "list_facts".into(),
+    Ok(MemoryToolPayload {
+        last_action: "list_memories".into(),
         memory,
         key: None,
     })
@@ -206,7 +206,7 @@ async fn search_web_tavily(api_key: &str, query: &str, max_results: i64) -> WebS
             answer: None,
             results: Vec::new(),
             error: Some(format!(
-                "Tavily API key is not set. Add it in {RIG_SECTION_GENERAL}."
+                "Tavily API key is not set. Add it in {SETTINGS_SECTION_GENERAL}."
             )),
         };
     }
@@ -383,7 +383,7 @@ pub async fn lookup_image(query: &str) -> LookupImagePayload {
             image_url: None,
             description: None,
             error: Some(format!(
-                "Tavily API key is not set. Add it in {RIG_SECTION_GENERAL}."
+                "Tavily API key is not set. Add it in {SETTINGS_SECTION_GENERAL}."
             )),
         };
     }
@@ -525,8 +525,8 @@ pub async fn execute_assistant_tool(
         "task_update" => serde_json::to_value(update_task(state, args).await?)?.into(),
         "task_delete" => serde_json::to_value(delete_task(state, args).await?)?.into(),
         "task_clear_completed" => serde_json::to_value(clear_completed_tasks(state).await?)?.into(),
-        "memory_set_fact" => serde_json::to_value(set_memory_fact(state, &args).await?)?.into(),
-        "memory_list_facts" => serde_json::to_value(list_memory_facts(state).await?)?.into(),
+        "memory_set" => serde_json::to_value(set_memory(state, &args).await?)?.into(),
+        "memory_list" => serde_json::to_value(list_memories(state).await?)?.into(),
         "memory_search_conversations" => {
             serde_json::to_value(search_memory_conversations(state, &args).await?)?.into()
         }

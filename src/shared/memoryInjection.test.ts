@@ -24,14 +24,14 @@ describe("sortedMemoryEntries", () => {
 });
 
 describe("formatMemoryContextBlock", () => {
-  it("wraps facts with memory context markers", () => {
+  it("wraps memories with memory context markers", () => {
     const block = formatMemoryContextBlock([["tone", "concise"]]);
     expect(block).toContain("[USER_MEMORY_CONTEXT]");
     expect(block).toContain("- tone: concise");
     expect(block).toContain("[MEMORY_RULES]");
   });
 
-  it("returns empty string when no facts", () => {
+  it("returns empty string when no memories", () => {
     expect(formatMemoryContextBlock([])).toBe("");
   });
 });

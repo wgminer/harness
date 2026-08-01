@@ -309,22 +309,22 @@ final class ConversationStore: ObservableObject {
         try Self.loadUserMemory(in: localDataDir)
     }
 
-    func setUserMemoryFact(args: [String: Any]) throws -> MemoryFactsPayload {
+    func setUserMemory(args: [String: Any]) throws -> MemoryToolPayload {
         let key = (args["key"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let value = (args["value"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         var memory = try Self.loadUserMemory(in: localDataDir)
         if key.isEmpty {
-            return MemoryFactsPayload(lastAction: "set_fact", memory: memory, key: key)
+            return MemoryToolPayload(lastAction: "set_memory", memory: memory, key: key)
         }
         memory[key] = value
         try Self.saveUserMemory(memory, in: localDataDir)
         notifyContentChanged()
-        return MemoryFactsPayload(lastAction: "set_fact", memory: memory, key: key)
+        return MemoryToolPayload(lastAction: "set_memory", memory: memory, key: key)
     }
 
-    func listUserMemoryFacts() throws -> MemoryFactsPayload {
+    func listUserMemories() throws -> MemoryToolPayload {
         let memory = try Self.loadUserMemory(in: localDataDir)
-        return MemoryFactsPayload(lastAction: "list_facts", memory: memory, key: nil)
+        return MemoryToolPayload(lastAction: "list_memories", memory: memory, key: nil)
     }
 
     func loadTavilyApiKey() throws -> String? {

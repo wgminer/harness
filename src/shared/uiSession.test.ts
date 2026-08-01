@@ -46,6 +46,10 @@ describe("normalizeUiSession", () => {
     });
   });
 
+  it("keeps search view", () => {
+    expect(normalizeUiSession({ view: "search" }).view).toBe("search");
+  });
+
   it("keeps images view and image id", () => {
     expect(
       normalizeUiSession({

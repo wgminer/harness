@@ -21,6 +21,7 @@ import "./chat.css";
 import "./workspaceShell.css";
 import "./settings.css";
 import "./tasks.css";
+import "./search.css";
 import "./notes.css";
 import "./images.css";
 import "./stickyNote.css";

@@ -1,4 +1,4 @@
-/** All stored facts, sorted by key, for `[USER_MEMORY_CONTEXT]` injection. */
+/** All stored memories, sorted by key, for `[USER_MEMORY_CONTEXT]` injection. */
 export function sortedMemoryEntries(
   userMemory: Record<string, string>
 ): Array<[key: string, value: string]> {

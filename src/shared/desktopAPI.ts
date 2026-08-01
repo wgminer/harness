@@ -63,14 +63,13 @@ export interface HarnessAPI {
     openMicrophoneSettings: () => Promise<void>;
     openSpeechRecognitionSettings: () => Promise<void>;
   };
-  windowSize: {
-    get: () => Promise<"small" | "large">;
-    toggle: () => Promise<"small" | "large">;
-  };
   settings: {
     get: () => Promise<Settings>;
     set: (partial: Partial<Settings>) => Promise<void>;
-    getSystemPromptPreview: (platform: "desktop" | "ios") => Promise<SystemPromptPreview>;
+    getSystemPromptPreview: (
+      platform: "desktop" | "ios",
+      chatMode?: string,
+    ) => Promise<SystemPromptPreview>;
   };
   credentials: {
     getStatus: () => Promise<{
@@ -89,7 +88,7 @@ export interface HarnessAPI {
     setR2SecretAccessKey: (value: string) => Promise<void>;
   };
   memory: {
-    createConversation: () => Promise<string>;
+    createConversation: (chatMode?: string) => Promise<string>;
     getConversation: (id: string) => Promise<unknown>;
     listConversations: () => Promise<
       {
@@ -99,9 +98,11 @@ export interface HarnessAPI {
         sessionKind?: "dictation" | "chat";
         hasAssistantReply?: boolean;
         hasMessages?: boolean;
+        chatMode?: "chat" | "decide" | "write" | "refine";
       }[]
     >;
     deleteConversation: (id: string) => Promise<void>;
+    setConversationChatMode: (conversationId: string, chatMode: string) => Promise<void>;
     getMessages: (id: string) => Promise<
       {
         role: string;
@@ -137,7 +138,7 @@ export interface HarnessAPI {
       folderPath: string,
       claudeIds?: string[],
     ) => Promise<{ imported: number; updated: number; errors: string[] }>;
-    /** Distill user-memory facts from a pasted export produced by another assistant. */
+    /** Distill user memories from a pasted export produced by another assistant. */
     importLlmContext: (exportText: string) => Promise<
       | {
           ok: true;

@@ -239,7 +239,7 @@ struct ChatComposerView: View {
                     .padding(.top, 14)
             }
 
-            TextField("Type a message…", text: $draft, axis: .vertical)
+            TextField("Write a message…", text: $draft, axis: .vertical)
                 .lineLimit(1 ... 8)
                 .focused($isFocused)
                 .font(.body)

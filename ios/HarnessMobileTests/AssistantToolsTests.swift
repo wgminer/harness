@@ -43,27 +43,27 @@ final class AssistantToolsTests: XCTestCase {
         XCTAssertEqual(object["error"] as? String, "Invalid timezone: Not/A/Timezone")
     }
 
-    func testMemorySetAndListFactsPersist() async throws {
+    func testMemorySetAndListPersist() async throws {
         let store = ConversationStore(localDataDir: tempDir)
         let setRaw = try await AssistantTools.execute(
-            name: "memory_set_fact",
+            name: "memory_set",
             args: ["key": "favorite_color", "value": "blue"],
             store: store
         )
         let setObject = try decodeJSONObject(setRaw)
-        XCTAssertEqual(setObject["lastAction"] as? String, "set_fact")
+        XCTAssertEqual(setObject["lastAction"] as? String, "set_memory")
         XCTAssertEqual((setObject["memory"] as? [String: String])?["favorite_color"], "blue")
 
-        let listRaw = try await AssistantTools.execute(name: "memory_list_facts", args: [:], store: store)
+        let listRaw = try await AssistantTools.execute(name: "memory_list", args: [:], store: store)
         let listObject = try decodeJSONObject(listRaw)
-        XCTAssertEqual(listObject["lastAction"] as? String, "list_facts")
+        XCTAssertEqual(listObject["lastAction"] as? String, "list_memories")
         XCTAssertEqual((listObject["memory"] as? [String: String])?["favorite_color"], "blue")
     }
 
-    func testMemorySetFactWithEmptyKeyDoesNotWrite() async throws {
+    func testMemorySetWithEmptyKeyDoesNotWrite() async throws {
         let store = ConversationStore(localDataDir: tempDir)
         _ = try await AssistantTools.execute(
-            name: "memory_set_fact",
+            name: "memory_set",
             args: ["key": " ", "value": "ignored"],
             store: store
         )
@@ -88,7 +88,7 @@ final class AssistantToolsTests: XCTestCase {
         let tools = AssistantToolDefinitions.openAITools(in: tempDir)
         let names = toolNames(from: tools)
         XCTAssertTrue(names.contains("get_datetime"))
-        XCTAssertTrue(names.contains("memory_set_fact"))
+        XCTAssertTrue(names.contains("memory_set"))
         XCTAssertFalse(names.contains("web_search"))
     }
 

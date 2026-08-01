@@ -49,15 +49,14 @@ export function createHarnessAdapter(): HarnessAPI {
       openSpeechRecognitionSettings: () =>
         invoke<void>(cmd("system:openSpeechRecognitionSettings")),
     },
-    windowSize: {
-      get: () => invoke<"small" | "large">(cmd("window:getSize")),
-      toggle: () => invoke<"small" | "large">(cmd("window:toggleSize")),
-    },
     settings: {
       get: () => invoke(cmd("settings:get")),
       set: (partial: unknown) => invoke(cmd("settings:set"), { partial }),
-      getSystemPromptPreview: (platform: "desktop" | "ios") =>
-        invoke<SystemPromptPreview>(cmd("settings:getSystemPromptPreview"), { platform }),
+      getSystemPromptPreview: (platform: "desktop" | "ios", chatMode?: string) =>
+        invoke<SystemPromptPreview>(cmd("settings:getSystemPromptPreview"), {
+          platform,
+          chatMode: chatMode ?? null,
+        }),
     },
     credentials: {
       getStatus: () => invoke(cmd("credentials:getStatus")),
@@ -70,12 +69,17 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("credentials:setR2SecretAccessKey"), { value }),
     },
     memory: {
-      createConversation: () => invoke<string>(cmd("memory:createConversation")),
+      createConversation: (chatMode?: string) =>
+        invoke<string>(cmd("memory:createConversation"), {
+          chatMode: chatMode ?? null,
+        }),
       getConversation: (id: string) =>
         invoke(cmd("memory:getConversation"), { id }),
       listConversations: () => invoke(cmd("memory:listConversations")),
       deleteConversation: (conversationId: string) =>
         invoke(cmd("memory:deleteConversation"), { conversationId }),
+      setConversationChatMode: (conversationId: string, chatMode: string) =>
+        invoke(cmd("memory:setConversationChatMode"), { conversationId, chatMode }),
       getMessages: (conversationId: string) =>
         invoke(cmd("memory:getMessages"), { conversationId }),
       appendMessage: (

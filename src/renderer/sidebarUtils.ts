@@ -2,17 +2,32 @@ import type { ConversationListRow } from "../shared/conversationSession";
 
 export type Conversation = ConversationListRow;
 
-export type View = "chat" | "settings" | "tasks" | "notes" | "images";
+export type View = "chat" | "settings" | "tasks" | "search" | "notes" | "images";
 
 export type LibraryItemKind = "conversation" | "note" | "image";
 
 /** A sidebar row — either a conversation or a note, sharing the same sort/group shape. */
 export type LibraryRow = ConversationListRow & { itemKind?: LibraryItemKind };
 
-/** Default number of conversations shown in the sidebar before "More". */
-export const SIDEBAR_INITIAL_VISIBLE_COUNT = 20;
-/** Each "More" click adds this many conversations to the sidebar list. */
-export const SIDEBAR_MORE_INCREMENT = 20;
+/** Max library rows shown in the drawer (newest by createdAt). */
+export const SIDEBAR_VISIBLE_LIMIT = 50;
+
+/**
+ * Newest N rows; always includes the active item when it falls outside the window.
+ */
+export function pickSidebarLibraryRows(
+  rows: LibraryRow[],
+  activeId: string | null,
+  limit: number = SIDEBAR_VISIBLE_LIMIT,
+): LibraryRow[] {
+  if (rows.length <= limit) return rows;
+  const sorted = [...rows].sort((a, b) => b.createdAt - a.createdAt);
+  const top = sorted.slice(0, limit);
+  if (!activeId || top.some((r) => r.id === activeId)) return top;
+  const active = rows.find((r) => r.id === activeId);
+  if (!active) return top;
+  return [...sorted.slice(0, limit - 1), active];
+}
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -81,9 +96,10 @@ function getDateGroupLabel(key: string): string {
 
 export type SidebarGroup = { key: string; label: string; items: LibraryRow[] };
 
+/** Sidebar list grouping: relative date buckets, flat recent, or calendar days. */
 export type SidebarListSortMode = "date" | "recent" | "day";
 
-export const SIDEBAR_LIST_SORT_MODES: SidebarListSortMode[] = ["date", "recent", "day"];
+export const SIDEBAR_LIST_SORT_MODES: SidebarListSortMode[] = ["recent", "date", "day"];
 
 export function nextSidebarListSortMode(mode: SidebarListSortMode): SidebarListSortMode {
   const index = SIDEBAR_LIST_SORT_MODES.indexOf(mode);
@@ -123,9 +139,15 @@ function groupConversationsByCalendarDay(conversations: LibraryRow[]): { groups:
   return { groups };
 }
 
+/**
+ * Group library rows by sort mode:
+ * - date: Today / Yesterday / weekday / weeks ago / month
+ * - recent: single flat Recent list
+ * - day: one group per calendar day
+ */
 export function groupConversations(
   conversations: LibraryRow[],
-  sortMode: SidebarListSortMode = "recent"
+  sortMode: SidebarListSortMode = "recent",
 ): { groups: SidebarGroup[] } {
   if (sortMode === "recent") {
     const items = [...conversations].sort((a, b) => b.createdAt - a.createdAt);
@@ -170,22 +192,4 @@ export function groupConversations(
   }
 
   return { groups };
-}
-
-/** Sidebar list: newest N by default; always includes the active conversation when not showing all. */
-export function pickSidebarConversationsForList(
-  conversations: LibraryRow[],
-  activeId: string | null,
-  previewCount: number
-): LibraryRow[] {
-  if (conversations.length <= previewCount) {
-    return conversations;
-  }
-  const sorted = [...conversations].sort((a, b) => b.createdAt - a.createdAt);
-  const top = sorted.slice(0, previewCount);
-  if (!activeId) return top;
-  if (top.some((c) => c.id === activeId)) return top;
-  const active = conversations.find((c) => c.id === activeId);
-  if (!active) return top;
-  return [...sorted.slice(0, previewCount - 1), active];
 }

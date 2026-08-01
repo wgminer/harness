@@ -2,21 +2,21 @@ use std::path::Path;
 
 use crate::credentials::resolve_openai_api_key;
 use crate::memory::{get_memory_dir, AppState};
-use crate::memory_facts::{merge_facts, parse_facts_response, DistilledFact, MemoryCompileLlm};
+use crate::memory_distill::{merge_memories, parse_memories_response, DistilledMemory, MemoryCompileLlm};
 use crate::openai::{chat_completion_json, openai_transcript_cleanup_model};
 
 pub const LLM_CONTEXT_IMPORT_CHAR_LIMIT: usize = 80_000;
-const RIG_PAGE_TITLE: &str = "System";
+const SETTINGS_PAGE_TITLE: &str = "System";
 
-const IMPORT_SYSTEM_PROMPT: &str = "You are importing a structured memory export from another AI assistant into a personal workspace user-fact store.\
- Each fact uses a short lowercase snake_case key (max 40 chars) and a one-line value (max 200 chars).\
- Extract durable facts from every section of the export. Preserve verbatim wording in values when it captures instructions, preferences, or quoted evidence.\
- Use distinct keys per fact (e.g. preferred_name, profession, interest_climbing, instruction_never_use_em_dashes).\
+const IMPORT_SYSTEM_PROMPT: &str = "You are importing a structured memory export from another AI assistant into a personal workspace memory store.\
+ Each memory uses a short lowercase snake_case key (max 40 chars) and a one-line value (max 200 chars).\
+ Extract durable memories from every section of the export. Preserve verbatim wording in values when it captures instructions, preferences, or quoted evidence.\
+ Use distinct keys per memory (e.g. preferred_name, profession, interest_climbing, instruction_never_use_em_dashes).\
  Include dates in values when the export provides them.\
- Do not invent facts that are not supported by the export.\
+ Do not invent memories that are not supported by the export.\
  Output strict JSON with this exact shape and nothing else:\
- { \"facts\": [ { \"key\": \"snake_case_label\", \"value\": \"one-line detail\" } ] }\
- If nothing usable is present, output { \"facts\": [] }.";
+ { \"memories\": [ { \"key\": \"snake_case_label\", \"value\": \"one-line detail\" } ] }\
+ If nothing usable is present, output { \"memories\": [] }.";
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,7 +33,7 @@ struct OpenAiImportDistiller {
 
 #[async_trait::async_trait]
 impl MemoryCompileLlm for OpenAiImportDistiller {
-    async fn distill(&self, export_text: &str) -> Result<Vec<DistilledFact>, String> {
+    async fn distill(&self, export_text: &str) -> Result<Vec<DistilledMemory>, String> {
         let raw = chat_completion_json(
             &self.api_key,
             &openai_transcript_cleanup_model(),
@@ -44,7 +44,7 @@ impl MemoryCompileLlm for OpenAiImportDistiller {
         )
         .await
         .map_err(|e| e.to_string())?;
-        Ok(parse_facts_response(&raw))
+        Ok(parse_memories_response(&raw))
     }
 }
 
@@ -71,8 +71,8 @@ pub fn truncate_export_for_import(export_text: &str) -> (String, bool) {
     )
 }
 
-fn source_fact(source: &str) -> DistilledFact {
-    DistilledFact {
+fn source_memory(source: &str) -> DistilledMemory {
+    DistilledMemory {
         key: "context_import_source".into(),
         value: source.to_string(),
     }
@@ -101,16 +101,16 @@ pub async fn import_llm_context_in(
     }
 
     let import_source = parse_import_source(&text);
-    let mut facts = llm.distill(&text).await?;
+    let mut memories = llm.distill(&text).await?;
     if let Some(source) = &import_source {
-        facts.retain(|f| f.key.to_lowercase() != "context_import_source");
-        facts.push(source_fact(source));
+        memories.retain(|m| m.key.to_lowercase() != "context_import_source");
+        memories.push(source_memory(source));
     }
 
     let existing = crate::memory::get_user_memory_in(state, memory_dir)
         .await
         .map_err(|e| e.to_string())?;
-    let (merged, added, updated) = merge_facts(&existing, &facts);
+    let (merged, added, updated) = merge_memories(&existing, &memories);
     for (key, value) in &merged {
         if existing.get(key) != Some(value) {
             crate::memory::set_user_memory_in(state, memory_dir, key, value)
@@ -147,7 +147,7 @@ pub async fn run_llm_context_import_now(
     }
     let Some(llm) = build_import_llm_from_settings().await else {
         return Ok(Err(format!(
-            "Add an OpenAI API key in {RIG_PAGE_TITLE} before importing context."
+            "Add an OpenAI API key in {SETTINGS_PAGE_TITLE} before importing context."
         )));
     };
     let memory_dir = get_memory_dir();
@@ -155,7 +155,7 @@ pub async fn run_llm_context_import_now(
         Ok(result) => {
             if result.added == 0 && result.updated == 0 {
                 Ok(Err(
-                    "No facts could be extracted from that export. Check the format and try again."
+                    "No memories could be extracted from that export. Check the format and try again."
                         .into(),
                 ))
             } else {

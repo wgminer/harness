@@ -5,7 +5,7 @@ Two layers:
 1. **Outcomes** — what the project is *for* (steer ideas here first).
 2. **Execution** — what shipped, what’s active, what’s frozen.
 
-**Current phase:** v0.8 Consolidation has landed (desktop **0.8.0**). Active work is paper cuts, residual hardening, and low-friction ship hygiene — not new product surface.
+**Current phase:** v0.8 Consolidation has landed (desktop **0.8.0**). Active work includes desktop shell + cognitive modes, paper cuts, and ship hygiene.
 
 When considering work: *does it serve craft, trust, or ship friction — or does it belong in Frozen?*
 
@@ -21,7 +21,7 @@ Here should feel deliberate: typography, spacing, motion, and hierarchy under re
 |---|---|
 | **Success** | Opening the app shows craft: readable density, fixed dark theme, surfaces that scale, chat/notes/settings that feel designed. |
 | **Signals** | Fixed dark theme; 4px tokens (`src/shared/grid.ts`); object-library sidebar; Notes/System shells; session restore; tray branding. |
-| **Gaps** | Shell still reads as old ChatGPT (sidebar + narrow chat column); want fuller viewport / less chrome. CSS consolidation (~4.9k lines); empty/loading/error polish; menu bar tray mark refresh. |
+| **Gaps** | Density / CSS consolidation (~4.9k lines); empty/loading/error polish; menu bar tray mark refresh. |
 
 ### O2 — Replace paid AI subscriptions
 
@@ -69,7 +69,7 @@ Build, ship, and switch machines without a second project.
 
 | Outcome | Posture | Notes |
 |---------|---------|--------|
-| **O1** UI craft | Building | Shell is coherent but ChatGPT-era; full-screen redesign queued. CSS/empty-state debt remains. |
+| **O1** UI craft | Building | Home-first shell + library drawer landed; CSS/empty-state debt remains. |
 | **O2** Subscriptions | Hardening | Core loops + sync QR shipped; feature expansion frozen. |
 | **O3** Mobile | Building | Chat + dictation + R2 + pairing work; capture-inbox frozen. |
 | **O4** Learning lab | Hardening | Contracts/parity started; more drift guards + file splits. |
@@ -82,13 +82,13 @@ Build, ship, and switch machines without a second project.
 Short list only — refresh when something ships.
 
 - [ ] **Decide: deepen Here rename?** Display brand is **Here** / **Here Dev**; data dirs, bundle IDs (`com.harness.*`), Keychain, `harness-pair` / R2 `harness/`, and `window.harness` still say Harness. Choose: stop (display-only is enough), or continue (Application Support migration, identity/Keychain dual-read, optional wire + API scrub). Serves O5 trust/friction more than product surface — don’t start until decided.
-- [ ] **Desktop shell redesign (own chat)** — leave the old-ChatGPT layout: fuller viewport, less chrome, chat as the primary surface. Scope IA + density; not a theme tweak. Serves O1.
+- [x] **Desktop shell + cognitive modes** — Library drawer (hidden by default, edge/hover + pin); full-screen “You are here” home; Chat / Decide / Write / Refine modes (in-place on the open conversation). Distinct from frozen Agent mode. Mobile stays unopinionated. Serves O1/O2.
 - [ ] **Menu bar tray icon** — replace the plain white squircle (`resources/icon-tray*.png` + recording/processing variants) with a clearer Here mark (template-friendly at 18/36px).
 - [ ] **CSS consolidation** for the fixed dark theme (fewer one-off surfaces).
 - [ ] **Empty / loading / error** polish on primary desktop + iOS surfaces.
 - [x] **Desktop dictation transcription screen** — polish recording overlay / “Transcribing…” UI in dictation mode.
 - [ ] **iOS long-message** overflow / tap-to-expand.
-- [ ] **More shared contracts** under `resources/contracts/` (prompts, model names, sync scopes) + parity tests.
+- [ ] **More shared contracts** under `resources/contracts/` (prompts, model names, sync scopes) + parity tests. (`chatModes.json` landed.)
 - [ ] **God-file splits** — keep chipping `SettingsView.tsx` and `sync.rs`.
 - [ ] **Cross-machine bootstrap** notes in BUILD.md (no secrets in repo).
 

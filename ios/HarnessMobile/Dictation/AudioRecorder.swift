@@ -24,52 +24,28 @@ enum AudioRecorderError: LocalizedError, Equatable {
 
 /// Pure metering helpers — testable without a microphone.
 enum AudioRecorderMetering {
-    static let waveformSampleCount = 32
-    /// Peak dB below this maps to silence (0). Runtime metering showed quiet-room noise
-    /// around -50 dB; -65 made ambient noise read as ~0.23 "speech".
     static let silenceFloor: Float = -55
-    /// Peak dB at/above this maps to full height (1).
     static let speechCeiling: Float = -14
-    /// Perceptual curve — higher keeps quiet speech low and accents peaks.
     static let compressionExponent: Float = 1.25
-    /// Fraction toward target when rising (fast attack).
     static let attack: Float = 0.85
-    /// Fraction toward target when falling (slower release).
     static let release: Float = 0.28
-    /// Brief hold so consonants register without strobing.
     static let peakHoldTicks = 2
 
-    /// Maps peak power in dB to `0...1`. Silence is true `0`.
     static func normalizedLevel(fromDecibels power: Float) -> CGFloat {
         if power <= silenceFloor { return 0 }
         let clamped = min(max(power, silenceFloor), speechCeiling)
         let linear = (clamped - silenceFloor) / (speechCeiling - silenceFloor)
-        let compressed = pow(linear, compressionExponent)
-        return CGFloat(min(max(compressed, 0), 1))
+        return CGFloat(min(max(pow(linear, compressionExponent), 0), 1))
     }
 
-    /// Exponential smooth toward `target` with asymmetric attack/release.
     static func smooth(current: Float, toward target: Float) -> Float {
-        let factor = target > current ? attack : release
-        return current + (target - current) * factor
-    }
-
-    /// Appends `level` to a fixed-length sliding window.
-    static func appendSample(_ level: CGFloat, to samples: [CGFloat], count: Int = waveformSampleCount) -> [CGFloat] {
-        var next = samples
-        if next.count >= count {
-            next.removeFirst()
-        }
-        next.append(level)
-        return next
+        current + (target - current) * (target > current ? attack : release)
     }
 }
 
 /// Validates a stopped recording before spending time on transcription.
 enum RecordingCaptureValidation {
-    /// Minimum duration before we treat the clip as potentially usable.
     static let minimumDurationSeconds: TimeInterval = 0.3
-    /// Peak normalized level that counts as “heard something.”
     static let minimumPeakLevel: CGFloat = 0.04
 
     enum Failure: Equatable {
@@ -93,11 +69,9 @@ enum RecordingCaptureValidation {
         if resolvedDuration < minimumDurationSeconds {
             return .tooShort
         }
-
         if peakLevelDuringSession < minimumPeakLevel {
             return .noSpeechDetected
         }
-
         return nil
     }
 
@@ -115,20 +89,17 @@ enum RecordingCaptureValidation {
 
 @MainActor
 final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
-    static let waveformSampleCount = AudioRecorderMetering.waveformSampleCount
+    /// All AVAudioSession / AVAudioRecorder mutations run here — never freestyle Task.detached.
+    private static let sessionQueue = DispatchQueue(label: "com.harness.mobile.audio-session")
 
     @Published private(set) var isRecording = false
     @Published private(set) var elapsedMs: Int = 0
-    /// Highest smoothed level seen while this take was recording (for pre-transcribe validation).
-    /// Not `@Published` — updated mid-record without waking SwiftUI observers.
+    /// Not `@Published` — peak tracking for post-stop validation only.
     private(set) var peakLevelDuringSession: CGFloat = 0
-    /// Latest smoothed meter for peak tracking / validation. Not `@Published`.
     private(set) var currentMeterLevel: CGFloat = 0
-    /// File left on disk after an unexpected teardown (interruption / media-reset / route fail).
-    /// Cleared on the next intentional cancel or successful `start()`.
+    /// File preserved after unexpected teardown for retry/share.
     private(set) var preservedRecordingURL: URL?
-    /// Set before `stop()` / intentional `cancel()` so UI watchdogs can tell user/system
-    /// teardown from interruption. Not @Published — read synchronously at onChange time.
+    /// True for user stop/cancel so the sheet watchdog ignores the drop.
     private(set) var intentionalStop = false
 
     private var recorder: AVAudioRecorder?
@@ -138,28 +109,30 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private var smoothedLevel: Float = 0
     private var heldPeak: Float = 0
     private var peakHoldRemaining = 0
-    /// Bumped on every `cancel()` so an in-flight `start()` cannot leave the mic on after teardown.
     private var startGeneration = 0
     private var sessionObservers: [NSObjectProtocol] = []
     private var categoryPrepared = false
 
-    /// Override in tests to avoid the system permission prompt / control timing.
     var permissionProvider: () async -> Bool = {
         await AudioRecorder.requestRecordPermissionIfNeeded()
     }
 
-    /// True when mic access is already granted (no prompt needed on the start critical path).
     var hasRecordPermission: Bool {
         AVAudioApplication.shared.recordPermission == .granted
     }
 
-    /// Warm the audio category without activating the mic (call from home/compose appear).
     func prepare() {
-        do {
-            try configureSessionCategory()
-            categoryPrepared = true
-        } catch {
-            categoryPrepared = false
+        Self.sessionQueue.async { [weak self] in
+            do {
+                try Self.configureSessionCategory()
+                Task { @MainActor in
+                    self?.categoryPrepared = true
+                }
+            } catch {
+                Task { @MainActor in
+                    self?.categoryPrepared = false
+                }
+            }
         }
     }
 
@@ -171,7 +144,6 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         if isRecording {
             cancel()
         }
-        // Drop any leftover from a prior unexpected teardown before opening a new take.
         clearPreservedRecording(deleteFile: true)
 
         startGeneration += 1
@@ -181,27 +153,30 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         try ensureStartStillValid(generation)
         guard granted else { throw AudioRecorderError.permissionDenied }
 
-        if !categoryPrepared {
-            try configureSessionCategory()
-            categoryPrepared = true
+        let needsCategory = !categoryPrepared
+        let capture: CaptureStartResult = try await withCheckedThrowingContinuation { continuation in
+            Self.sessionQueue.async {
+                do {
+                    if needsCategory {
+                        try Self.configureSessionCategory()
+                    }
+                    let result = try Self.activateAndBeginCapture()
+                    continuation.resume(returning: result)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
-        try ensureStartStillValid(generation)
 
-        // setActive / AVAudioRecorder init / record() are blocking media-server IPC —
-        // run them off the MainActor so sheet presentation stays smooth.
-        let capture: CaptureStartResult
-        do {
-            capture = try await Task.detached(priority: .userInitiated) {
-                try Self.activateAndBeginCapture()
-            }.value
-        } catch {
-            try ensureStartStillValid(generation)
-            throw error
+        if needsCategory {
+            categoryPrepared = true
         }
 
         if generation != startGeneration || Task.isCancelled {
-            Self.discardCapture(capture)
-            deactivateSession()
+            Self.sessionQueue.async {
+                Self.discardCapture(capture)
+                Self.deactivateSession()
+            }
             throw CancellationError()
         }
 
@@ -212,7 +187,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         intentionalStop = false
         startedAt = Date()
         elapsedMs = 0
-        resetWaveform()
+        resetMetering()
         installSessionObservers()
         startTimer()
         return capture.url
@@ -221,37 +196,35 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @discardableResult
     func stop() throws -> URL {
         guard let recorder, let url = outputURL else { throw AudioRecorderError.notRecording }
-        // Mark before flipping isRecording so any observer sees an intentional end.
         intentionalStop = true
         if let startedAt {
             elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
         }
         stopTimer()
         removeSessionObservers()
-        recorder.stop()
-        isRecording = false
         self.recorder = nil
         outputURL = nil
+        isRecording = false
         preservedRecordingURL = nil
-        // Keep peakLevelDuringSession until the caller validates / resets.
         let level = currentMeterLevel
-        resetWaveformPublishing()
-        // Preserve peak for validation after stop.
+        resetMeteringLevels()
         peakLevelDuringSession = max(peakLevelDuringSession, level)
-        deactivateSession()
+
+        Self.sessionQueue.sync {
+            recorder.stop()
+            Self.deactivateSession()
+        }
         return url
     }
 
-    /// Tears down capture. Pass `intentional: false` for interruption / media-reset /
-    /// route failure so the sheet watchdog can show a failure instead of a stuck UI.
-    /// Unexpected teardown **preserves** the file at `preservedRecordingURL` for retry/share.
+    /// Unexpected teardown preserves the file for retry/share.
     func cancel(intentional: Bool = true) {
         startGeneration += 1
         intentionalStop = intentional
         stopTimer()
         removeSessionObservers()
-        recorder?.stop()
 
+        let activeRecorder = recorder
         let url = outputURL
         recorder = nil
         outputURL = nil
@@ -264,19 +237,20 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             clearPreservedRecording(deleteFile: true)
             elapsedMs = 0
             startedAt = nil
-            resetWaveform()
+            resetMetering()
         } else if let url {
-            // Finalize on disk; leave peak/elapsed so the failure UI can still validate/retry.
             preservedRecordingURL = url
             let level = currentMeterLevel
-            resetWaveformPublishing()
+            resetMeteringLevels()
             peakLevelDuringSession = max(peakLevelDuringSession, level)
         }
 
-        deactivateSession()
+        Self.sessionQueue.async {
+            activeRecorder?.stop()
+            Self.deactivateSession()
+        }
     }
 
-    /// Hand ownership of a preserved file to the UI (retry/share). Does not delete the file.
     @discardableResult
     func consumePreservedRecordingURL() -> URL? {
         let url = preservedRecordingURL
@@ -284,9 +258,22 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         return url
     }
 
-    /// Test seam: seed a preserved URL as if unexpected teardown just ran.
     func testSeedPreservedRecordingURL(_ url: URL?) {
         preservedRecordingURL = url
+    }
+
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        Task { @MainActor in
+            guard self.recorder === recorder, self.isRecording else { return }
+            cancel(intentional: false)
+        }
+    }
+
+    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        Task { @MainActor in
+            guard self.recorder === recorder, self.isRecording, !flag else { return }
+            cancel(intentional: false)
+        }
     }
 
     private func clearPreservedRecording(deleteFile: Bool) {
@@ -296,17 +283,13 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         preservedRecordingURL = nil
     }
 
-    // MARK: - Permission
-
     private static func requestRecordPermissionIfNeeded() async -> Bool {
         switch AVAudioApplication.shared.recordPermission {
         case .granted:
             return true
         case .denied:
             return false
-        case .undetermined:
-            break
-        @unknown default:
+        default:
             break
         }
 
@@ -317,18 +300,15 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
 
-    // MARK: - Session
-
-    private func configureSessionCategory() throws {
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(
+    nonisolated private static func configureSessionCategory() throws {
+        try AVAudioSession.sharedInstance().setCategory(
             .playAndRecord,
             mode: .spokenAudio,
             options: [.defaultToSpeaker, .allowBluetooth]
         )
     }
 
-    private func deactivateSession() {
+    nonisolated private static func deactivateSession() {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
@@ -340,7 +320,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             center.addObserver(
                 forName: AVAudioSession.interruptionNotification,
                 object: AVAudioSession.sharedInstance(),
-                queue: .main
+                queue: nil
             ) { [weak self] notification in
                 Task { @MainActor in
                     self?.handleInterruption(notification)
@@ -352,7 +332,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             center.addObserver(
                 forName: AVAudioSession.mediaServicesWereResetNotification,
                 object: AVAudioSession.sharedInstance(),
-                queue: .main
+                queue: nil
             ) { [weak self] _ in
                 Task { @MainActor in
                     self?.handleMediaServicesReset()
@@ -364,7 +344,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             center.addObserver(
                 forName: AVAudioSession.routeChangeNotification,
                 object: AVAudioSession.sharedInstance(),
-                queue: .main
+                queue: nil
             ) { [weak self] notification in
                 Task { @MainActor in
                     self?.handleRouteChange(notification)
@@ -389,28 +369,28 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
         switch type {
         case .began:
-            // Keep file; pause metering visually. AVAudioRecorder pauses itself on interruption.
             stopTimer()
         case .ended:
             let optionsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
             if options.contains(.shouldResume), let recorder {
-                // System may already have resumed capture — just restart metering.
                 if recorder.isRecording {
                     startTimer()
                     return
                 }
-                do {
-                    try AVAudioSession.sharedInstance().setActive(true)
-                    if recorder.record() {
-                        startTimer()
-                        return
+                let resumed = Self.sessionQueue.sync { () -> Bool in
+                    do {
+                        try AVAudioSession.sharedInstance().setActive(true)
+                        return recorder.record()
+                    } catch {
+                        return false
                     }
-                } catch {
-                    // Fall through to unexpected teardown (file preserved).
+                }
+                if resumed {
+                    startTimer()
+                    return
                 }
             }
-            // Cannot resume cleanly — preserve the file and fail the sheet clearly.
             cancel(intentional: false)
         @unknown default:
             break
@@ -422,7 +402,6 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             categoryPrepared = false
             return
         }
-        // Media server died mid-take — file may be corrupt; unexpected cancel rather than silent zombie.
         categoryPrepared = false
         cancel(intentional: false)
     }
@@ -434,32 +413,32 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue)
         else { return }
 
-        // Old device unavailable (e.g. Bluetooth disconnect) can leave a silent route.
         if reason == .oldDeviceUnavailable {
-            // Try to keep recording on the built-in mic; if record isn't active, fail clearly.
             if let recorder, !recorder.isRecording {
-                do {
-                    try AVAudioSession.sharedInstance().setActive(true)
-                    if !recorder.record() {
-                        cancel(intentional: false)
-                    } else {
-                        startTimer()
+                let resumed = Self.sessionQueue.sync { () -> Bool in
+                    do {
+                        try AVAudioSession.sharedInstance().setActive(true)
+                        return recorder.record()
+                    } catch {
+                        return false
                     }
-                } catch {
+                }
+                if resumed {
+                    startTimer()
+                } else {
                     cancel(intentional: false)
                 }
             }
         }
     }
 
-    // MARK: - Start validity / timer / metering
+    // MARK: - Timer / metering
 
     private func ensureStartStillValid(_ generation: Int) throws {
         guard generation == startGeneration else { throw CancellationError() }
         try Task.checkCancellation()
     }
 
-    /// Blocking media-server work — must not run on the MainActor.
     private struct CaptureStartResult: @unchecked Sendable {
         let recorder: AVAudioRecorder
         let url: URL
@@ -481,7 +460,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         recorder.isMeteringEnabled = true
         guard recorder.record() else {
             try? FileManager.default.removeItem(at: url)
-            try? session.setActive(false, options: .notifyOthersOnDeactivation)
+            deactivateSession()
             throw AudioRecorderError.failedToStart
         }
         return CaptureStartResult(recorder: recorder, url: url)
@@ -494,21 +473,22 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     private func startTimer() {
         stopTimer()
-        // ~10 Hz is enough for peak/silence validation + second-resolution elapsed UI.
-        // Scheduled on RunLoop.main, so the callback is already on the main actor.
-        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, let startedAt = self.startedAt else { return }
-                let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
-                // Match m:ss display — publish every second.
-                if ms - self.elapsedMs >= 1000 || ms < self.elapsedMs {
-                    self.elapsedMs = ms
-                }
-                self.tickMetering()
-            }
+        // ~10ms so the recording sheet can show live milliseconds.
+        let timer = Timer(timeInterval: 0.01, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            DispatchQueue.main.async { self.timerFired() }
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+    }
+
+    private func timerFired() {
+        guard let startedAt else { return }
+        let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
+        if ms != elapsedMs {
+            elapsedMs = ms
+        }
+        tickMetering()
     }
 
     private func stopTimer() {
@@ -525,7 +505,6 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             AudioRecorderMetering.normalizedLevel(fromDecibels: max(peak, average))
         )
 
-        // Short peak-hold so consonants register without strobing every tick.
         if target >= heldPeak {
             heldPeak = target
             peakHoldRemaining = AudioRecorderMetering.peakHoldTicks
@@ -537,22 +516,18 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
         smoothedLevel = AudioRecorderMetering.smooth(current: smoothedLevel, toward: heldPeak)
         let level = CGFloat(smoothedLevel)
-        // Non-published — used only for peak/silence validation after stop.
         currentMeterLevel = level
         if level > peakLevelDuringSession {
             peakLevelDuringSession = level
         }
     }
 
-    private func resetWaveform() {
-        smoothedLevel = 0
-        heldPeak = 0
-        peakHoldRemaining = 0
-        currentMeterLevel = 0
+    private func resetMetering() {
+        resetMeteringLevels()
         peakLevelDuringSession = 0
     }
 
-    private func resetWaveformPublishing() {
+    private func resetMeteringLevels() {
         smoothedLevel = 0
         heldPeak = 0
         peakHoldRemaining = 0

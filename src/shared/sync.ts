@@ -1,4 +1,4 @@
-import { rigSection } from "./rigPage";
+import { settingsSection } from "./settingsPage";
 
 /** Cloudflare R2 remote backup sync. */
 export type SyncProvider = "s3Backup";
@@ -80,7 +80,7 @@ export {
 /** Native tooltip text for Sync now controls (sidebar icon and settings button). */
 export function syncNowButtonTooltip(input: { busy: boolean; configured: boolean }): string {
   if (input.busy) return "Syncing…";
-  if (!input.configured) return `Set up backup in ${rigSection("Data")}`;
+  if (!input.configured) return `Set up backup in ${settingsSection("Data")}`;
   return "Sync now";
 }
 
@@ -106,7 +106,7 @@ export function sidebarSyncStatusTooltip(input: {
   lastError: string | null;
   lastSuccessAt: number | null;
 }): string {
-  if (!input.configured) return `Set up sync in ${rigSection("Data")}`;
+  if (!input.configured) return `Set up sync in ${settingsSection("Data")}`;
   if (input.busy) return "Syncing…";
   if (input.lastError) return input.lastError;
   return syncInlineStatusLine({ lastSuccessAt: input.lastSuccessAt }) ?? "Synced";
@@ -119,7 +119,7 @@ export function formatSyncStatusLine(input: {
   lastError: string | null;
   configured: boolean;
 }): string | null {
-  if (!input.configured) return `Connect R2 in ${rigSection("Data")} to enable sync.`;
+  if (!input.configured) return `Connect R2 in ${settingsSection("Data")} to enable sync.`;
   if (input.isSyncing) return "Syncing…";
   if (input.lastError) return input.lastError;
   if (input.lastSuccessAt) {

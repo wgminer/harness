@@ -21,6 +21,8 @@ export type ConversationListRow = {
   hasAssistantReply?: boolean;
   /** True once the conversation has at least one persisted message. */
   hasMessages?: boolean;
+  /** Desktop cognitive mode; omitted means chat. */
+  chatMode?: "chat" | "decide" | "write" | "refine";
 };
 
 /** Sidebar visibility — message-less threads are hidden. */

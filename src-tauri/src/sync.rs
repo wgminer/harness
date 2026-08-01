@@ -34,7 +34,7 @@ const POLL_INTERVAL_MS: u64 = 30_000;
 const SYNC_DEBOUNCE_MS: u64 = 2_500;
 const SYNC_SUPPRESS_MS: u64 = 3_000;
 
-pub const RIG_PAGE_TITLE: &str = "System";
+const SETTINGS_PAGE_TITLE: &str = "System";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -590,7 +590,7 @@ async fn run_sync_now_inner(runtime: &SyncRuntime) -> SyncResult {
             config
                 .config_error
                 .clone()
-                .unwrap_or_else(|| format!("Configure R2 sync in {RIG_PAGE_TITLE}.")),
+                .unwrap_or_else(|| format!("Configure R2 sync in {SETTINGS_PAGE_TITLE}.")),
         );
         let _ = save_state(&runtime.app_state, &state).await;
         *runtime.persisted.lock().await = state.clone();

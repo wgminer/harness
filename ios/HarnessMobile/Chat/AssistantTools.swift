@@ -4,10 +4,10 @@ import Foundation
 enum AssistantTools {
     static func execute(name: String, args: [String: Any], store: ConversationStore) async throws -> String {
         switch name {
-        case "memory_set_fact":
-            return try encodeMemoryFacts(try store.setUserMemoryFact(args: args))
-        case "memory_list_facts":
-            return try encodeMemoryFacts(try store.listUserMemoryFacts())
+        case "memory_set":
+            return try encodeMemoryTool(try store.setUserMemory(args: args))
+        case "memory_list":
+            return try encodeMemoryTool(try store.listUserMemories())
         case "memory_search_conversations":
             return try encodeSearchResult(args: args, store: store)
         case "get_datetime":
@@ -20,7 +20,7 @@ enum AssistantTools {
         }
     }
 
-    private static func encodeMemoryFacts(_ payload: MemoryFactsPayload) -> String {
+    private static func encodeMemoryTool(_ payload: MemoryToolPayload) -> String {
         var object: [String: Any] = [
             "lastAction": payload.lastAction,
             "memory": payload.memory,
@@ -60,7 +60,7 @@ enum AssistantTools {
     }
 }
 
-struct MemoryFactsPayload {
+struct MemoryToolPayload {
     let lastAction: String
     let memory: [String: String]
     let key: String?

@@ -91,7 +91,7 @@ final class ChatService: ObservableObject {
             localDataDir: localDataDir,
             excludeConversationId: conversationId
         )
-        let systemPromptSettings = SystemPromptSettings.load(from: localDataDir)
+        let systemPromptSettings = SystemPromptSettings.defaults
         let includeWebSearch = AssistantToolDefinitions.hasTavilyApiKey(in: localDataDir)
         let system = systemPromptSettings.assembledSystemPrompt(
             memoryBlock: memoryBlock,

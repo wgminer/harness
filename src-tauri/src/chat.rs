@@ -13,7 +13,7 @@ mod tool;
 mod turn;
 
 pub use turn::{
-    ContextPreview, ContextPreviewFact, ContextPreviewMessage, ContextPreviewTool,
+    ContextPreview, ContextPreviewMemory, ContextPreviewMessage, ContextPreviewTool,
 };
 
 use stream::NoteStreamState;

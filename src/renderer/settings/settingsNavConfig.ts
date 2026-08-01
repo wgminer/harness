@@ -1,4 +1,4 @@
-import { RIG_NOTES_TAB_LABEL } from "../../shared/rigPage";
+import { SETTINGS_NOTES_TAB_LABEL } from "../../shared/settingsPage";
 
 export type SettingsTabId = "general" | "notes" | "voice" | "data";
 
@@ -40,7 +40,7 @@ export const SETTINGS_NAV: Array<{
   },
   {
     id: "notes",
-    label: RIG_NOTES_TAB_LABEL,
+    label: SETTINGS_NOTES_TAB_LABEL,
     subtitle: "Templates",
     icon: "StickyNote",
     keywords: [
@@ -55,7 +55,7 @@ export const SETTINGS_NAV: Array<{
   {
     id: "voice",
     label: "Voice",
-    subtitle: "Dictation & Fn",
+    subtitle: "Cleanup & corrections",
     icon: "Mic",
     keywords: ["transcription", "dictation", "cleanup"],
   },
@@ -71,7 +71,7 @@ export const SETTINGS_NAV: Array<{
       "tavily",
       "web search",
       "memory",
-      "facts",
+      "memories",
       "sync",
       "backup",
       "icloud",

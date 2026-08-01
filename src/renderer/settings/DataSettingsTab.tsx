@@ -8,9 +8,10 @@ import { SettingsActions } from "./SettingsActions";
 import { SettingsField } from "./SettingsField";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";
+import { SettingsSubsection } from "./SettingsSubsection";
 import { SettingsTabPanel } from "./SettingsTabPanel";
 import {
-  MemoryFactImportSection,
+  MemoryImportSection,
   MemorySettingsSections,
   useMemorySettings,
 } from "./MemorySettingsTab";
@@ -72,210 +73,229 @@ export function DataSettingsTab({
         <MemorySettingsSections memory={memory} />
 
         <SettingsGroup title="API keys" collapsible defaultOpen={false}>
-          <SettingsField label="OpenAI" htmlFor="settings-api-key">
-            <SecretField
-              id="settings-api-key"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              onBlur={() => void persistSettings()}
-              ariaLabel="OpenAI API key"
-            />
-          </SettingsField>
-          <SettingsField label="Tavily" htmlFor="settings-tavily-key">
-            <SecretField
-              id="settings-tavily-key"
-              testId="settings-tavily-key"
-              value={tavilyApiKey}
-              onChange={(e) => setTavilyApiKey(e.target.value)}
-              onBlur={() => void persistSettings()}
-              ariaLabel="Tavily API key"
-            />
-          </SettingsField>
-          <SettingsHint>
-            Optional web search for the assistant. Free Tavily keys at{" "}
-            <a href="https://tavily.com" target="_blank" rel="noreferrer noopener">
-              tavily.com
-            </a>
-            .
-          </SettingsHint>
-        </SettingsGroup>
+          <SettingsSubsection title="OpenAI">
+            <SettingsField label="API key" htmlFor="settings-api-key">
+              <SecretField
+                id="settings-api-key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onBlur={() => void persistSettings()}
+                ariaLabel="OpenAI API key"
+              />
+            </SettingsField>
+          </SettingsSubsection>
 
-        <SettingsGroup
-          title="Backup"
-          description="Cloudflare R2 for cloud backup."
-          collapsible
-          defaultOpen={false}
-        >
-          <SettingsField label="Account ID" htmlFor="settings-r2-account">
-            <input
-              id="settings-r2-account"
-              type="text"
-              value={r2AccountId}
-              onChange={(e) => setR2AccountId(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </SettingsField>
-          <SettingsField label="Bucket" htmlFor="settings-r2-bucket">
-            <input
-              id="settings-r2-bucket"
-              type="text"
-              value={r2Bucket}
-              onChange={(e) => setR2Bucket(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </SettingsField>
-          <SettingsField label="Prefix" htmlFor="settings-r2-prefix">
-            <input
-              id="settings-r2-prefix"
-              type="text"
-              value={r2Prefix}
-              onChange={(e) => setR2Prefix(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </SettingsField>
-          <SettingsField label="Access key ID" htmlFor="settings-r2-access-key-id">
-            <input
-              id="settings-r2-access-key-id"
-              type="text"
-              value={r2AccessKeyId}
-              onChange={(e) => setR2AccessKeyId(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </SettingsField>
-          <SettingsField label="Secret access key" htmlFor="settings-r2-secret">
-            <SecretField
-              id="settings-r2-secret"
-              value={r2SecretAccessKey}
-              onChange={(e) => setR2SecretAccessKey(e.target.value)}
-              onBlur={() => void persistSettings()}
-              ariaLabel="R2 secret access key"
-            />
-          </SettingsField>
-          {(data.dataStatus?.sync.lastError || data.r2TestError) && (
-            <p className="settings-import-status__errors">
-              {data.dataStatus?.sync.lastError ?? data.r2TestError}
-            </p>
-          )}
-          <SettingsActions>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => void data.testR2Connection()}
-              disabled={data.syncTestBusy}
-            >
-              {data.syncTestBusy ? "Testing…" : "Test Connection"}
-            </button>
-            <div className="settings-sync-control">
-              <Tooltip label={data.syncTooltip}>
-                <button
-                  type="button"
-                  className="btn btn-primary settings-sync-now"
-                  onClick={() => void data.runSyncNow()}
-                  disabled={data.syncBusy || !data.dataStatus?.sync.configured}
-                  aria-busy={data.syncBusy}
-                >
-                  {data.syncBusy ? (
-                    <>
-                      <Loader2 size={14} className="voice-spinner" aria-hidden />
-                      Syncing…
-                    </>
-                  ) : (
-                    "Sync Now"
-                  )}
-                </button>
-              </Tooltip>
-              {data.syncInlineStatus ? (
-                <span className="settings-sync-status" role="status">
-                  {data.syncInlineStatus}
-                </span>
-              ) : data.syncBusy ? (
-                <span className="settings-sync-status" role="status">
-                  Syncing…
-                </span>
-              ) : null}
-            </div>
-          </SettingsActions>
+          <SettingsSubsection
+            title="Tavily"
+            description={
+              <>
+                Optional. Get a key at{" "}
+                <a href="https://tavily.com" target="_blank" rel="noreferrer noopener">
+                  tavily.com
+                </a>
+                .
+              </>
+            }
+          >
+            <SettingsField label="API key" htmlFor="settings-tavily-key">
+              <SecretField
+                id="settings-tavily-key"
+                testId="settings-tavily-key"
+                value={tavilyApiKey}
+                onChange={(e) => setTavilyApiKey(e.target.value)}
+                onBlur={() => void persistSettings()}
+                ariaLabel="Tavily API key"
+              />
+            </SettingsField>
+          </SettingsSubsection>
+
+          <SettingsSubsection
+            title="Cloudflare R2"
+            description="Optional backup sync."
+          >
+            <SettingsField label="Account ID" htmlFor="settings-r2-account">
+              <input
+                id="settings-r2-account"
+                type="text"
+                value={r2AccountId}
+                onChange={(e) => setR2AccountId(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </SettingsField>
+            <SettingsField label="Bucket" htmlFor="settings-r2-bucket">
+              <input
+                id="settings-r2-bucket"
+                type="text"
+                value={r2Bucket}
+                onChange={(e) => setR2Bucket(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </SettingsField>
+            <SettingsField label="Prefix" htmlFor="settings-r2-prefix">
+              <input
+                id="settings-r2-prefix"
+                type="text"
+                value={r2Prefix}
+                onChange={(e) => setR2Prefix(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </SettingsField>
+            <SettingsField label="Access key ID" htmlFor="settings-r2-access-key-id">
+              <input
+                id="settings-r2-access-key-id"
+                type="text"
+                value={r2AccessKeyId}
+                onChange={(e) => setR2AccessKeyId(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </SettingsField>
+            <SettingsField label="Secret access key" htmlFor="settings-r2-secret">
+              <SecretField
+                id="settings-r2-secret"
+                value={r2SecretAccessKey}
+                onChange={(e) => setR2SecretAccessKey(e.target.value)}
+                onBlur={() => void persistSettings()}
+                ariaLabel="R2 secret access key"
+              />
+            </SettingsField>
+            {(data.dataStatus?.sync.lastError || data.r2TestError) && (
+              <p className="settings-import-status__errors">
+                {data.dataStatus?.sync.lastError ?? data.r2TestError}
+              </p>
+            )}
+            <SettingsActions>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void data.testR2Connection()}
+                disabled={data.syncTestBusy}
+              >
+                {data.syncTestBusy ? "Testing…" : "Test"}
+              </button>
+              <div className="settings-sync-control">
+                <Tooltip label={data.syncTooltip}>
+                  <button
+                    type="button"
+                    className="btn btn-primary settings-sync-now"
+                    onClick={() => void data.runSyncNow()}
+                    disabled={data.syncBusy || !data.dataStatus?.sync.configured}
+                    aria-busy={data.syncBusy}
+                  >
+                    {data.syncBusy ? (
+                      <>
+                        <Loader2 size={14} className="voice-spinner" aria-hidden />
+                        Syncing…
+                      </>
+                    ) : (
+                      "Sync"
+                    )}
+                  </button>
+                </Tooltip>
+                {data.syncInlineStatus ? (
+                  <span className="settings-sync-status" role="status">
+                    {data.syncInlineStatus}
+                  </span>
+                ) : data.syncBusy ? (
+                  <span className="settings-sync-status" role="status">
+                    Syncing…
+                  </span>
+                ) : null}
+              </div>
+            </SettingsActions>
+          </SettingsSubsection>
         </SettingsGroup>
 
         <SettingsGroup
           title="Import"
-          description="Bring in chat history or facts distilled from another assistant."
           collapsible
           defaultOpen={false}
         >
-          <SettingsActions>
-            <button type="button" className="btn" onClick={data.runImport} disabled={data.importing}>
-              {data.importing ? "Importing…" : "Import From ChatGPT"}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              data-testid="settings-claude-import"
-              onClick={() => void data.runClaudeImport()}
-              disabled={data.claudeImporting || data.claudeConfirming}
-            >
-              {data.claudeImporting ? "Reading Export…" : "Import From Claude"}
-            </button>
-          </SettingsActions>
-          {data.importStatus != null && (
-            <div className="settings-import-status" role="status">
-              {data.importStatus.imported > 0 && (
-                <p className="settings-import-status__ok">
-                  Imported {data.importStatus.imported} conversation
-                  {data.importStatus.imported !== 1 ? "s" : ""}.
-                </p>
-              )}
-              {data.importStatus.errors.length > 0 && (
-                <div className="settings-import-status__errors">
-                  <ul>
-                    {data.importStatus.errors.map((err, i) => (
-                      <li key={i}>{err}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-          {data.claudeImportStatus != null && (
-            <div className="settings-import-status" role="status">
-              {(data.claudeImportStatus.imported > 0 || data.claudeImportStatus.updated > 0) && (
-                <p className="settings-import-status__ok">
-                  {[
-                    data.claudeImportStatus.imported > 0
-                      ? `Imported ${data.claudeImportStatus.imported} conversation${
-                          data.claudeImportStatus.imported !== 1 ? "s" : ""
-                        }`
-                      : null,
-                    data.claudeImportStatus.updated > 0
-                      ? `refreshed ${data.claudeImportStatus.updated}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  .
-                </p>
-              )}
-              {data.claudeImportStatus.imported === 0 &&
-                data.claudeImportStatus.updated === 0 &&
-                data.claudeImportStatus.errors.length === 0 && (
-                  <p className="settings-import-status__ok">No conversations imported.</p>
+          <SettingsSubsection title="Chat history">
+            <SettingsActions>
+              <button
+                type="button"
+                className="btn"
+                onClick={data.runImport}
+                disabled={data.importing}
+              >
+                {data.importing ? "Importing…" : "Import From ChatGPT"}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                data-testid="settings-claude-import"
+                onClick={() => void data.runClaudeImport()}
+                disabled={data.claudeImporting || data.claudeConfirming}
+              >
+                {data.claudeImporting ? "Reading Export…" : "Import From Claude"}
+              </button>
+            </SettingsActions>
+            {data.importStatus != null && (
+              <div className="settings-import-status" role="status">
+                {data.importStatus.imported > 0 && (
+                  <p className="settings-import-status__ok">
+                    Imported {data.importStatus.imported} conversation
+                    {data.importStatus.imported !== 1 ? "s" : ""}.
+                  </p>
                 )}
-              {data.claudeImportStatus.errors.length > 0 && (
-                <div className="settings-import-status__errors">
-                  <ul>
-                    {data.claudeImportStatus.errors.map((err, i) => (
-                      <li key={i}>{err}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-          <MemoryFactImportSection memory={memory} />
+                {data.importStatus.errors.length > 0 && (
+                  <div className="settings-import-status__errors">
+                    <ul>
+                      {data.importStatus.errors.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            {data.claudeImportStatus != null && (
+              <div className="settings-import-status" role="status">
+                {(data.claudeImportStatus.imported > 0 || data.claudeImportStatus.updated > 0) && (
+                  <p className="settings-import-status__ok">
+                    {[
+                      data.claudeImportStatus.imported > 0
+                        ? `Imported ${data.claudeImportStatus.imported} conversation${
+                            data.claudeImportStatus.imported !== 1 ? "s" : ""
+                          }`
+                        : null,
+                      data.claudeImportStatus.updated > 0
+                        ? `refreshed ${data.claudeImportStatus.updated}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    .
+                  </p>
+                )}
+                {data.claudeImportStatus.imported === 0 &&
+                  data.claudeImportStatus.updated === 0 &&
+                  data.claudeImportStatus.errors.length === 0 && (
+                    <p className="settings-import-status__ok">No conversations imported.</p>
+                  )}
+                {data.claudeImportStatus.errors.length > 0 && (
+                  <div className="settings-import-status__errors">
+                    <ul>
+                      {data.claudeImportStatus.errors.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </SettingsSubsection>
+
+          <SettingsSubsection
+            title="Memories"
+            description="Uses your OpenAI key."
+          >
+            <MemoryImportSection memory={memory} />
+          </SettingsSubsection>
         </SettingsGroup>
 
         <SettingsGroup title="Paths" collapsible defaultOpen={false}>

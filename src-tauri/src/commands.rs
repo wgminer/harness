@@ -1,7 +1,7 @@
 //! Tauri command handlers wiring renderer IPC to backend modules.
 
 use serde_json::Value;
-use tauri::{command, AppHandle, Emitter, State, Window};
+use tauri::{command, AppHandle, Emitter, State};
 
 use crate::assistant_tools::lookup_image;
 use crate::chat::ChatController;
@@ -20,10 +20,11 @@ use crate::import::{
     ImportResult,
 };
 use crate::memory::{
-    append_message, cleanup_legacy_memory, create_conversation, delete_conversation,
-    delete_user_memory_key, get_conversation, get_data_status, get_messages, get_user_memory,
-    list_conversations, open_app_data_folder,
-    search_conversations, set_conversation_title, set_user_memory, AppState, AppendMessageMeta,
+    append_message, cleanup_legacy_memory, create_conversation, create_conversation_with_mode,
+    delete_conversation, delete_user_memory_key, get_conversation,
+    get_data_status, get_messages, get_user_memory, list_conversations, open_app_data_folder,
+    search_conversations, set_conversation_chat_mode, set_conversation_title, set_user_memory,
+    AppState, AppendMessageMeta,
 };
 use crate::memory_import::run_llm_context_import_now;
 use crate::images::{
@@ -40,12 +41,6 @@ use crate::sticky_notes::{
 use crate::sync::{get_sync_status, SyncRuntime};
 use crate::tasks::{clear_completed_tasks, create_task, delete_task, list_tasks, update_task};
 use crate::ui_session::{get_ui_session, set_ui_session};
-
-const LARGE_WIDTH: f64 = 1024.0;
-const LARGE_HEIGHT: f64 = 768.0;
-const SMALL_WIDTH: f64 = 400.0;
-const SMALL_HEIGHT: f64 = 480.0;
-const WINDOW_SMALL_PRESET_MAX_WIDTH_PX: u32 = 400;
 
 fn map_err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
@@ -64,32 +59,6 @@ pub fn env_is_harness_dev() -> bool {
 #[command(rename_all = "camelCase")]
 pub fn env_is_harness_e2e() -> bool {
     is_harness_e2e()
-}
-
-#[command(rename_all = "camelCase")]
-pub fn window_get_size(window: Window) -> String {
-    let size = window.outer_size().unwrap_or_default();
-    if size.width <= WINDOW_SMALL_PRESET_MAX_WIDTH_PX {
-        "small".into()
-    } else {
-        "large".into()
-    }
-}
-
-#[command(rename_all = "camelCase")]
-pub fn window_toggle_size(window: Window) -> Result<String, String> {
-    let size = window.outer_size().map_err(map_err)?;
-    if size.width <= WINDOW_SMALL_PRESET_MAX_WIDTH_PX {
-        window
-            .set_size(tauri::LogicalSize::new(LARGE_WIDTH, LARGE_HEIGHT))
-            .map_err(map_err)?;
-        Ok("large".into())
-    } else {
-        window
-            .set_size(tauri::LogicalSize::new(SMALL_WIDTH, SMALL_HEIGHT))
-            .map_err(map_err)?;
-        Ok("small".into())
-    }
 }
 
 #[command(rename_all = "camelCase")]
@@ -124,8 +93,10 @@ pub async fn settings_set(
 pub async fn settings_get_system_prompt_preview(
     chat: State<'_, ChatController>,
     platform: String,
+    chat_mode: Option<String>,
 ) -> Result<crate::system_prompt::SystemPromptPreview, String> {
-    chat.get_system_prompt_preview(&platform).await
+    chat.get_system_prompt_preview(&platform, chat_mode.as_deref())
+        .await
 }
 
 #[command(rename_all = "camelCase")]
@@ -156,8 +127,28 @@ pub fn credentials_set_r2_secret_access_key(value: String) -> Result<(), String>
 }
 
 #[command(rename_all = "camelCase")]
-pub async fn memory_create_conversation(state: State<'_, AppState>) -> Result<String, String> {
-    create_conversation(&state).await.map_err(map_err)
+pub async fn memory_create_conversation(
+    state: State<'_, AppState>,
+    chat_mode: Option<String>,
+) -> Result<String, String> {
+    if let Some(mode) = chat_mode.as_deref() {
+        create_conversation_with_mode(&state, Some(mode))
+            .await
+            .map_err(map_err)
+    } else {
+        create_conversation(&state).await.map_err(map_err)
+    }
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn memory_set_conversation_chat_mode(
+    state: State<'_, AppState>,
+    conversation_id: String,
+    chat_mode: String,
+) -> Result<(), String> {
+    set_conversation_chat_mode(&state, &conversation_id, &chat_mode)
+        .await
+        .map_err(map_err)
 }
 
 #[command(rename_all = "camelCase")]

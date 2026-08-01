@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { ExternalLink, Settings as SettingsIcon } from "lucide-react";
-import { RIG_PAGE_TITLE, rigSection } from "../shared/rigPage";
+import { ExternalLink, Plus, Settings2 as SettingsIcon, Square, SquareCheck } from "lucide-react";
+import { SETTINGS_PAGE_TITLE, settingsSection } from "../shared/settingsPage";
 import { DEFAULT_SETTINGS, DEFAULT_LAYOUT } from "../shared/types";
 import type { Settings, TranscriptDictionaryEntry, WideView } from "../shared/types";
 import { DEFAULT_ACCENT, applyAccent, normalizeAccentHex } from "../shared/accent";
@@ -10,6 +10,7 @@ import {
   DEFAULT_NOTE_TEMPLATES,
   NOTE_TEMPLATE_CURSOR_TOKEN,
   NOTE_TEMPLATE_TODAY_TOKEN,
+  isBuiltInNoteTemplateId,
   normalizeDefaultNoteTemplateId,
   normalizeNoteTemplates,
   type NoteTemplateConfig,
@@ -17,7 +18,6 @@ import {
 import type { GlobalRecordingStatus } from "../shared/desktopAPI";
 import { Modal } from "./Modal";
 import { SyncQrModal } from "./SyncQrModal";
-import { useScrolledHeader } from "./useScrolledHeader";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
   SettingsActions,
@@ -309,7 +309,7 @@ export function SettingsView({
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistSettingsRef = useRef<() => Promise<boolean>>(async () => true);
   const flushSettingsOnUnmountRef = useRef(false);
-  const { scrollRef, scrolled: headerScrolled, onScroll } = useScrolledHeader();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const tabButtonRefs = useRef<Record<SettingsTabId, HTMLButtonElement | null>>({
     general: null,
     notes: null,
@@ -565,15 +565,9 @@ export function SettingsView({
       r2AccessKeyId,
       accent,
     });
-    if (latest === lastPersistedRef.current) {
-      if (hideToastRef.current) clearTimeout(hideToastRef.current);
-      setSaveStatus("saved");
-      hideToastRef.current = setTimeout(() => {
-        setSaveStatus("idle");
-        hideToastRef.current = null;
-      }, SAVED_TOAST_VISIBLE_MS);
-      return true;
-    }
+    // No-op: stay silent. Toast only after a real write (avoids Strict Mode
+    // remount / blur / unmount flush flashing "Saved" on an unchanged form).
+    if (latest === lastPersistedRef.current) return true;
 
     const prev = JSON.parse(lastPersistedRef.current || "{}") as Partial<PersistedFormState>;
     const next = JSON.parse(latest) as PersistedFormState;
@@ -682,7 +676,6 @@ export function SettingsView({
 
   useEffect(() => {
     if (!settingsHydratedRef.current) return;
-    flushSettingsOnUnmountRef.current = true;
     if (skipAutosaveRef.current) {
       skipAutosaveRef.current = false;
       return;
@@ -707,6 +700,8 @@ export function SettingsView({
     });
     if (current === lastPersistedRef.current) return;
 
+    // Arm unmount flush only when there is a pending dirty write.
+    flushSettingsOnUnmountRef.current = true;
     const timer = setTimeout(() => {
       void persistSettings();
     }, SECRETS_SAVE_DEBOUNCE_MS);
@@ -718,7 +713,6 @@ export function SettingsView({
 
   useEffect(() => {
     if (!settingsHydratedRef.current) return;
-    flushSettingsOnUnmountRef.current = true;
     if (skipAutosaveRef.current) {
       skipAutosaveRef.current = false;
       return;
@@ -743,6 +737,7 @@ export function SettingsView({
     });
     if (current === lastPersistedRef.current) return;
 
+    flushSettingsOnUnmountRef.current = true;
     const timer = setTimeout(() => {
       void persistSettings();
     }, SAVE_DEBOUNCE_MS);
@@ -832,6 +827,14 @@ export function SettingsView({
     setTemplateIsDefaultDraft(false);
   };
 
+  const openCreateTemplateModal = () => {
+    setEditingTemplateId(null);
+    setTemplateTitleDraft("");
+    setTemplateContentDraft("");
+    setTemplateIsDefaultDraft(false);
+    setTemplatesModalOpen(true);
+  };
+
   const openTemplateModal = (template: NoteTemplateConfig) => {
     setEditingTemplateId(template.id);
     setTemplateTitleDraft(template.title);
@@ -840,30 +843,56 @@ export function SettingsView({
     setTemplatesModalOpen(true);
   };
 
-  const saveTemplate = async () => {
-    if (!editingTemplateId) return;
-    const nextTitle = templateTitleDraft.trim();
-    if (!nextTitle) return;
-    const nextTemplates = noteTemplates.map((template) =>
-      template.id === editingTemplateId
-        ? {
-            ...template,
-            title: nextTitle,
-            content: templateContentDraft,
-          }
-        : template,
-    );
+  const persistTemplates = async (
+    nextTemplates: NoteTemplateConfig[],
+    nextDefaultId: string,
+  ) => {
     const normalized = normalizeNoteTemplates(nextTemplates);
-    const nextDefaultId = normalizeDefaultNoteTemplateId(
-      templateIsDefaultDraft ? editingTemplateId : defaultNoteTemplateId,
-      normalized,
-    );
+    const resolvedDefaultId = normalizeDefaultNoteTemplateId(nextDefaultId, normalized);
     setNoteTemplates(normalized);
-    setDefaultNoteTemplateId(nextDefaultId);
+    setDefaultNoteTemplateId(resolvedDefaultId);
     await window.harness.settings.set({
-      notes: { templates: normalized, defaultTemplateId: nextDefaultId },
+      notes: { templates: normalized, defaultTemplateId: resolvedDefaultId },
     });
     window.dispatchEvent(new CustomEvent("notes:templatesUpdated", { detail: normalized }));
+  };
+
+  const saveTemplate = async () => {
+    const nextTitle = templateTitleDraft.trim();
+    if (!nextTitle) return;
+
+    if (editingTemplateId) {
+      const nextTemplates = noteTemplates.map((template) =>
+        template.id === editingTemplateId
+          ? {
+              ...template,
+              title: nextTitle,
+              content: templateContentDraft,
+            }
+          : template,
+      );
+      const nextDefaultId = templateIsDefaultDraft ? editingTemplateId : defaultNoteTemplateId;
+      await persistTemplates(nextTemplates, nextDefaultId);
+    } else {
+      const newId = crypto.randomUUID();
+      const nextTemplates = [
+        ...noteTemplates,
+        { id: newId, title: nextTitle, content: templateContentDraft },
+      ];
+      const nextDefaultId = templateIsDefaultDraft ? newId : defaultNoteTemplateId;
+      await persistTemplates(nextTemplates, nextDefaultId);
+    }
+    closeTemplatesModal();
+  };
+
+  const deleteTemplate = async () => {
+    if (!editingTemplateId || isBuiltInNoteTemplateId(editingTemplateId)) return;
+    const nextTemplates = noteTemplates.filter((template) => template.id !== editingTemplateId);
+    const nextDefaultId =
+      defaultNoteTemplateId === editingTemplateId
+        ? DEFAULT_NOTE_TEMPLATE_ID
+        : defaultNoteTemplateId;
+    await persistTemplates(nextTemplates, nextDefaultId);
     closeTemplatesModal();
   };
 
@@ -911,49 +940,48 @@ export function SettingsView({
 
   return (
     <div className="workspace-page settings-page">
-      <WorkspaceHeader
-        title={RIG_PAGE_TITLE}
-        icon={<SettingsIcon size={16} />}
-        scrolled={headerScrolled}
-        actions={
-          <div
-            className="settings-tabs settings-tabs--header"
-            role="tablist"
-            aria-label={`${RIG_PAGE_TITLE} sections`}
-          >
-            {SETTINGS_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                ref={(el) => {
-                  tabButtonRefs.current[tab.id] = el;
-                }}
-                id={`settings-tab-${tab.id}`}
-                type="button"
-                role="tab"
-                className={`settings-tab${activeTab === tab.id ? " settings-tab--active" : ""}`}
-                aria-selected={activeTab === tab.id}
-                aria-controls={`settings-panel-${tab.id}`}
-                tabIndex={activeTab === tab.id ? 0 : -1}
-                onClick={() => switchTab(tab.id)}
-                onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        }
-      />
-      <div ref={scrollRef} className="workspace-scroll settings-scroll" onScroll={onScroll}>
+      <div ref={scrollRef} className="workspace-scroll settings-scroll">
+        <WorkspaceHeader
+          title={SETTINGS_PAGE_TITLE}
+          icon={<SettingsIcon size={24} />}
+          actions={
+            <div
+              className="settings-tabs settings-tabs--header"
+              role="tablist"
+              aria-label={`${SETTINGS_PAGE_TITLE} sections`}
+            >
+              {SETTINGS_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  ref={(el) => {
+                    tabButtonRefs.current[tab.id] = el;
+                  }}
+                  id={`settings-tab-${tab.id}`}
+                  type="button"
+                  role="tab"
+                  className={`settings-tab${activeTab === tab.id ? " settings-tab--active" : ""}`}
+                  aria-selected={activeTab === tab.id}
+                  aria-controls={`settings-panel-${tab.id}`}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
+                  onClick={() => switchTab(tab.id)}
+                  onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          }
+        />
         <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
           {activeTab === "general" && <SettingsTabPanel id="general">
-            <SettingsGroup title="Theme" description="One accent color. Surfaces stay dark.">
+            <SettingsGroup title="Theme" description="Accent only — chrome stays dark.">
               <AccentColorField value={accent} onChange={setAccent} />
             </SettingsGroup>
 
             <SettingsGroup
               title="Large window"
-              description="On large windows, keep the interface as a readable block in the middle, or stretch it to the edges."
+              description="Centered readable column, or edge-to-edge."
             >
               <div
                 className="settings-segmented"
@@ -1013,7 +1041,7 @@ export function SettingsView({
               <SettingsSwitch
                 id="bringToFrontOnBackgroundDictationToggle"
                 testId="settings-bring-to-front-background-dictation"
-                label="Bring Here to front for background dictation"
+                label="Focus window on background dictation"
                 checked={bringToFrontOnBackgroundDictation}
                 onChange={(e) => setBringToFrontOnBackgroundDictation(e.target.checked)}
               />
@@ -1047,24 +1075,48 @@ export function SettingsView({
           </SettingsTabPanel>}
 
           {activeTab === "notes" && <SettingsTabPanel id="notes">
-            <SettingsGroup title="Editor templates" description="Edit note templates.">
-              <div className="settings-entry-list">
-                {noteTemplates.map((template) => (
-                  <SettingsEntryRow
-                    key={template.id}
-                    title={template.title}
-                    badge={template.id === defaultNoteTemplateId ? "Default" : undefined}
-                    onEdit={() => openTemplateModal(template)}
-                    editAriaLabel={`Edit ${template.title} template`}
-                    editButtonTitle="Edit template"
-                  />
-                ))}
+            <SettingsGroup title="Editor templates">
+              <div className="settings-template-grid">
+                {noteTemplates.map((template) => {
+                  const isDefault = template.id === defaultNoteTemplateId;
+                  const preview = template.content.replace(/\s+$/, "");
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      className="settings-template-card"
+                      onClick={() => openTemplateModal(template)}
+                      aria-label={`Edit ${template.title} template`}
+                      data-testid={`settings-notes-template-card-${template.id}`}
+                    >
+                      <div className="settings-template-card__header">
+                        <span className="settings-template-card__title">{template.title}</span>
+                        {isDefault ? (
+                          <span className="settings-template-card__badge">Default</span>
+                        ) : null}
+                      </div>
+                      <div className="settings-template-card__preview" aria-hidden>
+                        {preview.length > 0 ? preview : "Empty"}
+                      </div>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  className="settings-template-card settings-template-card--add"
+                  onClick={openCreateTemplateModal}
+                  aria-label="Add template"
+                  data-testid="settings-notes-template-add"
+                >
+                  <Plus size={24} strokeWidth={2} aria-hidden />
+                  <span className="settings-template-card__add-label">Add template</span>
+                </button>
               </div>
             </SettingsGroup>
           </SettingsTabPanel>}
 
           {activeTab === "voice" && <SettingsTabPanel id="voice">
-            <SettingsGroup title="Voice & transcription">
+            <SettingsGroup title="Cleanup">
               <SettingsSwitch
                 id="transcriptCleanupToggle"
                 label="Clean up transcripts"
@@ -1085,25 +1137,29 @@ export function SettingsView({
               {cleanupEnabled &&
               !(secretsLoaded ? apiKey.trim().length > 0 : openAIConfigured) ? (
                 <SettingsHint>
-                  Cleanup needs an OpenAI API key in {rigSection("Data")}.
+                  Cleanup needs an OpenAI API key in {settingsSection("Data")}.
                 </SettingsHint>
               ) : null}
             </SettingsGroup>
 
             <SettingsGroup title="Transcript corrections">
-              <div className="settings-entry-list">
-                {transcriptDictionary.map((entry) => (
-                  <SettingsEntryRow
-                    key={entry.from}
-                    title={entry.from}
-                    detail={entry.to}
-                    onEdit={() => openEditDictionaryModal(entry)}
-                    onDelete={() => deleteDictionaryEntry(entry.from)}
-                    editAriaLabel={`Edit transcript correction ${entry.from}`}
-                    deleteAriaLabel={`Remove transcript correction ${entry.from}`}
-                  />
-                ))}
-              </div>
+              {transcriptDictionary.length === 0 ? (
+                <SettingsHint flush>No corrections yet.</SettingsHint>
+              ) : (
+                <div className="settings-entry-list">
+                  {transcriptDictionary.map((entry) => (
+                    <SettingsEntryRow
+                      key={entry.from}
+                      title={entry.from}
+                      detail={entry.to}
+                      onEdit={() => openEditDictionaryModal(entry)}
+                      onDelete={() => deleteDictionaryEntry(entry.from)}
+                      editAriaLabel={`Edit transcript correction ${entry.from}`}
+                      deleteAriaLabel={`Remove transcript correction ${entry.from}`}
+                    />
+                  ))}
+                </div>
+              )}
               <SettingsActions>
                 <button type="button" className="btn" onClick={openAddDictionaryModal}>
                   Add Correction
@@ -1196,21 +1252,38 @@ export function SettingsView({
           <Modal
             open={templatesModalOpen}
             onClose={closeTemplatesModal}
-            title="Edit notes template"
+            title={editingTemplateId ? "Edit notes template" : "Add notes template"}
             data-testid="settings-notes-template-modal"
+            footerClassName={
+              editingTemplateId && !isBuiltInNoteTemplateId(editingTemplateId)
+                ? "app-modal-footer--spread"
+                : undefined
+            }
             footer={
               <>
-                <button type="button" className="btn" onClick={closeTemplatesModal}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void saveTemplate()}
-                  disabled={!templateTitleDraft.trim()}
-                >
-                  Save
-                </button>
+                {editingTemplateId && !isBuiltInNoteTemplateId(editingTemplateId) ? (
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={() => void deleteTemplate()}
+                    data-testid="settings-notes-template-delete"
+                  >
+                    Delete
+                  </button>
+                ) : null}
+                <div className="app-modal-footer-actions">
+                  <button type="button" className="btn" onClick={closeTemplatesModal}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => void saveTemplate()}
+                    disabled={!templateTitleDraft.trim()}
+                  >
+                    Save
+                  </button>
+                </div>
               </>
             }
           >
@@ -1225,6 +1298,19 @@ export function SettingsView({
                   autoComplete="off"
                 />
               </label>
+              <label className="app-modal-field">
+                <span className="app-modal-field__label">Template body</span>
+                <textarea
+                  value={templateContentDraft}
+                  onChange={(e) => setTemplateContentDraft(e.target.value)}
+                  className="app-modal-input app-modal-input--multiline settings-template-content-input"
+                  rows={10}
+                />
+                <p className="app-modal-field__hint">
+                  Use <code>{NOTE_TEMPLATE_TODAY_TOKEN}</code> for today&apos;s date and{" "}
+                  <code>{NOTE_TEMPLATE_CURSOR_TOKEN}</code> to place the cursor when the note opens.
+                </p>
+              </label>
               <label className="app-modal-check">
                 <input
                   type="checkbox"
@@ -1234,20 +1320,14 @@ export function SettingsView({
                   onChange={(e) => setTemplateIsDefaultDraft(e.target.checked)}
                   data-testid="settings-notes-template-default"
                 />
+                <span className="app-modal-check__icon" aria-hidden>
+                  {templateIsDefaultDraft ? (
+                    <SquareCheck size={18} strokeWidth={2} />
+                  ) : (
+                    <Square size={18} strokeWidth={2} />
+                  )}
+                </span>
                 <span className="app-modal-check__text">Default for new notes</span>
-              </label>
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Template body</span>
-                <p className="app-modal-field__hint">
-                  Use <code>{NOTE_TEMPLATE_TODAY_TOKEN}</code> for today&apos;s date and{" "}
-                  <code>{NOTE_TEMPLATE_CURSOR_TOKEN}</code> to place the cursor when the note opens.
-                </p>
-                <textarea
-                  value={templateContentDraft}
-                  onChange={(e) => setTemplateContentDraft(e.target.value)}
-                  className="app-modal-input app-modal-input--multiline settings-template-content-input"
-                  rows={10}
-                />
               </label>
             </div>
           </Modal>

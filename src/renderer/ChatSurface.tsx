@@ -17,7 +17,6 @@ interface ChatSurfaceProps {
   chatAreaRef: RefObject<HTMLDivElement>;
   composerRef: RefObject<HTMLDivElement>;
   headerContent: ReactNode;
-  headerCornerControl?: ReactNode;
   headerClassName?: string;
   displayMessages: Message[];
   copiedId: string | null;
@@ -30,7 +29,8 @@ interface ChatSurfaceProps {
   llmActionsEnabled?: boolean;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
-  onGenerateReply: () => void;
+  /** Mode picker shown in the reply strip (in place of Continue) while awaiting a reply. */
+  replyModeControl?: ReactNode;
   onOptionSelect?: (label: string) => void | Promise<void>;
   liveNoteStream?: LiveNoteStream | null;
   onOpenNoteInEditor?: (noteId: string) => void;
@@ -53,13 +53,15 @@ interface ChatSurfaceProps {
   messagesTestId: string;
   composerTestId: string;
   inputRef: MutableRefObject<HTMLTextAreaElement | null>;
+  placeholder?: string;
+  modeControl?: ReactNode;
+  onCycleMode?: () => void;
 }
 
 export function ChatSurface({
   chatAreaRef,
   composerRef,
   headerContent,
-  headerCornerControl,
   headerClassName,
   displayMessages,
   copiedId,
@@ -72,7 +74,7 @@ export function ChatSurface({
   llmActionsEnabled = true,
   onToolConfirm,
   onPolish,
-  onGenerateReply,
+  replyModeControl,
   onOptionSelect,
   liveNoteStream,
   onOpenNoteInEditor,
@@ -95,6 +97,9 @@ export function ChatSurface({
   messagesTestId,
   composerTestId,
   inputRef,
+  placeholder,
+  modeControl,
+  onCycleMode,
 }: ChatSurfaceProps) {
   const chatPaneRef = useRef<HTMLDivElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -121,11 +126,6 @@ export function ChatSurface({
    */
   return (
     <div ref={chatPaneRef} className="chat-pane">
-      {headerCornerControl ? (
-        <div className="chat-pane-corner-control">
-          {headerCornerControl}
-        </div>
-      ) : null}
       <div
         ref={chatAreaRef}
         className={centerSingleMessage ? "chat-scroll chat-scroll--single-message" : "chat-scroll"}
@@ -160,7 +160,7 @@ export function ChatSurface({
             llmActionsEnabled={llmActionsEnabled}
             onToolConfirm={onToolConfirm}
             onPolish={onPolish}
-            onGenerateReply={onGenerateReply}
+            replyModeControl={replyModeControl}
             onOptionSelect={onOptionSelect}
             liveNoteStream={liveNoteStream}
             onOpenNoteInEditor={onOpenNoteInEditor}
@@ -194,6 +194,9 @@ export function ChatSurface({
           onRemoveAttachedAudio={onRemoveAttachedAudio}
           focusComposerNonce={focusComposerNonce}
           inputRef={inputRef}
+          placeholder={placeholder}
+          modeControl={modeControl}
+          onCycleMode={onCycleMode}
         />
       </div>
       <ChatSelectionImagePopover containerRef={chatPaneRef} />

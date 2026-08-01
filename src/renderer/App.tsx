@@ -3,6 +3,7 @@ import { ChatView } from "./ChatView";
 import { SettingsView } from "./SettingsView";
 import { setCachedAccessibilityTrusted, setCachedHasOpenAIApiKey, setCachedSettings } from "./settings/settingsSessionCache";
 import { TasksView } from "./TasksView";
+import { SearchView } from "./SearchView";
 import { NotesView } from "./WritingSurfaceView";
 import { ImageCanvasView } from "./ImageCanvasView";
 import { Sidebar } from "./Sidebar";
@@ -22,7 +23,6 @@ import {
 import type { GeneratedImage } from "../shared/images";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
 import type { Conversation, View } from "./sidebarUtils";
-import { useViewportLayout } from "./useViewportLayout";
 import {
   collectSetupGaps,
   shouldShowSetupNotice,
@@ -30,6 +30,13 @@ import {
 } from "../shared/setupState";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { IDLE_UPDATE_STATUS, type UpdateStatus } from "../shared/updateStatus";
+import {
+  computeLibraryPeekTarget,
+  initialLibraryPeekSpring,
+  libraryPeekSpringSettled,
+  stepLibraryPeekSpring,
+  type LibraryPeekSpring,
+} from "./libraryPeek";
 
 function removeTitleAwaitingId(
   prev: Record<string, true>,
@@ -47,11 +54,10 @@ export default function App() {
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [layout, setLayout] = useState<LayoutOptions>(DEFAULT_LAYOUT);
-  const { presetSmall } = useViewportLayout();
-  /** Incremented when entering small window on chat so ChatView focuses the composer. */
+  /** Incremented when the chat composer should be focused. */
   const [focusComposerNonce, setFocusComposerNonce] = useState(0);
-  const [appVersion, setAppVersion] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(IDLE_UPDATE_STATUS);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   /** True while the open chat is waiting on / streaming from the chat model (not composer voice). */
   const [activeChatProcessing, setActiveChatProcessing] = useState(false);
   /** Per-conversation refcount for async LLM thread title generation after a reply. */
@@ -75,6 +81,143 @@ export default function App() {
   const [openNoteInStickyWindow, setOpenNoteInStickyWindow] = useState(
     DEFAULT_UI_SESSION.openNoteInStickyWindow ?? false,
   );
+  /** Library drawer: pinned open, or temporarily open via edge hover / peek latch. */
+  const [libraryPinned, setLibraryPinned] = useState(false);
+  const [libraryHoverOpen, setLibraryHoverOpen] = useState(false);
+  const libraryCloseTimerRef = useRef<number | null>(null);
+  const appRef = useRef<HTMLDivElement>(null);
+  const libraryPeekRafRef = useRef<number | null>(null);
+  const libraryPeekPendingXRef = useRef<number | null>(null);
+  const libraryPeekSpringRef = useRef<LibraryPeekSpring>(initialLibraryPeekSpring());
+  const libraryPeekLastTsRef = useRef<number | null>(null);
+  const libraryPinnedRef = useRef(libraryPinned);
+  const libraryHoverOpenRef = useRef(libraryHoverOpen);
+  const librarySideRef = useRef(layout.sidebar);
+  libraryPinnedRef.current = libraryPinned;
+  libraryHoverOpenRef.current = libraryHoverOpen;
+  librarySideRef.current = layout.sidebar;
+
+  const libraryOpen = libraryPinned || libraryHoverOpen;
+
+  const clearLibraryCloseTimer = useCallback(() => {
+    if (libraryCloseTimerRef.current != null) {
+      window.clearTimeout(libraryCloseTimerRef.current);
+      libraryCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const applyLibraryPeekCss = useCallback((peek: number) => {
+    const el = appRef.current;
+    if (!el) return;
+    el.style.setProperty("--library-peek", String(peek));
+    el.dataset.libraryPeeking = peek > 0.02 && peek < 1 ? "true" : "false";
+  }, []);
+
+  const scheduleLibraryHoverClose = useCallback(() => {
+    clearLibraryCloseTimer();
+    libraryCloseTimerRef.current = window.setTimeout(() => {
+      setLibraryHoverOpen(false);
+      libraryCloseTimerRef.current = null;
+    }, 220);
+  }, [clearLibraryCloseTimer]);
+
+  const openLibraryHover = useCallback(() => {
+    clearLibraryCloseTimer();
+    setLibraryHoverOpen(true);
+  }, [clearLibraryCloseTimer]);
+
+  const toggleLibraryPinned = useCallback(() => {
+    setLibraryPinned((prev) => {
+      const next = !prev;
+      if (next) setLibraryHoverOpen(false);
+      return next;
+    });
+  }, []);
+
+  const closeLibraryIfUnpinned = useCallback(() => {
+    if (!libraryPinned) {
+      setLibraryHoverOpen(false);
+    }
+  }, [libraryPinned]);
+
+  useEffect(() => () => clearLibraryCloseTimer(), [clearLibraryCloseTimer]);
+
+  // Sync peek CSS when pinned / hover-open latches or releases.
+  useEffect(() => {
+    libraryPeekSpringRef.current = initialLibraryPeekSpring(libraryPinned || libraryHoverOpen ? 1 : 0);
+    libraryPeekLastTsRef.current = null;
+    if (libraryPinned || libraryHoverOpen) {
+      applyLibraryPeekCss(1);
+    } else {
+      applyLibraryPeekCss(0);
+    }
+  }, [libraryPinned, libraryHoverOpen, applyLibraryPeekCss]);
+
+  // Proximity target + JS spring (CSS transitions can't overshoot while tracking the cursor).
+  useEffect(() => {
+    if (libraryPinned || libraryHoverOpen) return;
+
+    const stopPeekLoop = () => {
+      if (libraryPeekRafRef.current != null) {
+        window.cancelAnimationFrame(libraryPeekRafRef.current);
+        libraryPeekRafRef.current = null;
+      }
+      libraryPeekLastTsRef.current = null;
+    };
+
+    const tick = (now: number) => {
+      libraryPeekRafRef.current = null;
+      if (libraryPinnedRef.current || libraryHoverOpenRef.current) return;
+
+      const el = appRef.current;
+      const pendingX = libraryPeekPendingXRef.current;
+      if (!el || pendingX == null) return;
+
+      const lastTs = libraryPeekLastTsRef.current;
+      libraryPeekLastTsRef.current = now;
+      const dtSeconds = Math.min(1 / 30, Math.max(1 / 120, lastTs == null ? 1 / 60 : (now - lastTs) / 1000));
+
+      const rect = el.getBoundingClientRect();
+      const { target, latch } = computeLibraryPeekTarget({
+        x: pendingX - rect.left,
+        viewportWidth: rect.width,
+        side: librarySideRef.current === "right" ? "right" : "left",
+      });
+
+      if (latch) {
+        openLibraryHover();
+        return;
+      }
+
+      libraryPeekSpringRef.current = stepLibraryPeekSpring(
+        libraryPeekSpringRef.current,
+        target,
+        dtSeconds,
+      );
+      applyLibraryPeekCss(libraryPeekSpringRef.current.value);
+
+      if (!libraryPeekSpringSettled(libraryPeekSpringRef.current, target)) {
+        libraryPeekRafRef.current = window.requestAnimationFrame(tick);
+      }
+    };
+
+    const ensurePeekLoop = () => {
+      if (libraryPeekRafRef.current != null) return;
+      libraryPeekRafRef.current = window.requestAnimationFrame(tick);
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      libraryPeekPendingXRef.current = event.clientX;
+      ensurePeekLoop();
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      stopPeekLoop();
+      libraryPeekPendingXRef.current = null;
+    };
+  }, [libraryPinned, libraryHoverOpen, openLibraryHover, applyLibraryPeekCss]);
 
   const [pendingHotkeyText, setPendingHotkeyText] = useState<string | null>(null);
   /** When true, hotkey text is always pre-filled (never auto-sent). Used for global recording while the app was unfocused. */
@@ -141,6 +284,11 @@ export default function App() {
       setSettingsInitialTab(undefined);
     }
     setView(next);
+  }, []);
+
+  const handleConversationSelect = useCallback((id: string) => {
+    setConversationId(id);
+    setView("chat");
   }, []);
 
   const openSettingsForGap = useCallback((gap: SetupGap) => {
@@ -257,6 +405,14 @@ export default function App() {
     void loadImagesList();
   }, [loadImagesList]);
 
+  const handleSelectNoteFromLibrary = useCallback((id: string) => {
+    openNoteInMain(id);
+  }, [openNoteInMain]);
+
+  const handleSelectImageFromLibrary = useCallback((id: string) => {
+    openImageInMain(id);
+  }, [openImageInMain]);
+
   useEffect(() => {
     void loadConversations();
   }, [loadConversations]);
@@ -360,7 +516,7 @@ export default function App() {
     };
   }, [bumpTitleGen]);
 
-  /** Initial window focus should land in the chat composer, not the sidebar search toggle. */
+  /** Initial window focus should land in the chat composer, not a sidebar control. */
   useEffect(() => {
     setFocusComposerNonce((n) => n + 1);
   }, []);
@@ -475,10 +631,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [createNew, createNewNote]);
 
-  const handleWindowSizeToggle = useCallback(async () => {
-    await window.harness.windowSize.toggle();
-  }, []);
-
   const handleConversationDelete = useCallback(async (id: string) => {
     await window.harness.memory.deleteConversation(id);
     const remaining = conversations.filter((c) => c.id !== id);
@@ -564,11 +716,28 @@ export default function App() {
     setActiveChatProcessing(active);
   }, []);
 
-  void presetSmall;
-
   return (
-    <div className="app" data-sidebar={layout.sidebar} data-wide-view={layout.wideView}>
+    <div
+      ref={appRef}
+      className="app"
+      data-sidebar={layout.sidebar}
+      data-wide-view={layout.wideView}
+      data-library-open={libraryOpen ? "true" : "false"}
+    >
       <div className="app-frame">
+        <div
+          className="library-edge-hit"
+          onPointerEnter={openLibraryHover}
+          data-testid="library-edge-hit"
+        />
+        {libraryOpen && !libraryPinned ? (
+          <button
+            type="button"
+            className="library-backdrop"
+            aria-label="Close library"
+            onClick={closeLibraryIfUnpinned}
+          />
+        ) : null}
         <Sidebar
           conversations={sidebarConversations}
           notes={notes}
@@ -578,15 +747,26 @@ export default function App() {
           activeImageId={activeImageId}
           view={view}
           onViewChange={handleViewChange}
-          onConversationSelect={setConversationId}
+          onConversationSelect={handleConversationSelect}
           onConversationDelete={handleConversationDelete}
-          onSelectNote={openNoteInMain}
+          onSelectNote={handleSelectNoteFromLibrary}
           onNoteDelete={handleNoteDelete}
-          onSelectImage={openImageInMain}
+          onSelectImage={handleSelectImageFromLibrary}
           onImageDelete={handleImageDelete}
-          onNewChat={createNew}
-          onNewNote={() => void createNewNote()}
-          onNewImage={() => void createNewImage()}
+          onNewChat={() => {
+            void createNew();
+            closeLibraryIfUnpinned();
+          }}
+          onNewNote={() => {
+            void createNewNote();
+            closeLibraryIfUnpinned();
+          }}
+          onNewImage={() => {
+            void createNewImage();
+            closeLibraryIfUnpinned();
+          }}
+          libraryPinned={libraryPinned}
+          onToggleLibraryPinned={toggleLibraryPinned}
           activeChatProcessing={activeChatProcessing}
           titleGenInFlight={titleGenInFlight}
           titleAwaitingIds={titleAwaitingIds}
@@ -595,6 +775,10 @@ export default function App() {
           onUpdateClick={handleUpdateClick}
           onSyncComplete={refreshLibraryAfterSync}
           onOpenDataSettings={openDataSettings}
+          onLibraryPointerEnter={openLibraryHover}
+          onLibraryPointerLeave={() => {
+            if (!libraryPinned) scheduleLibraryHoverClose();
+          }}
         />
         <main className="main">
           {(view === "chat" || activeChatProcessing) && (
@@ -617,6 +801,7 @@ export default function App() {
                       !!titleAwaitingIds[activeChatConversation.id]
                   )
                 }
+                conversationChatMode={activeChatConversation?.chatMode}
                 onConversationCreated={refreshConversations}
                 onAssignConversationId={handleAssignConversationId}
                 pendingHotkeyText={pendingHotkeyText}
@@ -627,7 +812,6 @@ export default function App() {
                 }}
                 onChatActivityChange={handleChatActivityChange}
                 focusComposerNonce={focusComposerNonce}
-                onWindowSizeToggle={handleWindowSizeToggle}
                 onOpenNotesView={(noteId) => openNoteInMain(noteId)}
                 openAIConfigured={!setupStateLoaded || openAIConfigured}
                 mirrorGlobalFnRecording={view === "chat"}
@@ -648,6 +832,18 @@ export default function App() {
             />
           )}
           {view === "tasks" && <TasksView />}
+          {view === "search" && (
+            <SearchView
+              notes={notes}
+              images={images}
+              conversationId={conversationId}
+              activeNoteId={activeNoteId}
+              activeImageId={activeImageId}
+              onSelectConversation={handleConversationSelect}
+              onSelectNote={handleSelectNoteFromLibrary}
+              onSelectImage={handleSelectImageFromLibrary}
+            />
+          )}
           {view === "notes" && (
             <NotesView
               notes={notes}

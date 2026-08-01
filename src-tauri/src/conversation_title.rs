@@ -327,6 +327,7 @@ mod tests {
       session_kind: kind,
       has_assistant_reply: None,
       has_messages: None,
+      chat_mode: None,
     }
   }
 

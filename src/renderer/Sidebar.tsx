@@ -6,22 +6,22 @@ import {
   useRef,
 } from "react";
 import {
-  AlertCircle,
   ArrowUpRight,
-  Check,
-  Settings,
-  Plus,
   Search,
   StickyNote,
   Image as ImageIcon,
   X,
-  ListTodo,
   Loader2,
   Circle,
-  ListFilter,
+  Plus,
   ChevronDown,
+  PanelLeft,
+  CheckLine,
+  ListFilter,
+  Settings2 as SettingsIcon,
+  Check,
+  AlertCircle,
 } from "lucide-react";
-import type { SearchResult } from "../shared/types";
 import {
   conversationDisplayTitle,
   conversationSidebarIconKind,
@@ -29,12 +29,12 @@ import {
 } from "../shared/conversationSession";
 import { getDisplayNoteTitle, type NoteSummary } from "../shared/writing";
 import { getDisplayImageTitle, type GeneratedImage } from "../shared/images";
+import { SETTINGS_PAGE_TITLE } from "../shared/settingsPage";
 import {
   sidebarSyncStatusTooltip,
   syncResultChangedLocalData,
   type SyncStatus,
 } from "../shared/sync";
-import { RIG_PAGE_TITLE } from "../shared/rigPage";
 import type { UpdateStatus } from "../shared/updateStatus";
 import {
   type Conversation,
@@ -42,11 +42,9 @@ import {
   type View,
   type SidebarGroup,
   type SidebarListSortMode,
-  SIDEBAR_INITIAL_VISIBLE_COUNT,
-  SIDEBAR_MORE_INCREMENT,
   groupConversations,
   nextSidebarListSortMode,
-  pickSidebarConversationsForList,
+  pickSidebarLibraryRows,
 } from "./sidebarUtils";
 import { useScrollFadeEdges } from "./useScrollFadeEdges";
 
@@ -68,31 +66,18 @@ interface SidebarProps {
   onNewChat: () => void;
   onNewNote: () => void;
   onNewImage: () => void;
+  libraryPinned: boolean;
+  onToggleLibraryPinned: () => void;
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
   titleAwaitingIds: Record<string, true>;
   appVersion: string | null;
   updateStatus: UpdateStatus;
   onUpdateClick: () => void;
-  /** Called after sync when local conversation data may have changed. */
   onSyncComplete?: () => void;
-  /** Open System → Data (error recovery / sync setup). */
   onOpenDataSettings?: () => void;
-}
-
-function HighlightText({ text, range }: { text: string; range?: [number, number] }) {
-  if (range == null || range[0] < 0 || range[1] <= range[0] || range[0] >= text.length) {
-    return <>{text}</>;
-  }
-  const start = Math.max(0, range[0]);
-  const end = Math.min(text.length, range[1]);
-  return (
-    <>
-      {text.slice(0, start)}
-      <mark className="search-highlight">{text.slice(start, end)}</mark>
-      {text.slice(end)}
-    </>
-  );
+  onLibraryPointerEnter?: () => void;
+  onLibraryPointerLeave?: () => void;
 }
 
 export function Sidebar({
@@ -113,6 +98,8 @@ export function Sidebar({
   onNewChat,
   onNewNote,
   onNewImage,
+  libraryPinned,
+  onToggleLibraryPinned,
   activeChatProcessing,
   titleGenInFlight,
   titleAwaitingIds,
@@ -121,6 +108,8 @@ export function Sidebar({
   onUpdateClick,
   onSyncComplete,
   onOpenDataSettings,
+  onLibraryPointerEnter,
+  onLibraryPointerLeave,
 }: SidebarProps) {
   const updateButtonLabel = (() => {
     switch (updateStatus.status) {
@@ -148,22 +137,13 @@ export function Sidebar({
     updateStatus.status === "ready" ||
     updateStatus.status === "checking";
 
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchButtonRef = useRef<HTMLButtonElement>(null);
-  /** Avoid focusing the search toggle on mount — composer should receive initial focus. */
-  const prevSearchOpenRef = useRef<boolean | undefined>(undefined);
-
-  const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_INITIAL_VISIBLE_COUNT);
   const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("recent");
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement | null>(null);
   const modKey = navigator.platform.startsWith("Mac") ? "⌘" : "Ctrl+";
+
   const { scrollRef: sidebarListRef, fadeTop, fadeBottom, onScroll: onSidebarListScroll } =
     useScrollFadeEdges();
 
@@ -220,38 +200,6 @@ export function Sidebar({
   }, [syncConfigured, syncHasError, onOpenDataSettings, runSidebarSync]);
 
   useEffect(() => {
-    if (!searchOpen) return;
-    const trimmed = searchQuery.trim();
-    if (!trimmed) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      return;
-    }
-    setSearchLoading(true);
-    const t = setTimeout(() => {
-      window.harness.memory.searchConversations(trimmed, true).then((results) => {
-        setSearchResults(results);
-        setSearchLoading(false);
-      });
-    }, 250);
-    return () => clearTimeout(t);
-  }, [searchOpen, searchQuery]);
-
-  useEffect(() => {
-    if (searchOpen) {
-      searchInputRef.current?.focus();
-    } else if (prevSearchOpenRef.current === true) {
-      searchButtonRef.current?.focus();
-    }
-    prevSearchOpenRef.current = searchOpen;
-  }, [searchOpen]);
-
-  const closeSearch = useCallback(() => {
-    setSearchOpen(false);
-    setSearchQuery("");
-  }, []);
-
-  useEffect(() => {
     if (!newMenuOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setNewMenuOpen(false);
@@ -268,16 +216,8 @@ export function Sidebar({
     };
   }, [newMenuOpen]);
 
-  const handleSearchResultClick = useCallback(
-    (id: string) => {
-      onConversationSelect(id);
-      onViewChange("chat");
-    },
-    [onConversationSelect, onViewChange]
-  );
-
-  const libraryRows = useMemo<LibraryRow[]>(
-    () => [
+  const libraryRows = useMemo<LibraryRow[]>(() => {
+    const all: LibraryRow[] = [
       ...conversations.map((c): LibraryRow => ({ ...c, itemKind: "conversation" })),
       ...notes.map(
         (n): LibraryRow => ({
@@ -295,23 +235,16 @@ export function Sidebar({
           itemKind: "image",
         })
       ),
-    ],
-    [conversations, notes, images]
-  );
-
-  const sidebarListItems = useMemo(
-    () =>
-      pickSidebarConversationsForList(
-        libraryRows,
-        conversationId ?? activeNoteId ?? activeImageId,
-        sidebarVisibleLimit,
-      ),
-    [libraryRows, conversationId, activeNoteId, activeImageId, sidebarVisibleLimit]
-  );
+    ];
+    return pickSidebarLibraryRows(
+      all,
+      conversationId ?? activeNoteId ?? activeImageId,
+    );
+  }, [conversations, notes, images, conversationId, activeNoteId, activeImageId]);
 
   const { groups: sidebarGroups } = useMemo(
-    () => groupConversations(sidebarListItems, listSortMode),
-    [sidebarListItems, listSortMode]
+    () => groupConversations(libraryRows, listSortMode),
+    [libraryRows, listSortMode]
   );
 
   const toggleListSortMode = useCallback(() => {
@@ -319,29 +252,11 @@ export function Sidebar({
   }, []);
 
   const nextSortModeHint =
-    listSortMode === "date"
-      ? { ariaLabel: "Switch to Recent list", title: "Sort by recent activity" }
-      : listSortMode === "recent"
+    listSortMode === "recent"
+      ? { ariaLabel: "Switch to time-ago groups", title: "Group by time ago" }
+      : listSortMode === "date"
         ? { ariaLabel: "Switch to calendar day groups", title: "Group by calendar day" }
-        : { ariaLabel: "Switch to time-ago groups", title: "Group by time ago" };
-
-  const showSidebarMoreControl = sidebarListItems.length < libraryRows.length;
-
-  const onSidebarShowMore = useCallback(() => {
-    setSidebarVisibleLimit((n) => Math.min(libraryRows.length, n + SIDEBAR_MORE_INCREMENT));
-  }, [libraryRows.length]);
-
-  const noteSearchMatches = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return notes.filter((n) => getDisplayNoteTitle(n.title).toLowerCase().includes(q));
-  }, [notes, searchQuery]);
-
-  const imageSearchMatches = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return images.filter((img) => getDisplayImageTitle(img.title).toLowerCase().includes(q));
-  }, [images, searchQuery]);
+        : { ariaLabel: "Switch to Recent list", title: "Sort by recent activity" };
 
   const renderLibraryItem = useCallback(
     (row: LibraryRow) => {
@@ -476,143 +391,117 @@ export function Sidebar({
   );
 
   return (
-    <div className="sidebar-dock">
+    <div
+      className="sidebar-dock"
+      onPointerEnter={onLibraryPointerEnter}
+      onPointerLeave={onLibraryPointerLeave}
+    >
       <aside className="sidebar">
-        {searchOpen ? (
-          <div className="sidebar-search-row">
-            <input
-              ref={searchInputRef}
-              type="search"
-              className="sidebar-search-input"
-              placeholder="Search…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") closeSearch();
-              }}
-              aria-label="Search"
-            />
+        <div className="sidebar-buttons">
+          <div className="sidebar-new-menu-wrap" ref={newMenuRef}>
             <button
               type="button"
-              className="btn btn-icon"
-              onClick={closeSearch}
-              aria-label="Close search"
+              className="btn sidebar-new-chat-btn"
+              data-testid="sidebar-new-menu"
+              aria-label="New"
+              aria-haspopup="menu"
+              aria-expanded={newMenuOpen}
+              onClick={() => setNewMenuOpen((open) => !open)}
             >
-              <X size={16} />
+              <Plus size={16} className="sidebar-new-chat-icon" aria-hidden />
+              <span className="sidebar-new-chat-label">New</span>
+              <ChevronDown size={14} className="sidebar-new-menu-chevron" aria-hidden />
             </button>
+            {newMenuOpen ? (
+              <div className="sidebar-new-menu" role="menu" aria-label="Create new">
+                <button
+                  type="button"
+                  className="sidebar-new-menu-item"
+                  role="menuitem"
+                  data-testid="sidebar-new-chat"
+                  onClick={() => {
+                    setNewMenuOpen(false);
+                    onNewChat();
+                  }}
+                >
+                  <span className="sidebar-new-menu-item__main">
+                    <Circle size={16} className="sidebar-new-menu-item__icon" aria-hidden />
+                    <span>New chat</span>
+                  </span>
+                  <span className="sidebar-new-menu-item__shortcut" aria-hidden>
+                    {modKey}N
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-new-menu-item"
+                  role="menuitem"
+                  data-testid="sidebar-new-note"
+                  onClick={() => {
+                    setNewMenuOpen(false);
+                    onNewNote();
+                  }}
+                >
+                  <span className="sidebar-new-menu-item__main">
+                    <StickyNote size={16} className="sidebar-new-menu-item__icon" aria-hidden />
+                    <span>New note</span>
+                  </span>
+                  <span className="sidebar-new-menu-item__shortcut" aria-hidden>
+                    ⇧{modKey}N
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-new-menu-item"
+                  role="menuitem"
+                  data-testid="sidebar-new-image"
+                  onClick={() => {
+                    setNewMenuOpen(false);
+                    onNewImage();
+                  }}
+                >
+                  <span className="sidebar-new-menu-item__main">
+                    <ImageIcon size={16} className="sidebar-new-menu-item__icon" aria-hidden />
+                    <span>New image</span>
+                  </span>
+                </button>
+              </div>
+            ) : null}
           </div>
-        ) : (
-          <div className="sidebar-buttons">
-            <div className="sidebar-new-menu-wrap" ref={newMenuRef}>
-              <button
-                type="button"
-                className="btn sidebar-new-chat-btn"
-                data-testid="sidebar-new-menu"
-                aria-label="New"
-                aria-haspopup="menu"
-                aria-expanded={newMenuOpen}
-                onClick={() => setNewMenuOpen((open) => !open)}
-              >
-                <Plus size={16} className="sidebar-new-chat-icon" aria-hidden />
-                <span className="sidebar-new-chat-label">New</span>
-                <ChevronDown size={14} className="sidebar-new-menu-chevron" aria-hidden />
-              </button>
-              {newMenuOpen ? (
-                <div className="sidebar-new-menu" role="menu" aria-label="Create new">
-                  <button
-                    type="button"
-                    className="sidebar-new-menu-item"
-                    role="menuitem"
-                    data-testid="sidebar-new-chat"
-                    onClick={() => {
-                      setNewMenuOpen(false);
-                      onNewChat();
-                    }}
-                  >
-                    <span className="sidebar-new-menu-item__main">
-                      <Circle size={16} className="sidebar-new-menu-item__icon" aria-hidden />
-                      <span>New chat</span>
-                    </span>
-                    <span className="sidebar-new-menu-item__shortcut" aria-hidden>
-                      {modKey}N
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="sidebar-new-menu-item"
-                    role="menuitem"
-                    data-testid="sidebar-new-note"
-                    onClick={() => {
-                      setNewMenuOpen(false);
-                      onNewNote();
-                    }}
-                  >
-                    <span className="sidebar-new-menu-item__main">
-                      <StickyNote size={16} className="sidebar-new-menu-item__icon" aria-hidden />
-                      <span>New note</span>
-                    </span>
-                    <span className="sidebar-new-menu-item__shortcut" aria-hidden>
-                      ⇧{modKey}N
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="sidebar-new-menu-item"
-                    role="menuitem"
-                    data-testid="sidebar-new-image"
-                    onClick={() => {
-                      setNewMenuOpen(false);
-                      onNewImage();
-                    }}
-                  >
-                    <span className="sidebar-new-menu-item__main">
-                      <ImageIcon size={16} className="sidebar-new-menu-item__icon" aria-hidden />
-                      <span>New image</span>
-                    </span>
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            <button
-              ref={searchButtonRef}
-              type="button"
-              className="btn btn-icon"
-              onClick={() => setSearchOpen(true)}
-              aria-label="Search"
-            >
-              <Search size={16} />
-            </button>
-          </div>
-        )}
-        {!searchOpen && (
-          <nav className="sidebar-workspace" aria-label="Workspace">
-            <button
-              type="button"
-              className={`sidebar-item${view === "tasks" ? " active" : ""}`}
-              onClick={() => onViewChange("tasks")}
-              aria-label="Tasks"
-              aria-current={view === "tasks" ? "page" : undefined}
-            >
-              <span className="sidebar-item-icon" aria-hidden>
-                <ListTodo size={16} className="sidebar-item-icon__svg" />
-              </span>
-              <span className="sidebar-item-title">Tasks</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-item${view === "settings" ? " active" : ""}`}
-              data-testid="sidebar-settings"
-              onClick={() => onViewChange("settings")}
-              aria-label={RIG_PAGE_TITLE}
-              aria-current={view === "settings" ? "page" : undefined}
-            >
-              <span className="sidebar-item-icon" aria-hidden>
-                <Settings size={16} className="sidebar-item-icon__svg" />
-              </span>
-              <span className="sidebar-item-title">{RIG_PAGE_TITLE}</span>
-            </button>
-          </nav>
-        )}
+          <button
+            type="button"
+            className={`btn btn-icon${view === "search" ? " btn-primary" : ""}`}
+            onClick={() => onViewChange("search")}
+            aria-label="Search"
+            aria-pressed={view === "search"}
+            title="Search"
+            data-testid="sidebar-search"
+          >
+            <Search size={16} />
+          </button>
+          <button
+            type="button"
+            className={`btn btn-icon${view === "tasks" ? " btn-primary" : ""}`}
+            onClick={() => onViewChange("tasks")}
+            aria-label="Tasks"
+            aria-pressed={view === "tasks"}
+            title="Tasks"
+            data-testid="library-tasks"
+          >
+            <CheckLine size={16} />
+          </button>
+          <button
+            type="button"
+            className={`btn btn-icon${view === "settings" ? " btn-primary" : ""}`}
+            onClick={() => onViewChange("settings")}
+            aria-label={SETTINGS_PAGE_TITLE}
+            aria-pressed={view === "settings"}
+            title={SETTINGS_PAGE_TITLE}
+            data-testid="library-settings"
+          >
+            <SettingsIcon size={16} />
+          </button>
+        </div>
         <div
           className={[
             "sidebar-list-wrap",
@@ -623,77 +512,12 @@ export function Sidebar({
             .join(" ")}
         >
           <ul ref={sidebarListRef} className="sidebar-list" onScroll={onSidebarListScroll}>
-          {searchOpen ? (
-            searchQuery.trim() ? (
-              searchLoading && noteSearchMatches.length === 0 && imageSearchMatches.length === 0 ? (
-                <li className="sidebar-search-empty">Searching…</li>
-              ) : searchResults.length === 0 &&
-                noteSearchMatches.length === 0 &&
-                imageSearchMatches.length === 0 ? (
-                <li className="sidebar-search-empty">No results</li>
-              ) : (
-                <>
-                  {noteSearchMatches.map((n) => (
-                    <li
-                      key={n.id}
-                      className={`search-result-item ${view === "notes" && activeNoteId === n.id ? "active" : ""}`}
-                      onClick={() => {
-                        onSelectNote(n.id);
-                        closeSearch();
-                      }}
-                    >
-                      <span className="search-result-title">{getDisplayNoteTitle(n.title)}</span>
-                    </li>
-                  ))}
-                  {imageSearchMatches.map((img) => (
-                    <li
-                      key={img.id}
-                      className={`search-result-item ${view === "images" && activeImageId === img.id ? "active" : ""}`}
-                      onClick={() => {
-                        onSelectImage(img.id);
-                        closeSearch();
-                      }}
-                    >
-                      <span className="search-result-title">{getDisplayImageTitle(img.title)}</span>
-                    </li>
-                  ))}
-                  {searchResults.map((r) => (
-                    <li
-                      key={r.id}
-                      className={`search-result-item ${conversationId === r.id && view === "chat" ? "active" : ""}`}
-                      onClick={() => handleSearchResultClick(r.id)}
-                    >
-                      <span className="search-result-title">
-                        <HighlightText
-                          text={conversationDisplayTitle(r.title, r.createdAt)}
-                          range={r.titleMatched ? r.titleMatchRange ?? undefined : undefined}
-                        />
-                      </span>
-                      <span className="search-result-snippet">
-                        <HighlightText
-                          text={r.snippet}
-                          range={
-                            r.snippetMatchRange[0] >= 0 && r.snippetMatchRange[1] > r.snippetMatchRange[0]
-                              ? r.snippetMatchRange
-                              : undefined
-                          }
-                        />
-                      </span>
-                    </li>
-                  ))}
-                </>
-              )
-            ) : (
-              <li className="sidebar-search-empty">Type to search</li>
-            )
-          ) : (
-            <>
-              {sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => {
-                const groupLabelTitle =
-                  key === "recent"
-                    ? `${libraryRows.length} item${libraryRows.length === 1 ? "" : "s"}`
-                    : undefined;
-                return (
+            {sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => {
+              const groupLabelTitle =
+                key === "recent"
+                  ? `${libraryRows.length} item${libraryRows.length === 1 ? "" : "s"}`
+                  : undefined;
+              return (
                 <li key={key} className="sidebar-group">
                   {groupIndex === 0 ? (
                     <div className="sidebar-group-header">
@@ -720,25 +544,8 @@ export function Sidebar({
                     {items.map((row) => renderLibraryItem(row))}
                   </ul>
                 </li>
-                );
-              })}
-              {showSidebarMoreControl ? (
-                <li className="sidebar-list-expand">
-                  <div className="sidebar-list-expand-row">
-                    <button
-                      type="button"
-                      className="btn sidebar-list-expand-btn"
-                      data-testid="sidebar-conversations-show-more"
-                      aria-label={`Show ${SIDEBAR_MORE_INCREMENT} more items`}
-                      onClick={onSidebarShowMore}
-                    >
-                      More
-                    </button>
-                  </div>
-                </li>
-              ) : null}
-            </>
-          )}
+              );
+            })}
           </ul>
         </div>
         <div className="sidebar-footer">
@@ -765,15 +572,15 @@ export function Sidebar({
             type="button"
             className={
               syncConfigured
-                ? `btn btn-icon sidebar-footer__sync-toggle${syncHasError ? " sidebar-footer__sync-toggle--error" : ""}`
-                : "btn sidebar-footer__sync-setup"
+                ? `sidebar-footer__sync-toggle${syncHasError ? " sidebar-footer__sync-toggle--error" : ""}`
+                : "sidebar-footer__sync-setup"
             }
             data-testid="sidebar-sync"
             onClick={handleSyncControlClick}
             disabled={syncBusy && syncConfigured}
             aria-label={
               !syncConfigured
-                ? "Set Up Sync"
+                ? "Set up sync"
                 : syncBusy
                   ? "Syncing"
                   : syncHasError
@@ -783,14 +590,25 @@ export function Sidebar({
             title={syncTooltip}
           >
             {!syncConfigured ? (
-              "Set Up Sync"
+              "Set up sync"
             ) : syncBusy ? (
-              <Loader2 size={14} className="voice-spinner" />
+              <Loader2 size={12} className="voice-spinner" aria-hidden />
             ) : syncHasError ? (
-              <AlertCircle size={14} />
+              <AlertCircle size={12} aria-hidden />
             ) : (
-              <Check size={14} strokeWidth={2.5} />
+              <Check size={12} strokeWidth={2.5} aria-hidden />
             )}
+          </button>
+          <button
+            type="button"
+            className={`sidebar-footer__pin${libraryPinned ? " sidebar-footer__pin--active" : ""}`}
+            onClick={onToggleLibraryPinned}
+            aria-label={libraryPinned ? "Unpin library" : "Pin library"}
+            aria-pressed={libraryPinned}
+            title={libraryPinned ? "Unpin library" : "Pin library"}
+            data-testid="library-toggle"
+          >
+            <PanelLeft size={12} strokeWidth={2} aria-hidden />
           </button>
         </div>
       </aside>

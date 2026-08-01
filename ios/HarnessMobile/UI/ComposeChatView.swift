@@ -4,6 +4,7 @@ import UIKit
 struct ComposeChatView: View {
     /// Not observed — AppModel sync/setup publishes must not rebuild compose chrome.
     let app: AppModel
+    var onConversationCreated: (String) -> Void = { _ in }
 
     @State private var sendError: String?
     @State private var showDictationSheet = false
@@ -17,29 +18,31 @@ struct ComposeChatView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
+        NavigationStack {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
 
-            if !headerQuote.isEmpty {
-                Text(headerQuote)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(Self.quoteLineSpacing)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 32)
-                    .frame(maxWidth: .infinity)
+                if !headerQuote.isEmpty {
+                    Text(headerQuote)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(Self.quoteLineSpacing)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 32)
+                        .frame(maxWidth: .infinity)
+                }
+
+                Spacer(minLength: 0)
             }
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground).ignoresSafeArea())
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            composerDock
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.systemBackground).ignoresSafeArea())
+            .navigationTitle("New Chat")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                composerDock
+            }
         }
         .alert("Could not start chat", isPresented: .constant(sendError != nil)) {
             Button("OK") { sendError = nil }
@@ -57,7 +60,7 @@ struct ComposeChatView: View {
                     isPresented: $showDictationSheet,
                     onTranscriptSent: { transcript in
                         app.queueOutboundMessage(conversationId: conversationId, text: transcript)
-                        app.openThread(id: conversationId)
+                        onConversationCreated(conversationId)
                     }
                 )
             }
@@ -67,10 +70,7 @@ struct ComposeChatView: View {
                 dictationConversationId = nil
             }
         }
-        // Wait for NavigationStack push (~0.35s) before focusing so keyboard and push don't fight.
-        .task {
-            try? await Task.sleep(nanoseconds: Self.composerAutofocusDelayNs)
-            guard !Task.isCancelled else { return }
+        .onAppear {
             isComposerFocused = true
         }
         .fullScreenCover(isPresented: $showCamera) {
@@ -80,9 +80,6 @@ struct ComposeChatView: View {
             .ignoresSafeArea()
         }
     }
-
-    /// Matches typical NavigationStack push duration so keyboard opens after the transition.
-    private static let composerAutofocusDelayNs: UInt64 = 350_000_000
 
     private static var quoteLineSpacing: CGFloat {
         let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .title2).pointSize, weight: .semibold)
@@ -94,7 +91,7 @@ struct ComposeChatView: View {
         ChatComposerView(
             conversationId: "compose",
             isStreaming: false,
-            autofocusOnAppear: false,
+            autofocusOnAppear: true,
             startsExpanded: true,
             allowsCollapse: false,
             initialDraft: app.composeDraft,
@@ -122,7 +119,7 @@ struct ComposeChatView: View {
             )
             pendingImage = nil
             app.clearComposeDraft()
-            app.openThread(id: id)
+            onConversationCreated(id)
         } catch {
             sendError = error.localizedDescription
         }
@@ -140,7 +137,5 @@ struct ComposeChatView: View {
 }
 
 #Preview("Compose") {
-    PreviewNavigationRoot {
-        ComposeChatView(app: PreviewSupport.emptyApp(syncNotConfigured: false, needsAPIKey: false))
-    }
+    ComposeChatView(app: PreviewSupport.emptyApp(syncNotConfigured: false, needsAPIKey: false))
 }

@@ -1,10 +1,9 @@
 import { DEFAULT_NOTE_TEMPLATES, DEFAULT_NOTE_TEMPLATE_ID } from "./writing";
 import { DEFAULT_ACCENT } from "./accent";
-import { DEFAULT_SYSTEM_PROMPT, type SystemPromptSettings } from "./systemPromptDefaults";
 
 export type MessageRole = "user" | "assistant" | "system";
 
-export interface ContextPreviewFact {
+export interface ContextPreviewMemory {
   key: string;
   value: string;
 }
@@ -20,7 +19,7 @@ export interface ContextPreviewTool {
 }
 
 export interface ContextPreview {
-  selectedFacts: ContextPreviewFact[];
+  selectedMemories: ContextPreviewMemory[];
   systemPrompt: string;
   temporalContext: string;
   memoryBlock: string;
@@ -39,24 +38,28 @@ export interface ToolCallRecord {
   payload?: unknown;
 }
 
-export interface SystemPromptPreviewFact {
+export interface SystemPromptPreviewMemory {
   key: string;
   value: string;
 }
 
 export interface SystemPromptPreview {
   platform: "desktop" | "ios";
-  /** Shared instructions from settings.systemPrompt.shared. */
+  /** Shared instructions from resources/contracts/systemPrompt.json. */
   shared: string;
-  /** Platform overlay from settings.systemPrompt.desktop | ios. */
+  /** Platform overlay from the same contract (desktop | ios). */
   platformOverlay: string;
   /** shared + platform overlay (static portion before runtime blocks). */
   staticPrompt: string;
+  /** Desktop chat-mode overlay; empty for chat / iOS. */
+  modeOverlay: string;
+  /** Mode used when assembling this preview. */
+  chatMode: string;
   memoryBlock: string;
   recentConversationsBlock: string;
   temporalContext: string;
   assembledPrompt: string;
-  selectedFacts: SystemPromptPreviewFact[];
+  selectedMemories: SystemPromptPreviewMemory[];
   /** Tool schemas on the chat request — sibling to the system prompt, not inside it. */
   tools: SystemPromptPreviewTool[];
 }
@@ -147,8 +150,6 @@ export interface Settings {
     /** When true, app launch opens the centered compose splash instead of restoring the last session. */
     openToComposeOnLaunch: boolean;
   };
-  /** Shared chat system prompt fields synced across desktop and iOS. */
-  systemPrompt?: SystemPromptSettings;
   /** Desktop appearance (accent drives derived CSS tokens). */
   appearance?: {
     /** Accent hex (`#rrggbb`). */
@@ -213,7 +214,6 @@ export const DEFAULT_SETTINGS: Settings = {
   chat: {
     openToComposeOnLaunch: true,
   },
-  systemPrompt: { ...DEFAULT_SYSTEM_PROMPT },
   appearance: {
     accent: DEFAULT_ACCENT,
   },

@@ -96,7 +96,7 @@ write_messages(
     state / "messages_conv_hero_memory.json",
     [
         ("user", "How does context get assembled for a reply?"),
-        ("assistant", "Memory facts, temporal notes, and the system prompt — then the visible thread."),
+        ("assistant", "Memories, temporal notes, and the system prompt — then the visible thread."),
     ],
 )
 write_messages(

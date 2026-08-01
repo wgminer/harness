@@ -47,7 +47,7 @@ npm run capture:hero      # refresh media/hero.png from a running Here Dev windo
 
 | | |
 |---|---|
-| **Desktop** | Tauri (Rust + React) — chat, tools, memory, notes, tasks, dictation, R2 sync |
+| **Desktop** | Tauri (Rust + React) — chat modes (Chat/Decide/Write/Refine), tools, memory, notes, tasks, dictation, R2 sync |
 | **Mobile** | Native iOS companion — chat, capture, sync QR pairing ([ios/README.md](ios/README.md)) |
 | **Models** | OpenAI API or OpenAI-compatible locals (e.g. Ollama) |
 | **Speech** | Apple Speech on macOS and iOS |

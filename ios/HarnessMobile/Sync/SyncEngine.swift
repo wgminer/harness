@@ -168,7 +168,10 @@ final class SyncEngine {
         }
         let doc = try BundleCodec.parseBundle(bytes)
         try LocalDataLayout.ensureDirectories(at: localDataDir)
-        let fileCount = try BundleCodec.extractBundle(localDataDir: localDataDir, doc: doc)
+        let dir = localDataDir
+        let fileCount = try await Task.detached(priority: .userInitiated) {
+            try BundleCodec.extractBundle(localDataDir: dir, doc: doc)
+        }.value
         try pruneNonMaterializedFiles()
         let contentRevision: String
         if let remoteManifest {
@@ -176,7 +179,6 @@ final class SyncEngine {
         } else {
             contentRevision = BundleCodec.computeContentRevisionFromBundle(doc)
         }
-        let dir = localDataDir
         let remoteRevision = remoteManifest?.revision
         let revision = try await Task.detached(priority: .userInitiated) {
             if let remoteRevision, !remoteRevision.isEmpty {
@@ -202,7 +204,9 @@ final class SyncEngine {
         guard remoteManifest != nil else { throw SyncEngineError.manifestMissing }
         guard !remoteBundleData.isEmpty else { throw SyncEngineError.bundleMissing }
 
-        let localFiles = try loadLocalScopedFileMap()
+        let localFiles = try await Task.detached(priority: .userInitiated) { [localDataDir] in
+            try Self.loadLocalScopedFileMap(localDataDir: localDataDir)
+        }.value
         let review = SyncMerge.buildConflictReview(localFiles: localFiles, remoteFiles: remoteBundleData)
         let choices = SyncMerge.buildDefaultMergeChoices(review: review)
         let mergeWarning = SyncMerge.mergeWarning(from: review)
@@ -212,7 +216,9 @@ final class SyncEngine {
             choices: choices
         )
 
-        try applyMergedFiles(mergedFiles)
+        try await Task.detached(priority: .userInitiated) { [localDataDir] in
+            try Self.applyMergedFiles(mergedFiles, localDataDir: localDataDir)
+        }.value
         try pruneNonMaterializedFiles()
 
         var passthrough: [String: Data] = [:]
@@ -253,11 +259,15 @@ final class SyncEngine {
         for (path, data) in extraPassthrough {
             mergedPassthrough[path] = data
         }
-        let built = try BundleCodec.buildBundle(
-            localDataDir: localDataDir,
-            scopes: SyncScopes.mobilePushScopes,
-            passthroughData: mergedPassthrough
-        )
+        let dir = localDataDir
+        let scopes = SyncScopes.mobilePushScopes
+        let built = try await Task.detached(priority: .userInitiated) {
+            try BundleCodec.buildBundle(
+                localDataDir: dir,
+                scopes: scopes,
+                passthroughData: mergedPassthrough
+            )
+        }.value
         let manifest = BackupManifest(
             version: SyncScopes.manifestVersion,
             revision: localRevision,
@@ -271,7 +281,7 @@ final class SyncEngine {
         return built.entries.count
     }
 
-    private func loadLocalScopedFileMap() throws -> [String: Data] {
+    private nonisolated static func loadLocalScopedFileMap(localDataDir: URL) throws -> [String: Data] {
         let files = try BundleCodec.listScopedFiles(
             localDataDir: localDataDir,
             scopes: SyncScopes.defaultScopes
@@ -286,7 +296,7 @@ final class SyncEngine {
         return map
     }
 
-    private func applyMergedFiles(_ merged: [String: Data]) throws {
+    private nonisolated static func applyMergedFiles(_ merged: [String: Data], localDataDir: URL) throws {
         let fm = FileManager.default
         let scopes = SyncScopes.defaultScopes
         let existing = try BundleCodec.listScopedFiles(localDataDir: localDataDir, scopes: scopes)

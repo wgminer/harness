@@ -1,12 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Brain, Minimize2 } from "lucide-react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import { HOME_HEADER_QUOTE } from "../shared/headerQuote";
+import {
+  chatModePlaceholder,
+  DEFAULT_CHAT_MODE,
+  getChatMode,
+  nextChatMode,
+  type ChatModeId,
+} from "../shared/chatModes";
 import { ChatTitleModal } from "./ChatTitleModal";
-import { ContextInspectorModal } from "./ContextInspectorModal";
 import { ChatSurface } from "./ChatSurface";
 import { ChatComposer } from "./ChatComposer";
+import { ChatModePicker } from "./ChatModePicker";
 import { useChatComposer } from "./useChatComposer";
 import {
   type Message,
@@ -42,14 +48,15 @@ interface ChatViewProps {
   onPendingHotkeyTextConsumed?: () => void;
   /** Fires when this chat is waiting on / streaming from the model (not composer voice). */
   onChatActivityChange?: (active: boolean) => void;
-  /** Parent increments when the composer should be focused (e.g. switching to small window). */
+  /** Parent increments when the composer should be focused. */
   focusComposerNonce?: number;
-  onWindowSizeToggle: () => void;
   onOpenNotesView?: (noteId: string) => void;
   /** When false, chat/polish/reply are blocked with a setup message. */
   openAIConfigured?: boolean;
   /** Mirror focused Fn recording into the composer mic chrome. */
   mirrorGlobalFnRecording?: boolean;
+  /** Persisted mode for the open conversation (from list meta). */
+  conversationChatMode?: string | null;
 }
 
 export function ChatView({
@@ -63,16 +70,21 @@ export function ChatView({
   onPendingHotkeyTextConsumed,
   onChatActivityChange,
   focusComposerNonce,
-  onWindowSizeToggle,
   onOpenNotesView,
   openAIConfigured = true,
   mirrorGlobalFnRecording = false,
+  conversationChatMode = null,
 }: ChatViewProps) {
   /** Set synchronously on first send so thread UI mounts before parent re-renders. */
   const [draftConversationId, setDraftConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const effectiveConversationId = conversationId ?? draftConversationId;
   const isComposeMode = effectiveConversationId === null && messages.length === 0;
+  /** Pending mode on compose home; resets to Chat when opening a fresh home. */
+  const [composeChatMode, setComposeChatMode] = useState<ChatModeId>(DEFAULT_CHAT_MODE);
+  /** Optimistic mode while persist catches up — avoids UI flicker. */
+  const [optimisticChatMode, setOptimisticChatMode] = useState<ChatModeId | null>(null);
+  const [modeSwitching, setModeSwitching] = useState(false);
   const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<string | null>(null);
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const [isTurnPending, setIsTurnPending] = useState(false);
@@ -88,7 +100,6 @@ export function ChatView({
   /** After plain dictation, show polish next to reply (polish targets the dictated turn only). */
   const [polishHintAfterDictation, setPolishHintAfterDictation] = useState(false);
   const [titleModalOpen, setTitleModalOpen] = useState(false);
-  const [contextModalOpen, setContextModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [titleSaving, setTitleSaving] = useState(false);
 
@@ -112,6 +123,60 @@ export function ChatView({
   useEffect(() => {
     conversationIdRef.current = effectiveConversationId;
   }, [effectiveConversationId]);
+
+  useEffect(() => {
+    if (conversationId === null && draftConversationId === null) {
+      setComposeChatMode(DEFAULT_CHAT_MODE);
+      setOptimisticChatMode(null);
+    }
+  }, [conversationId, draftConversationId]);
+
+  useEffect(() => {
+    if (
+      optimisticChatMode != null &&
+      !isComposeMode &&
+      getChatMode(conversationChatMode).id === optimisticChatMode
+    ) {
+      setOptimisticChatMode(null);
+    }
+  }, [conversationChatMode, isComposeMode, optimisticChatMode]);
+
+  const activeChatMode: ChatModeId =
+    optimisticChatMode ??
+    (isComposeMode ? composeChatMode : getChatMode(conversationChatMode).id);
+
+  const handleChatModeChange = useCallback(
+    async (next: ChatModeId) => {
+      if (next === activeChatMode || modeSwitching) return;
+      setOptimisticChatMode(next);
+
+      if (isComposeMode || !effectiveConversationId) {
+        setComposeChatMode(next);
+        return;
+      }
+
+      setModeSwitching(true);
+      try {
+        await window.harness.memory.setConversationChatMode(effectiveConversationId, next);
+        onConversationCreated();
+      } catch {
+        setOptimisticChatMode(null);
+      } finally {
+        setModeSwitching(false);
+      }
+    },
+    [
+      activeChatMode,
+      effectiveConversationId,
+      isComposeMode,
+      modeSwitching,
+      onConversationCreated,
+    ],
+  );
+
+  const handleCycleMode = useCallback(() => {
+    void handleChatModeChange(nextChatMode(activeChatMode));
+  }, [activeChatMode, handleChatModeChange]);
 
   useEffect(() => {
     if (conversationId) setDraftConversationId(null);
@@ -316,6 +381,7 @@ export function ChatView({
         setPolishHintAfterDictation(false);
         setTitleModalOpen(false);
         setLiveNoteStream(null);
+        setOptimisticChatMode(null);
         resetComposerInputRef.current();
         focusComposer();
       }
@@ -342,6 +408,7 @@ export function ChatView({
     setPolishHintAfterDictation(false);
     setTitleModalOpen(false);
     setLiveNoteStream(null);
+    setOptimisticChatMode(null);
     focusComposer();
 
     let cancelled = false;
@@ -590,7 +657,7 @@ export function ChatView({
       }
       let convId = effectiveConversationId;
       if (!convId) {
-        convId = await window.harness.memory.createConversation();
+        convId = await window.harness.memory.createConversation(composeChatMode);
         firstSendInProgressRef.current = true;
         setDraftConversationId(convId);
         conversationIdRef.current = convId;
@@ -604,7 +671,14 @@ export function ChatView({
       }
       return true;
     },
-    [blockLlmAction, effectiveConversationId, onAssignConversationId, openAIConfigured, sendText]
+    [
+      blockLlmAction,
+      composeChatMode,
+      effectiveConversationId,
+      onAssignConversationId,
+      openAIConfigured,
+      sendText,
+    ]
   );
 
   /** Post-strip polish: replace last user dictation with instruction + same text, then stream. */
@@ -703,6 +777,16 @@ export function ChatView({
     runAssistantTurn,
   ]);
 
+  const continueWithMode = useCallback(
+    async (mode: ChatModeId) => {
+      if (mode !== activeChatMode) {
+        await handleChatModeChange(mode);
+      }
+      await generateReply();
+    },
+    [activeChatMode, generateReply, handleChatModeChange],
+  );
+
   const handleOptionSelect = useCallback(
     (label: string) => void ensureConversationAndSend(label),
     [ensureConversationAndSend],
@@ -746,6 +830,35 @@ export function ChatView({
     }
   }, [titleDraft, effectiveConversationId, onConversationCreated]);
 
+  const awaitingReply =
+    !isComposeMode &&
+    messages.length > 0 &&
+    messages[messages.length - 1]?.role === "user" &&
+    !activeAssistantMessageId;
+
+  const composerHasDraft = composer.input.trim().length > 0;
+
+  const showComposerModes = !awaitingReply || composerHasDraft;
+  const showStripModes = awaitingReply && !composerHasDraft;
+
+  const modePicker = (
+    <ChatModePicker
+      value={activeChatMode}
+      onChange={(mode) => void handleChatModeChange(mode)}
+      disabled={sending || modeSwitching}
+    />
+  );
+
+  const replyModeControl = showStripModes ? (
+    <ChatModePicker
+      value={activeChatMode}
+      onChange={(mode) => void handleChatModeChange(mode)}
+      onSelect={(mode) => void continueWithMode(mode)}
+      variant="outline"
+      disabled={sending || modeSwitching || !openAIConfigured}
+    />
+  ) : null;
+
   const composerProps = {
     input: composer.input,
     onInputChange: composer.setInput,
@@ -776,36 +889,15 @@ export function ChatView({
     },
     focusComposerNonce,
     inputRef: composer.inputRef,
+    placeholder: chatModePlaceholder(activeChatMode),
+    modeControl: showComposerModes ? modePicker : undefined,
+    onCycleMode: handleCycleMode,
   };
-
-  const cornerControls = (
-    <div className="chat-pane-corner-control">
-      <button
-        type="button"
-        className="btn btn-icon chat-pane-corner-btn"
-        onClick={() => setContextModalOpen(true)}
-        aria-label="View context"
-        title="View context"
-      >
-        <Brain size={14} />
-      </button>
-      <button
-        type="button"
-        className="btn btn-icon chat-pane-corner-btn"
-        onClick={onWindowSizeToggle}
-        aria-label="Shrink window"
-        title="Shrink window"
-      >
-        <Minimize2 size={14} />
-      </button>
-    </div>
-  );
 
   if (isComposeMode) {
     return (
       <>
         <div className="new-chat-pane">
-          {cornerControls}
         <div className="new-chat-center">
           <p className="new-chat-quote">{HOME_HEADER_QUOTE}</p>
           <div
@@ -819,11 +911,6 @@ export function ChatView({
           </div>
         </div>
         </div>
-        <ContextInspectorModal
-          open={contextModalOpen}
-          onClose={() => setContextModalOpen(false)}
-          conversationId={effectiveConversationId}
-        />
       </>
     );
   }
@@ -848,7 +935,6 @@ export function ChatView({
             )}
           </button>
         )}
-        headerCornerControl={cornerControls}
         displayMessages={messages}
         copiedId={copiedId}
         savedToNotesId={savedToNotesId}
@@ -859,7 +945,7 @@ export function ChatView({
         llmActionsEnabled={openAIConfigured}
         onToolConfirm={handleToolConfirm}
         onPolish={polishLastUserFromStrip}
-        onGenerateReply={generateReply}
+        replyModeControl={replyModeControl}
         onOptionSelect={handleOptionSelect}
         liveNoteStream={liveNoteStream}
         onOpenNoteInEditor={onOpenNotesView}
@@ -874,11 +960,6 @@ export function ChatView({
         onTitleDraftChange={setTitleDraft}
         onSave={() => void saveConversationTitle()}
         saving={titleSaving}
-      />
-      <ContextInspectorModal
-        open={contextModalOpen}
-        onClose={() => setContextModalOpen(false)}
-        conversationId={effectiveConversationId}
       />
     </>
   );

@@ -39,26 +39,4 @@ final class AudioRecorderMeteringTests: XCTestCase {
         XCTAssertGreaterThan(up, from)
         XCTAssertLessThan(down, from)
     }
-
-    func testAppendSampleKeepsFixedWindowLength() {
-        let count = AudioRecorderMetering.waveformSampleCount
-        var samples: [CGFloat] = []
-        for value in 1 ... count {
-            samples = AudioRecorderMetering.appendSample(CGFloat(value), to: samples)
-            XCTAssertLessThanOrEqual(samples.count, count)
-        }
-        XCTAssertEqual(samples.count, count)
-        XCTAssertEqual(samples.first, 1)
-        XCTAssertEqual(samples.last, CGFloat(count))
-
-        samples = AudioRecorderMetering.appendSample(CGFloat(count + 1), to: samples)
-        XCTAssertEqual(samples.count, count)
-        XCTAssertEqual(samples.first, 2)
-        XCTAssertEqual(samples.last, CGFloat(count + 1))
-    }
-
-    func testWaveformSampleCountMatchesRecorder() {
-        XCTAssertEqual(AudioRecorder.waveformSampleCount, AudioRecorderMetering.waveformSampleCount)
-        XCTAssertEqual(AudioRecorderMetering.waveformSampleCount, 32)
-    }
 }

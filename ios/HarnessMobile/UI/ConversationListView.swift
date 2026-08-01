@@ -30,6 +30,7 @@ struct ConversationListView: View {
 
     @State private var createError: String?
     @State private var showDictationSheet = false
+    @State private var showComposeSheet = false
     @State private var searchQuery = ""
     @State private var visibleLimit = ConversationListWindow.initialVisibleCount
     @State private var conversationToRename: ConversationListItem?
@@ -118,6 +119,12 @@ struct ConversationListView: View {
                 }
             )
         }
+        .sheet(isPresented: $showComposeSheet) {
+            ComposeChatView(app: app) { conversationId in
+                showComposeSheet = false
+                onSelect(conversationId)
+            }
+        }
     }
 
     private var conversationList: some View {
@@ -159,9 +166,13 @@ struct ConversationListView: View {
                     } label: {
                         Text("More")
                             .font(.body.weight(.medium))
-                            .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                     .accessibilityLabel(
                         "Show \(ConversationListWindow.moreIncrement) more conversations"
                     )
@@ -175,7 +186,7 @@ struct ConversationListView: View {
         HStack(spacing: 12) {
             Button {
                 HapticFeedback.medium()
-                createNewChat()
+                showComposeSheet = true
             } label: {
                 Label("New Chat", systemImage: "plus")
                     .labelStyle(.titleAndIcon)
@@ -205,10 +216,6 @@ struct ConversationListView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Dictate")
         }
-    }
-
-    private func createNewChat() {
-        app.openCompose()
     }
 
     private func deleteConversation(id: String) {

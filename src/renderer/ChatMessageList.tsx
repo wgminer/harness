@@ -1,7 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { stripSentAtPrefix } from "../shared/chatTemporalContext";
-import { resolveDictationReplyLabel } from "../shared/dictationReplyStrip";
 import {
   type Message,
   type ToolCallDisplay,
@@ -29,7 +28,8 @@ interface ChatMessageListProps {
   llmActionsEnabled?: boolean;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
-  onGenerateReply: () => void;
+  /** Mode picker (or other controls) shown in place of Continue while awaiting a reply. */
+  replyModeControl?: ReactNode;
   onOptionSelect?: (label: string) => void | Promise<void>;
   liveNoteStream?: LiveNoteStream | null;
   onOpenNoteInEditor?: (noteId: string) => void;
@@ -47,7 +47,7 @@ export function ChatMessageList({
   llmActionsEnabled = true,
   onToolConfirm,
   onPolish,
-  onGenerateReply,
+  replyModeControl,
   onOptionSelect,
   liveNoteStream,
   onOpenNoteInEditor,
@@ -99,7 +99,8 @@ export function ChatMessageList({
   const optionSelectEnabled =
     !!onOptionSelect && llmActionsEnabled && !sending && !streamingContent;
   const showPolishInStrip = showReplyActions && polishHintAfterDictation;
-  const replyLabel = resolveDictationReplyLabel();
+  const showStripModes = showReplyActions && !!replyModeControl;
+  const showSecondaryActions = showPolishInStrip || showStripModes;
   return (
     <>
       <div className="chat-messages-stack">
@@ -288,7 +289,7 @@ export function ChatMessageList({
           );
         })}
       </div>
-      {showReplyActions && (
+      {showSecondaryActions && (
         <div className="chat-secondary-actions" data-testid="chat-secondary-actions">
           {showPolishInStrip && (
             <button
@@ -300,15 +301,7 @@ export function ChatMessageList({
               Polish
             </button>
           )}
-          <button
-            type="button"
-            className="btn btn-outline btn-compact chat-pane-btn"
-            onClick={onGenerateReply}
-            data-testid="chat-generate-reply"
-            disabled={!llmActionsEnabled}
-          >
-            {replyLabel}
-          </button>
+          {showStripModes ? replyModeControl : null}
         </div>
       )}
     </>

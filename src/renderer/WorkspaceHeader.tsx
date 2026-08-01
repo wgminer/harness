@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 interface WorkspaceHeaderProps {
   title: string;
   icon?: ReactNode;
-  scrolled?: boolean;
   className?: string;
   innerClassName?: string;
   titleRowClassName?: string;
@@ -19,7 +18,6 @@ function joinClassNames(...parts: Array<string | false | null | undefined>): str
 export function WorkspaceHeader({
   title,
   icon,
-  scrolled = false,
   className,
   innerClassName,
   titleRowClassName,
@@ -28,11 +26,11 @@ export function WorkspaceHeader({
   children,
 }: WorkspaceHeaderProps) {
   return (
-    <header className={joinClassNames("workspace-header", scrolled && "workspace-header--scrolled", className)}>
+    <header className={joinClassNames("workspace-header", className)}>
       <div className={joinClassNames("workspace-header-inner", innerClassName)}>
         <div className={joinClassNames("workspace-header-title-row", titleRowClassName)}>
           {icon}
-          <h2 className={joinClassNames("workspace-title", titleClassName)}>{title}</h2>
+          <h1 className={joinClassNames("workspace-title", titleClassName)}>{title}</h1>
         </div>
         {actions}
       </div>

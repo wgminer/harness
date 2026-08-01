@@ -6,10 +6,9 @@ use serde::Serialize;
 use crate::memory::{get_messages, get_user_memory, pop_last_user_message, AppendMessageMeta};
 use crate::openai::{tool_definitions, ChatMessageParam};
 use crate::recent_conversations::build_recent_conversations_block;
-use crate::settings;
 use crate::system_prompt::{
-    build_system_prompt, fields_from_settings, SystemPromptPreview, SystemPromptPreviewFact,
-    SystemPromptPreviewTool,
+    build_system_prompt_with_mode, contract_fields, SystemPromptPreview,
+    SystemPromptPreviewMemory, SystemPromptPreviewTool,
 };
 use crate::conversation_title::schedule_conversation_title_refinement;
 
@@ -28,7 +27,7 @@ pub(crate) struct ContextAssembly {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ContextPreviewFact {
+pub struct ContextPreviewMemory {
     pub key: String,
     pub value: String,
 }
@@ -50,7 +49,7 @@ pub struct ContextPreviewTool {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextPreview {
-    pub selected_facts: Vec<ContextPreviewFact>,
+    pub selected_memories: Vec<ContextPreviewMemory>,
     pub system_prompt: String,
     pub temporal_context: String,
     pub memory_block: String,
@@ -139,9 +138,9 @@ impl ChatController {
     pub async fn get_system_prompt_preview(
         &self,
         platform: &str,
+        chat_mode: Option<&str>,
     ) -> Result<SystemPromptPreview, String> {
         let platform = if platform == "ios" { "ios" } else { "desktop" };
-        let settings = settings::get_settings(&self.state.write_chains).await;
         let user_memory = get_user_memory(&self.state)
             .await
             .map_err(|e| e.to_string())?;
@@ -152,14 +151,25 @@ impl ChatController {
                 .await
                 .map_err(|e| e.to_string())?;
         let temporal_context = format_temporal_context_block();
-        let fields = fields_from_settings(&settings);
+        let fields = contract_fields();
         let shared = fields.shared.clone();
         let platform_overlay =
             crate::system_prompt::platform_overlay(&fields, platform).to_string();
         let static_prompt = crate::system_prompt::build_static_system_prompt(&fields, platform);
-        let assembled_prompt = build_system_prompt(
+        let mode = if platform == "ios" {
+            crate::chat_modes::ChatMode::Chat
+        } else {
+            crate::chat_modes::ChatMode::parse(chat_mode)
+        };
+        let mode_overlay = if platform == "ios" {
+            String::new()
+        } else {
+            crate::chat_modes::mode_overlay(mode)
+        };
+        let assembled_prompt = build_system_prompt_with_mode(
             &fields,
             platform,
+            &mode_overlay,
             &memory_block,
             &recent_conversations_block,
             &temporal_context,
@@ -169,13 +179,15 @@ impl ChatController {
             shared,
             platform_overlay,
             static_prompt,
+            mode_overlay,
+            chat_mode: mode.as_str().to_string(),
             memory_block,
             recent_conversations_block,
             temporal_context,
             assembled_prompt,
-            selected_facts: selected_memory
+            selected_memories: selected_memory
                 .into_iter()
-                .map(|(key, value)| SystemPromptPreviewFact { key, value })
+                .map(|(key, value)| SystemPromptPreviewMemory { key, value })
                 .collect(),
             tools: tool_summaries_for_platform(platform)
                 .into_iter()
@@ -195,10 +207,10 @@ impl ChatController {
             .assemble_context(conversation_id, None, None)
             .await?;
         Ok(ContextPreview {
-            selected_facts: assembly
+            selected_memories: assembly
                 .selected_memory
                 .iter()
-                .map(|(key, value)| ContextPreviewFact {
+                .map(|(key, value)| ContextPreviewMemory {
                     key: key.clone(),
                     value: value.clone(),
                 })
@@ -240,7 +252,6 @@ impl ChatController {
         user_content: Option<&str>,
         second_user_content: Option<&str>,
     ) -> Result<(ContextAssembly, Vec<ChatMessageParam>), String> {
-        let settings = settings::get_settings(&self.state.write_chains).await;
         let user_memory = get_user_memory(&self.state)
             .await
             .map_err(|e| e.to_string())?;
@@ -251,10 +262,19 @@ impl ChatController {
                 .await
                 .map_err(|e| e.to_string())?;
         let temporal_context = format_temporal_context_block();
-        let fields = fields_from_settings(&settings);
-        let system_prompt = build_system_prompt(
+        let fields = contract_fields();
+        let chat_mode = if let Some(conversation_id) = conversation_id {
+            crate::memory::get_conversation_chat_mode(&self.state, conversation_id)
+                .await
+                .unwrap_or_default()
+        } else {
+            crate::chat_modes::ChatMode::Chat
+        };
+        let mode_overlay = crate::chat_modes::mode_overlay(chat_mode);
+        let system_prompt = build_system_prompt_with_mode(
             &fields,
             "desktop",
+            &mode_overlay,
             &memory_block,
             &recent_conversations_block,
             &temporal_context,
@@ -357,8 +377,8 @@ const IOS_TOOL_NAMES: &[&str] = &[
     "task_update",
     "task_delete",
     "task_clear_completed",
-    "memory_set_fact",
-    "memory_list_facts",
+    "memory_set",
+    "memory_list",
     "memory_search_conversations",
     "get_datetime",
     "web_search",
@@ -424,6 +444,7 @@ pub(crate) fn format_memory_context_block(selected: &[(String, String)]) -> Stri
 #[cfg(test)]
 mod context_preview_tests {
     use super::*;
+    use crate::system_prompt::build_system_prompt;
     use std::collections::HashMap;
 
     #[test]
@@ -440,7 +461,7 @@ mod context_preview_tests {
     fn build_system_prompt_includes_memory_and_temporal_blocks() {
         let memory = format_memory_context_block(&[("tone".into(), "concise".into())]);
         let temporal = format_temporal_context_block();
-        let fields = fields_from_settings(&json!({}));
+        let fields = contract_fields();
         let prompt = build_system_prompt(&fields, "desktop", &memory, "", &temporal);
         assert!(prompt.contains("[CORE_INSTRUCTIONS]"));
         assert!(prompt.contains("[USER_MEMORY_CONTEXT]"));
@@ -448,7 +469,7 @@ mod context_preview_tests {
     }
 
     #[test]
-    fn sorted_memory_entries_returns_all_facts_sorted() {
+    fn sorted_memory_entries_returns_all_memories_sorted() {
         let mut mem = HashMap::new();
         mem.insert("zip".into(), "12528".into());
         mem.insert("alpha".into(), "first".into());

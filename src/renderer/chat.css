@@ -1,11 +1,12 @@
 /*
  * Chat column: `--chat-composer-dock-height` is measured from the overlay composer dock.
  * `.chat-scroll` is the only scrollport and uses bottom inset padding to keep the latest
- * transcript clear of the composer (plus a small gap for the dock shadow).
+ * transcript clear of the composer. Inset is 2× (dock height + gap) so the live edge sits
+ * well above the dock.
  */
 .chat-pane {
   --chat-composer-dock-height: var(--space-35);
-  --chat-composer-scroll-inset: calc(var(--chat-composer-dock-height) + var(--space-2));
+  --chat-composer-scroll-inset: calc((var(--chat-composer-dock-height) + var(--space-2)) * 2);
   position: relative;
   flex: 1;
   display: flex;
@@ -67,7 +68,7 @@
 
 .chat-scroll {
   --chat-composer-dock-height: var(--space-35);
-  --chat-composer-scroll-inset: calc(var(--chat-composer-dock-height) + var(--space-2));
+  --chat-composer-scroll-inset: calc((var(--chat-composer-dock-height) + var(--space-2)) * 2);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -403,7 +404,7 @@
   justify-content: center;
   background: transparent;
   color: rgb(255 255 255 / 0.5);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   cursor: pointer;
   border: 1px solid rgb(255 255 255 / 0.04);
   transition:
@@ -571,7 +572,7 @@
   justify-content: center;
   background: var(--btn-bg);
   color: var(--fg-muted);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-sm);
   cursor: pointer;
   border: 1px solid var(--border-input);
   transition:
@@ -654,34 +655,6 @@
   border: 1px solid var(--border-input);
 }
 
-.chat-pane-corner-btn,
-.chat-pane-window-toggle {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  background: transparent;
-  border-color: transparent;
-  color: var(--fg-muted);
-  opacity: 0.75;
-}
-
-.chat-pane-corner-btn:hover:not(:disabled),
-.chat-pane-window-toggle:hover:not(:disabled) {
-  background: var(--btn-bg-hover);
-  border: 1px solid var(--border-input);
-  opacity: 0.95;
-}
-
-.chat-pane-corner-control {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
 .chat-pane-title-skeleton {
   display: inline-block;
   width: min(9rem, 42vw);
@@ -700,6 +673,11 @@
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-1) 0 var(--space-2);
+}
+
+.chat-secondary-actions .chat-mode-picker {
+  justify-content: center;
+  gap: var(--space-2);
 }
 
 /* Chat composer dock — transparent shell; glass lives on `.chat-composer-inner`. */
@@ -733,6 +711,55 @@
   border-radius: var(--radius-md) var(--radius-md) 0 0;
   border: 1px solid var(--border-input);
   box-shadow: 0 calc(var(--space-3) * -1) var(--input-height) rgba(0, 0, 0, 0.2);
+}
+
+.chat-composer-mode-row {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.chat-mode-picker {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: var(--space-1);
+}
+
+.chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: var(--line-height-tight);
+  height: var(--input-height);
+  min-height: var(--input-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn:hover:not(:disabled) {
+  color: var(--fg);
+  background: var(--bg-hover, rgba(127, 127, 127, 0.12));
+}
+
+.chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn--active {
+  color: var(--fg);
+  border-color: var(--border-edge);
+  background: var(--bg-hover, rgba(127, 127, 127, 0.12));
+}
+
+.chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .chat-composer-inner:focus-within {
@@ -823,7 +850,8 @@
 }
 
 .chat-input::placeholder {
-  color: var(--fg-muted);
+  /* Dimmer than --fg-muted — ~3.5:1 on --bg, edge of legible. */
+  color: color-mix(in oklab, var(--fg) 40%, var(--bg));
 }
 
 .chat-input:focus {
@@ -1131,15 +1159,19 @@
 /* Options: ::::options containing :::option buttons */
 .message-block .content .md-options {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: var(--space-2);
   width: 100%;
   margin-top: var(--space-3);
 }
 
 .message-block .content .md-option-btn {
-  width: 100%;
-  height: calc(var(--grid) * 10 - var(--space-1));
+  --control-size: calc(var(--grid) * 10 - var(--space-1));
+  width: auto;
+  min-width: 0;
+  flex: 0 1 auto;
+  height: var(--control-size);
   font-size: var(--font-size-ui);
   font-weight: 500;
   background: var(--bg-elevated);
@@ -1480,111 +1512,6 @@
 .document-card-overlay__body th {
   background: var(--document-code-bg);
   font-weight: 600;
-}
-
-.context-inspector-sections {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.context-inspector-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--border-edge);
-  border-radius: var(--radius-md);
-}
-
-.context-inspector-heading {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--fg-muted);
-}
-
-.context-inspector-meta,
-.context-inspector-empty,
-.context-inspector-status {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--fg-muted);
-}
-
-.context-inspector-error {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--danger);
-}
-
-.context-inspector-tools,
-.context-inspector-recordings {
-  margin: 0;
-  padding-left: var(--space-4);
-  font-size: var(--font-size-sm);
-  color: var(--fg);
-}
-
-.context-inspector-recordings li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-1);
-}
-
-.context-inspector-recording-name {
-  font-family: var(--font-mono, monospace);
-  font-size: var(--font-size-xs);
-  word-break: break-all;
-}
-
-.context-inspector-facts,
-.context-inspector-messages {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.context-inspector-message {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.context-inspector-fact-key {
-  font-weight: 400;
-  color: var(--fg-muted);
-  opacity: 0.75;
-}
-
-.context-inspector-message-role {
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-}
-
-.context-inspector-pre {
-  margin: 0;
-  padding: var(--space-2);
-  border: 1px solid var(--border-edge);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  font-family: var(--font-mono, monospace);
-  font-size: var(--font-size-xs);
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 12rem;
-  overflow: auto;
-}
-
-.context-inspector-pre--tall {
-  max-height: 20rem;
 }
 
 /* Selection → Tavily image popover (desktop chat MVP) */
