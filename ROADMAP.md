@@ -5,7 +5,7 @@ Two layers:
 1. **Outcomes** — what the project is *for* (steer ideas here first).
 2. **Execution** — what shipped, what’s active, what’s frozen.
 
-**Current phase:** v0.8 Consolidation has landed (desktop **0.8.0**). Active work includes desktop shell + cognitive modes, paper cuts, and ship hygiene.
+**Current phase:** v0.9 (desktop **0.9.0**) — chat modes, shared prompt/stream contracts, shell polish. Next: paper cuts and ship hygiene.
 
 When considering work: *does it serve craft, trust, or ship friction — or does it belong in Frozen?*
 
@@ -101,6 +101,13 @@ Short list only — refresh when something ships.
 - User-visible brand → **Here** / **Here Dev** / **Here Mobile** (Dock, titles, Welcome, boot wordmark, privacy strings, site/docs).
 - Compose quote unchanged: **“You are here”**.
 - Left alone on purpose: `com.harness.*`, Application Support `Harness` / `Harness Dev`, Keychain services, `harness-pair:1:`, R2 prefix `harness/`, `window.harness` / `HARNESS_*` env vars, helper binaries (`HarnessSpeech`, `HarnessFnMonitor`).
+
+### 2026-08 — v0.9 chat modes + contracts `[O1][O2]`
+
+- **Chat modes** — Decide / Write / Refine overlays (`chatModes.json`) with desktop picker.
+- **Contracts** — Shared `systemPrompt.json` + coarse `chatStreamBatch.json` flushes; tools contract kept.
+- **Shell** — Desktop search, settings/sidebar refresh, library peek; memory distill rename.
+- **Version** — Desktop **0.9.0** (iOS marketing version stays on its own line).
 
 ### 2026-07 — v0.8 Consolidation `[O2][O4][O5]`
 
