@@ -45,6 +45,9 @@
 		5A04FBB228018839E2AC7FD0 /* TaskModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EDC7BBC9E5869A42F0B0BD /* TaskModels.swift */; };
 		5C4A4B35455994C45AC61C05 /* TranscriptDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3669F9E0A1AD2C79EB77F217 /* TranscriptDictionary.swift */; };
 		5EC46457CDA92F533F459CA4 /* tools.json in Resources */ = {isa = PBXBuildFile; fileRef = FD5EF1CE95A488A8F7EADE31 /* tools.json */; };
+		C8A1B2C3D4E5F60718293A02 /* chatStreamBatch.json in Resources */ = {isa = PBXBuildFile; fileRef = C8A1B2C3D4E5F60718293A01 /* chatStreamBatch.json */; };
+		C8A1B2C3D4E5F60718293A04 /* ChatStreamBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A1B2C3D4E5F60718293A03 /* ChatStreamBatch.swift */; };
+		C8A1B2C3D4E5F60718293A06 /* ChatStreamBatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A1B2C3D4E5F60718293A05 /* ChatStreamBatchTests.swift */; };
 		5F3A647BCC0C9AE8F5FD7605 /* ChatRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 555BF784A2F175103C5A8FED /* ChatRouter.swift */; };
 		610642E64681640235A564C9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E10B07F1BF607A227328880 /* ContentView.swift */; };
 		610E828B5C69BA4F1187A16D /* PreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14859E7C56E1266044C8B120 /* PreviewSupport.swift */; };
@@ -270,6 +273,9 @@
 		FB7354BB06DF5586F496F2F4 /* ComposerCollapsePolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCollapsePolicyTests.swift; sourceTree = "<group>"; };
 		FCF158BE0BA79A8B0916CCF8 /* ComposeChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeChatView.swift; sourceTree = "<group>"; };
 		FD5EF1CE95A488A8F7EADE31 /* tools.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tools.json; sourceTree = "<group>"; };
+		C8A1B2C3D4E5F60718293A01 /* chatStreamBatch.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = chatStreamBatch.json; sourceTree = "<group>"; };
+		C8A1B2C3D4E5F60718293A03 /* ChatStreamBatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStreamBatch.swift; sourceTree = "<group>"; };
+		C8A1B2C3D4E5F60718293A05 /* ChatStreamBatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStreamBatchTests.swift; sourceTree = "<group>"; };
 		FDAE405549A213E29482ED84 /* RecordingSessionManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSessionManagerTests.swift; sourceTree = "<group>"; };
 		FFA91DAFD23E31A3F80A4798 /* AudioRecorderMeteringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorderMeteringTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -326,6 +332,7 @@
 			children = (
 				42B09DCC64C75A0E0DCDBDA9 /* AssistantTools.swift */,
 				D9B4EBBBE10E0C397F313E3F /* ChatService.swift */,
+				C8A1B2C3D4E5F60718293A03 /* ChatStreamBatch.swift */,
 				B5C63089B0E2944246E8B77D /* ChatTemporalContext.swift */,
 				8D23899F7341D75E8021ED49 /* ChatToolDefinitions.swift */,
 				32065FA0D574656E1869E2A1 /* ConversationSearch.swift */,
@@ -406,6 +413,7 @@
 		5F67EB393E03AF9A4A6AD26D /* SharedContracts */ = {
 			isa = PBXGroup;
 			children = (
+				C8A1B2C3D4E5F60718293A01 /* chatStreamBatch.json */,
 				FD5EF1CE95A488A8F7EADE31 /* tools.json */,
 			);
 			name = SharedContracts;
@@ -457,6 +465,7 @@
 				DD6C78F5A4237F52C16C4269 /* RemoteBackupStoreTests.swift */,
 				E4485CC6393915027618C569 /* SettingsSecretsTests.swift */,
 				8708CFE5FF3C575653655123 /* SharedToolDefinitionsTests.swift */,
+				C8A1B2C3D4E5F60718293A05 /* ChatStreamBatchTests.swift */,
 				12D592F556DDF4B30E19716B /* StreamingMarkdownBlocksTests.swift */,
 				A1A707405489446956F32F0A /* SyncChangeSummaryTests.swift */,
 				88E6573E37354B7074EB23BE /* SyncMergeTests.swift */,
@@ -631,6 +640,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EDE4E8454465F36E27939DA4 /* Assets.xcassets in Resources */,
+				C8A1B2C3D4E5F60718293A02 /* chatStreamBatch.json in Resources */,
 				5EC46457CDA92F533F459CA4 /* tools.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -675,6 +685,7 @@
 				6B7FD8FBACE1A62D96ADF4B6 /* RemoteBackupStoreTests.swift in Sources */,
 				2FD683AE85D47B8BEB2B82B4 /* SettingsSecretsTests.swift in Sources */,
 				770BECE0B57F30DF4E39F9F3 /* SharedToolDefinitionsTests.swift in Sources */,
+				C8A1B2C3D4E5F60718293A06 /* ChatStreamBatchTests.swift in Sources */,
 				D654CDE83B5CE34ED57989EA /* StreamingMarkdownBlocksTests.swift in Sources */,
 				7D5F29005FFD4816F4D2F0FF /* SyncChangeSummaryTests.swift in Sources */,
 				87DA3C96886B81F17EE8CC43 /* SyncMergeTests.swift in Sources */,
@@ -702,6 +713,7 @@
 				5F3A647BCC0C9AE8F5FD7605 /* ChatRouter.swift in Sources */,
 				C8BBA6AB9024EA02BF81ECD0 /* ChatScrollLogic.swift in Sources */,
 				97941B84CF5AC90DCF4CF5E6 /* ChatService.swift in Sources */,
+				C8A1B2C3D4E5F60718293A04 /* ChatStreamBatch.swift in Sources */,
 				6A4CF47B5BC9CC724C1AF37F /* ChatTemporalContext.swift in Sources */,
 				7A11C4A228A569F2230230B6 /* ChatThreadView.swift in Sources */,
 				15CB346142AB54C0CB543D7A /* ChatToolDefinitions.swift in Sources */,

@@ -1,0 +1,5 @@
+{
+  "minChars": 150,
+  "maxHoldMs": 350,
+  "newlineMinChars": 40
+}

@@ -1,8 +1,8 @@
 /**
  * Chat scroll contract:
- * - pinned: auto-follow transcript growth (streaming, post-stream layout shifts)
+ * - pinned: auto-follow transcript growth (batched stream flushes, post-stream layout shifts)
  * - free: never programmatically scroll except explicit scrollToTop / scrollToBottom
- * - mode is stored in a ref so wheel/touch unlock is synchronous (no chunk-vs-setState race)
+ * - mode is stored in a ref so wheel/touch unlock is synchronous (no flush-vs-setState race)
  * - userTookOver: once the user scrolls during a turn, auto-follow stays off until they
  *   return to the live edge or a new turn starts
  */
@@ -78,7 +78,7 @@ export function useChatScrollController(args: {
     runProgrammaticScroll(() => scrollToLiveEdge(scroll));
   }, [args.sending, args.scrollEnabled, args.scrollRef, clearUserTakeover, runProgrammaticScroll]);
 
-  /** Follow transcript height changes while pinned (streaming tokens, markdown reflow). */
+  /** Follow transcript height changes while pinned (batched stream flushes, markdown reflow). */
   useLayoutEffect(() => {
     if (!args.scrollEnabled) return;
     const transcript = args.transcriptRef.current;
