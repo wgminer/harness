@@ -82,3 +82,6 @@ ios/.build/
 ios/.build-device/
 ios/**/.swiftpm/
 .worktrees/
+
+*storybook.log
+storybook-static/
