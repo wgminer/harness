@@ -83,6 +83,9 @@ pub struct ConversationMeta {
     /// Desktop cognitive mode (`chat` | `decide` | `write` | `refine`). Omitted = chat.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chat_mode: Option<String>,
+    /// Dictation reply-strip action (`run` | Summarize | Distill | Breakdown | Proofread).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dictation_reply_action: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -143,6 +146,8 @@ pub struct ConversationSummary {
     pub has_messages: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chat_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dictation_reply_action: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -382,6 +387,7 @@ pub async fn create_conversation_with_mode(
             has_assistant_reply: None,
             has_messages: None,
             chat_mode: chat_mode_field,
+            dictation_reply_action: None,
         },
     );
     save_conversations_map(state, &memory_dir, &conv).await?;
@@ -528,6 +534,7 @@ pub async fn import_conversations(
                 has_assistant_reply: if has_assistant_reply { Some(true) } else { None },
                 has_messages: if has_messages { Some(true) } else { None },
                 chat_mode: None,
+                dictation_reply_action: None,
             },
         );
         if let Some(claude_id) = item.claude_id.as_ref() {
@@ -559,6 +566,7 @@ pub async fn get_conversation(
         has_assistant_reply: c.has_assistant_reply,
         has_messages: c.has_messages,
         chat_mode: c.chat_mode.clone(),
+        dictation_reply_action: c.dictation_reply_action.clone(),
     }))
 }
 
@@ -575,6 +583,7 @@ pub async fn list_conversations(state: &AppState) -> Result<Vec<ConversationSumm
             has_assistant_reply: c.has_assistant_reply,
             has_messages: c.has_messages,
             chat_mode: c.chat_mode,
+            dictation_reply_action: c.dictation_reply_action,
         })
         .collect();
     rows.sort_by(|a, b| b.created_at.cmp(&a.created_at));
@@ -1014,6 +1023,7 @@ struct ConversationMetaPatch {
     has_assistant_reply: Option<bool>,
     has_messages: Option<bool>,
     chat_mode: Option<ChatModePatch>,
+    dictation_reply_action: Option<String>,
 }
 
 enum ChatModePatch {
@@ -1048,7 +1058,26 @@ async fn patch_conversation_meta(
     if let Some(ChatModePatch::Set(chat_mode)) = patch.chat_mode {
         meta.chat_mode = chat_mode;
     }
+    if let Some(dictation_reply_action) = patch.dictation_reply_action {
+        meta.dictation_reply_action = Some(dictation_reply_action);
+    }
     save_conversations_map(state, &memory_dir, &conv).await
+}
+
+pub async fn patch_conversation_dictation_reply_action(
+    state: &AppState,
+    conversation_id: &str,
+    action: &str,
+) -> Result<(), std::io::Error> {
+    patch_conversation_meta(
+        state,
+        conversation_id,
+        ConversationMetaPatch {
+            dictation_reply_action: Some(action.to_string()),
+            ..Default::default()
+        },
+    )
+    .await
 }
 
 fn open_path_in_file_manager(path: &Path) -> Result<(), std::io::Error> {

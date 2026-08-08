@@ -74,6 +74,7 @@ type PersistedFormState = {
   globalFnHotkey: boolean;
   bringToFrontOnBackgroundDictation: boolean;
   openToComposeOnLaunch: boolean;
+  selectionImageLookup: boolean;
   cleanupEnabled: boolean;
   cleanupPrompt: string;
   transcriptDictionary: TranscriptDictionaryEntry[];
@@ -251,6 +252,9 @@ export function SettingsView({
   const [openToComposeOnLaunch, setOpenToComposeOnLaunch] = useState(
     initialNonSecret?.openToComposeOnLaunch ?? D.chat!.openToComposeOnLaunch,
   );
+  const [selectionImageLookup, setSelectionImageLookup] = useState(
+    initialNonSecret?.selectionImageLookup ?? D.chat!.selectionImageLookup,
+  );
   const [tavilyApiKey, setTavilyApiKey] = useState(initialSecrets?.tavilyApiKey ?? "");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [r2AccountId, setR2AccountId] = useState(initialNonSecret?.r2AccountId ?? D.sync!.accountId);
@@ -295,6 +299,7 @@ export function SettingsView({
           globalFnHotkey: initialNonSecret.globalFnHotkey,
           bringToFrontOnBackgroundDictation: initialNonSecret.bringToFrontOnBackgroundDictation,
           openToComposeOnLaunch: initialNonSecret.openToComposeOnLaunch,
+          selectionImageLookup: initialNonSecret.selectionImageLookup,
           cleanupEnabled: initialNonSecret.cleanupEnabled,
           cleanupPrompt: initialNonSecret.cleanupPrompt,
           transcriptDictionary: initialNonSecret.transcriptDictionary,
@@ -335,6 +340,7 @@ export function SettingsView({
       bringToFrontOnBackgroundDictation:
         prev.bringToFrontOnBackgroundDictation ?? bringToFrontOnBackgroundDictation,
       openToComposeOnLaunch: prev.openToComposeOnLaunch ?? openToComposeOnLaunch,
+      selectionImageLookup: prev.selectionImageLookup ?? selectionImageLookup,
       cleanupEnabled: prev.cleanupEnabled ?? cleanupEnabled,
       cleanupPrompt: prev.cleanupPrompt ?? cleanupPrompt,
       transcriptDictionary: prev.transcriptDictionary ?? transcriptDictionary,
@@ -354,6 +360,7 @@ export function SettingsView({
     globalFnHotkey,
     bringToFrontOnBackgroundDictation,
     openToComposeOnLaunch,
+    selectionImageLookup,
     r2AccessKeyId,
     r2AccountId,
     r2Bucket,
@@ -412,6 +419,7 @@ export function SettingsView({
         globalFnHotkey: nonSecret.globalFnHotkey,
         bringToFrontOnBackgroundDictation: nonSecret.bringToFrontOnBackgroundDictation,
         openToComposeOnLaunch: nonSecret.openToComposeOnLaunch,
+        selectionImageLookup: nonSecret.selectionImageLookup,
         cleanupEnabled: nonSecret.cleanupEnabled,
         cleanupPrompt: nonSecret.cleanupPrompt,
         transcriptDictionary: nonSecret.transcriptDictionary,
@@ -432,6 +440,7 @@ export function SettingsView({
       setGlobalFnHotkey(hydrated.globalFnHotkey);
       setBringToFrontOnBackgroundDictation(hydrated.bringToFrontOnBackgroundDictation);
       setOpenToComposeOnLaunch(hydrated.openToComposeOnLaunch);
+      setSelectionImageLookup(hydrated.selectionImageLookup);
       setCleanupEnabled(hydrated.cleanupEnabled);
       setCleanupPrompt(hydrated.cleanupPrompt);
       setCleanupPromptDraft(hydrated.cleanupPrompt);
@@ -556,6 +565,7 @@ export function SettingsView({
       globalFnHotkey,
       bringToFrontOnBackgroundDictation,
       openToComposeOnLaunch,
+      selectionImageLookup,
       cleanupEnabled,
       cleanupPrompt,
       transcriptDictionary,
@@ -592,7 +602,10 @@ export function SettingsView({
           globalFnHotkey: next.globalFnHotkey,
           bringToFrontOnBackgroundDictation: next.bringToFrontOnBackgroundDictation,
         },
-        chat: { openToComposeOnLaunch: next.openToComposeOnLaunch },
+        chat: {
+          openToComposeOnLaunch: next.openToComposeOnLaunch,
+          selectionImageLookup: next.selectionImageLookup,
+        },
         transcription: {
           cleanup: {
             enabled: next.cleanupEnabled,
@@ -651,6 +664,7 @@ export function SettingsView({
     globalFnHotkey,
     bringToFrontOnBackgroundDictation,
     openToComposeOnLaunch,
+    selectionImageLookup,
     cleanupEnabled,
     cleanupPrompt,
     transcriptDictionary,
@@ -689,6 +703,7 @@ export function SettingsView({
       globalFnHotkey,
       bringToFrontOnBackgroundDictation,
       openToComposeOnLaunch,
+      selectionImageLookup,
       cleanupEnabled,
       cleanupPrompt,
       transcriptDictionary,
@@ -726,6 +741,7 @@ export function SettingsView({
       globalFnHotkey,
       bringToFrontOnBackgroundDictation,
       openToComposeOnLaunch,
+      selectionImageLookup,
       cleanupEnabled,
       cleanupPrompt,
       transcriptDictionary,
@@ -750,6 +766,7 @@ export function SettingsView({
     globalFnHotkey,
     bringToFrontOnBackgroundDictation,
     openToComposeOnLaunch,
+    selectionImageLookup,
     cleanupEnabled,
     cleanupPrompt,
     transcriptDictionary,
@@ -1030,6 +1047,13 @@ export function SettingsView({
                 label="Open to compose on launch"
                 checked={openToComposeOnLaunch}
                 onChange={(e) => setOpenToComposeOnLaunch(e.target.checked)}
+              />
+              <SettingsSwitch
+                id="selectionImageLookupToggle"
+                testId="settings-selection-image-lookup"
+                label="Look up images on selection"
+                checked={selectionImageLookup}
+                onChange={(e) => setSelectionImageLookup(e.target.checked)}
               />
               <SettingsSwitch
                 id="autoSendToggle"

@@ -37,6 +37,9 @@ const MERGEABLE_PATHS = new Set([
 /** Legacy paths that may appear in old sync bundles; ignore rather than fail. */
 const IGNORED_SYNC_PATHS = new Set(["app-state/plans.json"]);
 
+const IMAGES_INDEX_PATH = "app-state/images.json";
+const IMAGES_DIR_PREFIX = "app-state/images/";
+
 function fileBytesEqual(a: Buffer, b: Buffer): boolean {
   return a.byteLength === b.byteLength && a.equals(b);
 }
@@ -48,6 +51,10 @@ function previewText(bytes: Buffer | undefined, maxLen = 120): string | undefine
   return text.length <= maxLen ? text : `${text.slice(0, maxLen)}…`;
 }
 
+function isImageLibraryPath(path: string): boolean {
+  return path === IMAGES_INDEX_PATH || path.startsWith(IMAGES_DIR_PREFIX);
+}
+
 function labelForPath(path: string, _bytes: Buffer | undefined): string {
   if (path.startsWith("app-state/notes/")) {
     const name = path.slice("app-state/notes/".length);
@@ -55,6 +62,10 @@ function labelForPath(path: string, _bytes: Buffer | undefined): string {
   }
   if (path.startsWith("app-state/messages_")) {
     return path.slice("app-state/".length);
+  }
+  if (path === IMAGES_INDEX_PATH) return "Images library";
+  if (path.startsWith(IMAGES_DIR_PREFIX)) {
+    return `Image file ${path.slice(IMAGES_DIR_PREFIX.length)}`;
   }
   if (path === "app-state/conversations.json") return "Conversation list";
   if (path === "app-state/tasks.json") return "Tasks";
@@ -65,6 +76,7 @@ function labelForPath(path: string, _bytes: Buffer | undefined): string {
 }
 
 function supportsMergeForPath(path: string): boolean {
+  if (isImageLibraryPath(path)) return false;
   if (MERGEABLE_PATHS.has(path)) return true;
   if (path.startsWith("app-state/messages_")) return true;
   return false;
@@ -75,6 +87,90 @@ function defaultChoiceForKind(kind: SyncFileChangeKind, path: string): SyncFileC
   if (kind === "remote-only") return "remote";
   if (kind === "unchanged") return "local";
   return supportsMergeForPath(path) ? "merge" : "local";
+}
+
+function tsFromValue(value: unknown): number {
+  if (!value || typeof value !== "object") return 0;
+  const obj = value as Record<string, unknown>;
+  for (const key of ["updatedAt", "createdAt"] as const) {
+    if (typeof obj[key] === "number") return obj[key] as number;
+  }
+  return 0;
+}
+
+function maxImageUpdatedAt(imagesJson: Buffer): number {
+  try {
+    const parsed = JSON.parse(imagesJson.toString("utf-8")) as { images?: unknown[] };
+    const rows = Array.isArray(parsed.images) ? parsed.images : [];
+    return rows.reduce((max, row) => Math.max(max, tsFromValue(row)), 0);
+  } catch {
+    return 0;
+  }
+}
+
+function imageLibraryPaths(
+  localFiles: Record<string, Buffer>,
+  remoteFiles: Record<string, Buffer>,
+): string[] {
+  return [...new Set([...Object.keys(localFiles), ...Object.keys(remoteFiles)])]
+    .filter(isImageLibraryPath)
+    .sort();
+}
+
+function imageLibraryIsDirty(
+  localFiles: Record<string, Buffer>,
+  remoteFiles: Record<string, Buffer>,
+): boolean {
+  for (const path of imageLibraryPaths(localFiles, remoteFiles)) {
+    const local = localFiles[path];
+    const remote = remoteFiles[path];
+    if (local && remote) {
+      if (!fileBytesEqual(local, remote)) return true;
+    } else if (local || remote) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function imageLibraryWinner(
+  localFiles: Record<string, Buffer>,
+  remoteFiles: Record<string, Buffer>,
+): SyncFileChoice {
+  const localTs = localFiles[IMAGES_INDEX_PATH]
+    ? maxImageUpdatedAt(localFiles[IMAGES_INDEX_PATH])
+    : 0;
+  const remoteTs = remoteFiles[IMAGES_INDEX_PATH]
+    ? maxImageUpdatedAt(remoteFiles[IMAGES_INDEX_PATH])
+    : 0;
+  if (remoteTs > localTs) return "remote";
+  if (localTs > remoteTs) return "local";
+  const localHas = Object.keys(localFiles).some(isImageLibraryPath);
+  const remoteHas = Object.keys(remoteFiles).some(isImageLibraryPath);
+  if (!localHas && remoteHas) return "remote";
+  return "local";
+}
+
+function imageLibraryChoiceFromMap(
+  choices: Record<string, SyncFileChoice>,
+  localFiles: Record<string, Buffer>,
+  remoteFiles: Record<string, Buffer>,
+): SyncFileChoice {
+  const indexChoice = choices[IMAGES_INDEX_PATH];
+  if (indexChoice === "remote" || indexChoice === "local") return indexChoice;
+  return imageLibraryWinner(localFiles, remoteFiles);
+}
+
+function applyImageLibraryAtomicity(
+  choices: Record<string, SyncFileChoice>,
+  localFiles: Record<string, Buffer>,
+  remoteFiles: Record<string, Buffer>,
+): void {
+  if (!imageLibraryIsDirty(localFiles, remoteFiles)) return;
+  const winner = imageLibraryChoiceFromMap(choices, localFiles, remoteFiles);
+  for (const path of imageLibraryPaths(localFiles, remoteFiles)) {
+    choices[path] = winner;
+  }
 }
 
 export function buildSyncConflictReview(
@@ -111,10 +207,24 @@ export function buildSyncConflictReview(
     });
   }
 
+  if (imageLibraryIsDirty(localFiles, remoteFiles)) {
+    const winner = imageLibraryWinner(localFiles, remoteFiles);
+    for (const file of files) {
+      if (isImageLibraryPath(file.path)) {
+        file.defaultChoice = winner;
+        file.supportsMerge = false;
+      }
+    }
+  }
+
   return { files, summary };
 }
 
-export function buildDefaultMergeChoices(review: SyncConflictReview): Record<string, SyncFileChoice> {
+export function buildDefaultMergeChoices(
+  review: SyncConflictReview,
+  localFiles: Record<string, Buffer> = {},
+  remoteFiles: Record<string, Buffer> = {},
+): Record<string, SyncFileChoice> {
   const choices: Record<string, SyncFileChoice> = {};
   for (const file of review.files) {
     if (file.kind === "unchanged") {
@@ -123,6 +233,7 @@ export function buildDefaultMergeChoices(review: SyncConflictReview): Record<str
     }
     choices[file.path] = file.defaultChoice;
   }
+  applyImageLibraryAtomicity(choices, localFiles, remoteFiles);
   return choices;
 }
 
@@ -144,15 +255,6 @@ function mergeJsonRecords(local: Record<string, unknown>, remote: Record<string,
     merged[key] = localTs >= remoteTs ? localValue : remoteValue;
   }
   return merged;
-}
-
-function tsFromValue(value: unknown): number {
-  if (!value || typeof value !== "object") return 0;
-  const obj = value as Record<string, unknown>;
-  for (const key of ["updatedAt", "createdAt"] as const) {
-    if (typeof obj[key] === "number") return obj[key] as number;
-  }
-  return 0;
 }
 
 function mergeTasksJson(local: Buffer, remote: Buffer): Buffer {
@@ -249,11 +351,14 @@ export function buildMergedFileMap(
   remoteFiles: Record<string, Buffer>,
   choices: Record<string, SyncFileChoice>,
 ): Record<string, Buffer> {
+  const effectiveChoices = { ...choices };
+  applyImageLibraryAtomicity(effectiveChoices, localFiles, remoteFiles);
+
   const paths = [...new Set([...Object.keys(localFiles), ...Object.keys(remoteFiles)])].sort();
   const merged: Record<string, Buffer> = {};
   for (const path of paths) {
     if (IGNORED_SYNC_PATHS.has(path)) continue;
-    const choice = choices[path] ?? defaultChoiceForKind(
+    const choice = effectiveChoices[path] ?? defaultChoiceForKind(
       !localFiles[path] ? "remote-only" : !remoteFiles[path] ? "local-only" : "conflict",
       path,
     );

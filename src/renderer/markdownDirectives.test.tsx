@@ -70,7 +70,7 @@ describe("markdown directives", () => {
       ].join("\n"),
     );
     expect(html).toContain("md-options");
-    expect(html).toContain("md-option-btn");
+    expect(html).toContain('class="btn"');
     expect(html).toContain("Redis");
     expect(html).toContain("Memory");
     expect(html).not.toContain("Ignored body");

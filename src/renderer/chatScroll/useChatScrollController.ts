@@ -1,15 +1,14 @@
 /**
  * Chat scroll contract:
  * - pinned: auto-follow transcript growth (batched stream flushes, post-stream layout shifts)
- * - free: never programmatically scroll except explicit scrollToTop / scrollToBottom
+ * - free: never programmatically scroll except explicit scrollToBottom
  * - mode is stored in a ref so wheel/touch unlock is synchronous (no flush-vs-setState race)
  * - userTookOver: once the user scrolls during a turn, auto-follow stays off until they
  *   return to the live edge or a new turn starts
  */
 import { snapToGrid } from "../../shared/grid";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent, RefObject, UIEvent } from "react";
-import { SCROLL_TOP_THRESHOLD } from "../chatHelpers";
 import {
   didTurnJustStart,
   isNearLiveEdge,
@@ -26,7 +25,7 @@ export function useChatScrollController(args: {
   transcriptRef: RefObject<HTMLElement | null>;
   chatPaneRef: RefObject<HTMLDivElement | null>;
   composerDockRef: RefObject<HTMLDivElement | null>;
-  /** False when single-message centering mode disables follow behavior. */
+  /** False when single-message top-third landing disables follow behavior. */
   scrollEnabled: boolean;
   sending: boolean;
 }) {
@@ -35,7 +34,6 @@ export function useChatScrollController(args: {
   const prevSendingRef = useRef(false);
   const programmaticScrollRef = useRef(false);
   const lastScrollTopRef = useRef(0);
-  const [hasScrolled, setHasScrolled] = useState(false);
 
   const markUserTookOver = useCallback(() => {
     userTookOverRef.current = true;
@@ -164,7 +162,6 @@ export function useChatScrollController(args: {
     (_e: UIEvent<HTMLDivElement>) => {
       const el = args.scrollRef.current;
       if (!el) return;
-      setHasScrolled(el.scrollTop > SCROLL_TOP_THRESHOLD);
 
       if (programmaticScrollRef.current) {
         lastScrollTopRef.current = el.scrollTop;
@@ -200,11 +197,6 @@ export function useChatScrollController(args: {
     [markUserTookOver]
   );
 
-  const scrollToTop = useCallback(() => {
-    args.scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    markUserTookOver();
-  }, [args.scrollRef, markUserTookOver]);
-
   const scrollToBottom = useCallback(() => {
     const scroll = args.scrollRef.current;
     if (!scroll) return;
@@ -212,7 +204,7 @@ export function useChatScrollController(args: {
     runProgrammaticScroll(() => scrollToLiveEdge(scroll));
   }, [args.scrollRef, clearUserTakeover, runProgrammaticScroll]);
 
-  /** Single-message centering: reset scroll and disable follow. */
+  /** Single-message top-third landing: reset scroll and disable follow. */
   useLayoutEffect(() => {
     if (args.scrollEnabled) return;
     const scroll = args.scrollRef.current;
@@ -223,10 +215,8 @@ export function useChatScrollController(args: {
   }, [args.scrollEnabled, args.scrollRef]);
 
   return {
-    hasScrolled,
     onScroll,
     onKeyDown,
-    scrollToTop,
     scrollToBottom,
   };
 }

@@ -534,7 +534,7 @@ async fn auto_merge_and_push(
         .map_err(|e| e.to_string())?;
     let remote_files = load_remote_scoped_file_map(store, remote_manifest).await?;
     let review = build_sync_conflict_review(&local_files, &remote_files);
-    let choices = build_default_merge_choices(&review);
+    let choices = build_default_merge_choices(&review, &local_files, &remote_files);
     merge_conflict_resolution(runtime, store, remote_manifest, &choices, now).await?;
     let merge_warning = merge_warning_from_review(&review);
     let local_revision = compute_revision(&get_local_data_dir(), DEFAULT_SYNC_SCOPES)

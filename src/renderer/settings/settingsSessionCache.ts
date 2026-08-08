@@ -19,6 +19,7 @@ export type NonSecretSettingsHydration = {
   globalFnHotkey: boolean;
   bringToFrontOnBackgroundDictation: boolean;
   openToComposeOnLaunch: boolean;
+  selectionImageLookup: boolean;
   cleanupEnabled: boolean;
   cleanupPrompt: string;
   transcriptDictionary: TranscriptDictionaryEntry[];
@@ -117,6 +118,8 @@ export function nonSecretHydrationFromSettings(S: Settings): NonSecretSettingsHy
       S.chat?.openToComposeOnLaunch ??
       (S.chat as { composeFirst?: boolean } | undefined)?.composeFirst ??
       D.chat!.openToComposeOnLaunch,
+    selectionImageLookup:
+      S.chat?.selectionImageLookup ?? D.chat!.selectionImageLookup,
     cleanupEnabled: S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false,
     cleanupPrompt: S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "",
     transcriptDictionary: S.transcription?.dictionary ?? D.transcription?.dictionary ?? [],

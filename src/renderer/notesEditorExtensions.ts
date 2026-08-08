@@ -404,21 +404,3 @@ export function getNotesEditorCaretCoordinates(
     lineHeight: lineHeight || 20,
   };
 }
-
-export function measureNotesEditorLineWidth(view: EditorView, line: string): number {
-  const style = window.getComputedStyle(view.contentDOM);
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return 0;
-  ctx.font = [
-    style.fontStyle,
-    style.fontVariant,
-    style.fontWeight,
-    style.fontStretch,
-    style.fontSize,
-    style.fontFamily,
-  ]
-    .filter(Boolean)
-    .join(" ");
-  return ctx.measureText(line || " ").width;
-}

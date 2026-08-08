@@ -9,8 +9,8 @@ export type LibraryItemKind = "conversation" | "note" | "image";
 /** A sidebar row — either a conversation or a note, sharing the same sort/group shape. */
 export type LibraryRow = ConversationListRow & { itemKind?: LibraryItemKind };
 
-/** Max library rows shown in the drawer (newest by createdAt). */
-export const SIDEBAR_VISIBLE_LIMIT = 50;
+/** Rows shown initially in the sidebar, and added per "More" click. */
+export const SIDEBAR_PAGE_SIZE = 25;
 
 /**
  * Newest N rows; always includes the active item when it falls outside the window.
@@ -18,7 +18,7 @@ export const SIDEBAR_VISIBLE_LIMIT = 50;
 export function pickSidebarLibraryRows(
   rows: LibraryRow[],
   activeId: string | null,
-  limit: number = SIDEBAR_VISIBLE_LIMIT,
+  limit: number = SIDEBAR_PAGE_SIZE,
 ): LibraryRow[] {
   if (rows.length <= limit) return rows;
   const sorted = [...rows].sort((a, b) => b.createdAt - a.createdAt);

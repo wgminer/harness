@@ -22,6 +22,7 @@ import {
   getDisplayNoteTitle,
   normalizeNoteTemplates,
   resolveNoteTemplateContent,
+  titleFromMarkdownContent,
   type NoteSummary,
   type NoteTemplateConfig,
 } from "../shared/writing";
@@ -132,6 +133,10 @@ export function NotesView({
     () => notes.find((note) => note.id === selectedNoteId) ?? null,
     [selectedNoteId, notes],
   );
+  const noteTitle = activeNote
+    ? getDisplayNoteTitle(titleFromMarkdownContent(draft, activeNote.title))
+    : "Note";
+  const noteWordCount = countNoteWords(draft);
   const notesApi = window.harness.notes;
   const hasSelection = selection != null;
   const showSelectionMenu = hasSelection && !asideExpanded;
@@ -687,28 +692,50 @@ export function NotesView({
           ) : (
             <>
               <div className="notes-surface__toolbar">
-                <div className="notes-surface__meta">
-                  <strong
-                    className="notes-surface__meta-title"
-                    title={activeNote ? getDisplayNoteTitle(activeNote.title) : "Note"}
-                  >
-                    {activeNote ? getDisplayNoteTitle(activeNote.title) : "Note"}
-                  </strong>
-                </div>
                 <div className="notes-surface__toolbar-menu-wrap" ref={noteToolbarMenuRef}>
                   <button
                     type="button"
-                    className="btn btn-icon"
+                    className="btn btn-icon notes-surface__details-btn"
                     aria-expanded={noteToolbarMenuOpen}
                     aria-haspopup="menu"
-                    aria-label="Note actions"
-                    title="More actions"
+                    aria-label="Note details"
+                    title="Details"
                     onClick={() => setNoteToolbarMenuOpen((v) => !v)}
                   >
-                    <MoreVertical size={16} />
+                    <MoreVertical size={16} aria-hidden />
                   </button>
                   {noteToolbarMenuOpen ? (
-                    <div className="notes-surface__toolbar-menu" role="menu" aria-label="Note actions">
+                    <div className="notes-surface__toolbar-menu" role="menu" aria-label="Note details">
+                      <div className="notes-surface__toolbar-menu-meta">
+                        <div className="notes-surface__toolbar-menu-meta-row">
+                          <span className="notes-surface__toolbar-menu-meta-label">Title</span>
+                          <span className="notes-surface__toolbar-menu-meta-value" title={noteTitle}>
+                            {noteTitle}
+                          </span>
+                        </div>
+                        <div className="notes-surface__toolbar-menu-meta-row">
+                          <span className="notes-surface__toolbar-menu-meta-label">Words</span>
+                          <span className="notes-surface__toolbar-menu-meta-value">
+                            {formatNoteWordCount(noteWordCount)}
+                          </span>
+                        </div>
+                        {activeNote ? (
+                          <>
+                            <div className="notes-surface__toolbar-menu-meta-row">
+                              <span className="notes-surface__toolbar-menu-meta-label">Updated</span>
+                              <span className="notes-surface__toolbar-menu-meta-value">
+                                {formatNoteTimestamp(activeNote.updatedAt)}
+                              </span>
+                            </div>
+                            <div className="notes-surface__toolbar-menu-meta-row">
+                              <span className="notes-surface__toolbar-menu-meta-label">Created</span>
+                              <span className="notes-surface__toolbar-menu-meta-value">
+                                {formatNoteTimestamp(activeNote.createdAt)}
+                              </span>
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
                       <button
                         type="button"
                         className="notes-surface__toolbar-menu-item"
@@ -727,9 +754,8 @@ export function NotesView({
                         role="menuitem"
                         disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
                         onClick={() => {
-                          const title = activeNote ? getDisplayNoteTitle(activeNote.title) : "Note";
-                          const html = buildNotePrintHtml(title, draft);
-                          void window.harness.notes.print(html, title);
+                          const html = buildNotePrintHtml(noteTitle, draft);
+                          void window.harness.notes.print(html, noteTitle);
                           setNoteToolbarMenuOpen(false);
                         }}
                       >
@@ -1053,4 +1079,25 @@ export function NotesView({
       </div>
     </div>
   );
+}
+
+function countNoteWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+function formatNoteWordCount(count: number): string {
+  return `${count.toLocaleString()} ${count === 1 ? "word" : "words"}`;
+}
+
+function formatNoteTimestamp(ms: number): string {
+  try {
+    return new Date(ms).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return "";
+  }
 }

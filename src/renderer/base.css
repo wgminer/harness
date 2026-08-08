@@ -63,6 +63,7 @@
 
   /* --- Shadows & focus (shared across themes) --- */
   --scrim: rgba(0, 0, 0, 0.5);
+  --library-scrim: rgba(0, 0, 0, 0.75);
   --shadow-color: rgba(0, 0, 0, 0.3);
   --shadow-drop: rgba(0, 0, 0, 0.2);
   --shadow: 0 4px 12px var(--shadow-color);
@@ -545,29 +546,14 @@ hr {
 .app[data-library-open="true"] .sidebar-dock {
   transform: translateX(0);
   pointer-events: auto;
-  transition: transform var(--motion-duration-expressive) var(--motion-ease-spring-peek);
+  transition: transform var(--library-latch-duration, var(--motion-duration-expressive))
+    var(--motion-ease-spring-peek);
 }
 
 /* Peeking strip is hoverable so the user can finish opening without a backdrop. */
 .app[data-library-peeking="true"] .sidebar-dock {
   pointer-events: auto;
 }
-
-.library-edge-hit {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  /* Matches latch hit zone so slow approaches still catch. */
-  width: calc(var(--grid) * 14);
-  z-index: 38;
-}
-
-.app[data-sidebar="right"] .library-edge-hit {
-  left: auto;
-  right: 0;
-}
-
 
 .library-backdrop {
   position: absolute;
@@ -577,10 +563,18 @@ hr {
   padding: 0;
   border: none;
   border-radius: 0;
-  background: transparent;
+  background: var(--library-scrim);
   appearance: none;
   cursor: default;
   outline: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-duration-normal) var(--motion-ease-out);
+}
+
+.app[data-library-overlay="true"] .library-backdrop {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .sidebar {

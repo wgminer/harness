@@ -197,16 +197,12 @@ function MdOption({ title }: { title?: string }) {
   const label = title?.trim() || "Option";
   if (onOptionSelect) {
     return (
-      <button
-        type="button"
-        className="btn md-option-btn"
-        onClick={() => void onOptionSelect(label)}
-      >
+      <button type="button" className="btn" onClick={() => void onOptionSelect(label)}>
         {label}
       </button>
     );
   }
-  return <span className="btn md-option-btn md-option-btn--static">{label}</span>;
+  return <span className="btn">{label}</span>;
 }
 (MdOption as ComponentType & { displayName?: string }).displayName = "MdOption";
 

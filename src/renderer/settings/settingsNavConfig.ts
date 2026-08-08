@@ -36,6 +36,9 @@ export const SETTINGS_NAV: Array<{
       "menu bar",
       "accessibility",
       "microphone",
+      "selection",
+      "image",
+      "tavily",
     ],
   },
   {

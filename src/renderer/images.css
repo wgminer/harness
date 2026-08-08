@@ -24,44 +24,82 @@
   padding: 24px;
 }
 
-.image-canvas__pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+.image-canvas__tree {
   flex-shrink: 0;
   padding: 0 16px 16px;
+  overflow-x: auto;
 }
 
-.image-canvas__pager-btn {
+.image-canvas__tree-roots,
+.image-canvas__tree-children {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.image-canvas__tree-roots {
+  justify-content: center;
+}
+
+.image-canvas__tree-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.image-canvas__tree-children {
+  position: relative;
+  padding-top: 6px;
+}
+
+.image-canvas__tree-children::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 6px;
+  background: color-mix(in srgb, var(--fg) 22%, transparent);
+  transform: translateX(-50%);
+}
+
+.image-canvas__tree-chip {
   appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  min-width: 2rem;
+  height: 24px;
+  padding: 0 8px;
   border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
   border-radius: var(--radius-control-sm);
   background: transparent;
-  color: var(--fg);
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
 
-.image-canvas__pager-btn:hover:not(:disabled) {
+.image-canvas__tree-chip:hover:not(:disabled) {
   background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg);
 }
 
-.image-canvas__pager-btn:disabled {
+.image-canvas__tree-chip--active {
+  border-color: color-mix(in srgb, var(--fg) 36%, transparent);
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+  cursor: default;
+}
+
+.image-canvas__tree-chip:disabled:not(.image-canvas__tree-chip--active) {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.image-canvas__pager-label {
-  min-width: 3.5rem;
-  text-align: center;
-  font-size: 0.8rem;
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--fg) 65%, transparent);
 }
 
 .image-canvas__image {

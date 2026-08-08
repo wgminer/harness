@@ -142,7 +142,13 @@ describe("buildMergedFileMap", () => {
         "app-state/conflict.json": Buffer.from('{"from":"remote"}'),
       },
     );
-    const choices = buildDefaultMergeChoices(review);
+    const choices = buildDefaultMergeChoices(review, {
+      "app-state/local-only.json": Buffer.from('{"local":true}'),
+      "app-state/conflict.json": Buffer.from('{"from":"local"}'),
+    }, {
+      "app-state/remote-only.json": Buffer.from('{"remote":true}'),
+      "app-state/conflict.json": Buffer.from('{"from":"remote"}'),
+    });
     choices["app-state/conflict.json"] = "remote";
 
     const merged = buildMergedFileMap(
@@ -176,18 +182,78 @@ describe("buildMergedFileMap", () => {
     expect(review.files.find((f) => f.path === "app-state/plans.json")).toBeUndefined();
     expect(review.summary.conflict).toBe(0);
 
+    const local = {
+      "app-state/tasks.json": Buffer.from('{"tasks":[]}'),
+      "app-state/plans.json": Buffer.from('{"old":true}'),
+    };
+    const remote = {
+      "app-state/tasks.json": Buffer.from('{"tasks":[]}'),
+      "app-state/plans.json": Buffer.from('{"old":"remote"}'),
+    };
     const merged = buildMergedFileMap(
-      {
-        "app-state/tasks.json": Buffer.from('{"tasks":[]}'),
-        "app-state/plans.json": Buffer.from('{"old":true}'),
-      },
-      {
-        "app-state/tasks.json": Buffer.from('{"tasks":[]}'),
-        "app-state/plans.json": Buffer.from('{"old":"remote"}'),
-      },
-      buildDefaultMergeChoices(review),
+      local,
+      remote,
+      buildDefaultMergeChoices(review, local, remote),
     );
     expect(merged["app-state/plans.json"]).toBeUndefined();
     expect(merged["app-state/tasks.json"]?.toString("utf-8")).toBe('{"tasks":[]}');
+  });
+
+  it("keeps images.json and image blobs on one side", () => {
+    const localIndex = Buffer.from(
+      JSON.stringify({
+        images: [
+          {
+            id: "local-img",
+            title: "Local",
+            prompt: "x",
+            createdAt: 1,
+            updatedAt: 200,
+            size: "auto",
+            quality: "auto",
+            background: "auto",
+            outputFormat: "png",
+            fileName: "local-img.png",
+          },
+        ],
+      }),
+    );
+    const remoteIndex = Buffer.from(
+      JSON.stringify({
+        images: [
+          {
+            id: "remote-img",
+            title: "Remote",
+            prompt: "y",
+            createdAt: 1,
+            updatedAt: 100,
+            size: "auto",
+            quality: "auto",
+            background: "auto",
+            outputFormat: "png",
+            fileName: "remote-img.png",
+          },
+        ],
+      }),
+    );
+    const local = {
+      "app-state/images.json": localIndex,
+      "app-state/images/local-img.png": Buffer.from("local-bytes"),
+    };
+    const remote = {
+      "app-state/images.json": remoteIndex,
+      "app-state/images/remote-img.png": Buffer.from("remote-bytes"),
+    };
+    const review = buildSyncConflictReview(local, remote);
+    for (const file of review.files.filter((f) => f.path.startsWith("app-state/images"))) {
+      expect(file.defaultChoice).toBe("local");
+      expect(file.supportsMerge).toBe(false);
+    }
+    const choices = buildDefaultMergeChoices(review, local, remote);
+    choices["app-state/images/remote-img.png"] = "remote";
+    const merged = buildMergedFileMap(local, remote, choices);
+    expect(merged["app-state/images.json"]).toEqual(localIndex);
+    expect(merged["app-state/images/local-img.png"]?.toString("utf-8")).toBe("local-bytes");
+    expect(merged["app-state/images/remote-img.png"]).toBeUndefined();
   });
 });

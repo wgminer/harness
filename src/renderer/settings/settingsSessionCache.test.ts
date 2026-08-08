@@ -51,7 +51,7 @@ describe("settingsSessionCache", () => {
     it("fetches and seeds the cache on a cold open", async () => {
       const fetched = {
         ...DEFAULT_SETTINGS,
-        chat: { openToComposeOnLaunch: false },
+        chat: { openToComposeOnLaunch: false, selectionImageLookup: false },
       } satisfies Settings;
       const fetchSettings = vi.fn(async () => fetched);
       const setCache = vi.fn();
@@ -78,13 +78,14 @@ describe("settingsSessionCache", () => {
           globalFnHotkey: false,
           bringToFrontOnBackgroundDictation: true,
         },
-        chat: { openToComposeOnLaunch: false },
+        chat: { openToComposeOnLaunch: false, selectionImageLookup: true },
         appearance: { accent: "#112233" },
       });
       expect(hydrated.autoSend).toBe(false);
       expect(hydrated.globalFnHotkey).toBe(false);
       expect(hydrated.bringToFrontOnBackgroundDictation).toBe(true);
       expect(hydrated.openToComposeOnLaunch).toBe(false);
+      expect(hydrated.selectionImageLookup).toBe(true);
       expect(hydrated.accent).toBe("#112233");
     });
   });

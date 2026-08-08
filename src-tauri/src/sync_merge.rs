@@ -65,8 +65,15 @@ const MERGEABLE_PATHS: &[&str] = &[
 /// Legacy paths that may appear in old sync bundles; ignore rather than fail.
 const IGNORED_SYNC_PATHS: &[&str] = &["app-state/plans.json"];
 
+const IMAGES_INDEX_PATH: &str = "app-state/images.json";
+const IMAGES_DIR_PREFIX: &str = "app-state/images/";
+
 fn is_ignored_sync_path(path: &str) -> bool {
     IGNORED_SYNC_PATHS.contains(&path)
+}
+
+fn is_image_library_path(path: &str) -> bool {
+    path == IMAGES_INDEX_PATH || path.starts_with(IMAGES_DIR_PREFIX)
 }
 
 fn file_bytes_equal(a: &[u8], b: &[u8]) -> bool {
@@ -112,6 +119,12 @@ fn label_for_path(path: &str) -> String {
             return rest.to_string();
         }
     }
+    if path == IMAGES_INDEX_PATH {
+        return "Images library".into();
+    }
+    if let Some(name) = path.strip_prefix(IMAGES_DIR_PREFIX) {
+        return format!("Image file {name}");
+    }
     match path {
         "app-state/conversations.json" => "Conversation list".into(),
         "app-state/tasks.json" => "Tasks".into(),
@@ -123,6 +136,9 @@ fn label_for_path(path: &str) -> String {
 }
 
 fn supports_merge_for_path(path: &str) -> bool {
+    if is_image_library_path(path) {
+        return false;
+    }
     if MERGEABLE_PATHS.contains(&path) {
         return true;
     }
@@ -141,6 +157,97 @@ fn default_choice_for_kind(kind: SyncFileChangeKind, path: &str) -> SyncFileChoi
                 SyncFileChoice::Local
             }
         }
+    }
+}
+
+fn max_image_updated_at(images_json: &[u8]) -> i64 {
+    let parsed = parse_json(images_json);
+    let Some(rows) = parsed.get("images").and_then(|v| v.as_array()) else {
+        return 0;
+    };
+    rows.iter().map(ts_from_value).max().unwrap_or(0)
+}
+
+fn image_library_paths(
+    local_files: &HashMap<String, Vec<u8>>,
+    remote_files: &HashMap<String, Vec<u8>>,
+) -> Vec<String> {
+    let mut paths: Vec<String> = local_files
+        .keys()
+        .chain(remote_files.keys())
+        .filter(|path| is_image_library_path(path))
+        .cloned()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    paths.sort();
+    paths
+}
+
+fn image_library_is_dirty(
+    local_files: &HashMap<String, Vec<u8>>,
+    remote_files: &HashMap<String, Vec<u8>>,
+) -> bool {
+    for path in image_library_paths(local_files, remote_files) {
+        match (local_files.get(&path), remote_files.get(&path)) {
+            (Some(local), Some(remote)) if !file_bytes_equal(local, remote) => return true,
+            (Some(_), None) | (None, Some(_)) => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Pick one side for the whole image library (index + blobs) so sync never mixes them.
+fn image_library_winner(
+    local_files: &HashMap<String, Vec<u8>>,
+    remote_files: &HashMap<String, Vec<u8>>,
+) -> SyncFileChoice {
+    let local_ts = local_files
+        .get(IMAGES_INDEX_PATH)
+        .map(|bytes| max_image_updated_at(bytes))
+        .unwrap_or(0);
+    let remote_ts = remote_files
+        .get(IMAGES_INDEX_PATH)
+        .map(|bytes| max_image_updated_at(bytes))
+        .unwrap_or(0);
+    if remote_ts > local_ts {
+        return SyncFileChoice::Remote;
+    }
+    if local_ts > remote_ts {
+        return SyncFileChoice::Local;
+    }
+    let local_has = local_files.keys().any(|path| is_image_library_path(path));
+    let remote_has = remote_files.keys().any(|path| is_image_library_path(path));
+    match (local_has, remote_has) {
+        (false, true) => SyncFileChoice::Remote,
+        _ => SyncFileChoice::Local,
+    }
+}
+
+fn image_library_choice_from_map(
+    choices: &HashMap<String, SyncFileChoice>,
+    local_files: &HashMap<String, Vec<u8>>,
+    remote_files: &HashMap<String, Vec<u8>>,
+) -> SyncFileChoice {
+    match choices.get(IMAGES_INDEX_PATH) {
+        Some(SyncFileChoice::Remote) => SyncFileChoice::Remote,
+        Some(SyncFileChoice::Local) => SyncFileChoice::Local,
+        Some(SyncFileChoice::Merge) | None => image_library_winner(local_files, remote_files),
+    }
+}
+
+fn apply_image_library_atomicity(
+    choices: &mut HashMap<String, SyncFileChoice>,
+    local_files: &HashMap<String, Vec<u8>>,
+    remote_files: &HashMap<String, Vec<u8>>,
+) {
+    if !image_library_is_dirty(local_files, remote_files) {
+        return;
+    }
+    let winner = image_library_choice_from_map(choices, local_files, remote_files);
+    for path in image_library_paths(local_files, remote_files) {
+        choices.insert(path, winner);
     }
 }
 
@@ -202,10 +309,24 @@ pub fn build_sync_conflict_review(
         });
     }
 
+    if image_library_is_dirty(local_files, remote_files) {
+        let winner = image_library_winner(local_files, remote_files);
+        for file in &mut files {
+            if is_image_library_path(&file.path) {
+                file.default_choice = winner;
+                file.supports_merge = false;
+            }
+        }
+    }
+
     SyncConflictReview { files, summary }
 }
 
-pub fn build_default_merge_choices(review: &SyncConflictReview) -> HashMap<String, SyncFileChoice> {
+pub fn build_default_merge_choices(
+    review: &SyncConflictReview,
+    local_files: &HashMap<String, Vec<u8>>,
+    remote_files: &HashMap<String, Vec<u8>>,
+) -> HashMap<String, SyncFileChoice> {
     let mut choices = HashMap::new();
     for file in &review.files {
         if file.kind == SyncFileChangeKind::Unchanged {
@@ -214,6 +335,7 @@ pub fn build_default_merge_choices(review: &SyncConflictReview) -> HashMap<Strin
             choices.insert(file.path.clone(), file.default_choice);
         }
     }
+    apply_image_library_atomicity(&mut choices, local_files, remote_files);
     choices
 }
 
@@ -392,6 +514,9 @@ pub fn build_merged_file_map(
         .collect();
     paths.sort();
 
+    let mut effective_choices = choices.clone();
+    apply_image_library_atomicity(&mut effective_choices, local_files, remote_files);
+
     let mut merged = HashMap::new();
     for path in paths {
         if is_ignored_sync_path(&path) {
@@ -403,7 +528,7 @@ pub fn build_merged_file_map(
             (None, Some(_)) => SyncFileChangeKind::RemoteOnly,
             (None, None) => continue,
         };
-        let choice = choices
+        let choice = effective_choices
             .get(&path)
             .copied()
             .unwrap_or_else(|| default_choice_for_kind(kind, &path));
@@ -601,7 +726,7 @@ mod tests {
             ),
         ]);
         let review = build_sync_conflict_review(&local, &remote);
-        let mut choices = build_default_merge_choices(&review);
+        let mut choices = build_default_merge_choices(&review, &local, &remote);
         choices.insert("app-state/conflict.json".into(), SyncFileChoice::Remote);
 
         let merged = build_merged_file_map(&local, &remote, &choices);
@@ -645,12 +770,90 @@ mod tests {
         assert!(review.files.iter().all(|f| f.path != "app-state/plans.json"));
         assert_eq!(review.summary.conflict, 0);
 
-        let choices = build_default_merge_choices(&review);
+        let choices = build_default_merge_choices(&review, &local, &remote);
         let merged = build_merged_file_map(&local, &remote, &choices);
         assert!(!merged.contains_key("app-state/plans.json"));
         assert_eq!(
             String::from_utf8_lossy(merged.get("app-state/tasks.json").unwrap()),
             r#"{"tasks":[]}"#
         );
+    }
+
+    #[test]
+    fn image_library_merge_keeps_index_and_blobs_atomic() {
+        let local_index = br#"{
+          "images": [
+            {"id":"local-img","title":"Local","prompt":"x","createdAt":1,"updatedAt":200,"size":"auto","quality":"auto","background":"auto","outputFormat":"png","fileName":"local-img.png"}
+          ]
+        }"#;
+        let remote_index = br#"{
+          "images": [
+            {"id":"remote-img","title":"Remote","prompt":"y","createdAt":1,"updatedAt":100,"size":"auto","quality":"auto","background":"auto","outputFormat":"png","fileName":"remote-img.png"}
+          ]
+        }"#;
+        let local = HashMap::from([
+            ("app-state/images.json".into(), local_index.to_vec()),
+            ("app-state/images/local-img.png".into(), b"local-bytes".to_vec()),
+        ]);
+        let remote = HashMap::from([
+            ("app-state/images.json".into(), remote_index.to_vec()),
+            ("app-state/images/remote-img.png".into(), b"remote-bytes".to_vec()),
+        ]);
+
+        let review = build_sync_conflict_review(&local, &remote);
+        for file in &review.files {
+            if file.path.starts_with("app-state/images") {
+                assert_eq!(file.default_choice, SyncFileChoice::Local);
+                assert!(!file.supports_merge);
+            }
+        }
+
+        // Mixed choices must still resolve atomically to the images.json side.
+        let mut choices = build_default_merge_choices(&review, &local, &remote);
+        choices.insert(
+            "app-state/images/remote-img.png".into(),
+            SyncFileChoice::Remote,
+        );
+        let merged = build_merged_file_map(&local, &remote, &choices);
+        assert_eq!(
+            merged.get("app-state/images.json").map(|b| b.as_slice()),
+            Some(local_index.as_slice())
+        );
+        assert_eq!(
+            merged.get("app-state/images/local-img.png").map(|b| b.as_slice()),
+            Some(b"local-bytes".as_slice())
+        );
+        assert!(!merged.contains_key("app-state/images/remote-img.png"));
+    }
+
+    #[test]
+    fn image_library_prefers_newer_remote_index() {
+        let local_index = br#"{
+          "images": [
+            {"id":"old","title":"Old","prompt":"","createdAt":1,"updatedAt":10,"size":"auto","quality":"auto","background":"auto","outputFormat":"png","fileName":"old.png"}
+          ]
+        }"#;
+        let remote_index = br#"{
+          "images": [
+            {"id":"new","title":"New","prompt":"","createdAt":1,"updatedAt":99,"size":"auto","quality":"auto","background":"auto","outputFormat":"png","fileName":"new.png"}
+          ]
+        }"#;
+        let local = HashMap::from([
+            ("app-state/images.json".into(), local_index.to_vec()),
+            ("app-state/images/old.png".into(), b"old".to_vec()),
+        ]);
+        let remote = HashMap::from([
+            ("app-state/images.json".into(), remote_index.to_vec()),
+            ("app-state/images/new.png".into(), b"new".to_vec()),
+        ]);
+        let review = build_sync_conflict_review(&local, &remote);
+        let choices = build_default_merge_choices(&review, &local, &remote);
+        let merged = build_merged_file_map(&local, &remote, &choices);
+        assert_eq!(
+            merged.get("app-state/images.json").map(|b| b.as_slice()),
+            Some(remote_index.as_slice())
+        );
+        assert!(merged.contains_key("app-state/images/new.png"));
+        assert!(!merged.contains_key("app-state/images/old.png"));
     }
 }

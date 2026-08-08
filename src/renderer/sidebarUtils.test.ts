@@ -3,22 +3,22 @@ import {
   groupConversations,
   nextSidebarListSortMode,
   pickSidebarLibraryRows,
-  SIDEBAR_VISIBLE_LIMIT,
+  SIDEBAR_PAGE_SIZE,
 } from "./sidebarUtils";
 
 describe("sidebarUtils", () => {
-  it("limits the library list to the newest 50 items and keeps the active row", () => {
-    expect(SIDEBAR_VISIBLE_LIMIT).toBe(50);
-    const list = Array.from({ length: 60 }, (_, i) => ({
-      id: `id-${i}`,
-      title: `t${i}`,
-      createdAt: i * 100,
-    }));
-    const picked = pickSidebarLibraryRows(list, "id-0");
-    expect(picked).toHaveLength(50);
-    expect(picked.map((r) => r.id)).toContain("id-0");
-    expect(picked.map((r) => r.id)).toContain("id-59");
-    expect(picked.map((r) => r.id)).not.toContain("id-1");
+  it("uses one page size for the initial window and each More click", () => {
+    expect(SIDEBAR_PAGE_SIZE).toBe(25);
+  });
+
+  it("always includes the active row in the preview window", () => {
+    const list = [
+      { id: "a", title: "a", createdAt: 300 },
+      { id: "b", title: "b", createdAt: 200 },
+      { id: "c", title: "c", createdAt: 100 },
+    ];
+    const picked = pickSidebarLibraryRows(list, "c", 2);
+    expect(picked.map((r) => r.id)).toEqual(["a", "c"]);
   });
 
   it("groups conversations into a flat Recent list when requested", () => {

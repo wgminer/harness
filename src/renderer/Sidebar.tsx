@@ -15,7 +15,7 @@ import {
   Circle,
   Plus,
   ChevronDown,
-  PanelLeft,
+  Pin,
   CheckLine,
   ListFilter,
   Settings2 as SettingsIcon,
@@ -42,6 +42,7 @@ import {
   type View,
   type SidebarGroup,
   type SidebarListSortMode,
+  SIDEBAR_PAGE_SIZE,
   groupConversations,
   nextSidebarListSortMode,
   pickSidebarLibraryRows,
@@ -137,6 +138,7 @@ export function Sidebar({
     updateStatus.status === "ready" ||
     updateStatus.status === "checking";
 
+  const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_PAGE_SIZE);
   const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("recent");
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
@@ -216,8 +218,8 @@ export function Sidebar({
     };
   }, [newMenuOpen]);
 
-  const libraryRows = useMemo<LibraryRow[]>(() => {
-    const all: LibraryRow[] = [
+  const libraryRows = useMemo<LibraryRow[]>(
+    () => [
       ...conversations.map((c): LibraryRow => ({ ...c, itemKind: "conversation" })),
       ...notes.map(
         (n): LibraryRow => ({
@@ -235,16 +237,23 @@ export function Sidebar({
           itemKind: "image",
         })
       ),
-    ];
-    return pickSidebarLibraryRows(
-      all,
-      conversationId ?? activeNoteId ?? activeImageId,
-    );
-  }, [conversations, notes, images, conversationId, activeNoteId, activeImageId]);
+    ],
+    [conversations, notes, images]
+  );
+
+  const sidebarListItems = useMemo(
+    () =>
+      pickSidebarLibraryRows(
+        libraryRows,
+        conversationId ?? activeNoteId ?? activeImageId,
+        sidebarVisibleLimit
+      ),
+    [libraryRows, conversationId, activeNoteId, activeImageId, sidebarVisibleLimit]
+  );
 
   const { groups: sidebarGroups } = useMemo(
-    () => groupConversations(libraryRows, listSortMode),
-    [libraryRows, listSortMode]
+    () => groupConversations(sidebarListItems, listSortMode),
+    [sidebarListItems, listSortMode]
   );
 
   const toggleListSortMode = useCallback(() => {
@@ -257,6 +266,12 @@ export function Sidebar({
       : listSortMode === "date"
         ? { ariaLabel: "Switch to calendar day groups", title: "Group by calendar day" }
         : { ariaLabel: "Switch to Recent list", title: "Sort by recent activity" };
+
+  const showSidebarMoreControl = sidebarListItems.length < libraryRows.length;
+
+  const onSidebarShowMore = useCallback(() => {
+    setSidebarVisibleLimit((n) => Math.min(libraryRows.length, n + SIDEBAR_PAGE_SIZE));
+  }, [libraryRows.length]);
 
   const renderLibraryItem = useCallback(
     (row: LibraryRow) => {
@@ -546,12 +561,25 @@ export function Sidebar({
                 </li>
               );
             })}
+            {showSidebarMoreControl ? (
+              <li className="sidebar-list-expand">
+                <button
+                  type="button"
+                  className="sidebar-list-expand-btn"
+                  data-testid="sidebar-conversations-show-more"
+                  aria-label={`Show ${SIDEBAR_PAGE_SIZE} more items`}
+                  onClick={onSidebarShowMore}
+                >
+                  More
+                </button>
+              </li>
+            ) : null}
           </ul>
         </div>
         <div className="sidebar-footer">
           <div className="sidebar-footer__meta">
             {appVersion != null && appVersion !== "" ? (
-              <span className="sidebar-version" title={`Here ${appVersion}`}>
+              <span className="sidebar-version" title={`Harness ${appVersion}`}>
                 v{appVersion}
               </span>
             ) : null}
@@ -608,7 +636,7 @@ export function Sidebar({
             title={libraryPinned ? "Unpin library" : "Pin library"}
             data-testid="library-toggle"
           >
-            <PanelLeft size={12} strokeWidth={2} aria-hidden />
+            <Pin size={12} strokeWidth={2} aria-hidden />
           </button>
         </div>
       </aside>
