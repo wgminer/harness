@@ -98,7 +98,18 @@ export function ImageCanvasView({ imageId, onImageUpdated }: ImageCanvasViewProp
   const [status, setStatus] = useState<GenerateStatus>({ kind: "idle" });
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [stubImages, setStubImages] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.harness.env.isStubImages().then((on) => {
+      if (!cancelled) setStubImages(on);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const applyImageState = (next: GeneratedImage) => {
     setImage(next);
@@ -306,6 +317,12 @@ export function ImageCanvasView({ imageId, onImageUpdated }: ImageCanvasViewProp
           <h2 className="image-canvas__panel-title">
             {image ? getDisplayImageTitle(image.title) : "New image"}
           </h2>
+          {stubImages ? (
+            <p className="image-canvas__stub-banner" role="status">
+              Stub images on — colored PNGs, no OpenAI. Tip continues A; adjust from a node with a
+              child forks B/C.
+            </p>
+          ) : null}
         </header>
 
         <div className="image-canvas__panel-body">
@@ -453,7 +470,9 @@ export function ImageCanvasView({ imageId, onImageUpdated }: ImageCanvasViewProp
           {status.kind === "error" ? (
             <p className="image-canvas__error">{status.message}</p>
           ) : null}
+        </div>
 
+        <div className="image-canvas__panel-footer">
           <button
             type="button"
             className="btn btn-primary image-canvas__generate"

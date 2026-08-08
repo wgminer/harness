@@ -10,7 +10,7 @@ use crate::credentials::{
 };
 use crate::customization::{get_layout_options, set_layout};
 use crate::dictation_recording_index;
-use crate::env_util::{is_harness_dev, is_harness_e2e};
+use crate::env_util::{is_harness_dev, is_harness_e2e, is_stub_images};
 use crate::file_tools::get_allowed_roots;
 use crate::global_recording::{
     apply_global_fn_hotkey_setting, global_fn_hotkey_enabled_from_recording,
@@ -60,6 +60,11 @@ pub fn env_is_harness_dev() -> bool {
 #[command(rename_all = "camelCase")]
 pub fn env_is_harness_e2e() -> bool {
     is_harness_e2e()
+}
+
+#[command(rename_all = "camelCase")]
+pub fn env_is_stub_images() -> bool {
+    is_stub_images()
 }
 
 #[command(rename_all = "camelCase")]

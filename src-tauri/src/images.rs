@@ -5,9 +5,12 @@ use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
+use crate::env_util::is_stub_images;
 use crate::memory::AppState;
 use crate::paths::get_app_state_dir;
-use crate::storage::{atomic_write_utf8, file_exists};
+use crate::storage::{
+    atomic_write_utf8, atomic_write_utf8_unlocked, file_exists, with_path_lock,
+};
 
 const IMAGES_INDEX_FILE: &str = "images.json";
 const IMAGES_DIR: &str = "images";
@@ -235,8 +238,93 @@ fn output_format_from_file_name(file_name: &str) -> &'static str {
     }
 }
 
+#[cfg(test)]
 fn version_label(version: &ImageVersion) -> String {
     format!("{}{}", version.branch, version.index_in_branch)
+}
+
+fn crc32_ieee(data: &[u8]) -> u32 {
+    let mut crc = 0xffff_ffffu32;
+    for &b in data {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            let mask = if crc & 1 != 0 { 0xffff_ffff } else { 0 };
+            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
+        }
+    }
+    !crc
+}
+
+fn png_chunk(tag: &[u8; 4], data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(12 + data.len());
+    out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+    out.extend_from_slice(tag);
+    out.extend_from_slice(data);
+    let mut crc_data = Vec::with_capacity(4 + data.len());
+    crc_data.extend_from_slice(tag);
+    crc_data.extend_from_slice(data);
+    out.extend_from_slice(&crc32_ieee(&crc_data).to_be_bytes());
+    out
+}
+
+/// Deterministic stub PNG (solid color from prompt) for branch-logic testing without OpenAI.
+pub fn stub_image_png(prompt: &str, kind: &str) -> Vec<u8> {
+    use flate2::write::ZlibEncoder;
+    use flate2::Compression;
+    use std::hash::{Hash, Hasher};
+    use std::io::Write;
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    prompt.hash(&mut hasher);
+    kind.hash(&mut hasher);
+    let h = hasher.finish();
+    let r = ((h >> 16) & 0xff) as u8;
+    let g = ((h >> 8) & 0xff) as u8;
+    let b = (h & 0xff) as u8;
+    // Keep channels away from pure black so the stage isn't empty-looking.
+    let (r, g, b) = (r.max(40), g.max(40), b.max(40));
+
+    const W: u32 = 64;
+    const H: u32 = 64;
+    let mut raw = Vec::with_capacity(((W * 3 + 1) * H) as usize);
+    for row in 0..H {
+        raw.push(0); // filter None
+        for col in 0..W {
+            // Light band so successive stubs are visually distinct even if hues collide.
+            let band = if row < 8 { 40u8.wrapping_mul((col % 7) as u8) } else { 0 };
+            raw.push(r.wrapping_add(band));
+            raw.push(g.wrapping_add(band / 2));
+            raw.push(b.wrapping_add((kind.len() as u8).wrapping_mul(3)));
+        }
+    }
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
+    encoder.write_all(&raw).expect("stub png zlib write");
+    let compressed = encoder.finish().expect("stub png zlib finish");
+
+    let mut ihdr = Vec::with_capacity(13);
+    ihdr.extend_from_slice(&W.to_be_bytes());
+    ihdr.extend_from_slice(&H.to_be_bytes());
+    ihdr.extend_from_slice(&[8, 2, 0, 0, 0]); // 8-bit RGB
+
+    let mut png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+    png.extend(png_chunk(b"IHDR", &ihdr));
+    png.extend(png_chunk(b"IDAT", &compressed));
+    png.extend(png_chunk(b"IEND", &[]));
+    png
+}
+
+/// Deterministic id when legacy rows omit `id`, so UI clicks survive reloads before heal persists.
+fn stable_version_id(file_name: &str) -> String {
+    format!("fn:{file_name}")
+}
+
+fn ensure_version_id(id: &str, file_name: &str) -> String {
+    let trimmed = id.trim();
+    if !trimmed.is_empty() {
+        trimmed.to_string()
+    } else {
+        stable_version_id(file_name)
+    }
 }
 
 fn find_version<'a>(entry: &'a ImagesIndexEntry, id: &str) -> Option<&'a ImageVersion> {
@@ -377,12 +465,8 @@ fn parse_version_obj(obj: &serde_json::Map<String, serde_json::Value>) -> Option
         .and_then(|v| v.as_str())
         .unwrap_or("generate")
         .to_string();
-    let id = obj
-        .get("id")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| Uuid::new_v4().to_string());
+    let raw_id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("");
+    let id = ensure_version_id(raw_id, &file_name);
     let parent_id = obj
         .get("parentId")
         .and_then(|v| v.as_str())
@@ -466,9 +550,7 @@ fn migrate_versions_to_tree(entry: &mut ImagesIndexEntry, legacy_active_index: O
 
     let mut prev_id: Option<String> = None;
     for (i, version) in entry.versions.iter_mut().enumerate() {
-        if version.id.is_empty() {
-            version.id = Uuid::new_v4().to_string();
-        }
+        version.id = ensure_version_id(&version.id, &version.file_name);
         version.branch = "A".into();
         version.index_in_branch = (i as u32) + 1;
         version.parent_id = prev_id.clone();
@@ -578,7 +660,7 @@ fn heal_images_index_in_memory(app_state_dir: &Path, index: &mut ImagesIndex) ->
         if entry.versions.is_empty() {
             if let Some(found) = discover_image_file_name(app_state_dir, &entry.id) {
                 let format = output_format_from_file_name(&found).to_string();
-                let vid = Uuid::new_v4().to_string();
+                let vid = ensure_version_id("", &found);
                 entry.versions.push(ImageVersion {
                     id: vid.clone(),
                     parent_id: None,
@@ -599,28 +681,8 @@ fn heal_images_index_in_memory(app_state_dir: &Path, index: &mut ImagesIndex) ->
                 changed = true;
             }
         } else {
-            let mut versions_changed = false;
-            for version in &mut entry.versions {
-                if image_file_path(app_state_dir, &version.file_name).exists() {
-                    continue;
-                }
-                if let Some(found) = discover_image_file_name(app_state_dir, &entry.id) {
-                    version.file_name = found;
-                    version.output_format =
-                        output_format_from_file_name(&version.file_name).to_string();
-                    versions_changed = true;
-                }
-            }
-            if versions_changed {
-                changed = true;
-            }
-            let before = entry.versions.len();
-            entry
-                .versions
-                .retain(|v| image_file_path(app_state_dir, &v.file_name).exists());
-            if entry.versions.len() != before {
-                changed = true;
-            }
+            // Never remap a version onto another run's blob, and never drop history
+            // when a blob is temporarily missing (sync race). Keep nodes as-is.
             apply_active_version_mirror(&mut entry);
         }
 
@@ -645,10 +707,12 @@ async fn ensure_images_dir(app_state_dir: &Path) -> Result<(), std::io::Error> {
     tokio::fs::create_dir_all(images_dir_path(app_state_dir)).await
 }
 
-async fn load_images_index(app_state_dir: &Path) -> Result<ImagesIndex, std::io::Error> {
+/// Load index from disk. Second value is true when tree migration / root synthesis mutated entries
+/// and the caller should persist.
+async fn load_images_index(app_state_dir: &Path) -> Result<(ImagesIndex, bool), std::io::Error> {
     let path = images_index_path(app_state_dir);
     if !file_exists(&path).await {
-        return Ok(ImagesIndex::default());
+        return Ok((ImagesIndex::default(), false));
     }
     let raw = tokio::fs::read_to_string(&path).await.unwrap_or_default();
     let parsed: serde_json::Value =
@@ -659,6 +723,7 @@ async fn load_images_index(app_state_dir: &Path) -> Result<ImagesIndex, std::io:
         .cloned()
         .unwrap_or_default();
     let mut images = Vec::new();
+    let mut dirty = false;
     for item in source {
         let Some(obj) = item.as_object() else {
             continue;
@@ -680,10 +745,19 @@ async fn load_images_index(app_state_dir: &Path) -> Result<ImagesIndex, std::io:
             .map(|s| s.to_string())
             .filter(|s| !s.is_empty());
         let mut versions = Vec::new();
+        let mut versions_need_ids = false;
         if let Some(arr) = obj.get("versions").and_then(|v| v.as_array()) {
             for row in arr {
                 if let Some(vobj) = row.as_object() {
+                    let had_id = vobj
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .map(|s| !s.is_empty())
+                        .unwrap_or(false);
                     if let Some(version) = parse_version_obj(vobj) {
+                        if !had_id {
+                            versions_need_ids = true;
+                        }
                         versions.push(version);
                     }
                 }
@@ -724,13 +798,27 @@ async fn load_images_index(app_state_dir: &Path) -> Result<ImagesIndex, std::io:
             versions,
             active_version_id,
         };
-        let _ = ensure_root_from_file_name(&mut entry);
-        let _ = migrate_versions_to_tree(&mut entry, legacy_active_index);
+        if versions_need_ids {
+            dirty = true;
+        }
+        if ensure_root_from_file_name(&mut entry) {
+            dirty = true;
+        }
+        if migrate_versions_to_tree(&mut entry, legacy_active_index) {
+            dirty = true;
+        }
         apply_active_version_mirror(&mut entry);
         images.push(entry);
     }
     sort_by_updated_at_desc(&mut images);
-    Ok(ImagesIndex { images })
+    Ok((ImagesIndex { images }, dirty))
+}
+
+fn serialize_images_index(index: &ImagesIndex) -> String {
+    let mut images = index.images.clone();
+    sort_by_updated_at_desc(&mut images);
+    let payload = serde_json::json!({ "images": images });
+    serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{\"images\":[]}".into())
 }
 
 async fn save_images_index(
@@ -738,28 +826,45 @@ async fn save_images_index(
     app_state_dir: &Path,
     index: &ImagesIndex,
 ) -> Result<(), std::io::Error> {
-    let mut images = index.images.clone();
-    sort_by_updated_at_desc(&mut images);
-    let payload = serde_json::json!({ "images": images });
-    let pretty =
-        serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{\"images\":[]}".into());
     atomic_write_utf8(
         &state.write_chains,
         &images_index_path(app_state_dir),
-        &pretty,
+        &serialize_images_index(index),
     )
     .await
+}
+
+/// Persist while the caller already holds the images.json path lock.
+async fn save_images_index_unlocked(
+    app_state_dir: &Path,
+    index: &ImagesIndex,
+) -> Result<(), std::io::Error> {
+    atomic_write_utf8_unlocked(
+        &images_index_path(app_state_dir),
+        &serialize_images_index(index),
+    )
+    .await
+}
+
+async fn prepare_images_index(app_state_dir: &Path) -> Result<(ImagesIndex, bool), std::io::Error> {
+    let (mut index, load_dirty) = load_images_index(app_state_dir).await?;
+    let heal_dirty = heal_images_index_in_memory(app_state_dir, &mut index);
+    Ok((index, load_dirty || heal_dirty))
 }
 
 async fn load_healed_images_index(
     state: &AppState,
     app_state_dir: &Path,
 ) -> Result<ImagesIndex, std::io::Error> {
-    let mut index = load_images_index(app_state_dir).await?;
-    if heal_images_index_in_memory(app_state_dir, &mut index) {
-        save_images_index(state, app_state_dir, &index).await?;
-    }
-    Ok(index)
+    let index_path = images_index_path(app_state_dir);
+    with_path_lock(&state.write_chains, &index_path, async {
+        let (index, dirty) = prepare_images_index(app_state_dir).await?;
+        if dirty {
+            save_images_index_unlocked(app_state_dir, &index).await?;
+        }
+        Ok(index)
+    })
+    .await
 }
 
 async fn remove_image_blob(app_state_dir: &Path, file_name: &str) {
@@ -897,23 +1002,29 @@ pub async fn set_active_image_version(
     ensure_images_dir(&app_state_dir)
         .await
         .map_err(|e| e.to_string())?;
-    let mut index = load_healed_images_index(state, &app_state_dir)
-        .await
-        .map_err(|e| e.to_string())?;
-    let Some(entry) = index.images.iter_mut().find(|item| item.id == clean_id) else {
-        return Err("Image not found.".into());
-    };
-    if find_version(entry, version_id).is_none() {
-        return Err("Version not found.".into());
-    }
-    entry.active_version_id = version_id.to_string();
-    apply_active_version_mirror(entry);
-    entry.updated_at = chrono::Utc::now().timestamp_millis();
-    let result = to_generated_image(&app_state_dir, entry);
-    save_images_index(state, &app_state_dir, &index)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(result)
+    let index_path = images_index_path(&app_state_dir);
+    with_path_lock(&state.write_chains, &index_path, async {
+        let (mut index, dirty) = prepare_images_index(&app_state_dir)
+            .await
+            .map_err(|e| e.to_string())?;
+        let Some(entry) = index.images.iter_mut().find(|item| item.id == clean_id) else {
+            return Err("Image not found.".into());
+        };
+        if find_version(entry, version_id).is_none() {
+            return Err("Version not found.".into());
+        }
+        entry.active_version_id = version_id.to_string();
+        apply_active_version_mirror(entry);
+        entry.updated_at = chrono::Utc::now().timestamp_millis();
+        let result = to_generated_image(&app_state_dir, entry);
+        // Always persist after an explicit active-version change (and any heal).
+        let _ = dirty;
+        save_images_index_unlocked(&app_state_dir, &index)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(result)
+    })
+    .await
 }
 
 pub async fn generate_image(
@@ -950,13 +1061,19 @@ pub async fn generate_image(
         "new".to_string()
     };
 
-    let api_key = crate::credentials::resolve_openai_api_key()
-        .await
-        .trim()
-        .to_string();
-    if api_key.is_empty() {
-        return Err("OpenAI API key required.".into());
-    }
+    let stub = is_stub_images();
+    let api_key = if stub {
+        String::new()
+    } else {
+        let key = crate::credentials::resolve_openai_api_key()
+            .await
+            .trim()
+            .to_string();
+        if key.is_empty() {
+            return Err("OpenAI API key required.".into());
+        }
+        key
+    };
 
     let app_state_dir = get_app_state_dir();
     ensure_images_dir(&app_state_dir)
@@ -991,7 +1108,14 @@ pub async fn generate_image(
         source_bytes = Some((bytes, file_name));
     }
 
-    let bytes = if let Some((source, file_name)) = source_bytes {
+    let bytes = if stub {
+        // Distinct colored PNG per prompt so tip/fork switches are visible in the UI.
+        eprintln!(
+            "[harness] stub images: {} ({}) — no OpenAI call",
+            operation, prompt
+        );
+        stub_image_png(prompt, &operation)
+    } else if let Some((source, file_name)) = source_bytes {
         crate::openai::edit_image(
             &api_key,
             prompt,
@@ -1008,24 +1132,27 @@ pub async fn generate_image(
             .map_err(|e| e.to_string())?
     };
 
-    let mut index = load_healed_images_index(state, &app_state_dir)
-        .await
-        .map_err(|e| e.to_string())?;
-
     let now = chrono::Utc::now().timestamp_millis();
     let kind = if operation == "adjust" {
         "edit"
     } else {
         "generate"
     };
-    let ext = ext_for_format(&input.output_format);
+    // Stub bytes are always PNG; keep extension/format aligned.
+    let output_format = if stub {
+        "png".to_string()
+    } else {
+        input.output_format.clone()
+    };
+    let ext = ext_for_format(&output_format);
 
     let entry_id = if let Some(id) = image_id.clone() {
         id
     } else {
         Uuid::new_v4().to_string()
     };
-    let file_name = format!("{entry_id}-{now}.{ext}");
+    // Include a uuid so same-millisecond runs never share a path.
+    let file_name = format!("{entry_id}-{now}-{}.{ext}", &Uuid::new_v4().to_string()[..8]);
     let absolute_path = image_file_path(&app_state_dir, &file_name);
     atomic_write_bytes(&absolute_path, &bytes)
         .await
@@ -1042,43 +1169,52 @@ pub async fn generate_image(
         size: size.clone(),
         quality: input.quality.clone(),
         background: background.to_string(),
-        output_format: input.output_format.clone(),
+        output_format: output_format.clone(),
         created_at: now,
     };
 
-    if let Some(existing) = index.images.iter_mut().find(|item| item.id == entry_id) {
-        append_branched_version(existing, version)?;
-        existing.updated_at = now;
-    } else {
-        let mut entry = ImagesIndexEntry {
-            id: entry_id.clone(),
-            title: title_from_prompt(prompt),
-            prompt: prompt.to_string(),
-            created_at: now,
-            updated_at: now,
-            size: size.clone(),
-            quality: input.quality.clone(),
-            background: background.to_string(),
-            output_format: input.output_format.clone(),
-            file_name: Some(file_name),
-            versions: vec![],
-            active_version_id: String::new(),
-        };
-        append_branched_version(&mut entry, version)?;
-        index.images.insert(0, entry);
-    }
+    let index_path = images_index_path(&app_state_dir);
+    with_path_lock(&state.write_chains, &index_path, async {
+        // Reload under the lock so concurrent adjusts cannot overwrite each other.
+        let (mut index, _) = prepare_images_index(&app_state_dir)
+            .await
+            .map_err(|e| e.to_string())?;
 
-    save_images_index(state, &app_state_dir, &index)
-        .await
-        .map_err(|e| e.to_string())?;
+        if let Some(existing) = index.images.iter_mut().find(|item| item.id == entry_id) {
+            append_branched_version(existing, version)?;
+            existing.updated_at = now;
+        } else {
+            let mut entry = ImagesIndexEntry {
+                id: entry_id.clone(),
+                title: title_from_prompt(prompt),
+                prompt: prompt.to_string(),
+                created_at: now,
+                updated_at: now,
+                size: size.clone(),
+                quality: input.quality.clone(),
+                background: background.to_string(),
+                output_format: output_format.clone(),
+                file_name: Some(file_name),
+                versions: vec![],
+                active_version_id: String::new(),
+            };
+            append_branched_version(&mut entry, version)?;
+            index.images.insert(0, entry);
+        }
 
-    let entry = index
-        .images
-        .iter()
-        .find(|item| item.id == entry_id)
-        .cloned()
-        .ok_or_else(|| "Image not found after save.".to_string())?;
-    Ok(to_generated_image(&app_state_dir, &entry))
+        save_images_index_unlocked(&app_state_dir, &index)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let entry = index
+            .images
+            .iter()
+            .find(|item| item.id == entry_id)
+            .cloned()
+            .ok_or_else(|| "Image not found after save.".to_string())?;
+        Ok(to_generated_image(&app_state_dir, &entry))
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -1184,6 +1320,26 @@ mod tests {
         );
         assert_eq!(entry.active_version_id, entry.versions[0].id);
         assert_eq!(entry.prompt, "one");
+        assert_eq!(entry.versions[0].id, stable_version_id("a.png"));
+        assert_eq!(entry.versions[1].id, stable_version_id("b.png"));
+    }
+
+    #[test]
+    fn missing_version_ids_are_stable_across_parses() {
+        let row = serde_json::json!({
+            "fileName": "x-1.png",
+            "prompt": "hi",
+            "kind": "generate",
+            "size": "auto",
+            "quality": "low",
+            "background": "opaque",
+            "outputFormat": "png",
+            "createdAt": 1
+        });
+        let a = parse_version_obj(row.as_object().unwrap()).unwrap();
+        let b = parse_version_obj(row.as_object().unwrap()).unwrap();
+        assert_eq!(a.id, b.id);
+        assert_eq!(a.id, "fn:x-1.png");
     }
 
     #[test]
@@ -1216,6 +1372,66 @@ mod tests {
         assert_eq!(entry.active_version_id, b1.id);
     }
 
+    /// Full branch scenario without OpenAI: create → tip continue → select root → fork → tip continue on B.
+    #[test]
+    fn stub_branch_scenario_continue_then_fork() {
+        let mut entry = sample_entry("img");
+        // A1 root
+        append_branched_version(&mut entry, ver("a1", None, "?", 0, "a1.png")).unwrap();
+        assert_eq!(version_label(&entry.versions[0]), "A1");
+        let a1 = entry.versions[0].id.clone();
+
+        // Tip continue → A2
+        append_branched_version(&mut entry, ver("a2", None, "?", 0, "a2.png")).unwrap();
+        assert_eq!(entry.versions.len(), 2);
+        assert_eq!(version_label(&entry.versions[1]), "A2");
+        assert_eq!(entry.versions[1].parent_id.as_deref(), Some(a1.as_str()));
+
+        // Tip continue → A3
+        append_branched_version(&mut entry, ver("a3", None, "?", 0, "a3.png")).unwrap();
+        assert_eq!(entry.versions.len(), 3);
+        assert_eq!(version_label(&entry.versions[2]), "A3");
+
+        // Select A1 (has children) → fork B1
+        entry.active_version_id = a1.clone();
+        append_branched_version(&mut entry, ver("b1", None, "?", 0, "b1.png")).unwrap();
+        assert_eq!(entry.versions.len(), 4);
+        let b1 = entry.versions.iter().find(|v| v.file_name == "b1.png").unwrap();
+        assert_eq!(version_label(b1), "B1");
+        assert_eq!(b1.parent_id.as_deref(), Some(a1.as_str()));
+
+        // Tip continue on B → B2
+        append_branched_version(&mut entry, ver("b2", None, "?", 0, "b2.png")).unwrap();
+        assert_eq!(entry.versions.len(), 5);
+        let b2 = entry.versions.iter().find(|v| v.file_name == "b2.png").unwrap();
+        assert_eq!(version_label(b2), "B2");
+        assert_eq!(b2.parent_id.as_deref(), Some("b1"));
+
+        // Prior runs untouched
+        assert_eq!(entry.versions[0].file_name, "a1.png");
+        assert_eq!(entry.versions[1].file_name, "a2.png");
+        assert_eq!(entry.versions[2].file_name, "a3.png");
+        assert_eq!(
+            entry
+                .versions
+                .iter()
+                .map(|v| v.file_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a1.png", "a2.png", "a3.png", "b1.png", "b2.png"]
+        );
+    }
+
+    #[test]
+    fn stub_image_png_is_valid_and_prompt_sensitive() {
+        let a = stub_image_png("cat", "new");
+        let b = stub_image_png("dog", "new");
+        let c = stub_image_png("cat", "adjust");
+        assert!(a.starts_with(&[0x89, b'P', b'N', b'G']));
+        assert!(a.len() > 64);
+        assert_ne!(a, b);
+        assert_ne!(a, c);
+    }
+
     #[test]
     fn heal_drops_empty_shells() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1225,6 +1441,31 @@ mod tests {
         };
         assert!(heal_images_index_in_memory(tmp.path(), &mut index));
         assert!(index.images.is_empty());
+    }
+
+    #[test]
+    fn heal_does_not_remap_or_drop_version_runs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let images_dir = tmp.path().join("images");
+        std::fs::create_dir_all(&images_dir).unwrap();
+        // Only the latest blob exists — older run file is missing (sync race).
+        std::fs::write(images_dir.join("img-2.png"), b"new").unwrap();
+
+        let mut entry = sample_entry("img");
+        entry.file_name = Some("img-2.png".into());
+        entry.versions = vec![
+            ver("a1", None, "A", 1, "img-1.png"),
+            ver("a2", Some("a1"), "A", 2, "img-2.png"),
+        ];
+        entry.active_version_id = "a2".into();
+        let mut index = ImagesIndex {
+            images: vec![entry],
+        };
+        let changed = heal_images_index_in_memory(tmp.path(), &mut index);
+        assert!(!changed, "heal must not rewrite version history for missing blobs");
+        assert_eq!(index.images[0].versions.len(), 2);
+        assert_eq!(index.images[0].versions[0].file_name, "img-1.png");
+        assert_eq!(index.images[0].versions[1].file_name, "img-2.png");
     }
 
     #[test]

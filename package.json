@@ -11,6 +11,7 @@
   },
   "scripts": {
     "dev": "HARNESS_DEV=1 tauri dev --config src-tauri/tauri.dev.conf.json",
+    "dev:stub-images": "HARNESS_DEV=1 HARNESS_STUB_IMAGES=1 tauri dev --config src-tauri/tauri.dev.conf.json",
     "dev:web": "vite",
     "site": "serve site -l 8080",
     "prebuild": "npm run icon:icns && npm run build:speech-helper && npm run build:fn-monitor",

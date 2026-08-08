@@ -54,6 +54,8 @@ export interface HarnessAPI {
   env: {
     isHarnessE2E: () => Promise<boolean>;
     isHarnessDev: () => Promise<boolean>;
+    /** When true, image generate/adjust writes stub PNGs (no OpenAI). */
+    isStubImages: () => Promise<boolean>;
   };
   system: {
     getPlatform: () => Promise<NodeJS.Platform>;

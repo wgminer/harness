@@ -139,6 +139,8 @@ function ShellGallery() {
                   Final
                 </button>
               </div>
+            </div>
+            <div className="image-canvas__panel-footer">
               <button type="button" className="btn btn-primary image-canvas__generate">
                 Generate
               </button>

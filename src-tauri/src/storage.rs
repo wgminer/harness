@@ -164,13 +164,31 @@ pub fn write_json_pretty_sync(
     atomic_write_utf8_blocking(path, &data)
 }
 
+async fn path_lock(chains: &WriteChains, path: &Path) -> Arc<Mutex<()>> {
+    let mut map = chains.lock().await;
+    map.entry(path.to_path_buf())
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
+}
+
+/// Hold the per-path write lock across a read-modify-write critical section.
+/// Use [`atomic_write_utf8_unlocked`] for writes inside `f` to avoid re-entrant deadlock.
+pub async fn with_path_lock<F, T>(chains: &WriteChains, path: &Path, f: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    let lock = path_lock(chains, path).await;
+    let _guard = lock.lock().await;
+    f.await
+}
+
+/// Write while the caller already holds [`with_path_lock`] for `path`.
+pub async fn atomic_write_utf8_unlocked(path: &Path, data: &str) -> std::io::Result<()> {
+    atomic_write_utf8_once(path, data).await
+}
+
 pub async fn atomic_write_utf8(chains: &WriteChains, path: &Path, data: &str) -> std::io::Result<()> {
-    let lock = {
-        let mut map = chains.lock().await;
-        map.entry(path.to_path_buf())
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone()
-    };
+    let lock = path_lock(chains, path).await;
     let _guard = lock.lock().await;
     atomic_write_utf8_once(path, data).await
 }

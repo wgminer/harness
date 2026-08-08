@@ -102,6 +102,7 @@ pub fn run() {
             commands::app_get_version,
             commands::env_is_harness_dev,
             commands::env_is_harness_e2e,
+            commands::env_is_stub_images,
             commands::settings_get,
             commands::settings_set,
             commands::settings_get_system_prompt_preview,

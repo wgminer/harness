@@ -17,6 +17,12 @@ pub fn is_harness_e2e() -> bool {
     env::var("HARNESS_E2E").ok().as_deref() == Some("1")
 }
 
+/// Skip OpenAI image generate/edit and write deterministic stub PNGs instead.
+/// Opt in with `HARNESS_STUB_IMAGES=1` (also on when `HARNESS_E2E=1`).
+pub fn is_stub_images() -> bool {
+    is_harness_e2e() || env::var("HARNESS_STUB_IMAGES").ok().as_deref() == Some("1")
+}
+
 pub fn is_global_hotkey_disabled() -> bool {
     env::var("HARNESS_DISABLE_GLOBAL_HOTKEY").ok().as_deref() == Some("1")
 }
