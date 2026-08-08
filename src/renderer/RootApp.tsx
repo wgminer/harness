@@ -31,8 +31,8 @@ export function RootApp() {
 
   if (route.kind === "loading") {
     return (
-      <div className="harness-boot" data-testid="harness-boot" role="status" aria-label="Here">
-        <span className="harness-boot__wordmark">Here</span>
+      <div className="harness-boot" data-testid="harness-boot" role="status" aria-label="Harness">
+        <span className="harness-boot__wordmark">Harness</span>
       </div>
     );
   }

@@ -94,7 +94,7 @@ impl FnMonitorProcess {
                 signal: None,
             } => {
                 eprintln!(
-                    "[HarnessFnMonitor] exited with code 1 (Accessibility / event tap) — enable Accessibility for Here Dev and HarnessFnMonitor, then restart"
+                    "[HarnessFnMonitor] exited with code 1 (Accessibility / event tap) — enable Accessibility for Harness Dev and HarnessFnMonitor, then restart"
                 );
             }
             FnMonitorExit::Exited {

@@ -1,4 +1,4 @@
-# Here Roadmap
+# Harness Roadmap
 
 Two layers:
 
@@ -15,7 +15,7 @@ When considering work: *does it serve craft, trust, or ship friction — or does
 
 ### O1 — Showcase-grade layout and UI
 
-Here should feel deliberate: typography, spacing, motion, and hierarchy under real use — not a chat box in a dark skin.
+Harness should feel deliberate: typography, spacing, motion, and hierarchy under real use — not a chat box in a dark skin.
 
 | | |
 |---|---|
@@ -29,7 +29,7 @@ One personal app for chat, memory, notes, tasks, and light automation — data l
 
 | | |
 |---|---|
-| **Success** | You reach for Here first; fewer SaaS tabs; clear backup/sync. |
+| **Success** | You reach for Harness first; fewer SaaS tabs; clear backup/sync. |
 | **Signals** | Chat + tools + memory; tasks; Notes + `proposeEdit`; image library; ChatGPT/Claude import; R2 sync + conflict review; OpenAI/Ollama; dictation; **desktop→iOS sync QR**. |
 | **Gaps** | More providers, agent mode, semantic memory, inbox — **Frozen**. |
 
@@ -40,7 +40,7 @@ Capture and Q&A on phone — not desktop parity.
 | | |
 |---|---|
 | **Success** | Voice/text capture on the go; ask a question; sync with desktop via R2. |
-| **Signals** | Here Mobile: SwiftUI chat, streaming, dictation, Voice Memos import, Live Activity, R2 + conflict sheet, **Set up sync** QR, Keychain. See [ios/README.md](ios/README.md). |
+| **Signals** | Harness Mobile: SwiftUI chat, streaming, dictation, Voice Memos import, Live Activity, R2 + conflict sheet, **Set up sync** QR, Keychain. See [ios/README.md](ios/README.md). |
 | **Gaps** | Capture-first inbox; Android — **Frozen**. |
 
 ### O4 — Learning lab for building AI tools
@@ -60,7 +60,7 @@ Build, ship, and switch machines without a second project.
 | | |
 |---|---|
 | **Success** | One-command release that doesn’t hang; obvious Dev vs installed; bootstrap a second Mac from docs. |
-| **Signals** | `HARNESS_DEV` / **Here Dev** display + **Harness Dev** data dir; dist runner; non-interactive updater signing env; package-driven version bump + `versionParity` test; [BUILD.md](BUILD.md). |
+| **Signals** | `HARNESS_DEV` / **Harness Dev** display + **Harness Dev** data dir; dist runner; non-interactive updater signing env; package-driven version bump + `versionParity` test; [BUILD.md](BUILD.md). |
 | **Gaps** | Cross-machine bootstrap checklist (signing keys, credentials) — still tribal. |
 
 ---
@@ -81,9 +81,8 @@ Build, ship, and switch machines without a second project.
 
 Short list only — refresh when something ships.
 
-- [ ] **Decide: deepen Here rename?** Display brand is **Here** / **Here Dev**; data dirs, bundle IDs (`com.harness.*`), Keychain, `harness-pair` / R2 `harness/`, and `window.harness` still say Harness. Choose: stop (display-only is enough), or continue (Application Support migration, identity/Keychain dual-read, optional wire + API scrub). Serves O5 trust/friction more than product surface — don’t start until decided.
 - [x] **Desktop shell + cognitive modes** — Library drawer (hidden by default, edge/hover + pin); full-screen “You are here” home; Chat / Decide / Write / Refine modes (in-place on the open conversation). Distinct from frozen Agent mode. Mobile stays unopinionated. Serves O1/O2.
-- [ ] **Menu bar tray icon** — replace the plain white squircle (`resources/icon-tray*.png` + recording/processing variants) with a clearer Here mark (template-friendly at 18/36px).
+- [ ] **Menu bar tray icon** — replace the plain white squircle (`resources/icon-tray*.png` + recording/processing variants) with a clearer Harness mark (template-friendly at 18/36px).
 - [ ] **CSS consolidation** for the fixed dark theme (fewer one-off surfaces).
 - [ ] **Empty / loading / error** polish on primary desktop + iOS surfaces.
 - [x] **Desktop dictation transcription screen** — polish recording overlay / “Transcribing…” UI in dictation mode.
@@ -95,6 +94,12 @@ Short list only — refresh when something ships.
 ---
 
 ## Completed
+
+### 2026-08 — Revert display brand to Harness `[O5]`
+
+- User-visible brand back to **Harness** / **Harness Dev** / **Harness Mobile** (Dock, titles, Welcome, prompts, site/docs, `*.app` paths).
+- Identity was already Harness (`com.harness.*`, Application Support, Keychain, sync wire) — no data migration.
+- Compose quote unchanged: **“You are here”**.
 
 ### 2026-07 — Here display rename (light) `[O1][O5]`
 
@@ -113,7 +118,7 @@ Short list only — refresh when something ships.
 
 - **Cull** — Removed unfinished Plans objects, weather tool, nightly memory compile; theme studio already gone. Legacy `plans.json` ignored in sync merge.
 - **Sync QR pairing** — Desktop **Show Sync QR** + iOS **Set up sync** (`pairingPayload`, `SyncQrModal`, `SyncPairingSheet`).
-- **Dev profile** — `HARNESS_DEV` → separate Application Support (`Harness Dev`) + **Here Dev** window title.
+- **Dev profile** — `HARNESS_DEV` → separate Application Support (`Harness Dev`) + **Harness Dev** window title.
 - **Release hygiene** — Non-interactive updater signing password default; single-source version bump; parity tests.
 - **Contracts** — `resources/contracts/tools.json` shared across TS/Rust/Swift; `ipcNames` ↔ `generate_handler!` guard.
 - **Version** — Desktop **0.8.0** (iOS marketing version stays on its own line).
@@ -128,7 +133,7 @@ Short list only — refresh when something ships.
 
 ### 2026-05 — grid, Mobile, shell polish `[O1][O3]`
 
-- 4px grid; Here Mobile iOS; session restore; sync conflict review; dictation sessions; Claude import; Notes surface.
+- 4px grid; Harness Mobile iOS; session restore; sync conflict review; dictation sessions; Claude import; Notes surface.
 
 ### 2026-03 / 04 — foundation `[O2][O4]`
 

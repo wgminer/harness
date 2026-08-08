@@ -5,15 +5,18 @@
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm install`              | Install project dependencies.                                                                                                                                                                                                                                                                                                                                         |
 | `npm run dev`              | Run the app in development mode with hot reload.                                                                                                                                                                                                                                                                                                                      |
-| `npm run build`            | Runs **prebuild** first: `icon:icns`, then `build:speech-helper` and `build:fn-monitor` on macOS, then compiles the renderer to `dist-web/`. |
+| `npm run build`            | Runs **prebuild** first: `icon:icns` (`npm run icons`), then `build:speech-helper` and `build:fn-monitor` on macOS, then compiles the renderer to `dist-web/`. |
+| `npm run icons`            | Composite `resources/mark/horse-head.svg` onto black (dist) / blue (dev) → `resources/icon*.png` + `src-tauri/icons/*` (+ `.icns` on macOS). |
+| `npm run icons:trace`      | Optional: re-trace cream paint `resources/mark/horse-head-source.png` → SVG (needs `potrace` + Pillow). |
 | `npm run dist`             | Full pipeline: native helpers → vite build → `tauri build` (DMG + `.app` on macOS). Does **not** bump version unless you pass `--bump`.                                                                                                                                                                  |
 | `npm run dist:mac`         | Same as `dist` on macOS. Use for the main Mac build and with `--replace`.                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:quick`   | Adhoc-signed local build (`APPLE_SIGNING_IDENTITY=-`, no version bump). Not for distribution.                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:replace` | `dist:mac` with `--replace`: copy the built `.app` into `/Applications`.                                                                                                                                                                                                                                                                                              |
 | `npm run release`          | Bumps patch version, signed+notarized `dist:mac`, verify trust, publish GitHub Release + `latest.json`, push tag. |
-| `npm run icon:icns`        | Generate `build/icon.icns` from the project icon assets.                                                                                                                                                                                                                                                                                                              |
+| `npm run icon:icns`        | Alias of `npm run icons` (SVG mark → dist/dev PNGs + icns).                                                                                                                                                                                                                                                                                                          |
 | `npm run build:speech-helper` | **(macOS)** Build `native/HarnessSpeech` and copy the CLI into `resources/HarnessSpeech`. Needs Xcode Command Line Tools and Swift. |
 | `npm run build:fn-monitor` | **(macOS)** Build `native/HarnessFnMonitor` for the global Fn dictation shortcut. |
+| `npm run storybook`        | Local-only UI catalog (buttons and other controls against real CSS tokens). Not part of dist/release. |
 
 
 This guide walks you through creating a double-clickable, signed (and optionally notarized) Mac app using your Apple Developer account.
@@ -22,12 +25,12 @@ This guide walks you through creating a double-clickable, signed (and optionally
 
 ## Dev vs installed profiles
 
-`npm run dev` sets `HARNESS_DEV=1` and merges [`src-tauri/tauri.dev.conf.json`](src-tauri/tauri.dev.conf.json) (`productName` **Here Dev** / bundle id `com.harness.app.dev`). Display name and data folder are **split**: Dock / window / Privacy & Security show **Here** / **Here Dev**, while Application Support folders stay **`Harness`** / **`Harness Dev`** so existing profiles keep working. Bundle IDs remain `com.harness.*`. Tray icons still use the same production assets.
+`npm run dev` sets `HARNESS_DEV=1` and merges [`src-tauri/tauri.dev.conf.json`](src-tauri/tauri.dev.conf.json) (`productName` **Harness Dev** / bundle id `com.harness.app.dev`). Dev and installed builds use separate Application Support folders and macOS app identities; credentials, sync, and audio are not split across profiles. Bundle IDs remain `com.harness.*`. App icons share one SVG mark (`resources/mark/horse-head.svg`) on black (dist) vs blue (dev); tray icons are still shared production assets.
 
 | Mode | How you launch | App Support folder (macOS) | System name (Dock / A11y) |
 |------|----------------|----------------------------|---------------------------|
-| Development | `npm run dev` | `~/Library/Application Support/Harness Dev` | **Here Dev** |
-| Installed | `/Applications/Here.app` or `npm run dist:mac:replace` | `~/Library/Application Support/Harness` | **Here** |
+| Development | `npm run dev` | `~/Library/Application Support/Harness Dev` | **Harness Dev** |
+| Installed | `/Applications/Harness.app` or `npm run dist:mac:replace` | `~/Library/Application Support/Harness` | **Harness** |
 
 ### What is separate (not shared)
 
@@ -60,13 +63,13 @@ Voice is transcribed locally with Apple's **Speech** framework via the `HarnessS
 - **macOS 26+:** `SpeechAnalyzer` + `SpeechTranscriber` for long-form recordings
 - **Older macOS:** `SFSpeechRecognizer` with on-device recognition and chunked audio
 
-Grant **Microphone** and **Speech Recognition** when Here prompts you (System Settings → Privacy & Security). Fn also needs **Accessibility**. After toggling any of these, quit and reopen the app. Settings → Voice has buttons to ask for Microphone / open those privacy panes (and Accessibility for Fn). On older macOS, also ensure the dictation language is installed under Keyboard → Dictation.
+Grant **Microphone** and **Speech Recognition** when Harness prompts you (System Settings → Privacy & Security). Fn also needs **Accessibility**. After toggling any of these, quit and reopen the app. Settings → Voice has buttons to ask for Microphone / open those privacy panes (and Accessibility for Fn). On older macOS, also ensure the dictation language is installed under Keyboard → Dictation.
 
-Packaged apps must be signed with the hardened-runtime entitlement `com.apple.security.device.audio-input` ([`src-tauri/entitlements.plist`](src-tauri/entitlements.plist), wired via `bundle.macOS.entitlements`). Without it, macOS silently denies the mic — **no prompt and no Here row** under Privacy → Microphone.
+Packaged apps must be signed with the hardened-runtime entitlement `com.apple.security.device.audio-input` ([`src-tauri/entitlements.plist`](src-tauri/entitlements.plist), wired via `bundle.macOS.entitlements`). Without it, macOS silently denies the mic — **no prompt and no Harness row** under Privacy → Microphone.
 
 Packaged apps bundle `HarnessSpeech` in `Contents/Resources/`. Development builds load it from `resources/HarnessSpeech` after `npm run build:speech-helper`.
 
-**New Mac checklist:** enable Microphone + Speech Recognition for **Here** (or **Here Dev** when using `npm run dev`), then Accessibility for Fn. Deny once means macOS will not re-prompt — flip the toggle in System Settings. If Microphone never lists Here, rebuild/reinstall a dist that includes the audio-input entitlement (`codesign -d --entitlements :- …/Here.app` should show `com.apple.security.device.audio-input`).
+**New Mac checklist:** enable Microphone + Speech Recognition for **Harness** (or **Harness Dev** when using `npm run dev`), then Accessibility for Fn. Deny once means macOS will not re-prompt — flip the toggle in System Settings. If Microphone never lists Harness, rebuild/reinstall a dist that includes the audio-input entitlement (`codesign -d --entitlements :- …/Harness.app` should show `com.apple.security.device.audio-input`).
 ---
 
 ## 2. One-time: Create a “Developer ID Application” certificate
@@ -120,7 +123,7 @@ Set `APPLE_CERTIFICATE` to the contents of that file and `APPLE_CERTIFICATE_PASS
 Notarization makes Gatekeeper accept your app without “damaged” / “unidentified developer” warnings on other Macs.
 
 1. Go to [appleid.apple.com](https://appleid.apple.com) → Sign In and Security → **App-Specific Passwords**.
-2. Generate a new app-specific password (e.g. name: “Here notarization”).
+2. Generate a new app-specific password (e.g. name: “Harness notarization”).
 3. Copy the generated password; you’ll use it as `APPLE_PASSWORD` (this is **not** your normal Apple ID password).
 
 ---
@@ -171,7 +174,7 @@ npm run dist:mac:replace
 
 Equivalent: `npm run dist:mac -- --replace` (the dedicated script avoids the extra `--`).
 
-Quit Here if it is running before replacing, so the copy can succeed.
+Quit Harness if it is running before replacing, so the copy can succeed.
 
 - If you set `APPLE_SIGNING_IDENTITY` but **omit** notarization credentials (`APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID`), the app is signed but **not** notarized. Other Macs often see Gatekeeper **“damaged”** or **“cannot be opened”** — **do not ship** builds made this way.
 - If you set signing **and** notarization vars, Tauri signs, notarizes, and staples. Then run `npm run verify:mac-trust` before sharing.
@@ -187,10 +190,10 @@ On the Mac where you built (or on CI, this runs automatically after pack), confi
 npm run verify:mac-trust
 ```
 
-This looks for `src-tauri/target/release/bundle/macos/Here.app`, then fallbacks under `dist/mac-*`. To check a specific bundle:
+This looks for `src-tauri/target/release/bundle/macos/Harness.app`, then fallbacks under `dist/mac-*`. To check a specific bundle:
 
 ```bash
-npm run verify:mac-trust -- /path/to/Here.app
+npm run verify:mac-trust -- /path/to/Harness.app
 ```
 
 **Only share the DMG** from a build where `verify:mac-trust` passes. Prefer the DMG over AirDrop’ing a bare `.app`.
@@ -198,7 +201,7 @@ npm run verify:mac-trust -- /path/to/Here.app
 Outputs (for Mac) are under:
 
 - `src-tauri/target/release/bundle/dmg/Here_<version>_*.dmg` – installer from `npm run dist` / `dist:mac` (this is what you share)
-- `src-tauri/target/release/bundle/macos/Here.app` – app bundle (verify this; don’t ship it alone)
+- `src-tauri/target/release/bundle/macos/Harness.app` – app bundle (verify this; don’t ship it alone)
 - `dist/harness-vx.x.x-mac.dmg` / `.zip` – versioned copies created by `npm run release` when publishing
 
 ---
@@ -241,7 +244,7 @@ This command:
 5. Collects DMG, ZIP, updater bundle, and `latest.json`, then publishes them to GitHub Releases on this repo.
 6. Creates git tag `vX.Y.Z` and pushes tag + `main`.
 
-Installed copies of Here check GitHub on launch and show an **Update** button in the sidebar when a newer release exists.
+Installed copies of Harness check GitHub on launch and show an **Update** button in the sidebar when a newer release exists.
 
 Optional flags:
 
@@ -286,7 +289,7 @@ You can archive the old [`wgminer/harness-site`](https://github.com/wgminer/harn
 In `src-tauri/tauri.conf.json`:
 
 - `identifier`: e.g. `com.harness.app` (reverse-DNS bundle id).
-- `productName`: **Here** (Dock/Finder name; version is shown inside the app, not in the title).
+- `productName`: **Harness** (Dock/Finder name; version is shown inside the app, not in the title).
 
 Update `author` and `description` in `package.json` as needed.
 
@@ -295,7 +298,7 @@ Update `author` and `description` in `package.json` as needed.
 ## Troubleshooting
 
 - **“App is damaged” / Gatekeeper on another Mac**  
-The artifact was **adhoc-signed** or **not notarized**. Confirm `codesign -dv --verbose=4 …/Here.app` shows `Developer ID Application: …` (not `Signature=adhoc`). Ensure `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` were set at build time, then run `npm run verify:mac-trust`. Share the **DMG**, not a bare `.app`.
+The artifact was **adhoc-signed** or **not notarized**. Confirm `codesign -dv --verbose=4 …/Harness.app` shows `Developer ID Application: …` (not `Signature=adhoc`). Ensure `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` were set at build time, then run `npm run verify:mac-trust`. Share the **DMG**, not a bare `.app`.
 - **“No identity found” / signing fails**  
 Run `security find-identity -v -p codesigning` and set `APPLE_SIGNING_IDENTITY` to the exact `Developer ID Application: …` string. On CI, also set `APPLE_CERTIFICATE` + `APPLE_CERTIFICATE_PASSWORD`.
 - **Notarization fails with “Invalid credentials”**  
@@ -308,9 +311,9 @@ Apple rejected nested helpers (`HarnessSpeech`, `HarnessFnMonitor` under `Conten
 Check Console.app for Rust panics. Ensure native helpers (`HarnessSpeech`, `HarnessFnMonitor`) were built (`npm run prebuild`).
 - **HarnessFnMonitor restart loop / global Fn hotkey not working**  
 If logs show `terminated by signal 9`, Crash Reports will usually say `SIGKILL (Code Signature Invalid)` — rebuild the helper (`npm run build:fn-monitor`) so it is codesigned, then restart the app.  
-If logs show exit code 1 (Accessibility / event tap), enable **Accessibility** for **Here Dev** (or **Here**) and **HarnessFnMonitor** if listed separately in System Settings → Privacy & Security → Accessibility, then restart the app. You can also run `resources/HarnessFnMonitor` once from a terminal to trigger the permission prompt.
-- **Microphone denied / Here missing from Privacy → Microphone**  
-Signed builds use the hardened runtime. Without `com.apple.security.device.audio-input` in `bundle.macOS.entitlements`, macOS denies mic access silently (no prompt, no Settings row). Confirm with `codesign -d --entitlements :- /path/to/Here.app`, rebuild via `npm run dist:mac`, reinstall, then use Settings → Voice → Ask For Microphone.
+If logs show exit code 1 (Accessibility / event tap), enable **Accessibility** for **Harness Dev** (or **Harness**) and **HarnessFnMonitor** if listed separately in System Settings → Privacy & Security → Accessibility, then restart the app. You can also run `resources/HarnessFnMonitor` once from a terminal to trigger the permission prompt.
+- **Microphone denied / Harness missing from Privacy → Microphone**  
+Signed builds use the hardened runtime. Without `com.apple.security.device.audio-input` in `bundle.macOS.entitlements`, macOS denies mic access silently (no prompt, no Settings row). Confirm with `codesign -d --entitlements :- /path/to/Harness.app`, rebuild via `npm run dist:mac`, reinstall, then use Settings → Voice → Ask For Microphone.
 - **Build without distribution signing (local only)**  
 `npm run dist:mac:quick` forces `APPLE_SIGNING_IDENTITY=-` (adhoc). Do not share that DMG.
 

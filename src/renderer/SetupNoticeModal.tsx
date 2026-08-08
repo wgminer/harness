@@ -16,7 +16,7 @@ export function SetupNoticeModal({ open, gaps, onConfigure, onDismiss }: SetupNo
     <Modal
       open={open}
       onClose={onDismiss}
-      title="Welcome to Here"
+      title="Welcome to Harness"
       data-testid="setup-notice-modal"
       footer={
         <button type="button" className="btn" onClick={onDismiss}>
@@ -25,7 +25,7 @@ export function SetupNoticeModal({ open, gaps, onConfigure, onDismiss }: SetupNo
       }
     >
       <p className="setup-notice-lead">
-        Here works locally on your Mac. Chat needs an OpenAI API key. Cloud sync is optional — set
+        Harness works locally on your Mac. Chat needs an OpenAI API key. Cloud sync is optional — set
         up R2 when you want to pull data from another device.
       </p>
       {required.length > 0 && (

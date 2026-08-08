@@ -12,13 +12,13 @@ enum SyncEngineError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "Configure Cloudflare R2 in Settings to sync with desktop Here."
+            return "Configure Cloudflare R2 in Settings to sync with desktop Harness."
         case .bundleHashMismatch:
             return "Backup bundle failed integrity check."
         case .manifestMissing:
-            return "No manifest in remote backup. Sync from desktop Here first."
+            return "No manifest in remote backup. Sync from desktop Harness first."
         case .bundleMissing:
-            return "No backup bundle in remote storage. Sync from desktop Here first."
+            return "No backup bundle in remote storage. Sync from desktop Harness first."
         }
     }
 }

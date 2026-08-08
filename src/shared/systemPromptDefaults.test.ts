@@ -60,7 +60,7 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
     expect(DEFAULT_SYSTEM_PROMPT.shared).toBe(c.shared);
     expect(DEFAULT_SYSTEM_PROMPT.desktop).toContain("[CORE_INSTRUCTIONS]");
     expect(DEFAULT_SYSTEM_PROMPT.desktop).toContain("[FORMATTING_CAPABILITIES]");
-    expect(DEFAULT_SYSTEM_PROMPT.ios).toContain("Here Mobile");
+    expect(DEFAULT_SYSTEM_PROMPT.ios).toContain("Harness Mobile");
     expect(DEFAULT_SYSTEM_PROMPT.shared).not.toContain("[FORMATTING_CAPABILITIES]");
   });
 });
@@ -82,6 +82,6 @@ describe("assembleStaticSystemPrompt", () => {
     expect(desktop.startsWith(DEFAULT_SYSTEM_PROMPT_SHARED)).toBe(true);
     expect(ios.startsWith(DEFAULT_SYSTEM_PROMPT_SHARED)).toBe(true);
     expect(desktop).toContain("local desktop app");
-    expect(ios).toContain("Here Mobile");
+    expect(ios).toContain("Harness Mobile");
   });
 });

@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Here uses your microphone to record voice messages for transcription.</string>
+  <string>Harness uses your microphone to record voice messages for transcription.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>Here uses speech recognition to transcribe your voice recordings on this Mac.</string>
+  <string>Harness uses speech recognition to transcribe your voice recordings on this Mac.</string>
 </dict>
 </plist>

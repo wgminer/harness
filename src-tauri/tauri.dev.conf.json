@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Here Dev",
+  "productName": "Harness Dev",
   "identifier": "com.harness.app.dev",
   "app": {
     "windows": [
       {
-        "title": "Here Dev"
+        "title": "Harness Dev"
       }
     ]
   },

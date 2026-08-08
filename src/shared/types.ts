@@ -116,7 +116,7 @@ export interface Settings {
     autoSend: boolean;
     /** macOS menu bar icon + global Fn dictation hotkey. */
     globalFnHotkey: boolean;
-    /** When Fn dictation starts while Here is unfocused, raise/activate the main window. */
+    /** When Fn dictation starts while Harness is unfocused, raise/activate the main window. */
     bringToFrontOnBackgroundDictation: boolean;
   };
   transcription?: {
@@ -149,6 +149,8 @@ export interface Settings {
   chat?: {
     /** When true, app launch opens the centered compose splash instead of restoring the last session. */
     openToComposeOnLaunch: boolean;
+    /** When true, selecting text in chat looks up a Tavily image popover. */
+    selectionImageLookup: boolean;
   };
   /** Desktop appearance (accent drives derived CSS tokens). */
   appearance?: {
@@ -213,6 +215,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   chat: {
     openToComposeOnLaunch: true,
+    selectionImageLookup: false,
   },
   appearance: {
     accent: DEFAULT_ACCENT,

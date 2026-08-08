@@ -61,9 +61,9 @@ struct SystemPromptSettings: Equatable {
         else {
             assertionFailure("resources/contracts/systemPrompt.json failed to load or parse from the app bundle")
             return SystemPromptSettings(
-                shared: "You are Here — a thinking partner in a personal app.",
-                desktop: "[CORE_INSTRUCTIONS]\nYou are Here running in a local desktop app.",
-                ios: "[CORE_INSTRUCTIONS]\nYou are Here on iOS (Here Mobile)."
+                shared: "You are Harness — a thinking partner in a personal app.",
+                desktop: "[CORE_INSTRUCTIONS]\nYou are Harness running in a local desktop app.",
+                ios: "[CORE_INSTRUCTIONS]\nYou are Harness on iOS (Harness Mobile)."
             )
         }
         return SystemPromptSettings(shared: shared, desktop: desktop, ios: ios)

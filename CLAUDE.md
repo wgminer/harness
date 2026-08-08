@@ -1,12 +1,21 @@
-# Here — agent notes
+# Harness — agent notes
 
 Concise guardrails for AI-assisted work in this repo. Full build/packaging detail lives in [BUILD.md](BUILD.md); outcomes in [ROADMAP.md](ROADMAP.md).
+
+## Vocabulary
+
+Use product terms from [`docs/glossary.md`](docs/glossary.md). Highlights:
+
+- A **surface** is a specific part of the app (UI screen / focused area), not a client platform.
+- **Chat UI** and **dictation screen** are distinct surfaces — do not conflate voice capture/transcription chrome with the conversation thread.
+- Core objects: **conversation**, **message**, **note**, **task**, **memory**, **image**.
+- Desktop **chat modes**: Chat / Decide / Write / Refine (not Agent mode).
 
 ## Single source of truth
 
 **Do not hand-copy cross-language contracts.** When a value is shared across TypeScript, Rust, and/or Swift, add or extend a file under [`resources/contracts/`](resources/contracts/) and wire consumers to read it.
 
-- **Today:** [`resources/contracts/tools.json`](resources/contracts/tools.json) — OpenAI tool schemas (desktop `include_str!`, iOS bundle resource, TS can import the same path). [`resources/contracts/systemPrompt.json`](resources/contracts/systemPrompt.json) — shared / desktop / iOS system prompt fields (contract-only; not settings-overridable). [`resources/contracts/chatModes.json`](resources/contracts/chatModes.json) — desktop chat mode labels/overlays. [`resources/contracts/chatStreamBatch.json`](resources/contracts/chatStreamBatch.json) — coarse chat/note stream UI flush thresholds.
+- **Today:** [`resources/contracts/tools.json`](resources/contracts/tools.json) — OpenAI tool schemas (desktop `include_str!`, iOS bundle resource, TS can import the same path). [`resources/contracts/systemPrompt.json`](resources/contracts/systemPrompt.json) — shared / desktop / iOS system prompt fields (contract-only; not settings-overridable). [`resources/contracts/chatModes.json`](resources/contracts/chatModes.json) — desktop chat mode labels/overlays. [`resources/contracts/chatStreamBatch.json`](resources/contracts/chatStreamBatch.json) — coarse chat/note stream UI flush thresholds. [`resources/contracts/homeHeaderQuotes.json`](resources/contracts/homeHeaderQuotes.json) — compose-screen rotating header one-liners (desktop + iOS).
 - **Planned:** model names, sync scopes, gated tool names, and other shared value contracts.
 
 If code cannot share a file (logic mirrors), add a **parity test** that reads the real sources and fails on drift — same pattern as `src/shared/versionParity.test.ts` and `src/shared/ipcNames.test.ts`.
@@ -29,7 +38,7 @@ Vitest includes version parity, ipcNames ↔ `generate_handler!` parity, sync-me
 
 ## Dev vs installed data dirs
 
-`npm run dev` sets `HARNESS_DEV=1` and merges `src-tauri/tauri.dev.conf.json`. **Display** name is **Here Dev** (Dock / window / Accessibility); **data folder** stays **`~/Library/Application Support/Harness Dev`**. Installed builds display as **Here** with data under **`~/Library/Application Support/Harness`**. Bundle IDs remain `com.harness.app.dev` / `com.harness.app`. Credentials, sync, and audio are **not** split — only the on-disk profile root and macOS app identity. See [BUILD.md](BUILD.md) (development vs installed Application Support).
+`npm run dev` sets `HARNESS_DEV=1` and merges `src-tauri/tauri.dev.conf.json`. **Display** name is **Harness Dev** (Dock / window / Accessibility); **data folder** is **`~/Library/Application Support/Harness Dev`**. Installed builds display as **Harness** with data under **`~/Library/Application Support/Harness`**. Bundle IDs remain `com.harness.app.dev` / `com.harness.app`. Credentials, sync, and audio are **not** split — only the on-disk profile root and macOS app identity. See [BUILD.md](BUILD.md) (development vs installed Application Support).
 
 ## Dist / release confirmation
 

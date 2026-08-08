@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PictureInPicture2, SquareArrowDownLeft } from "lucide-react";
+import { Pin, SquareArrowDownLeft } from "lucide-react";
 import {
   stripLeadingMarkdownHeading,
   titleFromMarkdownContent,
@@ -17,7 +17,7 @@ export function WindowedNoteView({ noteId }: WindowedNoteViewProps) {
   const [draft, setDraft] = useState("");
   const [savedContent, setSavedContent] = useState("");
   const [fallbackTitle, setFallbackTitle] = useState(UNTITLED_NOTE_TITLE);
-  const [pinned, setPinned] = useState(false);
+  const [pinned, setPinned] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
@@ -191,7 +191,7 @@ export function WindowedNoteView({ noteId }: WindowedNoteViewProps) {
           className="btn btn-icon windowed-note__action"
           onClick={() => void popIn()}
           aria-label="Open note in main window"
-          title="Open in Here"
+          title="Open in Harness"
           data-testid="windowed-note-pop-in"
         >
           <SquareArrowDownLeft size={14} aria-hidden />
@@ -205,7 +205,7 @@ export function WindowedNoteView({ noteId }: WindowedNoteViewProps) {
           title={pinned ? "Unpin" : "Pin on top"}
           data-testid="windowed-note-pin"
         >
-          <PictureInPicture2 size={14} aria-hidden />
+          <Pin size={14} aria-hidden />
         </button>
       </div>
       {error ? <p className="windowed-note__inline-error">{error}</p> : null}

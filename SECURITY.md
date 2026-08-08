@@ -1,6 +1,6 @@
 # Security
 
-Here is a local-first desktop app that runs an LLM with tools against your filesystem and cloud sync bucket. This document describes intentional security boundaries and how to report issues.
+Harness is a local-first desktop app that runs an LLM with tools against your filesystem and cloud sync bucket. This document describes intentional security boundaries and how to report issues.
 
 ## Reporting vulnerabilities
 
@@ -10,7 +10,7 @@ If you find a security issue, please **do not** open a public GitHub issue with 
 
 The assistant can call file tools (`list_directory`, `read_file`, `write_file`, `delete_file`, `create_directory`) when the model requests them. Allowed roots are:
 
-- Here user data directory (on disk: `~/Library/Application Support/Harness` or `Harness Dev`)
+- Harness user data directory (on disk: `~/Library/Application Support/Harness` or `Harness Dev`)
 - Your home directory
 - Your desktop directory (when available)
 
@@ -33,7 +33,7 @@ Desktop **Show Sync QR** embeds R2 credentials and (when present) the OpenAI API
 
 ## iOS companion
 
-Here Mobile stores API keys and R2 secrets in the iOS Keychain. See [ios/README.md](ios/README.md).
+Harness Mobile stores API keys and R2 secrets in the iOS Keychain. See [ios/README.md](ios/README.md).
 
 ## Updates
 

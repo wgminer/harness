@@ -1,4 +1,4 @@
-# Here Mobile — device QA
+# Harness Mobile — device QA
 
 Short manual checklist after iOS stability changes. Run on a physical device when touching audio or sync.
 

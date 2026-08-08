@@ -77,7 +77,7 @@ enum Main {
       userInfo: nil
     ) else {
       fputs(
-        "HarnessFnMonitor: CGEvent.tapCreate failed — enable Accessibility for Here (and HarnessFnMonitor if listed separately), then restart the app.\n",
+        "HarnessFnMonitor: CGEvent.tapCreate failed — enable Accessibility for Harness (and HarnessFnMonitor if listed separately), then restart the app.\n",
         stderr
       )
       exit(1)

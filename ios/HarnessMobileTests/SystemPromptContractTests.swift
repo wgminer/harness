@@ -13,7 +13,7 @@ final class SystemPromptContractTests: XCTestCase {
         XCTAssertFalse(defaults.shared.contains("[FORMATTING_CAPABILITIES]"))
         XCTAssertTrue(defaults.desktop.contains("[FORMATTING_CAPABILITIES]"))
         XCTAssertFalse(defaults.ios.contains("[FORMATTING_CAPABILITIES]"))
-        XCTAssertTrue(defaults.ios.contains("Here Mobile"))
+        XCTAssertTrue(defaults.ios.contains("Harness Mobile"))
     }
 
     func testIosPromptWebSearchInjectionStillWorks() {

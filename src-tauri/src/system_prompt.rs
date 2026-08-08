@@ -154,7 +154,7 @@ mod tests {
         assert!(default_desktop().contains("[FORMATTING_CAPABILITIES]"));
         assert!(default_ios().contains("[CORE_INSTRUCTIONS]"));
         assert!(!default_ios().contains("[FORMATTING_CAPABILITIES]"));
-        assert!(default_ios().contains("Here Mobile"));
+        assert!(default_ios().contains("Harness Mobile"));
     }
 
     #[test]

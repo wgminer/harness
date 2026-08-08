@@ -1,4 +1,4 @@
-<h1 align="center">Here</h1>
+<h1 align="center">Harness</h1>
 
 <p align="center">
   A personal place around a language model — voice-first, offline, and yours to control from input to output.
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="media/hero.png" alt="Here desktop app — sidebar library and chat" width="920" />
+  <img src="media/hero.png" alt="Harness desktop app — sidebar library and chat" width="920" />
 </p>
 
 ---
@@ -38,7 +38,7 @@ Needs Rust. On macOS, Xcode Command Line Tools for the speech helpers.
 
 ```bash
 npm run dist:mac          # signed DMG — see BUILD.md
-npm run capture:hero      # refresh media/hero.png from a running Here Dev window
+npm run capture:hero      # refresh media/hero.png from a running Harness Dev window
 ```
 
 `capture:hero` uses macOS `screencapture`. Pass `--launch` to start `npm run dev` if the window isn’t open yet.
@@ -57,4 +57,5 @@ npm run capture:hero      # refresh media/hero.png from a running Here Dev windo
 - [ROADMAP.md](ROADMAP.md) — outcomes and what’s active
 - [BUILD.md](BUILD.md) — packaging, signing, Dev vs installed
 - [SECURITY.md](SECURITY.md) — trust boundaries and reporting
+- [docs/glossary.md](docs/glossary.md) — shared product vocabulary
 - [CLAUDE.md](CLAUDE.md) — agent notes (contracts, IPC, radius)

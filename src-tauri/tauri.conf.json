@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Here",
+  "productName": "Harness",
   "version": "0.9.0",
   "identifier": "com.harness.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Here",
+        "title": "Harness",
         "width": 1024,
         "height": 768,
         "resizable": true

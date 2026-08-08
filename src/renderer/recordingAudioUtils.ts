@@ -21,7 +21,7 @@ export function isSilentAudio(buffers: Float32Array[]): boolean {
 }
 
 export const MICROPHONE_PERMISSION_DENIED_MESSAGE =
-  "Microphone access is required. Enable Here in System Settings → Privacy & Security → Microphone, then quit and reopen. If Here is not listed, install a build that includes the microphone entitlement and try Ask For Microphone again.";
+  "Microphone access is required. Enable Harness in System Settings → Privacy & Security → Microphone, then quit and reopen. If Harness is not listed, install a build that includes the microphone entitlement and try Ask For Microphone again.";
 
 export const NO_AUDIO_CAPTURED_MESSAGE =
   "No audio captured. Check that your microphone is connected and not muted, then try again.";

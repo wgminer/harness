@@ -42,7 +42,7 @@ void (async () => {
     void window.harness.recording.signalFrontendReady();
   }
   const dev = await window.harness.env.isHarnessDev();
-  if (dev && !sticky) document.title = "Here Dev";
+  if (dev && !sticky) document.title = "Harness Dev";
 })();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
