@@ -144,6 +144,8 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("chat:polishLastUser"), { conversationId }),
       generateReply: (conversationId: string) =>
         invoke(cmd("chat:generateReply"), { conversationId }),
+      ensureDictationReplyAction: (conversationId: string) =>
+        invoke<string>(cmd("chat:ensureDictationReplyAction"), { conversationId }),
       stop: () => invoke(cmd("chat:stop")),
       resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") =>
         invoke(cmd("chat:resolveGatedTool"), { pendingId, action }),
@@ -194,6 +196,11 @@ export function createHarnessAdapter(): HarnessAPI {
           "chat:titleGenerationEnded",
           (p) => cb(p.conversationId),
         ),
+      onDictationReplyActionUpdated: (cb) =>
+        subscribe<{ conversationId: string; action: string }>(
+          "chat:dictationReplyActionUpdated",
+          (p) => cb(p.conversationId, p.action),
+        ),
     },
     uiSession: {
       get: () => invoke(cmd("uiSession:get")),
@@ -241,11 +248,12 @@ export function createHarnessAdapter(): HarnessAPI {
     },
     images: {
       list: () => invoke(cmd("images:list")),
-      create: () => invoke(cmd("images:create")),
       read: (id: string) => invoke(cmd("images:read"), { id }),
       delete: (id: string) => invoke(cmd("images:delete"), { id }),
       generate: (input: ImageGenerateInput) =>
         invoke(cmd("images:generate"), { input }),
+      setActiveVersion: (id: string, versionId: string) =>
+        invoke(cmd("images:setActiveVersion"), { id, versionId }),
     },
     recording: {
       signalFrontendReady: () => invoke(cmd("recording:signalFrontendReady")),

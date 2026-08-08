@@ -2,10 +2,8 @@ import SwiftUI
 
 /// Windowing for the home conversation list — matches desktop sidebar More controls.
 enum ConversationListWindow {
-    /// Matches desktop `SIDEBAR_INITIAL_VISIBLE_COUNT`.
-    static let initialVisibleCount = 20
-    /// Matches desktop `SIDEBAR_MORE_INCREMENT`.
-    static let moreIncrement = 20
+    /// Matches desktop `SIDEBAR_PAGE_SIZE` (initial window and each More click).
+    static let pageSize = 25
 
     static func visibleItems<T>(_ items: [T], limit: Int, searching: Bool) -> [T] {
         if searching { return items }
@@ -18,7 +16,7 @@ enum ConversationListWindow {
     }
 
     static func nextLimit(current: Int, totalCount: Int) -> Int {
-        min(totalCount, max(current, 0) + moreIncrement)
+        min(totalCount, max(current, 0) + pageSize)
     }
 }
 
@@ -32,7 +30,7 @@ struct ConversationListView: View {
     @State private var showDictationSheet = false
     @State private var showComposeSheet = false
     @State private var searchQuery = ""
-    @State private var visibleLimit = ConversationListWindow.initialVisibleCount
+    @State private var visibleLimit = ConversationListWindow.pageSize
     @State private var conversationToRename: ConversationListItem?
     @State private var renameDraft = ""
     @State private var showRenameAlert = false
@@ -67,7 +65,7 @@ struct ConversationListView: View {
             await app.performSync()
             Self.hapticForSyncOutcome(configured: R2SettingsStore.isConfigured, kind: app.syncStatus.kind)
         }
-        .navigationTitle("Here")
+        .navigationTitle("Harness")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -174,7 +172,7 @@ struct ConversationListView: View {
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                     .accessibilityLabel(
-                        "Show \(ConversationListWindow.moreIncrement) more conversations"
+                        "Show \(ConversationListWindow.pageSize) more conversations"
                     )
                 }
             }

@@ -61,13 +61,19 @@ enum PreviewSupport {
                 title: "Trip planning",
                 createdAt: now,
                 sessionKind: "chat",
-                hasAssistantReply: true
+                hasAssistantReply: true,
+                hasMessages: true,
+                titleSource: nil,
+                dictationReplyAction: nil
             ),
             secondConversationId: ConversationMeta(
                 title: nil,
                 createdAt: yesterday,
                 sessionKind: "chat",
-                hasAssistantReply: false
+                hasAssistantReply: false,
+                hasMessages: true,
+                titleSource: nil,
+                dictationReplyAction: nil
             ),
         ]
         let convPath = LocalDataLayout.fileURL(in: app.localDataDir, relativePath: LocalDataLayout.conversationsFile)

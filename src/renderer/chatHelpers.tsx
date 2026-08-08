@@ -416,6 +416,4 @@ export function SaveToNotesButton({
   );
 }
 
-export const SCROLL_TOP_THRESHOLD = 24;
-
 export type VoiceState = "idle" | "recording" | "processing";

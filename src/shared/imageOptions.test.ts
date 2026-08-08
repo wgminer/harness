@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   IMAGE_DEFAULTS,
+  IMAGE_MODE_PRESETS,
+  aspectPresetFromSize,
   backgroundAllowedForFormat,
   formatImageSize,
+  imageRenderModeFromSettings,
   parseImageSize,
+  settingsForRenderMode,
   sizeFromLegacyAspect,
   validateImageSize,
 } from "./imageOptions";
@@ -14,7 +18,7 @@ describe("imageOptions", () => {
     expect(sizeFromLegacyAspect("square")).toBe("1024x1024");
     expect(sizeFromLegacyAspect("landscape")).toBe("1536x1024");
     expect(sizeFromLegacyAspect("portrait")).toBe("1024x1536");
-    expect(sizeFromLegacyAspect("auto")).toBe("auto");
+    expect(sizeFromLegacyAspect("auto")).toBe("1024x1024");
   });
 
   it("parses and formats WxH sizes", () => {
@@ -37,9 +41,30 @@ describe("imageOptions", () => {
     expect(backgroundAllowedForFormat("png", "transparent")).toBe("transparent");
   });
 
-  it("has auto defaults", () => {
-    expect(IMAGE_DEFAULTS.size).toBe("auto");
+  it("defaults to draft mode settings", () => {
+    expect(IMAGE_DEFAULTS.mode).toBe("draft");
+    expect(IMAGE_DEFAULTS.size).toBe("1024x1024");
+    expect(IMAGE_DEFAULTS.quality).toBe("low");
     expect(IMAGE_DEFAULTS.outputFormat).toBe("png");
+    expect(IMAGE_DEFAULTS.background).toBe("opaque");
+    expect(settingsForRenderMode("draft").quality).toBe(IMAGE_MODE_PRESETS.draft.quality);
+    expect(settingsForRenderMode("final").quality).toBe(IMAGE_MODE_PRESETS.final.quality);
+  });
+
+  it("snaps stored sizes to aspect presets", () => {
+    expect(aspectPresetFromSize("1024x1024")).toBe("1024x1024");
+    expect(aspectPresetFromSize("1536x1024")).toBe("1536x1024");
+    expect(aspectPresetFromSize("auto")).toBe("1024x1024");
+    expect(aspectPresetFromSize("1280x720")).toBe("1536x1024");
+    expect(aspectPresetFromSize("720x1280")).toBe("1024x1536");
+    expect(aspectPresetFromSize("square")).toBe("1024x1024");
+  });
+
+  it("infers draft vs final from quality", () => {
+    expect(imageRenderModeFromSettings("low")).toBe("draft");
+    expect(imageRenderModeFromSettings("auto")).toBe("draft");
+    expect(imageRenderModeFromSettings("medium")).toBe("draft");
+    expect(imageRenderModeFromSettings("high")).toBe("final");
   });
 });
 

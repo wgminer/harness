@@ -7,6 +7,9 @@ export const OPENAI_CHAT_MODEL = "gpt-5.4";
 /** Short, cheap title generation. */
 export const OPENAI_TITLE_MODEL = "gpt-5.4-nano";
 
+/** Dictation reply-strip classify (same cheap model as titles). */
+export const OPENAI_DICTATION_SUGGEST_MODEL = OPENAI_TITLE_MODEL;
+
 /** Transcript cleanup / light rewriting after on-device speech transcription. */
 export const OPENAI_TRANSCRIPT_CLEANUP_MODEL = "gpt-5.4-mini";
 

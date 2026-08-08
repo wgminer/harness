@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { RefreshCw } from "lucide-react";
+import { DEFAULT_SETTINGS, type Settings } from "../shared/types";
+import { settingsSection } from "../shared/settingsPage";
+import { getCachedSettings } from "./settings/settingsSessionCache";
 
 const DEBOUNCE_MS = 350;
 const MIN_CHARS = 2;
@@ -51,11 +54,20 @@ function selectionInMessageContent(root: HTMLElement): { text: string; rect: DOM
   return { text: clamped, rect };
 }
 
+function readSelectionImageLookupEnabled(): boolean {
+  const cached = getCachedSettings();
+  if (cached) {
+    return cached.chat?.selectionImageLookup ?? DEFAULT_SETTINGS.chat!.selectionImageLookup;
+  }
+  return DEFAULT_SETTINGS.chat!.selectionImageLookup;
+}
+
 interface ChatSelectionImagePopoverProps {
   containerRef: RefObject<HTMLElement | null>;
 }
 
 export function ChatSelectionImagePopover({ containerRef }: ChatSelectionImagePopoverProps) {
+  const [enabled, setEnabled] = useState(readSelectionImageLookupEnabled);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [state, setState] = useState<LookupState>({ kind: "idle" });
@@ -63,6 +75,19 @@ export function ChatSelectionImagePopover({ containerRef }: ChatSelectionImagePo
   const debounceRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const activeQueryRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (window.harness.settings.get() as Promise<Settings>).then((settings) => {
+      if (cancelled) return;
+      setEnabled(
+        settings.chat?.selectionImageLookup ?? DEFAULT_SETTINGS.chat!.selectionImageLookup,
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const dismiss = useCallback(() => {
     requestIdRef.current += 1;
@@ -158,6 +183,11 @@ export function ChatSelectionImagePopover({ containerRef }: ChatSelectionImagePo
   }, [containerRef, dismiss, placePopover, runLookup]);
 
   useEffect(() => {
+    if (!enabled) {
+      dismiss();
+      return;
+    }
+
     const onSelectionChange = () => {
       // Defer so mouseup finishes updating the selection.
       window.requestAnimationFrame(() => syncFromSelection());
@@ -195,9 +225,9 @@ export function ChatSelectionImagePopover({ containerRef }: ChatSelectionImagePo
         window.clearTimeout(debounceRef.current);
       }
     };
-  }, [containerRef, dismiss, open, placePopover, syncFromSelection]);
+  }, [containerRef, dismiss, enabled, open, placePopover, syncFromSelection]);
 
-  if (!open || state.kind === "idle") return null;
+  if (!enabled || !open || state.kind === "idle") return null;
 
   const queryLabel =
     state.kind === "loading" ||
@@ -229,7 +259,7 @@ export function ChatSelectionImagePopover({ containerRef }: ChatSelectionImagePo
         {state.kind === "error" ? (
           <div className="chat-selection-image__status">
             {state.message.includes("Tavily API key")
-              ? "Add a Tavily key in Settings"
+              ? `Add a Tavily key in ${settingsSection("Data")}`
               : state.message}
           </div>
         ) : null}

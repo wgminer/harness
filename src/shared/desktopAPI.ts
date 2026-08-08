@@ -99,6 +99,7 @@ export interface HarnessAPI {
         hasAssistantReply?: boolean;
         hasMessages?: boolean;
         chatMode?: "chat" | "decide" | "write" | "refine";
+        dictationReplyAction?: string;
       }[]
     >;
     deleteConversation: (id: string) => Promise<void>;
@@ -186,6 +187,8 @@ export interface HarnessAPI {
     /** Replace last user message with polish instruction + same text, then stream. */
     polishLastUser: (conversationId: string) => Promise<void>;
     generateReply: (conversationId: string) => Promise<void>;
+    /** Classify-once (or return cached) dictation strip action: `run` or a vocab word. */
+    ensureDictationReplyAction: (conversationId: string) => Promise<string>;
     stop: () => Promise<void>;
     resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") => Promise<void>;
     getContextPreview: (conversationId?: string | null) => Promise<ContextPreview>;
@@ -200,6 +203,9 @@ export interface HarnessAPI {
     onConversationTitleUpdated: (cb: (conversationId: string) => void) => () => void;
     onTitleGenerationStarted: (cb: (conversationId: string) => void) => () => void;
     onTitleGenerationEnded: (cb: (conversationId: string) => void) => () => void;
+    onDictationReplyActionUpdated: (
+      cb: (conversationId: string, action: string) => void,
+    ) => () => void;
   };
   uiSession: {
     get: () => Promise<UiSession>;
@@ -249,10 +255,10 @@ export interface HarnessAPI {
   /** Generated image library objects (peer to notes/chats). */
   images: {
     list: () => Promise<GeneratedImage[]>;
-    create: () => Promise<GeneratedImage>;
     read: (id: string) => Promise<GeneratedImage | null>;
     delete: (id: string) => Promise<GeneratedImage[]>;
     generate: (input: ImageGenerateInput) => Promise<GeneratedImage>;
+    setActiveVersion: (id: string, versionId: string) => Promise<GeneratedImage>;
   };
   recording: {
     /** Call once after IPC listeners are registered so Fn monitor can start. */

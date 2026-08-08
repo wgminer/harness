@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
 const OPENAI_IMAGES_GENERATIONS_URL: &str = "https://api.openai.com/v1/images/generations";
+const OPENAI_IMAGES_EDITS_URL: &str = "https://api.openai.com/v1/images/edits";
 
 /// Max assistant↔tool round-trips per user turn. Keep in sync with iOS `OpenAIClient.maxToolCallIterations`.
 pub const MAX_TOOL_CALL_ITERATIONS: usize = 10;
@@ -221,6 +222,18 @@ fn build_image_request_body(model: &str, prompt: &str, options: &ImageGenerateOp
     })
 }
 
+fn decode_image_b64_response(parsed: &Value) -> Result<Vec<u8>, OpenAIError> {
+    let b64 = parsed
+        .pointer("/data/0/b64_json")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| OpenAIError::Api("Missing image data in OpenAI response.".into()))?;
+
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .map_err(|e| OpenAIError::Api(format!("Failed to decode image data: {e}")))
+}
+
 pub async fn generate_image(
     api_key: &str,
     prompt: &str,
@@ -242,15 +255,47 @@ pub async fn generate_image(
     }
 
     let parsed: Value = response.json().await?;
-    let b64 = parsed
-        .pointer("/data/0/b64_json")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| OpenAIError::Api("Missing image data in OpenAI response.".into()))?;
+    decode_image_b64_response(&parsed)
+}
 
-    use base64::Engine;
-    base64::engine::general_purpose::STANDARD
-        .decode(b64)
-        .map_err(|e| OpenAIError::Api(format!("Failed to decode image data: {e}")))
+/// Edit an existing image via `/v1/images/edits` (multipart).
+pub async fn edit_image(
+    api_key: &str,
+    prompt: &str,
+    image_bytes: &[u8],
+    file_name: &str,
+    mime_type: &str,
+    options: &ImageGenerateOptions,
+) -> Result<Vec<u8>, OpenAIError> {
+    let client = Client::builder().timeout(Duration::from_secs(120)).build()?;
+    let part = reqwest::multipart::Part::bytes(image_bytes.to_vec())
+        .file_name(file_name.to_string())
+        .mime_str(mime_type)
+        .map_err(|e| OpenAIError::Api(format!("Invalid image mime type: {e}")))?;
+    let form = reqwest::multipart::Form::new()
+        .text("model", openai_image_model())
+        .text("prompt", prompt.to_string())
+        .text("size", options.size.clone())
+        .text("quality", options.quality.clone())
+        .text("background", options.background.clone())
+        .text("output_format", options.output_format.clone())
+        .text("n", "1")
+        .part("image", part);
+
+    let response = client
+        .post(OPENAI_IMAGES_EDITS_URL)
+        .bearer_auth(api_key)
+        .multipart(form)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let detail = response.text().await.unwrap_or_default();
+        return Err(OpenAIError::Api(detail));
+    }
+
+    let parsed: Value = response.json().await?;
+    decode_image_b64_response(&parsed)
 }
 
 #[cfg(test)]

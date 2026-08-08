@@ -28,7 +28,8 @@ use crate::memory::{
 };
 use crate::memory_import::run_llm_context_import_now;
 use crate::images::{
-    create_image, delete_image, generate_image, list_images, read_image, ImageGenerateInput,
+    delete_image, generate_image, list_images, read_image, set_active_image_version,
+    ImageGenerateInput,
 };
 use crate::notes::{
     create_note, delete_note, list_notes, propose_note_edit, propose_note_spell_check, read_note,
@@ -394,6 +395,20 @@ pub async fn chat_generate_reply(
 }
 
 #[command(rename_all = "camelCase")]
+pub async fn chat_ensure_dictation_reply_action(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    conversation_id: String,
+) -> Result<String, String> {
+    crate::dictation_suggested_prompts::ensure_dictation_reply_action(
+        &app,
+        state.inner(),
+        &conversation_id,
+    )
+    .await
+}
+
+#[command(rename_all = "camelCase")]
 pub async fn chat_get_context_preview(
     chat: State<'_, ChatController>,
     conversation_id: Option<String>,
@@ -527,12 +542,6 @@ pub async fn images_list(state: State<'_, AppState>) -> Result<Value, String> {
 }
 
 #[command(rename_all = "camelCase")]
-pub async fn images_create(state: State<'_, AppState>) -> Result<Value, String> {
-    let image = create_image(&state).await.map_err(map_err)?;
-    serde_json::to_value(image).map_err(map_err)
-}
-
-#[command(rename_all = "camelCase")]
 pub async fn images_read(state: State<'_, AppState>, id: String) -> Result<Value, String> {
     let image = read_image(&state, &id).await.map_err(map_err)?;
     serde_json::to_value(image).map_err(map_err)
@@ -551,6 +560,18 @@ pub async fn images_generate(
 ) -> Result<Value, String> {
     let parsed: ImageGenerateInput = serde_json::from_value(input).map_err(map_err)?;
     let result = generate_image(&state, parsed).await.map_err(map_err)?;
+    serde_json::to_value(result).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_set_active_version(
+    state: State<'_, AppState>,
+    id: String,
+    version_id: String,
+) -> Result<Value, String> {
+    let result = set_active_image_version(&state, &id, &version_id)
+        .await
+        .map_err(map_err)?;
     serde_json::to_value(result).map_err(map_err)
 }
 

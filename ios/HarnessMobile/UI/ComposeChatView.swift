@@ -20,6 +20,7 @@ struct ComposeChatView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Top-third landing (1:2 free-space split) — matches desktop compose home.
                 Spacer(minLength: 0)
 
                 if !headerQuote.isEmpty {
@@ -34,6 +35,7 @@ struct ComposeChatView: View {
                         .frame(maxWidth: .infinity)
                 }
 
+                Spacer(minLength: 0)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

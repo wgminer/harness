@@ -29,7 +29,7 @@ interface ChatSurfaceProps {
   llmActionsEnabled?: boolean;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
-  /** Mode picker shown in the reply strip (in place of Continue) while awaiting a reply. */
+  /** Reply-strip controls while awaiting a reply (suggested prompts or mode picker). */
   replyModeControl?: ReactNode;
   onOptionSelect?: (label: string) => void | Promise<void>;
   liveNoteStream?: LiveNoteStream | null;
@@ -106,7 +106,7 @@ export function ChatSurface({
   const centerSingleMessage =
     displayMessages.length === 1 && !sending && !streamingContent;
 
-  const { hasScrolled, onScroll, onKeyDown, scrollToTop } = useChatScrollController({
+  const { onScroll, onKeyDown } = useChatScrollController({
     scrollRef: chatAreaRef,
     transcriptRef,
     chatPaneRef,
@@ -129,21 +129,10 @@ export function ChatSurface({
       <div
         ref={chatAreaRef}
         className={centerSingleMessage ? "chat-scroll chat-scroll--single-message" : "chat-scroll"}
-        data-scrolled={hasScrolled || undefined}
         onScroll={onScroll}
         onKeyDown={onKeyDown}
         tabIndex={-1}
       >
-        {hasScrolled && (
-          <button
-            type="button"
-            className="chat-scroll-top"
-            onClick={scrollToTop}
-            aria-label="Scroll to top"
-          >
-            Top
-          </button>
-        )}
         <header className={headerClassName ? `chat-pane-header ${headerClassName}` : "chat-pane-header"}>
           {headerContent}
         </header>

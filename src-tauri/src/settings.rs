@@ -37,7 +37,8 @@ pub fn default_settings() -> Value {
             "accessKeyId": ""
         },
         "chat": {
-            "openToComposeOnLaunch": true
+            "openToComposeOnLaunch": true,
+            "selectionImageLookup": false
         },
         "appearance": {
             "accent": DEFAULT_ACCENT
@@ -323,6 +324,16 @@ pub fn parse_settings(data: &Value) -> Value {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true)
         });
+    let selection_image_lookup = chat_raw
+        .and_then(|v| v.get("selectionImageLookup"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or_else(|| {
+            defaults
+                .get("chat")
+                .and_then(|v| v.get("selectionImageLookup"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        });
 
     let note_templates = normalize_note_templates(
         obj.and_then(|o| o.get("notes")).and_then(|v| v.get("templates")),
@@ -378,7 +389,10 @@ pub fn parse_settings(data: &Value) -> Value {
         },
         "transcription": parse_transcription(obj.and_then(|o| o.get("transcription")), &defaults),
         "sync": parse_sync(obj.and_then(|o| o.get("sync")), &defaults),
-        "chat": { "openToComposeOnLaunch": open_to_compose },
+        "chat": {
+            "openToComposeOnLaunch": open_to_compose,
+            "selectionImageLookup": selection_image_lookup
+        },
         "appearance": parse_appearance(obj.and_then(|o| o.get("appearance"))),
     })
 }
@@ -576,7 +590,7 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
         next["chat"] = merge_object_fields(
             current.get("chat").unwrap_or(&json!({})),
             chat,
-            &["openToComposeOnLaunch"],
+            &["openToComposeOnLaunch", "selectionImageLookup"],
         );
     }
 

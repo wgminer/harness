@@ -143,7 +143,8 @@ pub async fn open_sticky_window(
     }
 
     let title = note_title(state, clean_id).await?;
-    let pinned = saved.map(|entry| entry.pinned).unwrap_or(false);
+    // Fresh windows float on top; restored windows keep their saved pin state.
+    let pinned = saved.map(|entry| entry.pinned).unwrap_or(true);
 
     let window = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
         .title(&title)

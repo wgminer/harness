@@ -86,6 +86,8 @@ struct ConversationMeta: Codable, Equatable {
     var hasAssistantReply: Bool?
     var hasMessages: Bool?
     var titleSource: String?
+    /// `run` or a vocab word (Summarize / Distill / Breakdown / Proofread).
+    var dictationReplyAction: String?
 
     /// Parses desktop `conversations.json` entries, tolerating missing or numeric `createdAt`.
     static func fromDesktopJSONObject(_ object: Any) -> ConversationMeta? {
@@ -97,13 +99,15 @@ struct ConversationMeta: Codable, Equatable {
         let titleSource = dict["titleSource"] as? String
         let hasAssistantReply = dict["hasAssistantReply"] as? Bool
         let hasMessages = dict["hasMessages"] as? Bool
+        let dictationReplyAction = dict["dictationReplyAction"] as? String
         return ConversationMeta(
             title: title,
             createdAt: createdAt,
             sessionKind: sessionKind,
             hasAssistantReply: hasAssistantReply,
             hasMessages: hasMessages,
-            titleSource: titleSource
+            titleSource: titleSource,
+            dictationReplyAction: dictationReplyAction
         )
     }
 

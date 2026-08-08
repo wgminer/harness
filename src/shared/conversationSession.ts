@@ -23,6 +23,8 @@ export type ConversationListRow = {
   hasMessages?: boolean;
   /** Desktop cognitive mode; omitted means chat. */
   chatMode?: "chat" | "decide" | "write" | "refine";
+  /** Cached dictation strip action (`run` or a vocab word). */
+  dictationReplyAction?: string;
 };
 
 /** Sidebar visibility — message-less threads are hidden. */

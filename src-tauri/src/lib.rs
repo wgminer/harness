@@ -7,6 +7,7 @@ pub mod conversation_title;
 pub mod credentials;
 pub mod customization;
 pub mod dictation_recording_index;
+pub mod dictation_suggested_prompts;
 pub mod env_util;
 pub mod file_tools;
 pub mod fn_monitor;
@@ -139,6 +140,7 @@ pub fn run() {
             commands::chat_send,
             commands::chat_polish_last_user,
             commands::chat_generate_reply,
+            commands::chat_ensure_dictation_reply_action,
             commands::chat_get_context_preview,
             commands::chat_stop,
             commands::chat_resolve_gated_tool,
@@ -157,10 +159,10 @@ pub fn run() {
             commands::notes_spell_check,
             commands::search_lookup_image,
             commands::images_list,
-            commands::images_create,
             commands::images_read,
             commands::images_delete,
             commands::images_generate,
+            commands::images_set_active_version,
             system::system_get_platform,
             system::system_macos_accessibility_trusted,
             system::system_request_accessibility_prompt,

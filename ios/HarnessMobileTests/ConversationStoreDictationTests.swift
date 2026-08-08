@@ -43,15 +43,6 @@ final class ConversationStoreDictationTests: XCTestCase {
         XCTAssertEqual(DictationRecordingIndex.recordingURL(for: id)?.lastPathComponent, recording.lastPathComponent)
     }
 
-    func testPopLastUserMessageRemovesUserBubble() throws {
-        let store = ConversationStore(localDataDir: tempDir)
-        let id = try store.createDictationConversation(userMessage: "Remove me")
-
-        let popped = try store.popLastUserMessage(conversationId: id)
-        XCTAssertEqual(popped, "Remove me")
-        XCTAssertTrue(try store.loadMessages(conversationId: id).isEmpty)
-    }
-
     func testSendToConversationPreservesChatSessionKindAndLinksRecording() throws {
         let store = ConversationStore(localDataDir: tempDir)
         let id = try store.createConversation()

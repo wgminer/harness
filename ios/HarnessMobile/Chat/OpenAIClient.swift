@@ -13,21 +13,12 @@ enum OpenAIModel {
     static let chat = "gpt-5.4"
     /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_TITLE_MODEL`).
     static let title = "gpt-5.4-nano"
+    /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_DICTATION_SUGGEST_MODEL` / title).
+    static let dictationSuggest = title
     /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_TRANSCRIPT_CLEANUP_MODEL`).
     static let transcriptCleanup = "gpt-5.4-mini"
     /// OpenAI Whisper transcription (cloud fallback).
     static let whisper = "whisper-1"
-}
-
-enum DictationPolish {
-    /// Keep in sync with `src/shared/dictationPolish.ts`.
-    static let instruction =
-        "Polish and clarify the following dictation. Fix grammar and wording; keep the meaning. Reply with a clear, concise version."
-}
-
-enum DictationReplyLabel {
-    /// Keep in sync with `src/shared/dictationReplyStrip.ts`.
-    static let continueLabel = "Continue"
 }
 
 struct ChatCompletionContentPart {
@@ -351,6 +342,31 @@ final class OpenAIClient {
             throw OpenAIError.httpFailure
         }
         return text
+    }
+
+    func classifyDictationReplyAction(transcript: String) async throws -> String {
+        let cfg = DictationSuggestedPrompts.contract
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return DictationSuggestedPrompts.runAction }
+        var request = makeChatRequest(timeout: cfg.timeoutSecs)
+        let body: [String: Any] = [
+            "model": OpenAIModel.dictationSuggest,
+            "messages": [
+                ["role": "system", "content": cfg.systemPrompt],
+                ["role": "user", "content": DictationSuggestedPrompts.buildUserMessage(transcript: trimmed)],
+            ],
+            "response_format": ["type": "json_object"],
+            "max_completion_tokens": cfg.maxCompletionTokens,
+            "reasoning_effort": "low",
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode),
+              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = (json["choices"] as? [[String: Any]])?.first?["message"] as? [String: Any],
+              let text = content["content"] as? String
+        else { throw OpenAIError.httpFailure }
+        return DictationSuggestedPrompts.clampAction(text)
     }
 
     func cleanupTranscript(text: String, userInstructions: String) async throws -> String {

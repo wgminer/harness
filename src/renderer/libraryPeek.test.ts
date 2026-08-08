@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
-  LIBRARY_PEEK_HIT_ZONE_PX,
+  LIBRARY_DOCK_TRAVEL_PX,
   LIBRARY_PEEK_MAX,
+  LIBRARY_PEEK_MAX_PX,
   LIBRARY_PEEK_OVERSHOOT,
   LIBRARY_PEEK_ZONE_PX,
   computeLibraryPeekTarget,
   initialLibraryPeekSpring,
+  isPointerMovingTowardLibrary,
   libraryEdgeDistance,
+  libraryPeekMaxFraction,
   libraryPeekSpringSettled,
   peekFromDistance,
   stepLibraryPeekSpring,
+  updateLibraryPeekTowardIntent,
 } from "./libraryPeek";
 
 describe("libraryEdgeDistance", () => {
@@ -21,6 +25,62 @@ describe("libraryEdgeDistance", () => {
   it("uses width - x for right sidebar", () => {
     expect(libraryEdgeDistance(960, 1000, "right")).toBe(40);
     expect(libraryEdgeDistance(1100, 1000, "right")).toBe(0);
+  });
+});
+
+describe("isPointerMovingTowardLibrary", () => {
+  it("requires leftward motion for a left sidebar", () => {
+    expect(isPointerMovingTowardLibrary(-4, "left")).toBe(true);
+    expect(isPointerMovingTowardLibrary(4, "left")).toBe(false);
+    expect(isPointerMovingTowardLibrary(0, "left")).toBe(false);
+  });
+
+  it("requires rightward motion for a right sidebar", () => {
+    expect(isPointerMovingTowardLibrary(4, "right")).toBe(true);
+    expect(isPointerMovingTowardLibrary(-4, "right")).toBe(false);
+  });
+});
+
+describe("updateLibraryPeekTowardIntent", () => {
+  it("clears intent outside the peek zone", () => {
+    expect(
+      updateLibraryPeekTowardIntent({
+        distance: LIBRARY_PEEK_ZONE_PX + 1,
+        deltaX: -10,
+        side: "left",
+        previousToward: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps previous intent for tiny jitter inside the zone", () => {
+    expect(
+      updateLibraryPeekTowardIntent({
+        distance: 40,
+        deltaX: 0.1,
+        side: "left",
+        previousToward: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("updates from meaningful motion inside the zone", () => {
+    expect(
+      updateLibraryPeekTowardIntent({
+        distance: 40,
+        deltaX: -3,
+        side: "left",
+        previousToward: false,
+      }),
+    ).toBe(true);
+    expect(
+      updateLibraryPeekTowardIntent({
+        distance: 40,
+        deltaX: 3,
+        side: "left",
+        previousToward: true,
+      }),
+    ).toBe(false);
   });
 });
 
@@ -40,57 +100,69 @@ describe("peekFromDistance", () => {
     expect(near).toBeGreaterThan(mid);
     expect(near).toBeLessThanOrEqual(LIBRARY_PEEK_MAX);
   });
+
+  it("respects custom peekMax", () => {
+    expect(peekFromDistance(0, LIBRARY_PEEK_ZONE_PX, 0.5)).toBe(0.5);
+  });
+});
+
+describe("libraryPeekMaxFraction", () => {
+  it("maps peek px onto dock travel", () => {
+    expect(libraryPeekMaxFraction(0)).toBe(0);
+    expect(libraryPeekMaxFraction(LIBRARY_DOCK_TRAVEL_PX)).toBe(1);
+    expect(libraryPeekMaxFraction(LIBRARY_PEEK_MAX_PX)).toBeCloseTo(LIBRARY_PEEK_MAX, 2);
+  });
 });
 
 describe("computeLibraryPeekTarget", () => {
   it("peeks gradually as cursor nears the left edge", () => {
-    const far = computeLibraryPeekTarget({
-      x: LIBRARY_PEEK_ZONE_PX + 80,
-      viewportWidth: 1000,
-      side: "left",
-    });
-    expect(far.target).toBe(0);
-    expect(far.latch).toBe(false);
+    expect(
+      computeLibraryPeekTarget({
+        x: LIBRARY_PEEK_ZONE_PX + 80,
+        viewportWidth: 1000,
+        side: "left",
+      }),
+    ).toBe(0);
 
     const midX = LIBRARY_PEEK_ZONE_PX / 2;
-    const mid = computeLibraryPeekTarget({
-      x: midX,
-      viewportWidth: 1000,
-      side: "left",
-    });
-    expect(mid.target).toBe(peekFromDistance(midX));
-    expect(mid.latch).toBe(false);
+    expect(
+      computeLibraryPeekTarget({
+        x: midX,
+        viewportWidth: 1000,
+        side: "left",
+      }),
+    ).toBe(peekFromDistance(midX));
   });
 
-  it("latches inside the hit zone", () => {
-    const result = computeLibraryPeekTarget({
-      x: LIBRARY_PEEK_HIT_ZONE_PX,
-      viewportWidth: 1000,
-      side: "left",
-    });
-    expect(result.latch).toBe(true);
-    expect(result.target).toBe(1);
-  });
-
-  it("does not latch just outside the hit zone", () => {
-    const x = LIBRARY_PEEK_HIT_ZONE_PX + 1;
-    const result = computeLibraryPeekTarget({
-      x,
-      viewportWidth: 1000,
-      side: "left",
-    });
-    expect(result.latch).toBe(false);
-    expect(result.target).toBe(peekFromDistance(x));
+  it("peeks up to peekMax at the edge without latching", () => {
+    expect(
+      computeLibraryPeekTarget({
+        x: 0,
+        viewportWidth: 1000,
+        side: "left",
+      }),
+    ).toBe(LIBRARY_PEEK_MAX);
   });
 
   it("mirrors for right sidebar", () => {
-    const result = computeLibraryPeekTarget({
-      x: 1000 - LIBRARY_PEEK_HIT_ZONE_PX,
-      viewportWidth: 1000,
-      side: "right",
-    });
-    expect(result.latch).toBe(true);
-    expect(result.target).toBe(1);
+    expect(
+      computeLibraryPeekTarget({
+        x: 1000,
+        viewportWidth: 1000,
+        side: "right",
+      }),
+    ).toBe(LIBRARY_PEEK_MAX);
+  });
+
+  it("suppresses peek when not moving toward the edge", () => {
+    expect(
+      computeLibraryPeekTarget({
+        x: 0,
+        viewportWidth: 1000,
+        side: "left",
+        movingToward: false,
+      }),
+    ).toBe(0);
   });
 });
 
@@ -115,5 +187,14 @@ describe("stepLibraryPeekSpring", () => {
     }
     expect(libraryPeekSpringSettled(spring, target)).toBe(true);
     expect(spring.value).toBeCloseTo(target, 2);
+  });
+
+  it("uses custom stiffness / damping when provided", () => {
+    let soft = initialLibraryPeekSpring(0);
+    let stiff = initialLibraryPeekSpring(0);
+    const target = 0.5;
+    soft = stepLibraryPeekSpring(soft, target, 1 / 60, { stiffness: 80, damping: 20 });
+    stiff = stepLibraryPeekSpring(stiff, target, 1 / 60, { stiffness: 700, damping: 20 });
+    expect(stiff.value).toBeGreaterThan(soft.value);
   });
 });

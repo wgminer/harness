@@ -3,12 +3,7 @@ import { CHAT_MODES, type ChatModeId } from "../shared/chatModes";
 interface ChatModePickerProps {
   value: ChatModeId;
   onChange: (mode: ChatModeId) => void;
-  /**
-   * When set, every mode press (including the active one) calls this instead of
-   * onChange — used by the dictation reply strip as “continue in this mode”.
-   */
-  onSelect?: (mode: ChatModeId) => void;
-  /** `outline` matches the old Continue control in the reply strip. */
+  /** `outline` matches reply-strip chip styling (Storybook / legacy). */
   variant?: "quiet" | "outline";
   disabled?: boolean;
 }
@@ -16,7 +11,6 @@ interface ChatModePickerProps {
 export function ChatModePicker({
   value,
   onChange,
-  onSelect,
   variant = "quiet",
   disabled,
 }: ChatModePickerProps) {
@@ -42,10 +36,6 @@ export function ChatModePicker({
             tabIndex={-1}
             data-testid={`chat-mode-${mode.id}`}
             onClick={() => {
-              if (onSelect) {
-                onSelect(mode.id);
-                return;
-              }
               if (mode.id !== value) onChange(mode.id);
             }}
           >

@@ -31,10 +31,14 @@ import {
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { IDLE_UPDATE_STATUS, type UpdateStatus } from "../shared/updateStatus";
 import {
+  DEFAULT_LIBRARY_PEEK_TUNING,
   computeLibraryPeekTarget,
   initialLibraryPeekSpring,
+  libraryEdgeDistance,
+  libraryPeekMaxFraction,
   libraryPeekSpringSettled,
   stepLibraryPeekSpring,
+  updateLibraryPeekTowardIntent,
   type LibraryPeekSpring,
 } from "./libraryPeek";
 
@@ -81,13 +85,15 @@ export default function App() {
   const [openNoteInStickyWindow, setOpenNoteInStickyWindow] = useState(
     DEFAULT_UI_SESSION.openNoteInStickyWindow ?? false,
   );
-  /** Library drawer: pinned open, or temporarily open via edge hover / peek latch. */
+  /** Library drawer: pinned open, or temporarily open via dock hover after peek. */
   const [libraryPinned, setLibraryPinned] = useState(false);
   const [libraryHoverOpen, setLibraryHoverOpen] = useState(false);
   const libraryCloseTimerRef = useRef<number | null>(null);
   const appRef = useRef<HTMLDivElement>(null);
   const libraryPeekRafRef = useRef<number | null>(null);
   const libraryPeekPendingXRef = useRef<number | null>(null);
+  const libraryPeekLastXRef = useRef<number | null>(null);
+  const libraryPeekTowardRef = useRef(false);
   const libraryPeekSpringRef = useRef<LibraryPeekSpring>(initialLibraryPeekSpring());
   const libraryPeekLastTsRef = useRef<number | null>(null);
   const libraryPinnedRef = useRef(libraryPinned);
@@ -118,7 +124,7 @@ export default function App() {
     libraryCloseTimerRef.current = window.setTimeout(() => {
       setLibraryHoverOpen(false);
       libraryCloseTimerRef.current = null;
-    }, 220);
+    }, DEFAULT_LIBRARY_PEEK_TUNING.hoverCloseDelayMs);
   }, [clearLibraryCloseTimer]);
 
   const openLibraryHover = useCallback(() => {
@@ -142,6 +148,15 @@ export default function App() {
 
   useEffect(() => () => clearLibraryCloseTimer(), [clearLibraryCloseTimer]);
 
+  useEffect(() => {
+    const el = appRef.current;
+    if (!el) return;
+    el.style.setProperty(
+      "--library-latch-duration",
+      `${DEFAULT_LIBRARY_PEEK_TUNING.latchDurationMs}ms`,
+    );
+  }, []);
+
   // Sync peek CSS when pinned / hover-open latches or releases.
   useEffect(() => {
     libraryPeekSpringRef.current = initialLibraryPeekSpring(libraryPinned || libraryHoverOpen ? 1 : 0);
@@ -154,6 +169,7 @@ export default function App() {
   }, [libraryPinned, libraryHoverOpen, applyLibraryPeekCss]);
 
   // Proximity target + JS spring (CSS transitions can't overshoot while tracking the cursor).
+  // Peek only while the pointer is moving toward the library edge; full open is dock hover.
   useEffect(() => {
     if (libraryPinned || libraryHoverOpen) return;
 
@@ -176,23 +192,44 @@ export default function App() {
       const lastTs = libraryPeekLastTsRef.current;
       libraryPeekLastTsRef.current = now;
       const dtSeconds = Math.min(1 / 30, Math.max(1 / 120, lastTs == null ? 1 / 60 : (now - lastTs) / 1000));
+      const tuning = DEFAULT_LIBRARY_PEEK_TUNING;
+      const peekMax = libraryPeekMaxFraction(tuning.peekMaxPx);
 
       const rect = el.getBoundingClientRect();
-      const { target, latch } = computeLibraryPeekTarget({
-        x: pendingX - rect.left,
-        viewportWidth: rect.width,
-        side: librarySideRef.current === "right" ? "right" : "left",
+      const x = pendingX - rect.left;
+      const side = librarySideRef.current === "right" ? "right" : "left";
+      const lastX = libraryPeekLastXRef.current;
+      const deltaX = lastX == null ? 0 : pendingX - lastX;
+      libraryPeekLastXRef.current = pendingX;
+
+      const distance = libraryEdgeDistance(x, rect.width, side);
+      libraryPeekTowardRef.current = updateLibraryPeekTowardIntent({
+        distance,
+        deltaX,
+        side,
+        previousToward: libraryPeekTowardRef.current,
+        zonePx: tuning.zonePx,
       });
 
-      if (latch) {
-        openLibraryHover();
-        return;
-      }
+      const target = computeLibraryPeekTarget({
+        x,
+        viewportWidth: rect.width,
+        side,
+        zonePx: tuning.zonePx,
+        peekMax,
+        movingToward: libraryPeekTowardRef.current,
+      });
 
       libraryPeekSpringRef.current = stepLibraryPeekSpring(
         libraryPeekSpringRef.current,
         target,
         dtSeconds,
+        {
+          stiffness: tuning.stiffness,
+          damping: tuning.damping,
+          overshoot: tuning.overshoot,
+          peekMax,
+        },
       );
       applyLibraryPeekCss(libraryPeekSpringRef.current.value);
 
@@ -216,8 +253,10 @@ export default function App() {
       window.removeEventListener("pointermove", onPointerMove);
       stopPeekLoop();
       libraryPeekPendingXRef.current = null;
+      libraryPeekLastXRef.current = null;
+      libraryPeekTowardRef.current = false;
     };
-  }, [libraryPinned, libraryHoverOpen, openLibraryHover, applyLibraryPeekCss]);
+  }, [libraryPinned, libraryHoverOpen, applyLibraryPeekCss]);
 
   const [pendingHotkeyText, setPendingHotkeyText] = useState<string | null>(null);
   /** When true, hotkey text is always pre-filled (never auto-sent). Used for global recording while the app was unfocused. */
@@ -482,10 +521,16 @@ export default function App() {
   }, [uiSessionReady, view, conversationId, activeNoteId, activeImageId, openNoteInStickyWindow]);
 
   useEffect(() => {
-    const unsub = window.harness.chat.onConversationTitleUpdated(() => {
+    const unsubTitle = window.harness.chat.onConversationTitleUpdated(() => {
       void refreshConversations();
     });
-    return unsub;
+    const unsubAction = window.harness.chat.onDictationReplyActionUpdated(() => {
+      void refreshConversations();
+    });
+    return () => {
+      unsubTitle();
+      unsubAction();
+    };
   }, [refreshConversations]);
 
   const bumpTitleGen = useCallback((id: string, delta: 1 | -1) => {
@@ -589,19 +634,11 @@ export default function App() {
     }
   }, [openNoteInStickyWindow, openNoteInMain]);
 
-  const createNewImage = useCallback(async () => {
-    try {
-      const image = await window.harness.images.create();
-      setImages((prev) =>
-        [image, ...prev.filter((item) => item.id !== image.id)].sort(
-          (a, b) => b.updatedAt - a.updatedAt,
-        ),
-      );
-      openImageInMain(image.id);
-    } catch (e) {
-      console.error("Failed to create image", e);
-    }
-  }, [openImageInMain]);
+  const createNewImage = useCallback(() => {
+    // Prompt-first: open a blank canvas; the library entry is created on first generate.
+    setActiveImageId(null);
+    setView("images");
+  }, []);
 
   const handleAssignConversationId = useCallback((id: string) => {
     setConversationId(id);
@@ -670,6 +707,8 @@ export default function App() {
         (a, b) => b.updatedAt - a.updatedAt,
       ),
     );
+    // First successful generate from the compose canvas selects the new entry.
+    setActiveImageId((prev) => prev ?? image.id);
   }, []);
 
   const refreshLibraryAfterSync = useCallback(async () => {
@@ -723,21 +762,17 @@ export default function App() {
       data-sidebar={layout.sidebar}
       data-wide-view={layout.wideView}
       data-library-open={libraryOpen ? "true" : "false"}
+      data-library-overlay={libraryHoverOpen && !libraryPinned ? "true" : "false"}
     >
       <div className="app-frame">
-        <div
-          className="library-edge-hit"
-          onPointerEnter={openLibraryHover}
-          data-testid="library-edge-hit"
+        <button
+          type="button"
+          className="library-backdrop"
+          aria-label="Close library"
+          aria-hidden={!(libraryHoverOpen && !libraryPinned)}
+          tabIndex={libraryHoverOpen && !libraryPinned ? 0 : -1}
+          onClick={closeLibraryIfUnpinned}
         />
-        {libraryOpen && !libraryPinned ? (
-          <button
-            type="button"
-            className="library-backdrop"
-            aria-label="Close library"
-            onClick={closeLibraryIfUnpinned}
-          />
-        ) : null}
         <Sidebar
           conversations={sidebarConversations}
           notes={notes}
@@ -802,6 +837,9 @@ export default function App() {
                   )
                 }
                 conversationChatMode={activeChatConversation?.chatMode}
+                conversationDictationReplyAction={
+                  activeChatConversation?.dictationReplyAction ?? null
+                }
                 onConversationCreated={refreshConversations}
                 onAssignConversationId={handleAssignConversationId}
                 pendingHotkeyText={pendingHotkeyText}

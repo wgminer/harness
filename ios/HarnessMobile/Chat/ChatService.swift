@@ -1,13 +1,10 @@
 import Foundation
 
 enum ChatServiceError: LocalizedError {
-    case missingUserMessage
     case cancelled
 
     var errorDescription: String? {
         switch self {
-        case .missingUserMessage:
-            return "No user message to polish."
         case .cancelled:
             return nil
         }
@@ -28,6 +25,7 @@ final class ChatService: ObservableObject {
     private var taskToolExecutor: TaskToolExecutor?
     private var client: OpenAIClient?
     private var titleRefinementTasks: [String: Task<Void, Never>] = [:]
+    private var dictationReplyActionTasks: [String: Task<Void, Never>] = [:]
 
     init(store: ConversationStore, tasksStore: TasksStore) {
         self.store = store
@@ -195,34 +193,6 @@ final class ChatService: ObservableObject {
         try finishAssistantTurn(conversationId: conversationId, result: result)
     }
 
-    /// Pop last user message, send polish instruction + transcript, stream assistant reply.
-    func polishLastUser(
-        conversationId: String,
-        onStreamChunk: @escaping (String) -> Void,
-        onToolCall: @escaping (ToolCallRecord) -> Void
-    ) async throws {
-        guard let client else { throw OpenAIError.missingAPIKey }
-        guard let taskToolExecutor else { throw OpenAIError.missingAPIKey }
-        guard let transcript = try store.popLastUserMessage(conversationId: conversationId) else {
-            throw ChatServiceError.missingUserMessage
-        }
-
-        beginStreaming(conversationId: conversationId)
-        defer { endStreaming() }
-
-        try appendMessage(conversationId: conversationId, role: .user, content: DictationPolish.instruction)
-        try appendMessage(conversationId: conversationId, role: .user, content: transcript)
-        let apiMessages = try await buildMessages(conversationId: conversationId)
-        let result = try await client.streamChatWithTools(
-            messages: apiMessages,
-            tools: AssistantToolDefinitions.openAITools(in: store.localDataDir),
-            executeTool: makeToolExecutor(onToolCall: onToolCall),
-            onChunk: onStreamChunk
-        )
-        try throwIfStopped()
-        try finishAssistantTurn(conversationId: conversationId, result: result)
-    }
-
     private func finishAssistantTurn(
         conversationId: String,
         result: ChatCompletionResult
@@ -338,6 +308,34 @@ final class ChatService: ObservableObject {
                 // Title generation is best-effort; chat already succeeded.
             }
         }
+    }
+
+    func scheduleDictationReplyAction(conversationId: String) {
+        dictationReplyActionTasks[conversationId]?.cancel()
+        dictationReplyActionTasks[conversationId] = Task {
+            defer { dictationReplyActionTasks[conversationId] = nil }
+            _ = await ensureDictationReplyAction(conversationId: conversationId)
+        }
+    }
+
+    func ensureDictationReplyAction(conversationId: String) async -> String {
+        refreshClient()
+        if let cached = try? store.loadConversationMeta(conversationId: conversationId)?
+            .dictationReplyAction?.trimmingCharacters(in: .whitespacesAndNewlines), !cached.isEmpty {
+            return DictationSuggestedPrompts.clampAction(cached)
+        }
+        let transcript = (try? store.loadMessages(conversationId: conversationId))?
+            .first(where: { $0.messageRole == .user })?.content ?? ""
+        let action: String
+        if let client {
+            action = (try? await client.classifyDictationReplyAction(transcript: transcript))
+                ?? DictationSuggestedPrompts.runAction
+        } else {
+            action = DictationSuggestedPrompts.runAction
+        }
+        let clamped = DictationSuggestedPrompts.clampAction(action)
+        try? store.patchConversationMeta(conversationId: conversationId, dictationReplyAction: clamped)
+        return clamped
     }
 
     func stop() {

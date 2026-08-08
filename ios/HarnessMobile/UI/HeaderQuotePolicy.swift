@@ -1,10 +1,25 @@
 import Foundation
 
-/// Quote shown at the top of the conversation list.
+/// Quote shown at the top of the conversation list / compose screen.
+/// Home quotes come from bundled `resources/contracts/homeHeaderQuotes.json`
+/// (same file TypeScript imports).
 enum HeaderQuotePolicy {
-    static let homeHeaderQuote = "You are here"
+    static var homeHeaderQuotes: [String] { Self.loadHomeHeaderQuotes() }
+
+    /// Today's compose quote (rotates by UTC day — matches desktop `homeHeaderQuoteForDate`).
+    static var homeHeaderQuote: String {
+        pickHomeHeaderQuote()
+    }
 
     static let clippingsNoteTitle = "Clippings"
+
+    static func pickHomeHeaderQuote(date: Date = Date()) -> String {
+        let quotes = homeHeaderQuotes
+        guard !quotes.isEmpty else { return "You are here" }
+        let utcDay = Int(date.timeIntervalSince1970 / 86_400)
+        let index = ((utcDay % quotes.count) + quotes.count) % quotes.count
+        return quotes[index]
+    }
 
     static func headerQuote(fromNoteContent content: String, rotationIndex: Int = 0) -> String {
         let pool = numberedListItems(from: content)
@@ -60,5 +75,20 @@ enum HeaderQuotePolicy {
             options: .regularExpression
         )
         return trimmed
+    }
+
+    private static func loadHomeHeaderQuotes() -> [String] {
+        guard let url = Bundle.main.url(forResource: "homeHeaderQuotes", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let quotes = json["quotes"] as? [String]
+        else {
+            assertionFailure("resources/contracts/homeHeaderQuotes.json failed to load or parse from the app bundle")
+            return ["You are here"]
+        }
+        let cleaned = quotes
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return cleaned.isEmpty ? ["You are here"] : cleaned
     }
 }

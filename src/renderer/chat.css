@@ -2,7 +2,12 @@
  * Chat column: `--chat-composer-dock-height` is measured from the overlay composer dock.
  * `.chat-scroll` is the only scrollport and uses bottom inset padding to keep the latest
  * transcript clear of the composer. Inset is 2× (dock height + gap) so the live edge sits
- * well above the dock.
+ * well above the dock. Single-message mode (`.chat-scroll--single-message`) opts out so
+ * top-third landing is not skewed by that inset.
+ *
+ * Compose home (`.new-chat-center`) and single-message / dictation
+ * (`.chat-scroll--single-message .chat-area-inner`) share the same optical placement:
+ * free space splits 1:2 above/below so the block sits in the top third of the frame.
  */
 .chat-pane {
   --chat-composer-dock-height: var(--space-35);
@@ -15,7 +20,7 @@
   width: 100%;
 }
 
-/* Compose-first landing: centered quote + composer, no chat header. */
+/* Compose-first landing: quote + composer in the top third, no chat header. */
 .new-chat-pane {
   position: relative;
   flex: 1;
@@ -31,10 +36,33 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-6);
   padding: var(--space-8) var(--shell-pad-inline);
   box-sizing: border-box;
+}
+
+.new-chat-center::before,
+.chat-scroll.chat-scroll--single-message .chat-area-inner::before {
+  content: "";
+  flex: 1 1 0;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.new-chat-center::after,
+.chat-scroll.chat-scroll--single-message .chat-area-inner::after {
+  content: "";
+  flex: 2 1 0;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.new-chat-center-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  flex-shrink: 0;
 }
 
 .new-chat-quote {
@@ -102,19 +130,25 @@
   text-align: center;
 }
 
-/* Single-message threads (e.g. dictation): center the lone block in the viewport below the header. */
+/*
+ * Single-message threads (e.g. dictation): same top-third landing as compose home.
+ * Drop the multi-turn composer scroll inset — that padding is only for keeping a
+ * back-and-forth transcript clear of the dock, and it skews the 1:2 spacer split.
+ */
+.chat-scroll.chat-scroll--single-message {
+  padding-bottom: 0;
+  scroll-padding-bottom: 0;
+}
+
 .chat-scroll.chat-scroll--single-message .chat-area-inner {
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
 }
 
-.chat-scroll.chat-scroll--single-message .chat-area-inner > :first-child {
-  margin-top: auto;
-}
-
-.chat-scroll.chat-scroll--single-message .chat-area-inner > :last-child {
-  margin-bottom: auto;
+.chat-scroll.chat-scroll--single-message .chat-area-inner > * {
+  flex-shrink: 0;
 }
 
 /* Transcript column: max-width + flex growth (replaces former chat-area → chat-area-inner chain). */
@@ -136,7 +170,7 @@
   gap: var(--space-4);
   width: 100%;
   box-sizing: border-box;
-  padding: 0 0 calc(var(--space-2) * 2);
+  padding: 0;
 }
 
 .message-block .content {
@@ -499,30 +533,6 @@
   margin-bottom: var(--space-2);
 }
 
-.chat-scroll-top {
-  position: sticky;
-  top: var(--space-1);
-  z-index: 2;
-  display: block;
-  margin: 0 auto;
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  color: var(--fg-muted);
-  background: none;
-  border: none;
-  padding: var(--space-1) var(--space-2);
-  cursor: pointer;
-  opacity: 0.6;
-  transition:
-    opacity var(--motion-duration-ui) var(--motion-ease-standard),
-    color var(--motion-duration-ui) var(--motion-ease-standard);
-}
-
-.chat-scroll-top:hover {
-  opacity: 1;
-  color: var(--fg-muted);
-}
-
 .message-block-footer {
   display: flex;
   align-items: center;
@@ -651,8 +661,8 @@
 
 .chat-pane-header .chat-pane-title.btn:hover:not(:disabled) {
   color: var(--fg);
-  background: var(--btn-bg-hover);
-  border: 1px solid var(--border-input);
+  background: var(--overlay-subtle);
+  border-color: transparent;
 }
 
 .chat-pane-title-skeleton {
@@ -678,6 +688,24 @@
 .chat-secondary-actions .chat-mode-picker {
   justify-content: center;
   gap: var(--space-2);
+}
+
+.dictation-suggested-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dictation-suggested-prompts__chip {
+  text-align: center;
+}
+
+.dictation-suggested-prompts__chip--loading {
+  color: transparent;
+  pointer-events: none;
+  animation: title-skeleton-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
 }
 
 /* Chat composer dock — transparent shell; glass lives on `.chat-composer-inner`. */
@@ -1166,26 +1194,7 @@
   margin-top: var(--space-3);
 }
 
-.message-block .content .md-option-btn {
-  --control-size: calc(var(--grid) * 10 - var(--space-1));
-  width: auto;
-  min-width: 0;
-  flex: 0 1 auto;
-  height: var(--control-size);
-  font-size: var(--font-size-ui);
-  font-weight: 500;
-  background: var(--bg-elevated);
-  color: var(--fg);
-  border-color: var(--border-input);
-}
-
-.message-block .content .md-option-btn:hover:not(:disabled) {
-  background: var(--btn-bg-hover);
-  border-color: var(--border-light);
-  color: var(--fg);
-}
-
-.message-block .content .md-option-btn--static {
+.message-block .content .md-options span.btn {
   pointer-events: none;
   opacity: 0.6;
 }

@@ -181,7 +181,15 @@ final class ConversationStore: ObservableObject {
         try LocalDataLayout.ensureDirectories(at: localDataDir)
         let id = generateId(prefix: "conv")
         var map = try loadConversationMapRaw()
-        map[id] = ConversationMeta(title: nil, createdAt: Int64(Date().timeIntervalSince1970 * 1000), sessionKind: "chat")
+        map[id] = ConversationMeta(
+            title: nil,
+            createdAt: Int64(Date().timeIntervalSince1970 * 1000),
+            sessionKind: "chat",
+            hasAssistantReply: nil,
+            hasMessages: nil,
+            titleSource: nil,
+            dictationReplyAction: nil
+        )
         try saveConversationMap(map)
         try saveMessages(conversationId: id, messages: [])
         // Empty chats stay off the sidebar until they have messages — skip full reload.
@@ -201,7 +209,8 @@ final class ConversationStore: ObservableObject {
             sessionKind: "dictation",
             hasAssistantReply: false,
             hasMessages: true,
-            titleSource: "auto"
+            titleSource: "auto",
+            dictationReplyAction: nil
         )
         var map = try loadConversationMapRaw()
         map[id] = meta
@@ -224,26 +233,25 @@ final class ConversationStore: ObservableObject {
         return id
     }
 
-    func popLastUserMessage(conversationId: String) throws -> String? {
-        var messages = try loadMessages(conversationId: conversationId)
-        guard let last = messages.last, last.messageRole == .user else { return nil }
-        let content = last.content
-        messages.removeLast()
-        try saveMessages(conversationId: conversationId, messages: messages)
-        try reload()
-        return content
-    }
-
     func patchConversationMeta(
         conversationId: String,
         title: String? = nil,
-        titleSource: String? = nil
+        titleSource: String? = nil,
+        dictationReplyAction: String? = nil
     ) throws {
         var map = try loadConversationMapRaw()
         guard var meta = map[conversationId] else { return }
-        if meta.titleSource == "user" || meta.titleSource == "imported" { return }
-        if let title { meta.title = title }
+        if dictationReplyAction == nil, meta.titleSource == "user" || meta.titleSource == "imported" {
+            return
+        }
+        if let title {
+            if meta.titleSource == "user" || meta.titleSource == "imported" { return }
+            meta.title = title
+        }
         if let titleSource { meta.titleSource = titleSource }
+        if let dictationReplyAction {
+            meta.dictationReplyAction = dictationReplyAction
+        }
         map[conversationId] = meta
         try saveConversationMap(map)
         upsertSidebarItem(

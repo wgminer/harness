@@ -47,8 +47,8 @@ describe("tauriCommandName", () => {
     expect(tauriCommandName("notes:setStickyPinned")).toBe("notes_set_sticky_pinned");
     expect(tauriCommandName("notes:popInSticky")).toBe("notes_pop_in_sticky");
     expect(tauriCommandName("images:list")).toBe("images_list");
-    expect(tauriCommandName("images:create")).toBe("images_create");
     expect(tauriCommandName("images:generate")).toBe("images_generate");
+    expect(tauriCommandName("images:setActiveVersion")).toBe("images_set_active_version");
     expect(tauriCommandName("search:lookupImage")).toBe("search_lookup_image");
     expect(tauriCommandName("chat:getContextPreview")).toBe("chat_get_context_preview");
     expect(tauriCommandName("memory:linkDictationRecording")).toBe("memory_link_dictation_recording");

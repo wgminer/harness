@@ -35,6 +35,8 @@ struct ChatThreadView: View {
     @State private var conversationTitle = "Chat"
     @State private var streamingContent = ""
     @State private var lastLiveEdgeFollowAt = Date.distantPast
+    @State private var dictationReplyAction: String?
+    @State private var dictationReplyActionLoading = false
     @FocusState private var isComposerFocused: Bool
 
     private let autofocusComposer: Bool
@@ -174,6 +176,7 @@ struct ChatThreadView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if centerSingleMessage {
+                        // Top-third landing (1:2 free-space split) — matches compose home.
                         Spacer(minLength: 0)
                     }
 
@@ -192,9 +195,19 @@ struct ChatThreadView: View {
 
                     if showReplyActions {
                         DictationReplyStrip(
-                            onContinue: { Task { await generateReply() } }
+                            label: DictationSuggestedPrompts.displayLabel(
+                                for: dictationReplyAction ?? DictationSuggestedPrompts.runAction
+                            ),
+                            loading: dictationReplyActionLoading || dictationReplyAction == nil,
+                            disabled: isStreamingThisThread,
+                            onSelect: {
+                                Task { await handleDictationStripSelect() }
+                            }
                         )
                         .id("dictation-reply-strip")
+                        .task(id: conversationId) {
+                            await loadDictationReplyActionIfNeeded()
+                        }
                     }
 
                     if streamingMessageTimestamp != nil {
@@ -219,13 +232,14 @@ struct ChatThreadView: View {
 
                     if centerSingleMessage {
                         Spacer(minLength: 0)
+                        Spacer(minLength: 0)
                     }
 
                     ChatScrollBottomTracker()
                 }
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: centerSingleMessage ? minScrollHeight : nil, alignment: centerSingleMessage ? .center : .top)
+                .frame(minHeight: centerSingleMessage ? minScrollHeight : nil, alignment: .top)
                 .padding(.horizontal, ChatThreadLayout.horizontalInset)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
@@ -252,7 +266,7 @@ struct ChatThreadView: View {
                 )
             )
             .scrollDisabled(centerSingleMessage)
-            .defaultScrollAnchor(centerSingleMessage ? .center : .top)
+            .defaultScrollAnchor(.top)
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 12)
@@ -270,7 +284,8 @@ struct ChatThreadView: View {
     }
 
     private var minScrollHeight: CGFloat {
-        UIScreen.main.bounds.height * 0.55
+        // Fill most of the viewport so the 1:2 spacers can place the transcript in the top third.
+        UIScreen.main.bounds.height * 0.7
     }
 
     private var composerDock: some View {
@@ -512,6 +527,26 @@ struct ChatThreadView: View {
             finishStreaming()
             await reloadMessages()
         }
+    }
+
+    private func loadDictationReplyActionIfNeeded() async {
+        guard showReplyActions else { return }
+        if let cached = try? app.store.loadConversationMeta(conversationId: conversationId)?
+            .dictationReplyAction?.trimmingCharacters(in: .whitespacesAndNewlines), !cached.isEmpty {
+            dictationReplyAction = DictationSuggestedPrompts.clampAction(cached)
+            dictationReplyActionLoading = false
+            return
+        }
+        dictationReplyActionLoading = true
+        let action = await chatService.ensureDictationReplyAction(conversationId: conversationId)
+        guard !Task.isCancelled else { return }
+        dictationReplyAction = action
+        dictationReplyActionLoading = false
+    }
+
+    private func handleDictationStripSelect() async {
+        let action = DictationSuggestedPrompts.clampAction(dictationReplyAction ?? DictationSuggestedPrompts.runAction)
+        if action == DictationSuggestedPrompts.runAction { await generateReply() } else { await send(text: action) }
     }
 
     private func followLiveEdgeIfPinned(animated: Bool) {

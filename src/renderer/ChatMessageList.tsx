@@ -28,7 +28,7 @@ interface ChatMessageListProps {
   llmActionsEnabled?: boolean;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
   onPolish: () => void;
-  /** Mode picker (or other controls) shown in place of Continue while awaiting a reply. */
+  /** Reply-strip controls while awaiting a reply (suggested prompts or mode picker). */
   replyModeControl?: ReactNode;
   onOptionSelect?: (label: string) => void | Promise<void>;
   liveNoteStream?: LiveNoteStream | null;

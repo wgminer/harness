@@ -155,7 +155,12 @@ pub async fn finalize_voice_dictation_session(
   conversation_id: &str,
 ) -> Result<String, std::io::Error> {
   mark_voice_dictation_session(state, conversation_id).await?;
-  schedule_conversation_title_refinement(app, state.clone(), conversation_id.to_string());
+  schedule_conversation_title_refinement(app.clone(), state.clone(), conversation_id.to_string());
+  crate::dictation_suggested_prompts::schedule_dictation_reply_action(
+    app,
+    state.clone(),
+    conversation_id.to_string(),
+  );
   Ok(String::new())
 }
 
@@ -328,6 +333,7 @@ mod tests {
       has_assistant_reply: None,
       has_messages: None,
       chat_mode: None,
+      dictation_reply_action: None,
     }
   }
 

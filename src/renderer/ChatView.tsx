@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
-import { HOME_HEADER_QUOTE } from "../shared/headerQuote";
+import { homeHeaderQuoteForDate } from "../shared/headerQuote";
 import {
   chatModePlaceholder,
   DEFAULT_CHAT_MODE,
@@ -13,6 +13,7 @@ import { ChatTitleModal } from "./ChatTitleModal";
 import { ChatSurface } from "./ChatSurface";
 import { ChatComposer } from "./ChatComposer";
 import { ChatModePicker } from "./ChatModePicker";
+import { DictationSuggestedPromptChips } from "./DictationSuggestedPromptChips";
 import { useChatComposer } from "./useChatComposer";
 import {
   type Message,
@@ -31,6 +32,11 @@ import {
 import { scheduleAfterStreamEndSync } from "./streamEndScheduling";
 import { stripSentAtPrefix } from "../shared/chatTemporalContext";
 import { chatRequiresApiKeyMessage } from "../shared/setupState";
+import {
+  clampDictationReplyAction,
+  dictationReplyActionLabel,
+  type DictationReplyAction,
+} from "../shared/dictationSuggestedPrompts";
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -57,6 +63,8 @@ interface ChatViewProps {
   mirrorGlobalFnRecording?: boolean;
   /** Persisted mode for the open conversation (from list meta). */
   conversationChatMode?: string | null;
+  /** Cached dictation strip action from conversation meta (`run` or vocab word). */
+  conversationDictationReplyAction?: string | null;
 }
 
 export function ChatView({
@@ -74,6 +82,7 @@ export function ChatView({
   openAIConfigured = true,
   mirrorGlobalFnRecording = false,
   conversationChatMode = null,
+  conversationDictationReplyAction = null,
 }: ChatViewProps) {
   /** Set synchronously on first send so thread UI mounts before parent re-renders. */
   const [draftConversationId, setDraftConversationId] = useState<string | null>(null);
@@ -99,6 +108,11 @@ export function ChatView({
 
   /** After plain dictation, show polish next to reply (polish targets the dictated turn only). */
   const [polishHintAfterDictation, setPolishHintAfterDictation] = useState(false);
+  const [dictationReplyAction, setDictationReplyAction] = useState<DictationReplyAction | null>(
+    null,
+  );
+  const [dictationReplyActionLoading, setDictationReplyActionLoading] = useState(false);
+  const dictationReplyEnsureForRef = useRef<string | null>(null);
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [titleSaving, setTitleSaving] = useState(false);
@@ -379,6 +393,9 @@ export function ChatView({
         setCopiedId(null);
         setSavedToNotesId(null);
         setPolishHintAfterDictation(false);
+        setDictationReplyAction(null);
+        setDictationReplyActionLoading(false);
+        dictationReplyEnsureForRef.current = null;
         setTitleModalOpen(false);
         setLiveNoteStream(null);
         setOptimisticChatMode(null);
@@ -406,6 +423,13 @@ export function ChatView({
     setCopiedId(null);
     setSavedToNotesId(null);
     setPolishHintAfterDictation(false);
+    setDictationReplyAction(
+      conversationDictationReplyAction
+        ? clampDictationReplyAction(conversationDictationReplyAction)
+        : null,
+    );
+    setDictationReplyActionLoading(false);
+    dictationReplyEnsureForRef.current = null;
     setTitleModalOpen(false);
     setLiveNoteStream(null);
     setOptimisticChatMode(null);
@@ -777,19 +801,21 @@ export function ChatView({
     runAssistantTurn,
   ]);
 
-  const continueWithMode = useCallback(
-    async (mode: ChatModeId) => {
-      if (mode !== activeChatMode) {
-        await handleChatModeChange(mode);
-      }
-      await generateReply();
-    },
-    [activeChatMode, generateReply, handleChatModeChange],
-  );
-
   const handleOptionSelect = useCallback(
     (label: string) => void ensureConversationAndSend(label),
     [ensureConversationAndSend],
+  );
+
+  const handleDictationStripSelect = useCallback(
+    (prompt: string) => {
+      const action = clampDictationReplyAction(prompt);
+      if (action === "run") {
+        void generateReply();
+        return;
+      }
+      void ensureConversationAndSend(action);
+    },
+    [ensureConversationAndSend, generateReply],
   );
 
   const saveMessageToNotes = useCallback(
@@ -836,10 +862,8 @@ export function ChatView({
     messages[messages.length - 1]?.role === "user" &&
     !activeAssistantMessageId;
 
-  const composerHasDraft = composer.input.trim().length > 0;
-
-  const showComposerModes = !awaitingReply || composerHasDraft;
-  const showStripModes = awaitingReply && !composerHasDraft;
+  /** Single user turn (dictation): suggested prompts in the reply strip. */
+  const isDictationReplyStrip = awaitingReply && messages.length === 1;
 
   const modePicker = (
     <ChatModePicker
@@ -849,13 +873,64 @@ export function ChatView({
     />
   );
 
-  const replyModeControl = showStripModes ? (
-    <ChatModePicker
-      value={activeChatMode}
-      onChange={(mode) => void handleChatModeChange(mode)}
-      onSelect={(mode) => void continueWithMode(mode)}
-      variant="outline"
-      disabled={sending || modeSwitching || !openAIConfigured}
+  useEffect(() => {
+    if (conversationDictationReplyAction) {
+      setDictationReplyAction(clampDictationReplyAction(conversationDictationReplyAction));
+    }
+  }, [conversationDictationReplyAction, effectiveConversationId]);
+
+  useEffect(() => {
+    if (!isDictationReplyStrip || !effectiveConversationId) {
+      dictationReplyEnsureForRef.current = null;
+      if (!isDictationReplyStrip) {
+        setDictationReplyActionLoading(false);
+      }
+      return;
+    }
+
+    const unsub = window.harness.chat.onDictationReplyActionUpdated((cid, action) => {
+      if (cid !== effectiveConversationId) return;
+      setDictationReplyAction(clampDictationReplyAction(action));
+      setDictationReplyActionLoading(false);
+    });
+
+    if (dictationReplyAction != null) {
+      setDictationReplyActionLoading(false);
+      return () => unsub();
+    }
+
+    if (dictationReplyEnsureForRef.current === effectiveConversationId) {
+      return () => unsub();
+    }
+    dictationReplyEnsureForRef.current = effectiveConversationId;
+    setDictationReplyActionLoading(true);
+    void window.harness.chat
+      .ensureDictationReplyAction(effectiveConversationId)
+      .then((action) => {
+        if (dictationReplyEnsureForRef.current !== effectiveConversationId) return;
+        setDictationReplyAction(clampDictationReplyAction(action));
+      })
+      .catch(() => {
+        if (dictationReplyEnsureForRef.current !== effectiveConversationId) return;
+        setDictationReplyAction("run");
+      })
+      .finally(() => {
+        if (dictationReplyEnsureForRef.current === effectiveConversationId) {
+          setDictationReplyActionLoading(false);
+        }
+      });
+
+    return () => unsub();
+  }, [isDictationReplyStrip, effectiveConversationId, dictationReplyAction]);
+
+  const replyModeControl = isDictationReplyStrip ? (
+    <DictationSuggestedPromptChips
+      prompts={
+        dictationReplyAction != null ? [dictationReplyActionLabel(dictationReplyAction)] : []
+      }
+      loading={dictationReplyActionLoading || dictationReplyAction == null}
+      onSelect={handleDictationStripSelect}
+      disabled={sending || !openAIConfigured || dictationReplyActionLoading}
     />
   ) : null;
 
@@ -890,7 +965,7 @@ export function ChatView({
     focusComposerNonce,
     inputRef: composer.inputRef,
     placeholder: chatModePlaceholder(activeChatMode),
-    modeControl: showComposerModes ? modePicker : undefined,
+    modeControl: modePicker,
     onCycleMode: handleCycleMode,
   };
 
@@ -899,15 +974,17 @@ export function ChatView({
       <>
         <div className="new-chat-pane">
         <div className="new-chat-center">
-          <p className="new-chat-quote">{HOME_HEADER_QUOTE}</p>
-          <div
-            ref={composerRef}
-            className="new-chat-composer"
-            data-testid="chat-composer"
-            role="group"
-            aria-label="Message composer"
-          >
-            <ChatComposer {...composerProps} />
+          <div className="new-chat-center-stack">
+            <p className="new-chat-quote">{homeHeaderQuoteForDate()}</p>
+            <div
+              ref={composerRef}
+              className="new-chat-composer"
+              data-testid="chat-composer"
+              role="group"
+              aria-label="Message composer"
+            >
+              <ChatComposer {...composerProps} />
+            </div>
           </div>
         </div>
         </div>

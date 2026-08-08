@@ -378,7 +378,7 @@ final class AppModel: ObservableObject {
 
     private func beginSyncBackgroundTaskIfNeeded() {
         guard syncBackgroundTask == .invalid else { return }
-        syncBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "HereSync") { [weak self] in
+        syncBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "HarnessSync") { [weak self] in
             self?.endSyncBackgroundTaskIfNeeded()
         }
     }
@@ -425,19 +425,7 @@ final class AppModel: ObservableObject {
             recordingURL: recordingURL
         )
         chatService.scheduleTitleRefinement(conversationId: conversationId)
-        return conversationId
-    }
-
-    /// Re-transcribe a saved recording and open a fresh dictation conversation.
-    func retranscribeRecording(at url: URL) async throws -> String {
-        let transcript = try await dictationService.transcribeRecording(at: url)
-        let conversationId = try createDictationConversation(
-            userMessage: transcript,
-            recordingURL: url
-        )
-        if dictationService.loadSettings().autoSend {
-            markPendingAutoGenerateReply(conversationId: conversationId)
-        }
+        chatService.scheduleDictationReplyAction(conversationId: conversationId)
         return conversationId
     }
 

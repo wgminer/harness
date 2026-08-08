@@ -2,6 +2,20 @@ import XCTest
 @testable import HarnessMobile
 
 final class HeaderQuotePolicyTests: XCTestCase {
+    func testLoadsSharedHomeHeaderQuotesContract() {
+        let quotes = HeaderQuotePolicy.homeHeaderQuotes
+        XCTAssertEqual(quotes.count, 5, "homeHeaderQuotes.json should load five quotes from the app bundle")
+        XCTAssertFalse(quotes.contains(where: \.isEmpty))
+    }
+
+    func testHomeHeaderQuoteRotatesByUtcDay() {
+        let quotes = HeaderQuotePolicy.homeHeaderQuotes
+        let day0 = Date(timeIntervalSince1970: 0)
+        let day1 = Date(timeIntervalSince1970: 86_400)
+        XCTAssertEqual(HeaderQuotePolicy.pickHomeHeaderQuote(date: day0), quotes[0])
+        XCTAssertEqual(HeaderQuotePolicy.pickHomeHeaderQuote(date: day1), quotes[1])
+    }
+
     func testUsesNumberedListLinesFromNoteContent() {
         let content = """
         1. From my notes.

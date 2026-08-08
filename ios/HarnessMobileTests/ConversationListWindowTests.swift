@@ -3,8 +3,7 @@ import XCTest
 
 final class ConversationListWindowTests: XCTestCase {
     func testDefaultsMatchDesktopSidebarWindow() {
-        XCTAssertEqual(ConversationListWindow.initialVisibleCount, 20)
-        XCTAssertEqual(ConversationListWindow.moreIncrement, 20)
+        XCTAssertEqual(ConversationListWindow.pageSize, 25)
     }
 
     func testVisibleItemsPrefixesWhenNotSearching() {
@@ -36,7 +35,7 @@ final class ConversationListWindowTests: XCTestCase {
     }
 
     func testNextLimitCapsAtTotal() {
-        XCTAssertEqual(ConversationListWindow.nextLimit(current: 20, totalCount: 45), 40)
-        XCTAssertEqual(ConversationListWindow.nextLimit(current: 40, totalCount: 45), 45)
+        XCTAssertEqual(ConversationListWindow.nextLimit(current: 25, totalCount: 60), 50)
+        XCTAssertEqual(ConversationListWindow.nextLimit(current: 50, totalCount: 60), 60)
     }
 }
