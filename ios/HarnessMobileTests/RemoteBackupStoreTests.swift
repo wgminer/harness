@@ -11,6 +11,10 @@ final class RemoteBackupStoreTests: XCTestCase {
             RemoteBackupStore.objectKey(prefix: "/custom/", name: SyncScopes.bundleFileName),
             "custom/bundle.json.gz"
         )
+        XCTAssertEqual(
+            RemoteBackupStore.contentAddressedBundleObjectName(bundleHash: "abc123"),
+            "bundle-abc123.json.gz"
+        )
     }
 
     func testR2EndpointUsesAccountId() {

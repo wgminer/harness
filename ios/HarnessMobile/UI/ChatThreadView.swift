@@ -176,7 +176,7 @@ struct ChatThreadView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if centerSingleMessage {
-                        // Top-third landing (1:2 free-space split) — matches compose home.
+                        // Centered landing (1:1 free-space split) — matches compose home.
                         Spacer(minLength: 0)
                     }
 
@@ -232,7 +232,6 @@ struct ChatThreadView: View {
 
                     if centerSingleMessage {
                         Spacer(minLength: 0)
-                        Spacer(minLength: 0)
                     }
 
                     ChatScrollBottomTracker()
@@ -284,7 +283,7 @@ struct ChatThreadView: View {
     }
 
     private var minScrollHeight: CGFloat {
-        // Fill most of the viewport so the 1:2 spacers can place the transcript in the top third.
+        // Fill most of the viewport so the 1:1 spacers can place the transcript in the vertical center.
         UIScreen.main.bounds.height * 0.7
     }
 

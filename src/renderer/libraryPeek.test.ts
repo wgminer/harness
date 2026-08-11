@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   LIBRARY_DOCK_TRAVEL_PX,
+  LIBRARY_EDGE_HOLD_PX,
   LIBRARY_PEEK_MAX,
-  LIBRARY_PEEK_MAX_PX,
+  LIBRARY_PEEK_MAX_SCREEN_RATIO,
   LIBRARY_PEEK_OVERSHOOT,
   LIBRARY_PEEK_ZONE_PX,
   computeLibraryPeekTarget,
   initialLibraryPeekSpring,
+  isPointerInLibraryEdgeKeepAlive,
   isPointerMovingTowardLibrary,
   libraryEdgeDistance,
   libraryPeekMaxFraction,
@@ -82,6 +84,81 @@ describe("updateLibraryPeekTowardIntent", () => {
       }),
     ).toBe(false);
   });
+
+  it("holds toward intent while parked on the edge despite away jitter", () => {
+    expect(
+      updateLibraryPeekTowardIntent({
+        distance: LIBRARY_EDGE_HOLD_PX,
+        deltaX: 4,
+        side: "left",
+        previousToward: true,
+      }),
+    ).toBe(true);
+    expect(
+      updateLibraryPeekTowardIntent({
+        distance: 0,
+        deltaX: 8,
+        side: "left",
+        previousToward: false,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("isPointerInLibraryEdgeKeepAlive", () => {
+  it("keeps left-edge hover alive inside the hold strip", () => {
+    expect(
+      isPointerInLibraryEdgeKeepAlive({
+        clientX: 0,
+        side: "left",
+        frameLeft: 0,
+        frameRight: 1200,
+      }),
+    ).toBe(true);
+    expect(
+      isPointerInLibraryEdgeKeepAlive({
+        clientX: LIBRARY_EDGE_HOLD_PX,
+        side: "left",
+        frameLeft: 0,
+        frameRight: 1200,
+      }),
+    ).toBe(true);
+    expect(
+      isPointerInLibraryEdgeKeepAlive({
+        clientX: LIBRARY_EDGE_HOLD_PX + 1,
+        side: "left",
+        frameLeft: 0,
+        frameRight: 1200,
+      }),
+    ).toBe(false);
+  });
+
+  it("mirrors for the right edge and respects a centered frame", () => {
+    expect(
+      isPointerInLibraryEdgeKeepAlive({
+        clientX: 1190,
+        side: "right",
+        frameLeft: 100,
+        frameRight: 1200,
+      }),
+    ).toBe(true);
+    expect(
+      isPointerInLibraryEdgeKeepAlive({
+        clientX: 100 + LIBRARY_EDGE_HOLD_PX,
+        side: "left",
+        frameLeft: 100,
+        frameRight: 1200,
+      }),
+    ).toBe(true);
+    expect(
+      isPointerInLibraryEdgeKeepAlive({
+        clientX: 50,
+        side: "left",
+        frameLeft: 100,
+        frameRight: 1200,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("peekFromDistance", () => {
@@ -107,10 +184,16 @@ describe("peekFromDistance", () => {
 });
 
 describe("libraryPeekMaxFraction", () => {
-  it("maps peek px onto dock travel", () => {
-    expect(libraryPeekMaxFraction(0)).toBe(0);
-    expect(libraryPeekMaxFraction(LIBRARY_DOCK_TRAVEL_PX)).toBe(1);
-    expect(libraryPeekMaxFraction(LIBRARY_PEEK_MAX_PX)).toBeCloseTo(LIBRARY_PEEK_MAX, 2);
+  it("maps a screen-width ratio onto dock travel", () => {
+    expect(libraryPeekMaxFraction(0, 1440)).toBe(0);
+    expect(libraryPeekMaxFraction(1, LIBRARY_DOCK_TRAVEL_PX)).toBe(1);
+    expect(
+      libraryPeekMaxFraction(LIBRARY_PEEK_MAX_SCREEN_RATIO, 1440),
+    ).toBeCloseTo((LIBRARY_PEEK_MAX_SCREEN_RATIO * 1440) / LIBRARY_DOCK_TRAVEL_PX, 5);
+  });
+
+  it("caps at full dock open", () => {
+    expect(libraryPeekMaxFraction(0.5, 2000)).toBe(1);
   });
 });
 

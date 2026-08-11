@@ -31,6 +31,10 @@ export interface RecordingLink {
   path: string;
   filename: string;
   exists: boolean;
+  /** File size in bytes when the recording exists on disk. */
+  byteSize?: number | null;
+  /** Approximate duration from WAV header when available. */
+  durationMs?: number | null;
 }
 
 export interface ToolCallRecord {
@@ -157,6 +161,11 @@ export interface Settings {
     /** Accent hex (`#rrggbb`). */
     accent?: string;
   };
+  /** Defaults for compose ambient weather (US ZIP → Open-Meteo). */
+  weather?: {
+    /** US ZIP used for compose-corner temperature. */
+    defaultZip: string;
+  };
 }
 
 export interface SearchResult {
@@ -169,17 +178,12 @@ export interface SearchResult {
   snippetMatchRange: [number, number];
 }
 
-export type WideView = "centered" | "scaled";
-
 export interface LayoutOptions {
   sidebar: "left" | "right";
-  /** On large windows (≥1600px): cap+center chrome (width and height), or fill edge-to-edge. */
-  wideView: WideView;
 }
 
 export const DEFAULT_LAYOUT: LayoutOptions = {
   sidebar: "left",
-  wideView: "scaled",
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -219,5 +223,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   appearance: {
     accent: DEFAULT_ACCENT,
+  },
+  weather: {
+    defaultZip: "12528",
   },
 };

@@ -4,6 +4,7 @@ import {
   type ToolCallDisplay,
   TOOL_CALLS_COMPRESS_THRESHOLD,
   isToolCallPending,
+  noteIdFromCreateToolCall,
   summarizeToolCalls,
   toolCallLabel,
   toolIcon,
@@ -14,6 +15,7 @@ interface ToolCallsCardProps {
   expanded: boolean;
   onToggleExpanded: () => void;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
+  onOpenNote?: (noteId: string) => void;
 }
 
 function ToolCardSummaryRow({
@@ -49,16 +51,33 @@ function ToolCardSummaryRow({
 function ToolCallRow({
   call,
   onToolConfirm,
+  onOpenNote,
 }: {
   call: ToolCallDisplay;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
+  onOpenNote?: (noteId: string) => void;
 }) {
   const isPending = isToolCallPending(call);
+  const noteId = !isPending ? noteIdFromCreateToolCall(call) : null;
+  const canOpenNote = !!noteId && !!onOpenNote;
+  const label = toolCallLabel(call);
+
   return (
     <div className="tool-card-row">
       <span className="tool-card-icon">{toolIcon()}</span>
       <div className="tool-card-row-text">
-        <span className="tool-card-label">{toolCallLabel(call)}</span>
+        {canOpenNote ? (
+          <button
+            type="button"
+            className="tool-card-note-link"
+            onClick={() => onOpenNote!(noteId!)}
+            title="Open note"
+          >
+            {label}
+          </button>
+        ) : (
+          <span className="tool-card-label">{label}</span>
+        )}
       </div>
       {isPending && (
         <span className="tool-card-actions">
@@ -74,7 +93,13 @@ function ToolCallRow({
   );
 }
 
-export function ToolCallsCard({ toolCalls, expanded, onToggleExpanded, onToolConfirm }: ToolCallsCardProps) {
+export function ToolCallsCard({
+  toolCalls,
+  expanded,
+  onToggleExpanded,
+  onToolConfirm,
+  onOpenNote,
+}: ToolCallsCardProps) {
   const hasPending = toolCalls.some(isToolCallPending);
   const canCompress = toolCalls.length >= TOOL_CALLS_COMPRESS_THRESHOLD;
   const compressed = canCompress && !expanded && !hasPending;
@@ -106,7 +131,7 @@ export function ToolCallsCard({ toolCalls, expanded, onToggleExpanded, onToolCon
         />
       )}
       {toolCalls.map((call, j) => (
-        <ToolCallRow key={j} call={call} onToolConfirm={onToolConfirm} />
+        <ToolCallRow key={j} call={call} onToolConfirm={onToolConfirm} onOpenNote={onOpenNote} />
       ))}
     </div>
   );

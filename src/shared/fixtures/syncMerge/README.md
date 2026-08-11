@@ -9,4 +9,6 @@ Golden outputs for cross-platform sync-merge serialization parity.
 - Rust: `src-tauri/src/sync_merge.rs` (`include_str!` on `*.expected.*` files)
 - Swift: `ios/HarnessMobileTests/SyncMergeTests.swift` (inline expected strings — update when fixtures change)
 
+**Fixtures:** `conversations-merge`, `tasks-merge`, `messages-merge`, `notes-merge`, plus `message-dedup-stamp`.
+
 **Migration note:** Adopting this format changes revision hashes once. Devices must re-pull after upgrading.

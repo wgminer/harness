@@ -89,6 +89,7 @@
 		8D1D147CC0BE74DF6930CAC4 /* dictationSuggestedPrompts.json in Resources */ = {isa = PBXBuildFile; fileRef = 0A2C3CBEF61E359099DDE1C4 /* dictationSuggestedPrompts.json */; };
 		9405865D9D6FCF8A594A473E /* ConversationSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A16A22E55364018036822 /* ConversationSearchTests.swift */; };
 		97941B84CF5AC90DCF4CF5E6 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B4EBBBE10E0C397F313E3F /* ChatService.swift */; };
+		979B41A93A1C87AACFA155A6 /* AssistantProseStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52F62B543CA294A706909B6 /* AssistantProseStyle.swift */; };
 		9BF54839F61461DCF82B46A1 /* AudioRecorderMeteringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA91DAFD23E31A3F80A4798 /* AudioRecorderMeteringTests.swift */; };
 		9D2723E45244DBD7CEBED8A5 /* systemPrompt.json in Resources */ = {isa = PBXBuildFile; fileRef = 2A4D2A2493AA2A75269530AF /* systemPrompt.json */; };
 		9EF57575B8FA4F2E75020278 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4851B4A7D4121CE8BECE89F3 /* SyncEngine.swift */; };
@@ -120,6 +121,7 @@
 		E96B680F9A4656390372D18A /* PendingSyncTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 145AE7FAA1C2BA89D751F58C /* PendingSyncTrackerTests.swift */; };
 		EA50455331D50EB114C492B1 /* DictationRecordingIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1839787CAD2E4EEC9EF57AFD /* DictationRecordingIndex.swift */; };
 		EDE4E8454465F36E27939DA4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ECA1858568F8E70A03F3E641 /* Assets.xcassets */; };
+		EF3D323BE3AE246AF1E77A21 /* SyncMergeLibraries.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89BBB520249EB4818F55E054 /* SyncMergeLibraries.swift */; };
 		EFEABA187538F5C00F99FD14 /* HeaderQuotePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FC826B40EB55FD4B15E0CD /* HeaderQuotePolicy.swift */; };
 		EFF3338D49E04B4D907437F4 /* DictationRecordingAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2639D64FEF69FF760A26EC89 /* DictationRecordingAttributes.swift */; };
 		F0C3F4DBFDD147E2DEDF3BFD /* StopDictationRecordingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AFE100F914067F8B096ED6D /* StopDictationRecordingIntent.swift */; };
@@ -234,6 +236,7 @@
 		86F5172174F6290F6B320171 /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		8708CFE5FF3C575653655123 /* SharedToolDefinitionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedToolDefinitionsTests.swift; sourceTree = "<group>"; };
 		88E6573E37354B7074EB23BE /* SyncMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMergeTests.swift; sourceTree = "<group>"; };
+		89BBB520249EB4818F55E054 /* SyncMergeLibraries.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMergeLibraries.swift; sourceTree = "<group>"; };
 		8B4B40AD5E1B792DDB95C222 /* HarnessStorageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessStorageKeys.swift; sourceTree = "<group>"; };
 		8CD23513D40A5639F674398C /* SharedToolDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedToolDefinitions.swift; sourceTree = "<group>"; };
 		8D23899F7341D75E8021ED49 /* ChatToolDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatToolDefinitions.swift; sourceTree = "<group>"; };
@@ -284,6 +287,7 @@
 		EAE1DCD61A0E31E0C2B57163 /* CanonicalJson.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalJson.swift; sourceTree = "<group>"; };
 		ECA1858568F8E70A03F3E641 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EF673E8C0C642B79F38552E7 /* TagNormalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagNormalization.swift; sourceTree = "<group>"; };
+		F52F62B543CA294A706909B6 /* AssistantProseStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantProseStyle.swift; sourceTree = "<group>"; };
 		F5D82D3C326D45826E585020 /* TranscriptionSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionSettingsTests.swift; sourceTree = "<group>"; };
 		FB7354BB06DF5586F496F2F4 /* ComposerCollapsePolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCollapsePolicyTests.swift; sourceTree = "<group>"; };
 		FCF158BE0BA79A8B0916CCF8 /* ComposeChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeChatView.swift; sourceTree = "<group>"; };
@@ -450,6 +454,7 @@
 				B2C55D83964459C45EFAF4E9 /* SyncDecision.swift */,
 				4851B4A7D4121CE8BECE89F3 /* SyncEngine.swift */,
 				2D363056999F761CCBCE3AC6 /* SyncMerge.swift */,
+				89BBB520249EB4818F55E054 /* SyncMergeLibraries.swift */,
 				4730A624D3A95A9CB16A575B /* SyncScopes.swift */,
 				5E61F0E1B823D181A12D870A /* SyncStatusSnapshot.swift */,
 			);
@@ -509,6 +514,7 @@
 			isa = PBXGroup;
 			children = (
 				6BC30490E7E049CCC0843886 /* ActivityShareSheet.swift */,
+				F52F62B543CA294A706909B6 /* AssistantProseStyle.swift */,
 				9A957F64622B5870C6E9D6FA /* CameraPickerView.swift */,
 				CC6BFAD81034F85FABBC3129 /* ChatComposerView.swift */,
 				3479C15C7A1F4AED06B7DC5E /* ChatImageNormalizer.swift */,
@@ -733,6 +739,7 @@
 			files = (
 				D5DB4FE6A76C42AF31EC9567 /* ActivityShareSheet.swift in Sources */,
 				85B08CA7CD6E602039B3B96C /* AppModel.swift in Sources */,
+				979B41A93A1C87AACFA155A6 /* AssistantProseStyle.swift in Sources */,
 				249971D22AD461A2B0799C4A /* AssistantTools.swift in Sources */,
 				790B7DD0B54714BD2F97636A /* AudioRecorder.swift in Sources */,
 				4E1EF2930783BB50E1D5222D /* BackupManifest.swift in Sources */,
@@ -795,6 +802,7 @@
 				43DD804E517D5D529F751E1C /* SyncDecision.swift in Sources */,
 				9EF57575B8FA4F2E75020278 /* SyncEngine.swift in Sources */,
 				AA894E53E7E869F0397AD5F3 /* SyncMerge.swift in Sources */,
+				EF3D323BE3AE246AF1E77A21 /* SyncMergeLibraries.swift in Sources */,
 				F463A0A74D93A9E19E9BF498 /* SyncPairingSheet.swift in Sources */,
 				357D3D4146091B409203F23D /* SyncScopes.swift in Sources */,
 				0F94B33BFE9E0B2164A11134 /* SyncStatusSnapshot.swift in Sources */,

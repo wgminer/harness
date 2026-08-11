@@ -238,6 +238,16 @@ export function DocumentCard({
       document.body,
     );
 
+  const canOpenInEditor = !!noteId && !!onOpenInEditor && !streaming;
+
+  const handlePillClick = () => {
+    if (canOpenInEditor) {
+      onOpenInEditor!(noteId!);
+      return;
+    }
+    setOpen(true);
+  };
+
   const pillTitle = error ? "Couldn't open note" : loading ? "Loading note…" : title;
   const pillMeta = documentPillMeta({ summary, body, loading, error, streaming });
   const pillBusy = loading || streaming;
@@ -254,10 +264,15 @@ export function DocumentCard({
           ]
             .filter(Boolean)
             .join(" ")}
-          onClick={() => setOpen(true)}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          title={error ?? [title, summary?.trim()].filter(Boolean).join(" — ")}
+          onClick={handlePillClick}
+          aria-haspopup={canOpenInEditor ? undefined : "dialog"}
+          aria-expanded={canOpenInEditor ? undefined : open}
+          title={
+            error ??
+            (canOpenInEditor
+              ? `Open “${title}”`
+              : [title, summary?.trim()].filter(Boolean).join(" — "))
+          }
         >
           {pillBusy ? (
             <Loader2 size={18} className="document-card__pill-spinner" aria-hidden />

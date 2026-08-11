@@ -70,8 +70,9 @@
   --focus-ring: 2px solid var(--accent);
 
   /* --- Typography --- */
-  --font-family: "IBM Plex Sans", sans-serif;
-  --font-family-mono: "IBM Plex Mono", monospace;
+  --font-family: -apple-system, "system-ui", "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-family-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --font-family-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
   --font-size: var(--font-size-body);
   --font-size-caption: 12px;
   --font-size-body: 16px;
@@ -123,11 +124,6 @@
   --shell-bar-height: calc(var(--grid) * 13);
   --sidebar-width: calc(var(--grid) * 70);
   --content-width: calc(var(--grid) * 150);
-  --layout-viewport-max: calc(var(--sidebar-width) + var(--content-width));
-  /* Matches default / large window height (1024×768). */
-  --layout-viewport-max-height: calc(var(--grid) * 192);
-  /* Wide breakpoint for centered chrome — keep in sync with @media (min-width: 1600px) below. */
-  --layout-wide-min: 1600px;
   --shell-pad-inline: var(--space-4);
 
   /* --- Motion (shared across themes) --- */
@@ -492,22 +488,6 @@ hr {
   grid-area: 1 / 1;
 }
 
-/* Centered chrome only at the wide breakpoint (split/laptop always fill). */
-@media (min-width: 1600px) {
-  .app[data-wide-view="centered"] .app-frame {
-    width: min(100%, var(--layout-viewport-max));
-    height: min(100%, var(--layout-viewport-max-height));
-    justify-self: center;
-    align-self: center;
-  }
-
-  .app[data-wide-view="centered"] .sidebar {
-    border: 1px solid var(--border-edge);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
-}
-
 @media (max-width: 768px) {
   :root {
     --shell-pad-inline: var(--space-3);
@@ -517,6 +497,8 @@ hr {
 /* Library drawer — overlay panel, hidden by default.
  * Dock extends to the screen edge (padding keeps the panel inset) so the
  * gutter stays hover-live and does not flicker-close under the backdrop.
+ * Latch easing may overshoot past translateX(0); App keeps hover-open alive
+ * while the pointer is still on the frame-edge strip.
  * --library-peek (0–1) reveals from cursor proximity; latch springs fully open. */
 .sidebar-dock {
   position: absolute;

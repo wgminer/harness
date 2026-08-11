@@ -1,10 +1,12 @@
 /**
- * Generate dist/dev app icons from the White Pony–style SVG mark.
+ * Generate app icons from the White Pony–style SVG mark.
  *
  * Source of truth: resources/mark/horse-head.svg (white stroke, no background)
  *
- *   dist → black ground  (#000000)  → resources/icon.png + src-tauri/icons/icon.*
- *   dev  → blue ground   (#0000FF)  → resources/icon-dev.png + src-tauri/icons/icon-dev.*
+ * Composites the mark onto black, then writes:
+ *   - desktop: inset rounded plate → resources/icon.png (+ identical icon-dev.png for now)
+ *     and src-tauri/icons/icon.* (+ identical icon-dev.* for now)
+ *   - iOS: full-bleed black → ios/.../AppIcon.appiconset/AppIcon-1024.png
  *
  * Usage:  npm run icons
  * macOS:  also builds .icns via sips + iconutil
@@ -16,24 +18,7 @@ const { Resvg } = require("@resvg/resvg-js");
 
 const root = path.join(__dirname, "..");
 const markPath = path.join(root, "resources", "mark", "horse-head.svg");
-
-/** @type {{ id: string, bg: string, resourcePng: string, iconsPng: string, iconsIcns: string }} */
-const variants = [
-  {
-    id: "dist",
-    bg: "#000000",
-    resourcePng: path.join(root, "resources", "icon.png"),
-    iconsPng: path.join(root, "src-tauri", "icons", "icon.png"),
-    iconsIcns: path.join(root, "src-tauri", "icons", "icon.icns"),
-  },
-  {
-    id: "dev",
-    bg: "#0000FF",
-    resourcePng: path.join(root, "resources", "icon-dev.png"),
-    iconsPng: path.join(root, "src-tauri", "icons", "icon-dev.png"),
-    iconsIcns: path.join(root, "src-tauri", "icons", "icon-dev.icns"),
-  },
-];
+const BG = "#000000";
 
 const MASTER = 1024;
 const PNG_SIZES = [32, 128, 256, 512];
@@ -41,6 +26,15 @@ const PNG_SIZES = [32, 128, 256, 512];
 const PLATE_MARGIN = 100;
 /** Corner radius of the plate on the 1024 canvas (~22% of plate edge). */
 const PLATE_RADIUS = 180;
+
+const iosAppIconPath = path.join(
+  root,
+  "ios",
+  "HarnessMobile",
+  "Assets.xcassets",
+  "AppIcon.appiconset",
+  "AppIcon-1024.png"
+);
 
 function readMarkSvg() {
   if (!fs.existsSync(markPath)) {
@@ -59,15 +53,26 @@ function markInner(markSvg) {
     .trim();
 }
 
-function compositeSvg(markSvg, bgHex, size) {
+/**
+ * @param {string} markSvg
+ * @param {string} bgHex
+ * @param {number} size
+ * @param {{ fullBleed?: boolean }} [opts]
+ */
+function compositeSvg(markSvg, bgHex, size, opts = {}) {
   const inner = markInner(markSvg);
-  const m = PLATE_MARGIN;
-  const s = 1024 - 2 * m;
-  const r = PLATE_RADIUS;
-  // Transparent canvas; colored plate is inset (not full-bleed).
+  const plate = opts.fullBleed
+    ? `<rect width="1024" height="1024" fill="${bgHex}"/>`
+    : (() => {
+        const m = PLATE_MARGIN;
+        const s = 1024 - 2 * m;
+        const r = PLATE_RADIUS;
+        // Transparent canvas; colored plate is inset (macOS dock style).
+        return `<rect x="${m}" y="${m}" width="${s}" height="${s}" rx="${r}" ry="${r}" fill="${bgHex}"/>`;
+      })();
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
-  <rect x="${m}" y="${m}" width="${s}" height="${s}" rx="${r}" ry="${r}" fill="${bgHex}"/>
+  ${plate}
   ${inner}
 </svg>`;
 }
@@ -84,6 +89,12 @@ function writePng(filePath, bytes) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, bytes);
   console.log(`  wrote ${path.relative(root, filePath)} (${bytes.length} bytes)`);
+}
+
+function copyFile(src, dest) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+  console.log(`  wrote ${path.relative(root, dest)} (copy)`);
 }
 
 function buildIcns(srcPng, outIcns) {
@@ -113,45 +124,57 @@ function buildIcns(srcPng, outIcns) {
 
 function main() {
   const markSvg = readMarkSvg();
-  console.log(`icons: mark ← ${path.relative(root, markPath)}`);
+  console.log(`icons: mark ← ${path.relative(root, markPath)} (bg ${BG})`);
 
-  for (const v of variants) {
-    console.log(`icons: ${v.id} (bg ${v.bg})`);
-    const masterSvg = compositeSvg(markSvg, v.bg, MASTER);
-    const masterPng = renderPng(masterSvg, MASTER);
-    writePng(v.resourcePng, masterPng);
+  const masterSvg = compositeSvg(markSvg, BG, MASTER);
+  const masterPng = renderPng(masterSvg, MASTER);
 
-    // Tauri PNG (512 master for icons/icon.png convention in this repo)
-    writePng(v.iconsPng, renderPng(masterSvg, 512));
+  const resourcePng = path.join(root, "resources", "icon.png");
+  const resourceDevPng = path.join(root, "resources", "icon-dev.png");
+  const iconsPng = path.join(root, "src-tauri", "icons", "icon.png");
+  const iconsDevPng = path.join(root, "src-tauri", "icons", "icon-dev.png");
+  const iconsIcns = path.join(root, "src-tauri", "icons", "icon.icns");
+  const iconsDevIcns = path.join(root, "src-tauri", "icons", "icon-dev.icns");
 
-    if (v.id === "dist") {
-      // Size ladder referenced by tauri.conf.json bundle.icon
-      for (const size of PNG_SIZES) {
-        const name = size === 256 ? "128x128@2x.png" : `${size}x${size}.png`;
-        // 128@2x is 256; skip duplicate 256 filename
-        if (size === 256) {
-          writePng(path.join(root, "src-tauri", "icons", "128x128@2x.png"), renderPng(masterSvg, 256));
-          continue;
-        }
-        if (size === 512) {
-          // already wrote icons/icon.png at 512
-          continue;
-        }
-        writePng(path.join(root, "src-tauri", "icons", name), renderPng(masterSvg, size));
-      }
-      // also 64 for completeness if present historically
-      writePng(path.join(root, "src-tauri", "icons", "64x64.png"), renderPng(masterSvg, 64));
+  writePng(resourcePng, masterPng);
+  copyFile(resourcePng, resourceDevPng);
+
+  // Tauri PNG (512 master for icons/icon.png convention in this repo)
+  const tauriPng = renderPng(masterSvg, 512);
+  writePng(iconsPng, tauriPng);
+  writePng(iconsDevPng, tauriPng);
+
+  // Size ladder referenced by tauri.conf.json bundle.icon
+  for (const size of PNG_SIZES) {
+    if (size === 256) {
+      writePng(path.join(root, "src-tauri", "icons", "128x128@2x.png"), renderPng(masterSvg, 256));
+      continue;
     }
-
-    buildIcns(v.resourcePng, v.iconsIcns);
+    if (size === 512) {
+      // already wrote icons/icon.png at 512
+      continue;
+    }
+    writePng(path.join(root, "src-tauri", "icons", `${size}x${size}.png`), renderPng(masterSvg, size));
   }
+  // also 64 for completeness if present historically
+  writePng(path.join(root, "src-tauri", "icons", "64x64.png"), renderPng(masterSvg, 64));
+
+  buildIcns(resourcePng, iconsIcns);
+  if (process.platform === "darwin") {
+    copyFile(iconsIcns, iconsDevIcns);
+  } else {
+    console.log(`  skip icns (not macOS): ${path.relative(root, iconsDevIcns)}`);
+  }
+
+  // iOS: full-bleed black (system applies the mask; no transparent margin)
+  const iosSvg = compositeSvg(markSvg, BG, MASTER, { fullBleed: true });
+  writePng(iosAppIconPath, renderPng(iosSvg, MASTER));
 
   // Keep build/icon.icns in sync for the legacy make-icns consumers
   const buildIcnsPath = path.join(root, "build", "icon.icns");
   if (process.platform === "darwin") {
     fs.mkdirSync(path.dirname(buildIcnsPath), { recursive: true });
-    fs.copyFileSync(path.join(root, "src-tauri", "icons", "icon.icns"), buildIcnsPath);
-    console.log(`  wrote ${path.relative(root, buildIcnsPath)} (copy)`);
+    copyFile(iconsIcns, buildIcnsPath);
   }
 
   console.log("icons: done");

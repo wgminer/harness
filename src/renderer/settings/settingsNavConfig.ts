@@ -39,6 +39,9 @@ export const SETTINGS_NAV: Array<{
       "selection",
       "image",
       "tavily",
+      "weather",
+      "zip",
+      "temperature",
     ],
   },
   {

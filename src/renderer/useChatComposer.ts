@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { useRecorder } from "./useRecorder";
-import { transcribeWav } from "./recordingPipeline";
-import { playCancelChime } from "./recordingUtils";
 import { audioFileToWav } from "./audioFileToWav";
-import { MICROPHONE_PERMISSION_DENIED_MESSAGE } from "./recordingAudioUtils";
-import type { VoiceState } from "./chatHelpers";
 import { transcriptCleanupSkippedMessage } from "../shared/setupState";
 import type { Settings } from "../shared/types";
-
-const MAX_RECORDING_MS = 5 * 60 * 1000;
+import { useVoiceCapture, type VoiceTranscriptResult } from "./useVoiceCapture";
 
 export interface UseChatComposerOptions {
   onSubmit: (
@@ -45,103 +39,21 @@ export function useChatComposer({
   mirrorGlobalFnRecording = false,
 }: UseChatComposerOptions) {
   const [input, setInput] = useState("");
-  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
-  const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [recordingMs, setRecordingMs] = useState(0);
   const [attachedAudioFile, setAttachedAudioFile] = useState<File | null>(null);
   const [attachmentTranscribing, setAttachmentTranscribing] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const recordingStartRef = useRef<number>(0);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const transcriptionRequestIdRef = useRef<string | null>(null);
-  const transcriptionCancelledRef = useRef(false);
-  const mirroringGlobalRef = useRef(false);
   const onSubmitRef = useRef(onSubmit);
-
-  const recorder = useRecorder();
+  const setVoiceErrorRef = useRef<(message: string | null) => void>(() => {});
+  const applyTranscriptRef = useRef<
+    (text: string, result?: VoiceTranscriptResult) => Promise<boolean>
+  >(async () => false);
 
   useEffect(() => {
     onSubmitRef.current = onSubmit;
   });
-
-  useEffect(() => {
-    if (!mirrorGlobalFnRecording) {
-      if (mirroringGlobalRef.current) {
-        mirroringGlobalRef.current = false;
-        if (recordingTimerRef.current) {
-          clearInterval(recordingTimerRef.current);
-          recordingTimerRef.current = null;
-        }
-        setVoiceState("idle");
-        setRecordingMs(0);
-      }
-      return;
-    }
-
-    const clearMirrorTimer = () => {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-    };
-
-    const endMirror = () => {
-      if (!mirroringGlobalRef.current) return;
-      mirroringGlobalRef.current = false;
-      clearMirrorTimer();
-      setVoiceState("idle");
-      setRecordingMs(0);
-    };
-
-    const unsubStarted = window.harness.recording.onGlobalRecordingStarted(({ focused }) => {
-      if (!focused) return;
-      mirroringGlobalRef.current = true;
-      setVoiceError(null);
-      setRecordingMs(0);
-      setVoiceState("recording");
-      recordingStartRef.current = Date.now();
-      clearMirrorTimer();
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingMs(Date.now() - recordingStartRef.current);
-      }, 33);
-    });
-
-    const unsubStopped = window.harness.recording.onGlobalRecordingStopped(() => {
-      if (!mirroringGlobalRef.current) return;
-      clearMirrorTimer();
-      setVoiceState("processing");
-    });
-
-    const unsubCancelled = window.harness.recording.onGlobalRecordingCancelled(() => {
-      endMirror();
-    });
-
-    const unsubError = window.harness.recording.onGlobalRecordingError(({ message }) => {
-      if (!mirroringGlobalRef.current) return;
-      endMirror();
-      setVoiceError(message);
-    });
-
-    const unsubReady = window.harness.recording.onGlobalTranscriptReady(() => {
-      endMirror();
-    });
-
-    const unsubDelivered = window.harness.recording.onGlobalTranscriptDelivered(() => {
-      endMirror();
-    });
-
-    return () => {
-      unsubStarted();
-      unsubStopped();
-      unsubCancelled();
-      unsubError();
-      unsubReady();
-      unsubDelivered();
-    };
-  }, [mirrorGlobalFnRecording]);
 
   useEffect(() => {
     if (focusComposerNonce == null || focusComposerNonce < 1) return;
@@ -166,7 +78,7 @@ export function useChatComposer({
         setSubmitting(false);
       }
     },
-    [submitDisabled, submitting]
+    [submitDisabled, submitting],
   );
 
   const send = useCallback(async () => {
@@ -220,10 +132,7 @@ export function useChatComposer({
   });
 
   const applyTranscriptToComposer = useCallback(
-    async (
-      text: string,
-      result?: { cleanupSkipped?: "no_api_key"; recordingPath?: string },
-    ): Promise<boolean> => {
+    async (text: string, result?: VoiceTranscriptResult): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
       const settings = (await window.harness.settings.get()) as Settings;
@@ -238,12 +147,34 @@ export function useChatComposer({
       }
       setInput((prev) => (prev ? `${prev} ${trimmed}` : trimmed));
       if (result?.cleanupSkipped === "no_api_key") {
-        setVoiceError(transcriptCleanupSkippedMessage());
+        setVoiceErrorRef.current(transcriptCleanupSkippedMessage());
       }
       return true;
     },
-    [pendingHotkeyDraftOnly]
+    [pendingHotkeyDraftOnly],
   );
+
+  useEffect(() => {
+    applyTranscriptRef.current = applyTranscriptToComposer;
+  });
+
+  const {
+    voiceState,
+    voiceError,
+    setVoiceError,
+    recordingMs,
+    startRecording,
+    stopAndTranscribe,
+    cancelRecording,
+    resetVoiceCapture,
+  } = useVoiceCapture({
+    onTranscript: (text, result) => applyTranscriptRef.current(text, result),
+    mirrorGlobalFnRecording,
+  });
+
+  useEffect(() => {
+    setVoiceErrorRef.current = setVoiceError;
+  });
 
   useEffect(() => {
     if (!pendingHotkeyText) return;
@@ -260,122 +191,13 @@ export function useChatComposer({
     onPendingHotkeyTextConsumed,
   ]);
 
-  const stopAndTranscribe = useCallback(async () => {
-    if (mirroringGlobalRef.current) {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      setVoiceState("processing");
-      await window.harness.recording.stopGlobalRecording().catch(() => {});
-      return;
-    }
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    setVoiceState("processing");
-    setVoiceError(null);
-    transcriptionCancelledRef.current = false;
-    try {
-      const wav = await recorder.stop();
-      const requestId = crypto.randomUUID();
-      transcriptionRequestIdRef.current = requestId;
-      const result = await transcribeWav(wav);
-      if (transcriptionCancelledRef.current || transcriptionRequestIdRef.current !== requestId) {
-        return;
-      }
-      if ("error" in result) {
-        setVoiceError(result.error);
-      } else {
-        await applyTranscriptToComposer(result.text, {
-          cleanupSkipped: result.cleanupSkipped === "no_api_key" ? "no_api_key" : undefined,
-          recordingPath: result.path,
-        });
-      }
-    } catch (err) {
-      setVoiceError(err instanceof Error ? err.message : "Recording failed.");
-    } finally {
-      transcriptionRequestIdRef.current = null;
-      setVoiceState("idle");
-    }
-  }, [applyTranscriptToComposer, recorder]);
-
-  const startRecording = useCallback(async () => {
-    if (mirroringGlobalRef.current) return;
-    setVoiceError(null);
-    setRecordingMs(0);
-    try {
-      await recorder.start();
-      setVoiceState("recording");
-      transcriptionCancelledRef.current = false;
-      recordingStartRef.current = Date.now();
-      recordingTimerRef.current = setInterval(() => {
-        const elapsed = Date.now() - recordingStartRef.current;
-        setRecordingMs(elapsed);
-        if (elapsed >= MAX_RECORDING_MS) {
-          if (recordingTimerRef.current) {
-            clearInterval(recordingTimerRef.current);
-            recordingTimerRef.current = null;
-          }
-          void stopAndTranscribe();
-        }
-      }, 33);
-    } catch (err) {
-      setVoiceError(err instanceof Error ? err.message : MICROPHONE_PERMISSION_DENIED_MESSAGE);
-    }
-  }, [recorder, stopAndTranscribe]);
-
-  const cancelRecording = useCallback(async () => {
-    if (mirroringGlobalRef.current) {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      mirroringGlobalRef.current = false;
-      setVoiceState("idle");
-      setVoiceError(null);
-      setRecordingMs(0);
-      await window.harness.recording.cancelGlobalSession().catch(() => {});
-      return;
-    }
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    if (voiceState === "processing" && transcriptionRequestIdRef.current) {
-      transcriptionCancelledRef.current = true;
-      void window.harness.recording.cancelTranscription(transcriptionRequestIdRef.current).catch(() => {});
-      transcriptionRequestIdRef.current = null;
-    }
-    try {
-      if (voiceState === "recording") {
-        await recorder.stop({ chime: "none" });
-      }
-    } catch {
-      // already stopped
-    }
-    await playCancelChime();
-    setVoiceState("idle");
-    setVoiceError(null);
-    setRecordingMs(0);
-  }, [recorder, voiceState]);
-
   const resetComposerInput = useCallback(() => {
     setInput("");
-    setVoiceError(null);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    transcriptionRequestIdRef.current = null;
-    transcriptionCancelledRef.current = false;
-    setVoiceState("idle");
+    resetVoiceCapture();
     setAttachedAudioFile(null);
     setAttachmentTranscribing(false);
     setAttachmentError(null);
-    setRecordingMs(0);
-  }, []);
+  }, [resetVoiceCapture]);
 
   return {
     input,

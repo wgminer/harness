@@ -42,6 +42,9 @@ pub fn default_settings() -> Value {
         },
         "appearance": {
             "accent": DEFAULT_ACCENT
+        },
+        "weather": {
+            "defaultZip": "12528"
         }
     })
 }
@@ -308,6 +311,24 @@ fn parse_appearance(raw: Option<&Value>) -> Value {
     })
 }
 
+fn parse_weather(raw: Option<&Value>, defaults: &Value) -> Value {
+    let default_zip = defaults
+        .get("weather")
+        .and_then(|v| v.get("defaultZip"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("12528");
+    let zip = raw
+        .and_then(|v| v.get("defaultZip"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(default_zip);
+    let digits: String = zip.chars().filter(|c| c.is_ascii_digit()).take(5).collect();
+    json!({
+        "defaultZip": if digits.len() == 5 { digits } else { default_zip.to_string() }
+    })
+}
+
 pub fn parse_settings(data: &Value) -> Value {
     let defaults = default_settings();
     let obj = data.as_object();
@@ -394,6 +415,7 @@ pub fn parse_settings(data: &Value) -> Value {
             "selectionImageLookup": selection_image_lookup
         },
         "appearance": parse_appearance(obj.and_then(|o| o.get("appearance"))),
+        "weather": parse_weather(obj.and_then(|o| o.get("weather")), &defaults),
     })
 }
 
@@ -599,6 +621,14 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
             current.get("appearance").unwrap_or(&json!({})),
             appearance,
             &["accent"],
+        );
+    }
+
+    if let Some(weather) = partial.get("weather") {
+        next["weather"] = merge_object_fields(
+            current.get("weather").unwrap_or(&json!({})),
+            weather,
+            &["defaultZip"],
         );
     }
 

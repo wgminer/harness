@@ -4,6 +4,7 @@ import {
   useCallback,
   useMemo,
   useRef,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
   ArrowUpRight,
@@ -78,7 +79,7 @@ interface SidebarProps {
   onSyncComplete?: () => void;
   onOpenDataSettings?: () => void;
   onLibraryPointerEnter?: () => void;
-  onLibraryPointerLeave?: () => void;
+  onLibraryPointerLeave?: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }
 
 export function Sidebar({

@@ -49,6 +49,7 @@ interface ChatSurfaceProps {
   attachmentError: string | null;
   onAttachAudio: (file: File | null) => void;
   onRemoveAttachedAudio: () => void;
+  onAttachmentError?: (message: string | null) => void;
   focusComposerNonce?: number;
   messagesTestId: string;
   composerTestId: string;
@@ -93,6 +94,7 @@ export function ChatSurface({
   attachmentError,
   onAttachAudio,
   onRemoveAttachedAudio,
+  onAttachmentError,
   focusComposerNonce,
   messagesTestId,
   composerTestId,
@@ -181,6 +183,7 @@ export function ChatSurface({
           attachmentError={attachmentError}
           onAttachAudio={onAttachAudio}
           onRemoveAttachedAudio={onRemoveAttachedAudio}
+          onAttachmentError={onAttachmentError}
           focusComposerNonce={focusComposerNonce}
           inputRef={inputRef}
           placeholder={placeholder}

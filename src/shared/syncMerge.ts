@@ -30,6 +30,8 @@ export interface SyncConflictReview {
 const MERGEABLE_PATHS = new Set([
   "app-state/conversations.json",
   "app-state/tasks.json",
+  "app-state/notes.json",
+  "app-state/images.json",
   "app-state/user_memory.json",
   "settings/settings.json",
 ]);
@@ -39,6 +41,8 @@ const IGNORED_SYNC_PATHS = new Set(["app-state/plans.json"]);
 
 const IMAGES_INDEX_PATH = "app-state/images.json";
 const IMAGES_DIR_PREFIX = "app-state/images/";
+const NOTES_INDEX_PATH = "app-state/notes.json";
+const NOTES_DIR_PREFIX = "app-state/notes/";
 
 function fileBytesEqual(a: Buffer, b: Buffer): boolean {
   return a.byteLength === b.byteLength && a.equals(b);
@@ -55,6 +59,16 @@ function isImageLibraryPath(path: string): boolean {
   return path === IMAGES_INDEX_PATH || path.startsWith(IMAGES_DIR_PREFIX);
 }
 
+function isNoteBodyPath(path: string): boolean {
+  return path.startsWith(NOTES_DIR_PREFIX) && path.endsWith(".md");
+}
+
+function noteIdFromBodyPath(path: string): string | undefined {
+  if (!isNoteBodyPath(path)) return undefined;
+  const id = path.slice(NOTES_DIR_PREFIX.length, -3);
+  return id || undefined;
+}
+
 function labelForPath(path: string, _bytes: Buffer | undefined): string {
   if (path.startsWith("app-state/notes/")) {
     const name = path.slice("app-state/notes/".length);
@@ -69,6 +83,7 @@ function labelForPath(path: string, _bytes: Buffer | undefined): string {
   }
   if (path === "app-state/conversations.json") return "Conversation list";
   if (path === "app-state/tasks.json") return "Tasks";
+  if (path === NOTES_INDEX_PATH) return "Notes";
   if (path === "app-state/user_memory.json") return "User context";
   if (path === "app-state/writing.md") return "Writing surface";
   if (path === "settings/settings.json") return "App preferences";
@@ -76,7 +91,8 @@ function labelForPath(path: string, _bytes: Buffer | undefined): string {
 }
 
 function supportsMergeForPath(path: string): boolean {
-  if (isImageLibraryPath(path)) return false;
+  if (isImageLibraryPath(path)) return true;
+  if (isNoteBodyPath(path)) return true;
   if (MERGEABLE_PATHS.has(path)) return true;
   if (path.startsWith("app-state/messages_")) return true;
   return false;
@@ -98,22 +114,21 @@ function tsFromValue(value: unknown): number {
   return 0;
 }
 
-function maxImageUpdatedAt(imagesJson: Buffer): number {
-  try {
-    const parsed = JSON.parse(imagesJson.toString("utf-8")) as { images?: unknown[] };
-    const rows = Array.isArray(parsed.images) ? parsed.images : [];
-    return rows.reduce((max, row) => Math.max(max, tsFromValue(row)), 0);
-  } catch {
-    return 0;
-  }
-}
-
 function imageLibraryPaths(
   localFiles: Record<string, Buffer>,
   remoteFiles: Record<string, Buffer>,
 ): string[] {
   return [...new Set([...Object.keys(localFiles), ...Object.keys(remoteFiles)])]
     .filter(isImageLibraryPath)
+    .sort();
+}
+
+function noteBodyPaths(
+  localFiles: Record<string, Buffer>,
+  remoteFiles: Record<string, Buffer>,
+): string[] {
+  return [...new Set([...Object.keys(localFiles), ...Object.keys(remoteFiles)])]
+    .filter(isNoteBodyPath)
     .sort();
 }
 
@@ -133,43 +148,52 @@ function imageLibraryIsDirty(
   return false;
 }
 
-function imageLibraryWinner(
+function notesAreDirty(
   localFiles: Record<string, Buffer>,
   remoteFiles: Record<string, Buffer>,
-): SyncFileChoice {
-  const localTs = localFiles[IMAGES_INDEX_PATH]
-    ? maxImageUpdatedAt(localFiles[IMAGES_INDEX_PATH])
-    : 0;
-  const remoteTs = remoteFiles[IMAGES_INDEX_PATH]
-    ? maxImageUpdatedAt(remoteFiles[IMAGES_INDEX_PATH])
-    : 0;
-  if (remoteTs > localTs) return "remote";
-  if (localTs > remoteTs) return "local";
-  const localHas = Object.keys(localFiles).some(isImageLibraryPath);
-  const remoteHas = Object.keys(remoteFiles).some(isImageLibraryPath);
-  if (!localHas && remoteHas) return "remote";
-  return "local";
+): boolean {
+  const localIndex = localFiles[NOTES_INDEX_PATH];
+  const remoteIndex = remoteFiles[NOTES_INDEX_PATH];
+  if (localIndex && remoteIndex) {
+    if (!fileBytesEqual(localIndex, remoteIndex)) return true;
+  } else if (localIndex || remoteIndex) {
+    return true;
+  }
+  for (const path of noteBodyPaths(localFiles, remoteFiles)) {
+    const local = localFiles[path];
+    const remote = remoteFiles[path];
+    if (local && remote) {
+      if (!fileBytesEqual(local, remote)) return true;
+    } else if (local || remote) {
+      return true;
+    }
+  }
+  return false;
 }
 
-function imageLibraryChoiceFromMap(
-  choices: Record<string, SyncFileChoice>,
-  localFiles: Record<string, Buffer>,
-  remoteFiles: Record<string, Buffer>,
-): SyncFileChoice {
-  const indexChoice = choices[IMAGES_INDEX_PATH];
-  if (indexChoice === "remote" || indexChoice === "local") return indexChoice;
-  return imageLibraryWinner(localFiles, remoteFiles);
-}
-
-function applyImageLibraryAtomicity(
+function applyMergeableLibraryDefaults(
   choices: Record<string, SyncFileChoice>,
   localFiles: Record<string, Buffer>,
   remoteFiles: Record<string, Buffer>,
 ): void {
-  if (!imageLibraryIsDirty(localFiles, remoteFiles)) return;
-  const winner = imageLibraryChoiceFromMap(choices, localFiles, remoteFiles);
-  for (const path of imageLibraryPaths(localFiles, remoteFiles)) {
-    choices[path] = winner;
+  if (imageLibraryIsDirty(localFiles, remoteFiles)) {
+    for (const path of imageLibraryPaths(localFiles, remoteFiles)) {
+      const local = localFiles[path];
+      const remote = remoteFiles[path];
+      if (local && remote) choices[path] = "merge";
+      else if (local) choices[path] = "local";
+      else choices[path] = "remote";
+    }
+  }
+  if (notesAreDirty(localFiles, remoteFiles)) {
+    choices[NOTES_INDEX_PATH] = "merge";
+    for (const path of noteBodyPaths(localFiles, remoteFiles)) {
+      const local = localFiles[path];
+      const remote = remoteFiles[path];
+      if (local && remote) choices[path] = "merge";
+      else if (local) choices[path] = "local";
+      else choices[path] = "remote";
+    }
   }
 }
 
@@ -194,7 +218,15 @@ export function buildSyncConflictReview(
       kind = "remote-only";
     }
 
-    summary[kind === "unchanged" ? "unchanged" : kind === "local-only" ? "localOnly" : kind === "remote-only" ? "remoteOnly" : "conflict"] += 1;
+    summary[
+      kind === "unchanged"
+        ? "unchanged"
+        : kind === "local-only"
+          ? "localOnly"
+          : kind === "remote-only"
+            ? "remoteOnly"
+            : "conflict"
+    ] += 1;
 
     files.push({
       path,
@@ -208,11 +240,20 @@ export function buildSyncConflictReview(
   }
 
   if (imageLibraryIsDirty(localFiles, remoteFiles)) {
-    const winner = imageLibraryWinner(localFiles, remoteFiles);
     for (const file of files) {
       if (isImageLibraryPath(file.path)) {
-        file.defaultChoice = winner;
-        file.supportsMerge = false;
+        file.supportsMerge = true;
+        file.defaultChoice =
+          file.kind === "local-only" ? "local" : file.kind === "remote-only" ? "remote" : "merge";
+      }
+    }
+  }
+  if (notesAreDirty(localFiles, remoteFiles)) {
+    for (const file of files) {
+      if (file.path === NOTES_INDEX_PATH || isNoteBodyPath(file.path)) {
+        file.supportsMerge = true;
+        file.defaultChoice =
+          file.kind === "local-only" ? "local" : file.kind === "remote-only" ? "remote" : "merge";
       }
     }
   }
@@ -233,7 +274,7 @@ export function buildDefaultMergeChoices(
     }
     choices[file.path] = file.defaultChoice;
   }
-  applyImageLibraryAtomicity(choices, localFiles, remoteFiles);
+  applyMergeableLibraryDefaults(choices, localFiles, remoteFiles);
   return choices;
 }
 
@@ -257,16 +298,16 @@ function mergeJsonRecords(local: Record<string, unknown>, remote: Record<string,
   return merged;
 }
 
-function mergeTasksJson(local: Buffer, remote: Buffer): Buffer {
-  const localState = parseJson(local) as { tasks?: unknown[] };
-  const remoteState = parseJson(remote) as { tasks?: unknown[] };
+function mergeIdArrayJson(local: Buffer, remote: Buffer, arrayKey: string): Buffer {
+  const localState = parseJson(local) as Record<string, unknown>;
+  const remoteState = parseJson(remote) as Record<string, unknown>;
   const byId = new Map<string, Record<string, unknown>>();
-  for (const row of remoteState.tasks ?? []) {
+  for (const row of (remoteState[arrayKey] as unknown[]) ?? []) {
     if (row && typeof row === "object" && typeof (row as Record<string, unknown>).id === "string") {
       byId.set((row as Record<string, unknown>).id as string, row as Record<string, unknown>);
     }
   }
-  for (const row of localState.tasks ?? []) {
+  for (const row of (localState[arrayKey] as unknown[]) ?? []) {
     if (!row || typeof row !== "object" || typeof (row as Record<string, unknown>).id !== "string") continue;
     const id = (row as Record<string, unknown>).id as string;
     const existing = byId.get(id);
@@ -276,10 +317,223 @@ function mergeTasksJson(local: Buffer, remote: Buffer): Buffer {
     }
     byId.set(id, tsFromValue(row) >= tsFromValue(existing) ? (row as Record<string, unknown>) : existing);
   }
-  const tasks = [...byId.values()].sort(
-    (a, b) => tsFromValue(b) - tsFromValue(a),
-  );
-  return Buffer.from(canonicalJsonPretty({ tasks }), "utf-8");
+  const rows = [...byId.values()].sort((a, b) => tsFromValue(b) - tsFromValue(a));
+  return Buffer.from(canonicalJsonPretty({ [arrayKey]: rows }), "utf-8");
+}
+
+function mergeTasksJson(local: Buffer, remote: Buffer): Buffer {
+  return mergeIdArrayJson(local, remote, "tasks");
+}
+
+function mergeNotesJson(local: Buffer, remote: Buffer): Buffer {
+  return mergeIdArrayJson(local, remote, "notes");
+}
+
+function noteTsById(indexBytes: Buffer | undefined): Map<string, number> {
+  const out = new Map<string, number>();
+  if (!indexBytes) return out;
+  try {
+    const parsed = parseJson(indexBytes) as { notes?: unknown[] };
+    for (const row of parsed.notes ?? []) {
+      if (row && typeof row === "object" && typeof (row as Record<string, unknown>).id === "string") {
+        out.set((row as Record<string, unknown>).id as string, tsFromValue(row));
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
+}
+
+function mergeImageRecord(
+  local: Record<string, unknown>,
+  remote: Record<string, unknown>,
+): Record<string, unknown> {
+  const localIsNewer = tsFromValue(local) >= tsFromValue(remote);
+  const newer = localIsNewer ? local : remote;
+  const older = localIsNewer ? remote : local;
+  const versionsById = new Map<string, Record<string, unknown>>();
+  for (const source of [older, newer]) {
+    const versions = Array.isArray(source.versions) ? source.versions : [];
+    for (const version of versions) {
+      if (
+        version &&
+        typeof version === "object" &&
+        typeof (version as Record<string, unknown>).id === "string"
+      ) {
+        versionsById.set(
+          (version as Record<string, unknown>).id as string,
+          version as Record<string, unknown>,
+        );
+      }
+    }
+  }
+  const versions = [...versionsById.values()].sort((a, b) => {
+    const ta = typeof a.createdAt === "number" ? a.createdAt : 0;
+    const tb = typeof b.createdAt === "number" ? b.createdAt : 0;
+    if (ta !== tb) return ta - tb;
+    return String(a.id ?? "").localeCompare(String(b.id ?? ""));
+  });
+  const merged: Record<string, unknown> = { ...newer, versions };
+  const active = typeof merged.activeVersionId === "string" ? merged.activeVersionId : undefined;
+  const activeOk = active ? versions.some((v) => v.id === active) : false;
+  if (!activeOk && versions.length > 0) {
+    merged.activeVersionId = versions[versions.length - 1]?.id;
+  }
+  return merged;
+}
+
+function mergeImagesJson(local: Buffer, remote: Buffer): Buffer {
+  const localState = parseJson(local) as { images?: unknown[] };
+  const remoteState = parseJson(remote) as { images?: unknown[] };
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const row of remoteState.images ?? []) {
+    if (row && typeof row === "object" && typeof (row as Record<string, unknown>).id === "string") {
+      byId.set((row as Record<string, unknown>).id as string, row as Record<string, unknown>);
+    }
+  }
+  for (const row of localState.images ?? []) {
+    if (!row || typeof row !== "object" || typeof (row as Record<string, unknown>).id !== "string") continue;
+    const id = (row as Record<string, unknown>).id as string;
+    const existing = byId.get(id);
+    if (!existing) {
+      byId.set(id, row as Record<string, unknown>);
+      continue;
+    }
+    byId.set(id, mergeImageRecord(row as Record<string, unknown>, existing));
+  }
+  const images = [...byId.values()].sort((a, b) => tsFromValue(b) - tsFromValue(a));
+  return Buffer.from(canonicalJsonPretty({ images }), "utf-8");
+}
+
+function referencedImageBlobPaths(imagesJson: Buffer): Set<string> {
+  const out = new Set<string>();
+  try {
+    const parsed = parseJson(imagesJson) as { images?: unknown[] };
+    for (const row of parsed.images ?? []) {
+      if (!row || typeof row !== "object") continue;
+      const img = row as Record<string, unknown>;
+      if (typeof img.fileName === "string" && img.fileName) {
+        out.add(`${IMAGES_DIR_PREFIX}${img.fileName}`);
+      }
+      const versions = Array.isArray(img.versions) ? img.versions : [];
+      for (const version of versions) {
+        if (
+          version &&
+          typeof version === "object" &&
+          typeof (version as Record<string, unknown>).fileName === "string" &&
+          (version as Record<string, unknown>).fileName
+        ) {
+          out.add(`${IMAGES_DIR_PREFIX}${(version as Record<string, unknown>).fileName as string}`);
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
+}
+
+function applyImageLibraryMerge(
+  merged: Record<string, Buffer>,
+  localFiles: Record<string, Buffer>,
+  remoteFiles: Record<string, Buffer>,
+): void {
+  if (!imageLibraryIsDirty(localFiles, remoteFiles)) {
+    for (const path of imageLibraryPaths(localFiles, remoteFiles)) {
+      const bytes = localFiles[path] ?? remoteFiles[path];
+      if (bytes) merged[path] = bytes;
+    }
+    return;
+  }
+  const localIndex = localFiles[IMAGES_INDEX_PATH];
+  const remoteIndex = remoteFiles[IMAGES_INDEX_PATH];
+  let mergedIndex: Buffer;
+  if (localIndex && remoteIndex) mergedIndex = mergeImagesJson(localIndex, remoteIndex);
+  else if (localIndex) mergedIndex = localIndex;
+  else if (remoteIndex) mergedIndex = remoteIndex;
+  else return;
+
+  const refs = referencedImageBlobPaths(mergedIndex);
+  merged[IMAGES_INDEX_PATH] = mergedIndex;
+  for (const path of imageLibraryPaths(localFiles, remoteFiles)) {
+    if (path === IMAGES_INDEX_PATH) continue;
+    if (!refs.has(path)) {
+      delete merged[path];
+      continue;
+    }
+    const local = localFiles[path];
+    const remote = remoteFiles[path];
+    if (local && remote) {
+      merged[path] = local.byteLength >= remote.byteLength ? local : remote;
+    } else if (local) {
+      merged[path] = local;
+    } else if (remote) {
+      merged[path] = remote;
+    }
+  }
+}
+
+function applyNotesMerge(
+  merged: Record<string, Buffer>,
+  localFiles: Record<string, Buffer>,
+  remoteFiles: Record<string, Buffer>,
+): void {
+  if (!notesAreDirty(localFiles, remoteFiles)) {
+    const index = localFiles[NOTES_INDEX_PATH] ?? remoteFiles[NOTES_INDEX_PATH];
+    if (index) merged[NOTES_INDEX_PATH] = index;
+    for (const path of noteBodyPaths(localFiles, remoteFiles)) {
+      const bytes = localFiles[path] ?? remoteFiles[path];
+      if (bytes) merged[path] = bytes;
+    }
+    return;
+  }
+  const localIndex = localFiles[NOTES_INDEX_PATH];
+  const remoteIndex = remoteFiles[NOTES_INDEX_PATH];
+  let mergedIndex: Buffer | undefined;
+  if (localIndex && remoteIndex) mergedIndex = mergeNotesJson(localIndex, remoteIndex);
+  else if (localIndex) mergedIndex = localIndex;
+  else if (remoteIndex) mergedIndex = remoteIndex;
+
+  const keptIds = new Set<string>();
+  if (mergedIndex) {
+    try {
+      const parsed = parseJson(mergedIndex) as { notes?: unknown[] };
+      for (const row of parsed.notes ?? []) {
+        if (row && typeof row === "object" && typeof (row as Record<string, unknown>).id === "string") {
+          keptIds.add((row as Record<string, unknown>).id as string);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    merged[NOTES_INDEX_PATH] = mergedIndex;
+  }
+
+  const localTs = noteTsById(localIndex);
+  const remoteTs = noteTsById(remoteIndex);
+  for (const path of noteBodyPaths(localFiles, remoteFiles)) {
+    const id = noteIdFromBodyPath(path);
+    if (!id) continue;
+    if (keptIds.size > 0 && !keptIds.has(id)) {
+      delete merged[path];
+      continue;
+    }
+    const local = localFiles[path];
+    const remote = remoteFiles[path];
+    let bytes: Buffer | undefined;
+    if (local && remote) {
+      if (fileBytesEqual(local, remote)) bytes = local;
+      else {
+        const lt = localTs.get(id) ?? 0;
+        const rt = remoteTs.get(id) ?? 0;
+        bytes = lt >= rt ? local : remote;
+      }
+    } else {
+      bytes = local ?? remote;
+    }
+    if (bytes) merged[path] = bytes;
+  }
 }
 
 function mergeMessagesJson(local: Buffer, remote: Buffer): Buffer {
@@ -310,8 +564,11 @@ function mergeSettingsJson(local: Buffer, remote: Buffer): Buffer {
 
 export function mergeFileBytes(path: string, local: Buffer, remote: Buffer): Buffer {
   if (path === "app-state/tasks.json") return mergeTasksJson(local, remote);
+  if (path === NOTES_INDEX_PATH) return mergeNotesJson(local, remote);
+  if (path === IMAGES_INDEX_PATH) return mergeImagesJson(local, remote);
   if (path.startsWith("app-state/messages_")) return mergeMessagesJson(local, remote);
   if (path === "settings/settings.json") return mergeSettingsJson(local, remote);
+  if (isNoteBodyPath(path)) return local.byteLength >= remote.byteLength ? local : remote;
   if (path.endsWith(".json")) {
     const localObj = parseJson(local);
     const remoteObj = parseJson(remote);
@@ -352,18 +609,23 @@ export function buildMergedFileMap(
   choices: Record<string, SyncFileChoice>,
 ): Record<string, Buffer> {
   const effectiveChoices = { ...choices };
-  applyImageLibraryAtomicity(effectiveChoices, localFiles, remoteFiles);
+  applyMergeableLibraryDefaults(effectiveChoices, localFiles, remoteFiles);
 
   const paths = [...new Set([...Object.keys(localFiles), ...Object.keys(remoteFiles)])].sort();
   const merged: Record<string, Buffer> = {};
   for (const path of paths) {
     if (IGNORED_SYNC_PATHS.has(path)) continue;
-    const choice = effectiveChoices[path] ?? defaultChoiceForKind(
-      !localFiles[path] ? "remote-only" : !remoteFiles[path] ? "local-only" : "conflict",
-      path,
-    );
+    if (isImageLibraryPath(path) || path === NOTES_INDEX_PATH || isNoteBodyPath(path)) continue;
+    const choice =
+      effectiveChoices[path] ??
+      defaultChoiceForKind(
+        !localFiles[path] ? "remote-only" : !remoteFiles[path] ? "local-only" : "conflict",
+        path,
+      );
     const bytes = resolveFileBytes(path, choice, localFiles[path], remoteFiles[path]);
     if (bytes) merged[path] = bytes;
   }
+  applyImageLibraryMerge(merged, localFiles, remoteFiles);
+  applyNotesMerge(merged, localFiles, remoteFiles);
   return merged;
 }

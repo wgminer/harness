@@ -4,23 +4,27 @@ import UIKit
 struct ComposeChatView: View {
     /// Not observed — AppModel sync/setup publishes must not rebuild compose chrome.
     let app: AppModel
-    var onConversationCreated: (String) -> Void = { _ in }
+    var onConversationCreated: (String) -> Void
 
     @State private var sendError: String?
     @State private var showDictationSheet = false
     @State private var dictationConversationId: String?
     @State private var pendingImage: UIImage?
     @State private var showCamera = false
+    /// Drawn once per compose visit (shuffle bag); not recomputed on re-render.
+    @State private var headerQuote: String
     @FocusState private var isComposerFocused: Bool
 
-    private var headerQuote: String {
-        HeaderQuotePolicy.homeHeaderQuote
+    init(app: AppModel, onConversationCreated: @escaping (String) -> Void = { _ in }) {
+        self.app = app
+        self.onConversationCreated = onConversationCreated
+        _headerQuote = State(initialValue: HeaderQuotePolicy.nextHomeHeaderQuote().short)
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Top-third landing (1:2 free-space split) — matches desktop compose home.
+                // Centered landing (1:1 free-space split) — matches desktop compose home.
                 Spacer(minLength: 0)
 
                 if !headerQuote.isEmpty {
@@ -35,7 +39,6 @@ struct ComposeChatView: View {
                         .frame(maxWidth: .infinity)
                 }
 
-                Spacer(minLength: 0)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

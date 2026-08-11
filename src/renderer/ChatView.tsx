@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
-import { homeHeaderQuoteForDate } from "../shared/headerQuote";
+import {
+  formatHomeHeaderQuoteTooltip,
+  nextHomeHeaderQuote,
+  type HomeHeaderQuote,
+} from "../shared/headerQuote";
 import {
   chatModePlaceholder,
   DEFAULT_CHAT_MODE,
@@ -37,6 +41,101 @@ import {
   dictationReplyActionLabel,
   type DictationReplyAction,
 } from "../shared/dictationSuggestedPrompts";
+import type { ConversationSessionKind } from "../shared/conversationSession";
+import type { RecordingLink } from "../shared/types";
+import { formatDictateDurationLabel } from "../shared/dictateDurationLabel";
+
+/** Mounts only on empty compose — draws once per visit from the shuffle bag. */
+function ComposeHeaderQuote() {
+  const [quote] = useState<HomeHeaderQuote>(() => nextHomeHeaderQuote());
+  return (
+    <span className="tooltip new-chat-quote-tooltip">
+      <p className="new-chat-quote">“{quote.full}”</p>
+      <span className="tooltip__label">{formatHomeHeaderQuoteTooltip(quote)}</span>
+    </span>
+  );
+}
+
+function formatComposeClock(now: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(now);
+}
+
+function formatComposeDate(now: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  }).format(now);
+}
+
+/** Quiet ambient facts in the four corners of the compose splash. */
+function ComposeCornerMeta() {
+  const [now, setNow] = useState(() => new Date());
+  const [durationLabel, setDurationLabel] = useState(() => formatDictateDurationLabel(0));
+  const [weatherLabel, setWeatherLabel] = useState("—");
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshMeta = async () => {
+      try {
+        const stats = await window.harness.recording.archiveStats();
+        if (!cancelled) {
+          setDurationLabel(formatDictateDurationLabel(stats?.durationMs ?? 0));
+        }
+      } catch {
+        // Keep last known label if IPC is unavailable.
+      }
+      try {
+        const weather = await window.harness.weather.getCurrent();
+        if (!cancelled) {
+          setWeatherLabel(
+            typeof weather?.label === "string" && weather.label.trim().length > 0
+              ? weather.label
+              : "—",
+          );
+        }
+      } catch {
+        if (!cancelled) setWeatherLabel("—");
+      }
+    };
+
+    void refreshMeta();
+    const onFocus = () => {
+      void refreshMeta();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
+  return (
+    <>
+      <p className="new-chat-corner new-chat-corner--top-left" aria-hidden="true">
+        {formatComposeClock(now)}
+      </p>
+      <p className="new-chat-corner new-chat-corner--top-right" aria-hidden="true">
+        {formatComposeDate(now)}
+      </p>
+      <p className="new-chat-corner new-chat-corner--bottom-left" aria-hidden="true">
+        {durationLabel}
+      </p>
+      <p className="new-chat-corner new-chat-corner--bottom-right" aria-hidden="true">
+        {weatherLabel}
+      </p>
+    </>
+  );
+}
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -57,6 +156,8 @@ interface ChatViewProps {
   /** Parent increments when the composer should be focused. */
   focusComposerNonce?: number;
   onOpenNotesView?: (noteId: string) => void;
+  /** Refresh the notes library after agent tools create/update/delete notes. */
+  onNotesChanged?: () => void;
   /** When false, chat/polish/reply are blocked with a setup message. */
   openAIConfigured?: boolean;
   /** Mirror focused Fn recording into the composer mic chrome. */
@@ -65,6 +166,12 @@ interface ChatViewProps {
   conversationChatMode?: string | null;
   /** Cached dictation strip action from conversation meta (`run` or vocab word). */
   conversationDictationReplyAction?: string | null;
+  /** When the conversation was created (ms); used in the details modal. */
+  conversationCreatedAt?: number | null;
+  /** Dictation vs chat session kind from list meta. */
+  conversationSessionKind?: ConversationSessionKind | null;
+  /** True once an assistant reply exists (dictation → chat transition). */
+  conversationHasAssistantReply?: boolean;
 }
 
 export function ChatView({
@@ -79,10 +186,14 @@ export function ChatView({
   onChatActivityChange,
   focusComposerNonce,
   onOpenNotesView,
+  onNotesChanged,
   openAIConfigured = true,
   mirrorGlobalFnRecording = false,
   conversationChatMode = null,
   conversationDictationReplyAction = null,
+  conversationCreatedAt = null,
+  conversationSessionKind = null,
+  conversationHasAssistantReply = false,
 }: ChatViewProps) {
   /** Set synchronously on first send so thread UI mounts before parent re-renders. */
   const [draftConversationId, setDraftConversationId] = useState<string | null>(null);
@@ -116,6 +227,8 @@ export function ChatView({
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [titleSaving, setTitleSaving] = useState(false);
+  const [titleModalRecordings, setTitleModalRecordings] = useState<RecordingLink[]>([]);
+  const [titleModalRecordingsLoading, setTitleModalRecordingsLoading] = useState(false);
 
   const [liveNoteStream, setLiveNoteStream] = useState<LiveNoteStream | null>(null);
 
@@ -473,6 +586,13 @@ export function ChatView({
         } else {
           setAssistantToolCall(assistantId, toolName, payload);
         }
+        onNotesChanged?.();
+        return;
+      }
+
+      if (toolName === "note_delete" || toolName === "note_save") {
+        setAssistantToolCall(assistantId, toolName, payload);
+        onNotesChanged?.();
         return;
       }
 
@@ -482,7 +602,7 @@ export function ChatView({
     return () => {
       unsub();
     };
-  }, [activeAssistantMessageId, applyAssistantChunk, isTurnCurrent, setAssistantToolCall]);
+  }, [activeAssistantMessageId, applyAssistantChunk, isTurnCurrent, onNotesChanged, setAssistantToolCall]);
 
   useEffect(() => {
     const unsubChunk = window.harness.chat.onStreamChunk((cid, chunk) => {
@@ -529,6 +649,7 @@ export function ChatView({
         summary,
         attachedToMessage: true,
       });
+      onNotesChanged?.();
     });
     const unsubChunk = window.harness.chat.onNoteStreamChunk((cid, noteId, chunk) => {
       if (cid !== conversationIdRef.current) return;
@@ -550,13 +671,15 @@ export function ChatView({
         }
         return null;
       });
+      // Body/word count may have changed after the stream landed.
+      onNotesChanged?.();
     });
     return () => {
       unsubOpen();
       unsubChunk();
       unsubClose();
     };
-  }, [applyAssistantChunk, setAssistantToolCall]);
+  }, [applyAssistantChunk, onNotesChanged, setAssistantToolCall]);
 
   useEffect(() => {
     return () => {
@@ -840,8 +963,38 @@ export function ChatView({
 
   const openTitleModal = useCallback(() => {
     setTitleDraft(displayTitle);
+    setTitleModalRecordings([]);
+    setTitleModalRecordingsLoading(true);
     setTitleModalOpen(true);
   }, [displayTitle]);
+
+  useEffect(() => {
+    if (!titleModalOpen || !effectiveConversationId) {
+      if (!titleModalOpen) {
+        setTitleModalRecordings([]);
+        setTitleModalRecordingsLoading(false);
+      }
+      return;
+    }
+
+    let cancelled = false;
+    void window.harness.memory
+      .getConversationRecordings(effectiveConversationId)
+      .then((result) => {
+        if (cancelled) return;
+        setTitleModalRecordings(result.recordings ?? []);
+        setTitleModalRecordingsLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTitleModalRecordings([]);
+        setTitleModalRecordingsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [titleModalOpen, effectiveConversationId]);
 
   const saveConversationTitle = useCallback(async () => {
     const trimmed = titleDraft.trim();
@@ -855,6 +1008,10 @@ export function ChatView({
       setTitleSaving(false);
     }
   }, [titleDraft, effectiveConversationId, onConversationCreated]);
+
+  const showRecordingInFinder = useCallback((path: string) => {
+    void window.harness.recording.showInFolder(path);
+  }, []);
 
   const awaitingReply =
     !isComposeMode &&
@@ -962,6 +1119,9 @@ export function ChatView({
       composer.setAttachedAudioFile(null);
       composer.setAttachmentError(null);
     },
+    onAttachmentError: (message: string | null) => {
+      composer.setAttachmentError(message);
+    },
     focusComposerNonce,
     inputRef: composer.inputRef,
     placeholder: chatModePlaceholder(activeChatMode),
@@ -973,9 +1133,9 @@ export function ChatView({
     return (
       <>
         <div className="new-chat-pane">
+        <ComposeCornerMeta />
         <div className="new-chat-center">
           <div className="new-chat-center-stack">
-            <p className="new-chat-quote">{homeHeaderQuoteForDate()}</p>
             <div
               ref={composerRef}
               className="new-chat-composer"
@@ -985,6 +1145,7 @@ export function ChatView({
             >
               <ChatComposer {...composerProps} />
             </div>
+            <ComposeHeaderQuote />
           </div>
         </div>
         </div>
@@ -1002,7 +1163,7 @@ export function ChatView({
             type="button"
             className="btn chat-pane-title"
             onClick={openTitleModal}
-            title="Edit title"
+            title="Details"
             aria-busy={titlePending ? true : undefined}
           >
             {titlePending ? (
@@ -1037,6 +1198,14 @@ export function ChatView({
         onTitleDraftChange={setTitleDraft}
         onSave={() => void saveConversationTitle()}
         saving={titleSaving}
+        sessionKind={conversationSessionKind}
+        hasAssistantReply={conversationHasAssistantReply}
+        createdAt={conversationCreatedAt}
+        chatMode={activeChatMode}
+        messageCount={messages.length}
+        recordings={titleModalRecordings}
+        recordingsLoading={titleModalRecordingsLoading}
+        onShowRecordingInFinder={showRecordingInFinder}
       />
     </>
   );

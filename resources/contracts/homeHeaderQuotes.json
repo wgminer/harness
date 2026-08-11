@@ -1,9 +1,244 @@
 {
   "quotes": [
-    "You are here",
-    "Start here",
-    "Begin where you are",
-    "This is the place",
-    "Right here"
+    {
+      "id": "aurelius-stands-in-the-way",
+      "short": "What stands in the way",
+      "full": "The impediment to action advances action. What stands in the way becomes the way.",
+      "author": "Marcus Aurelius",
+      "source": "Meditations",
+      "job": "center",
+      "context": "Private notes a Roman emperor wrote to himself while on campaign.",
+      "moral": "Treat the obstacle as the path — resistance can become fuel."
+    },
+    {
+      "id": "aurelius-confine-present",
+      "short": "Confine yourself to the present",
+      "full": "Confine yourself to the present.",
+      "author": "Marcus Aurelius",
+      "source": "Meditations",
+      "job": "center",
+      "context": "Stoic counsel against living in past regret or future anxiety.",
+      "moral": "Work with what is here now; the rest is not yours to hold."
+    },
+    {
+      "id": "aurelius-power-over-mind",
+      "short": "You have power over your mind",
+      "full": "You have power over your mind — not outside events. Realize this, and you will find strength.",
+      "author": "Marcus Aurelius",
+      "source": "Meditations",
+      "job": "center",
+      "context": "Core Stoic split between what you control and what you don’t.",
+      "moral": "Strength is mastery of judgment, not mastery of the world."
+    },
+    {
+      "id": "seneca-suffer-imagination",
+      "short": "We suffer more often in",
+      "full": "We suffer more often in imagination than in reality.",
+      "author": "Seneca",
+      "source": "Moral Letters",
+      "job": "remind",
+      "context": "Advice from a Roman statesman to a friend on needless fear.",
+      "moral": "Most pain arrives early as rehearsal — don’t live the disaster twice."
+    },
+    {
+      "id": "seneca-begin-at-once",
+      "short": "Begin at once to live",
+      "full": "Begin at once to live, and count each separate day as a separate life.",
+      "author": "Seneca",
+      "source": "Moral Letters",
+      "job": "center",
+      "context": "On treating time as the one resource you cannot store.",
+      "moral": "Start now; make today complete on its own terms."
+    },
+    {
+      "id": "seneca-waste-a-lot",
+      "short": "we waste a lot of it",
+      "full": "It is not that we have a short time to live, but that we waste a lot of it.",
+      "author": "Seneca",
+      "source": "On the Shortness of Life",
+      "job": "teach",
+      "context": "Essay arguing busyness and distraction shrink a life more than years do.",
+      "moral": "Life feels short when attention is spent poorly."
+    },
+    {
+      "id": "epictetus-best-use",
+      "short": "Make the best use of what",
+      "full": "Make the best use of what is in your power, and take the rest as it happens.",
+      "author": "Epictetus",
+      "source": "Enchiridion",
+      "job": "center",
+      "context": "Handbook of a former slave turned Stoic teacher.",
+      "moral": "Act where you have leverage; accept what you don’t."
+    },
+    {
+      "id": "epictetus-not-by-things",
+      "short": "not by things, but by",
+      "full": "Men are disturbed not by things, but by the views which they take of them.",
+      "author": "Epictetus",
+      "source": "Enchiridion",
+      "job": "teach",
+      "context": "Foundational Stoic claim about judgment as the source of upset.",
+      "moral": "Change the story you tell about the event, and the event softens."
+    },
+    {
+      "id": "feynman-fool-yourself",
+      "short": "you must not fool yourself",
+      "full": "The first principle is that you must not fool yourself — and you are the easiest person to fool.",
+      "author": "Richard Feynman",
+      "source": "Cargo Cult Science",
+      "job": "teach",
+      "context": "Caltech commencement talk on scientific integrity and self-deception.",
+      "moral": "Doubt your own cleverness first; honesty starts there."
+    },
+    {
+      "id": "feynman-cannot-create",
+      "short": "What I cannot create",
+      "full": "What I cannot create, I do not understand.",
+      "author": "Richard Feynman",
+      "source": "Caltech blackboard",
+      "job": "intrigue",
+      "context": "Left on his office blackboard near the end of his life.",
+      "moral": "True understanding is the ability to rebuild from scratch."
+    },
+    {
+      "id": "feynman-questions",
+      "short": "questions that can't be answered",
+      "full": "I would rather have questions that can't be answered than answers that can't be questioned.",
+      "author": "Richard Feynman",
+      "source": "Attributed",
+      "job": "intrigue",
+      "context": "Widely attributed line capturing his stance on open inquiry.",
+      "moral": "Prefer live questions over sealed answers."
+    },
+    {
+      "id": "orwell-windowpane",
+      "short": "Good prose is like a windowpane",
+      "full": "Good prose is like a windowpane.",
+      "author": "George Orwell",
+      "source": "Why I Write",
+      "job": "teach",
+      "context": "On prose that disappears so the subject can be seen clearly.",
+      "moral": "Write to reveal, not to decorate."
+    },
+    {
+      "id": "orwell-ones-nose",
+      "short": "in front of one's nose",
+      "full": "To see what is in front of one's nose needs a constant struggle.",
+      "author": "George Orwell",
+      "source": "In Front of Your Nose",
+      "job": "remind",
+      "context": "Essay on how ideology and habit hide the obvious.",
+      "moral": "Obvious facts still require deliberate attention."
+    },
+    {
+      "id": "orwell-clear-language",
+      "short": "enemy of clear language",
+      "full": "The great enemy of clear language is insincerity.",
+      "author": "George Orwell",
+      "source": "Politics and the English Language",
+      "job": "teach",
+      "context": "His essay linking muddy prose to dishonest thought.",
+      "moral": "Vague words usually protect a vague intention."
+    },
+    {
+      "id": "didion-stories",
+      "short": "We tell ourselves stories",
+      "full": "We tell ourselves stories in order to live.",
+      "author": "Joan Didion",
+      "source": "The White Album",
+      "job": "remind",
+      "context": "Opening of an essay on narrative as a way to hold chaos together.",
+      "moral": "Meaning is made — notice the story you’re living by."
+    },
+    {
+      "id": "didion-what-im-thinking",
+      "short": "to find out what I'm thinking",
+      "full": "I write entirely to find out what I'm thinking, what I'm looking at, what I see and what it means.",
+      "author": "Joan Didion",
+      "source": "Why I Write",
+      "job": "intrigue",
+      "context": "Didion on writing as discovery rather than transcription.",
+      "moral": "Put words down to learn what you mean."
+    },
+    {
+      "id": "rilke-live-questions",
+      "short": "Live the questions now",
+      "full": "Live the questions now.",
+      "author": "Rainer Maria Rilke",
+      "source": "Letters to a Young Poet",
+      "job": "intrigue",
+      "context": "Counsel to a young writer impatient for certainty.",
+      "moral": "Don’t force answers; inhabit the questions until they ripen."
+    },
+    {
+      "id": "rilke-love-questions",
+      "short": "love the questions themselves",
+      "full": "Be patient toward all that is unsolved in your heart and try to love the questions themselves as if they were locked rooms or books written in a very foreign language.",
+      "author": "Rainer Maria Rilke",
+      "source": "Letters to a Young Poet",
+      "job": "intrigue",
+      "context": "Same letter cycle — patience with unresolved inner life.",
+      "moral": "Treat unanswered things as rooms to enter, not problems to crush."
+    },
+    {
+      "id": "confucius-small-stones",
+      "short": "carrying away small stones",
+      "full": "The man who moves a mountain begins by carrying away small stones.",
+      "author": "Confucius",
+      "source": "Attributed",
+      "job": "teach",
+      "context": "Popular saying in the Confucian tradition on gradual effort.",
+      "moral": "Huge work is just many small, unbroken moves."
+    },
+    {
+      "id": "confucius-real-knowledge",
+      "short": "Real knowledge is to know",
+      "full": "Real knowledge is to know the extent of one's ignorance.",
+      "author": "Confucius",
+      "source": "Attributed",
+      "job": "teach",
+      "context": "Often linked to Analects themes on humility in learning.",
+      "moral": "Knowing what you don’t know is the start of wisdom."
+    },
+    {
+      "id": "dillard-spend-our-days",
+      "short": "How we spend our days",
+      "full": "How we spend our days is, of course, how we spend our lives.",
+      "author": "Annie Dillard",
+      "source": "The Writing Life",
+      "job": "remind",
+      "context": "From her book on the daily discipline of making work.",
+      "moral": "Your life is the sum of ordinary days — spend them on purpose."
+    },
+    {
+      "id": "dillard-spend-it-all",
+      "short": "spend it all, shoot it",
+      "full": "One of the few things I know about writing is this: spend it all, shoot it, play it, lose it, all, right away, every time.",
+      "author": "Annie Dillard",
+      "source": "The Writing Life",
+      "job": "intrigue",
+      "context": "On not hoarding your best material for later.",
+      "moral": "Use the good idea now; more will come."
+    },
+    {
+      "id": "wittgenstein-whereof",
+      "short": "Whereof one cannot speak",
+      "full": "Whereof one cannot speak, thereof one must be silent.",
+      "author": "Ludwig Wittgenstein",
+      "source": "Tractatus Logico-Philosophicus",
+      "job": "center",
+      "context": "Closing proposition of his early work on the limits of saying.",
+      "moral": "Don’t force language past what it can honestly hold."
+    },
+    {
+      "id": "wittgenstein-limits",
+      "short": "limits of my language",
+      "full": "The limits of my language mean the limits of my world.",
+      "author": "Ludwig Wittgenstein",
+      "source": "Tractatus Logico-Philosophicus",
+      "job": "teach",
+      "context": "Early Wittgenstein on language as the boundary of thinkable world.",
+      "moral": "Widen your words and you widen what you can see."
+    }
   ]
 }

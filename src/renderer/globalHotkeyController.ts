@@ -13,10 +13,16 @@ export type GlobalHotkeyActions = {
   setFocusComposerNonce: (updater: (n: number) => number) => void;
   setPendingHotkeyText: (text: string | null) => void;
   setPendingHotkeyDraftOnly: (value: boolean) => void;
+  /** Focused Fn while the writing surface is open — insert at note cursor. */
+  setPendingNoteHotkeyText: (text: string | null) => void;
   setConversations: (updater: (prev: Conversation[]) => Conversation[]) => void;
   refreshConversations: () => Promise<void>;
   markTitleAwaiting: (id: string) => void;
   getConversationId: () => string | null;
+  /** Current main-window surface (used to keep focused dictation in notes). */
+  getView: () => string;
+  /** Active writing-surface note, if any. */
+  getActiveNoteId: () => string | null;
   /** Whether the current take is showing the overlay session. */
   getOverlaySession: () => boolean;
 };
@@ -82,6 +88,10 @@ export function createGlobalHotkeyController(): () => void {
 
   const unsubTranscriptReady = window.harness.recording.onGlobalTranscriptReady((text) => {
     clearOverlay();
+    if (actions?.getView() === "notes" && actions.getActiveNoteId()) {
+      actions.setPendingNoteHotkeyText(text);
+      return;
+    }
     actions?.setView("chat");
     if (!actions?.getConversationId()) {
       actions?.setConversationId(null);

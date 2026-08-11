@@ -39,6 +39,7 @@ pub mod system;
 pub mod tasks;
 pub mod ui_session;
 pub mod updater;
+pub mod weather;
 
 use memory::AppState;
 use sticky_notes::persist_open_sticky_windows;
@@ -181,6 +182,8 @@ pub fn run() {
             recording::recording_show_in_folder,
             recording::recording_export_wav,
             recording::recording_open_folder,
+            recording::recording_count_files,
+            recording::recording_archive_stats,
             recording::recording_cancel_transcription,
             recording::recording_transcribe,
             recording::recording_paste_text,
@@ -194,6 +197,7 @@ pub fn run() {
             updater::updater_check,
             updater::updater_get_status,
             updater::updater_download_and_install,
+            weather::weather_get_current,
             note_print::notes_print,
             commands::notes_open_sticky,
             commands::notes_set_sticky_pinned,

@@ -158,4 +158,65 @@ final class SyncMergeTests: XCTestCase {
         XCTAssertNil(openai?["apiKey"])
         XCTAssertNil(search?["tavilyApiKey"])
     }
+
+    func testMergeNotesByIdPrefersNewer() throws {
+        let local = Data(
+            #"{"notes":[{"id":"n1","title":"Local","updatedAt":20}]}"#.utf8
+        )
+        let remote = Data(
+            #"{"notes":[{"id":"n1","title":"Remote","updatedAt":10},{"id":"n2","title":"Only remote","updatedAt":5}]}"#.utf8
+        )
+        let merged = SyncMerge.mergeFileBytes(path: "app-state/notes.json", local: local, remote: remote)
+        let expected = """
+        {
+          "notes": [
+            {
+              "id": "n1",
+              "title": "Local",
+              "updatedAt": 20
+            },
+            {
+              "id": "n2",
+              "title": "Only remote",
+              "updatedAt": 5
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        XCTAssertEqual(merged, expected)
+    }
+
+    func testImageLibraryMergesPerRecordAndKeepsBlobs() throws {
+        let localIndex = Data(
+            #"{"images":[{"id":"local-img","title":"Local","prompt":"x","createdAt":1,"updatedAt":200,"size":"auto","quality":"auto","background":"auto","outputFormat":"png","fileName":"local-img.png"}]}"#.utf8
+        )
+        let remoteIndex = Data(
+            #"{"images":[{"id":"remote-img","title":"Remote","prompt":"y","createdAt":1,"updatedAt":100,"size":"auto","quality":"auto","background":"auto","outputFormat":"png","fileName":"remote-img.png"}]}"#.utf8
+        )
+        let local: [String: Data] = [
+            "app-state/images.json": localIndex,
+            "app-state/images/local-img.png": Data("local-bytes".utf8),
+        ]
+        let remote: [String: Data] = [
+            "app-state/images.json": remoteIndex,
+            "app-state/images/remote-img.png": Data("remote-bytes".utf8),
+        ]
+        let review = SyncMerge.buildConflictReview(localFiles: local, remoteFiles: remote)
+        let choices = SyncMerge.buildDefaultMergeChoices(
+            review: review,
+            localFiles: local,
+            remoteFiles: remote
+        )
+        let merged = SyncMerge.buildMergedFileMap(
+            localFiles: local,
+            remoteFiles: remote,
+            choices: choices
+        )
+        let parsed = try JSONSerialization.jsonObject(with: merged["app-state/images.json"]!) as? [String: Any]
+        let images = parsed?["images"] as? [[String: Any]] ?? []
+        let ids = Set(images.compactMap { $0["id"] as? String })
+        XCTAssertEqual(ids, Set(["local-img", "remote-img"]))
+        XCTAssertEqual(merged["app-state/images/local-img.png"], Data("local-bytes".utf8))
+        XCTAssertEqual(merged["app-state/images/remote-img.png"], Data("remote-bytes".utf8))
+    }
 }

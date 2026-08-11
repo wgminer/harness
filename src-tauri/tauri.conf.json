@@ -15,7 +15,8 @@
         "title": "Harness",
         "width": 1024,
         "height": 768,
-        "resizable": true
+        "resizable": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {
@@ -24,7 +25,9 @@
         "enable": true,
         "scope": [
           "$DATA/Harness/local-data/app-state/images/**",
-          "$DATA/Harness Dev/local-data/app-state/images/**"
+          "$DATA/Harness Dev/local-data/app-state/images/**",
+          "$DATA/Harness/audio-recordings/**",
+          "$DATA/Harness Dev/audio-recordings/**"
         ]
       }
     }

@@ -47,6 +47,33 @@ function parseNoteCreatePayload(payload: unknown): NoteCreatePayload | null {
   return payload as NoteCreatePayload;
 }
 
+/** Note id from a successful `note_create` / legacy write-up tool payload, if present. */
+export function noteIdFromCreateToolCall(call: ToolCallDisplay): string | null {
+  if (call.toolName === "note_create") {
+    const id = parseNoteCreatePayload(call.payload)?.note?.id?.trim();
+    return id || null;
+  }
+  if (call.toolName === "open_long_response") {
+    const p = call.payload as { noteId?: string } | undefined;
+    const id = typeof p?.noteId === "string" ? p.noteId.trim() : "";
+    return id || null;
+  }
+  return null;
+}
+
+function noteTitleFromCreateToolCall(call: ToolCallDisplay): string | null {
+  if (call.toolName === "note_create") {
+    const title = parseNoteCreatePayload(call.payload)?.note?.title?.trim();
+    return title || null;
+  }
+  if (call.toolName === "open_long_response") {
+    const parsed = parseLegacyDocumentPayload(call.payload);
+    const title = parsed?.title?.trim();
+    return title || null;
+  }
+  return null;
+}
+
 function parseLegacyDocumentPayload(payload: unknown): InlineWriteupPayload | null {
   if (!payload || typeof payload !== "object") return null;
   const p = payload as Record<string, unknown>;
@@ -317,11 +344,9 @@ export function summarizeToolCalls(calls: ToolCallDisplay[]): string {
 }
 
 export function toolCallLabel(call: ToolCallDisplay): string {
-  if (call.toolName === "note_create") {
-    return "Created note";
-  }
-  if (call.toolName === "open_long_response") {
-    return "Created note";
+  if (call.toolName === "note_create" || call.toolName === "open_long_response") {
+    const title = noteTitleFromCreateToolCall(call);
+    return title ? `Created “${title}”` : "Created note";
   }
   return toolLabel(call.toolName);
 }

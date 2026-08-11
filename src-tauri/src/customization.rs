@@ -10,25 +10,16 @@ pub enum SidebarPosition {
     Right,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum WideView {
-    Centered,
-    Scaled,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LayoutOptions {
     pub sidebar: SidebarPosition,
-    pub wide_view: WideView,
 }
 
 impl Default for LayoutOptions {
     fn default() -> Self {
         Self {
             sidebar: SidebarPosition::Left,
-            wide_view: WideView::Scaled,
         }
     }
 }
@@ -37,13 +28,6 @@ fn parse_sidebar(raw: Option<&str>) -> SidebarPosition {
     match raw {
         Some("right") => SidebarPosition::Right,
         _ => SidebarPosition::Left,
-    }
-}
-
-fn parse_wide_view(raw: Option<&str>) -> WideView {
-    match raw {
-        Some("centered") => WideView::Centered,
-        _ => WideView::Scaled,
     }
 }
 
@@ -56,7 +40,6 @@ pub fn get_layout_options() -> LayoutOptions {
     let parsed: Value = serde_json::from_str(&raw).unwrap_or_else(|_| json!({}));
     LayoutOptions {
         sidebar: parse_sidebar(parsed.get("sidebar").and_then(|v| v.as_str())),
-        wide_view: parse_wide_view(parsed.get("wideView").and_then(|v| v.as_str())),
     }
 }
 
@@ -68,20 +51,11 @@ pub fn set_layout(options: &Value) -> LayoutOptions {
             .and_then(|v| v.as_str())
             .map(|s| parse_sidebar(Some(s)))
             .unwrap_or(current.sidebar),
-        wide_view: options
-            .get("wideView")
-            .and_then(|v| v.as_str())
-            .map(|s| parse_wide_view(Some(s)))
-            .unwrap_or(current.wide_view),
     };
     let payload = json!({
         "sidebar": match next.sidebar {
             SidebarPosition::Left => "left",
             SidebarPosition::Right => "right",
-        },
-        "wideView": match next.wide_view {
-            WideView::Centered => "centered",
-            WideView::Scaled => "scaled",
         },
     });
     let pretty = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".into());
@@ -110,33 +84,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_wide_view_defaults_to_scaled() {
-        assert_eq!(parse_wide_view(None), WideView::Scaled);
-        assert_eq!(parse_wide_view(Some("centered")), WideView::Centered);
-        assert_eq!(parse_wide_view(Some("scaled")), WideView::Scaled);
-        assert_eq!(parse_wide_view(Some("nope")), WideView::Scaled);
+    fn parse_sidebar_defaults_to_left() {
+        assert_eq!(parse_sidebar(None), SidebarPosition::Left);
+        assert_eq!(parse_sidebar(Some("left")), SidebarPosition::Left);
+        assert_eq!(parse_sidebar(Some("right")), SidebarPosition::Right);
+        assert_eq!(parse_sidebar(Some("nope")), SidebarPosition::Left);
     }
 
     #[test]
-    fn wide_view_merge_preserves_unset_field() {
+    fn sidebar_merge_preserves_unset_field() {
         let current = LayoutOptions {
             sidebar: SidebarPosition::Right,
-            wide_view: WideView::Scaled,
         };
-        // Only sidebar provided → wide_view stays scaled
+        // No sidebar provided → stays right
         let next = LayoutOptions {
-            sidebar: parse_sidebar(Some("left")),
-            wide_view: current.wide_view,
+            sidebar: options_sidebar_or(&json!({}), current.sidebar),
         };
-        assert_eq!(next.sidebar, SidebarPosition::Left);
-        assert_eq!(next.wide_view, WideView::Scaled);
+        assert_eq!(next.sidebar, SidebarPosition::Right);
 
-        // Only wideView provided → sidebar stays right
+        // Sidebar provided → updates
         let next2 = LayoutOptions {
-            sidebar: current.sidebar,
-            wide_view: parse_wide_view(Some("centered")),
+            sidebar: options_sidebar_or(&json!({ "sidebar": "left" }), current.sidebar),
         };
-        assert_eq!(next2.sidebar, SidebarPosition::Right);
-        assert_eq!(next2.wide_view, WideView::Centered);
+        assert_eq!(next2.sidebar, SidebarPosition::Left);
+    }
+
+    fn options_sidebar_or(options: &Value, current: SidebarPosition) -> SidebarPosition {
+        options
+            .get("sidebar")
+            .and_then(|v| v.as_str())
+            .map(|s| parse_sidebar(Some(s)))
+            .unwrap_or(current)
     }
 }

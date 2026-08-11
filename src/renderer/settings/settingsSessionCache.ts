@@ -30,6 +30,7 @@ export type NonSecretSettingsHydration = {
   accent: string;
   noteTemplates: NoteTemplateConfig[];
   defaultNoteTemplateId: string;
+  weatherZip: string;
 };
 
 const D = DEFAULT_SETTINGS;
@@ -130,5 +131,6 @@ export function nonSecretHydrationFromSettings(S: Settings): NonSecretSettingsHy
     accent: normalizeAccentHex(S.appearance?.accent ?? D.appearance?.accent ?? DEFAULT_ACCENT),
     noteTemplates: templates,
     defaultNoteTemplateId: normalizeDefaultNoteTemplateId(S.notes?.defaultTemplateId, templates),
+    weatherZip: S.weather?.defaultZip ?? D.weather!.defaultZip,
   };
 }

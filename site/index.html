@@ -28,7 +28,7 @@
             height="80"
           />
           <p class="tagline">
-            An app I built for myself: dictation, chat without the
+            My personal LLM harness: dictation, chat without the
             persona, notes, and tasks. Offline-first. Full control over the
             inputs, the outputs, and everything in between.
           </p>
@@ -42,13 +42,22 @@
           </a>
         </div>
         <figure class="hero">
-          <img
-            class="hero__img"
-            src="./assets/hero.png"
-            alt="Harness desktop app — sidebar library and chat"
-            width="2940"
-            height="1846"
-          />
+          <div class="window" data-tilt>
+            <div class="window__chrome" aria-hidden="true">
+              <span class="window__dot window__dot--close"></span>
+              <span class="window__dot window__dot--minimize"></span>
+              <span class="window__dot window__dot--zoom"></span>
+            </div>
+            <div class="window__body">
+              <img
+                class="hero__img"
+                src="./assets/hero.png"
+                alt="Harness desktop app — sidebar library and chat"
+                width="2940"
+                height="1846"
+              />
+            </div>
+          </div>
         </figure>
         <p class="colophon">
           macOS 12 Monterey or later · Apple silicon · Microphone access for
@@ -60,5 +69,59 @@
         </p>
       </div>
     </main>
+    <script>
+      (function () {
+        var windowEl = document.querySelector("[data-tilt]");
+        if (!windowEl) return;
+
+        var reduceMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        );
+        if (reduceMotion.matches) return;
+
+        var maxTilt = 7;
+        var targetX = 0;
+        var targetY = 0;
+        var currentX = 0;
+        var currentY = 0;
+        var raf = 0;
+
+        function apply() {
+          currentX += (targetX - currentX) * 0.1;
+          currentY += (targetY - currentY) * 0.1;
+          windowEl.style.transform =
+            "rotateX(" +
+            currentY.toFixed(3) +
+            "deg) rotateY(" +
+            currentX.toFixed(3) +
+            "deg)";
+          raf = requestAnimationFrame(apply);
+        }
+
+        function onMove(event) {
+          var rect = windowEl.getBoundingClientRect();
+          var cx = rect.left + rect.width / 2;
+          var cy = rect.top + rect.height / 2;
+          var nx = (event.clientX - cx) / (rect.width / 2);
+          var ny = (event.clientY - cy) / (rect.height / 2);
+          // Clamp so far-away cursor doesn't over-rotate
+          nx = Math.max(-1, Math.min(1, nx));
+          ny = Math.max(-1, Math.min(1, ny));
+          targetX = nx * maxTilt;
+          targetY = -ny * maxTilt;
+        }
+
+        document.addEventListener("pointermove", onMove, { passive: true });
+        raf = requestAnimationFrame(apply);
+
+        reduceMotion.addEventListener("change", function (event) {
+          if (event.matches) {
+            cancelAnimationFrame(raf);
+            windowEl.style.transform = "";
+            document.removeEventListener("pointermove", onMove);
+          }
+        });
+      })();
+    </script>
   </body>
 </html>

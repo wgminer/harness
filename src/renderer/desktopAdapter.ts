@@ -271,6 +271,9 @@ export function createHarnessAdapter(): HarnessAPI {
       exportWav: (data: ArrayBuffer, suggestedName?: string) =>
         invoke(cmd("recording:exportWav"), { data, suggestedName }),
       openFolder: () => invoke(cmd("recording:openFolder")),
+      countFiles: () => invoke<number>(cmd("recording:countFiles")),
+      archiveStats: () =>
+        invoke<{ fileCount: number; durationMs: number }>(cmd("recording:archiveStats")),
       transcribe: (data: ArrayBuffer, options?: { requestId?: string }) =>
         invoke(cmd("recording:transcribe"), { data, requestId: options?.requestId }),
       cancelTranscription: (requestId: string) =>
@@ -326,6 +329,17 @@ export function createHarnessAdapter(): HarnessAPI {
         subscribeToWire<{ conversationId?: string }>("global-transcript-delivered", (p) => {
           if (p?.conversationId) cb(p.conversationId);
         }),
+    },
+    weather: {
+      getCurrent: () =>
+        invoke<{
+          tempF: number;
+          place: string;
+          state: string;
+          zip: string;
+          weather: string;
+          label: string;
+        }>(cmd("weather:getCurrent")),
     },
     sync: {
       getStatus: () => invoke<SyncStatus>(cmd("sync:getStatus")),

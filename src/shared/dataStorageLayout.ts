@@ -24,5 +24,6 @@ export const DATA_STORAGE_DIAGRAM = `Harness app data folder
         │  Sync packs app-state + settings
         ▼
 Your backup folder (iCloud, Dropbox, Drive, …)
-├─ bundle.json.gz
+├─ bundle-<sha256>.json.gz   (content-addressed; preferred)
+├─ bundle.json.gz            (legacy mirror for older clients)
 └─ manifest.json`;

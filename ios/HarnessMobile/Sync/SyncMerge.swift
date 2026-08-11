@@ -17,8 +17,8 @@ enum SyncFileChangeKind: String, Equatable {
 struct SyncConflictFileEntry: Equatable {
     let path: String
     let kind: SyncFileChangeKind
-    let defaultChoice: SyncFileChoice
-    let supportsMerge: Bool
+    var defaultChoice: SyncFileChoice
+    var supportsMerge: Bool
     let label: String
 }
 
@@ -30,7 +30,7 @@ struct SyncConflictReview: Equatable {
         var conflict: Int
     }
 
-    let files: [SyncConflictFileEntry]
+    var files: [SyncConflictFileEntry]
     let summary: Summary
 }
 
@@ -38,6 +38,8 @@ enum SyncMerge {
     private static let mergeablePaths: Set<String> = [
         "app-state/conversations.json",
         "app-state/tasks.json",
+        "app-state/notes.json",
+        "app-state/images.json",
         "app-state/user_memory.json",
         "settings/settings.json",
     ]
@@ -89,10 +91,39 @@ enum SyncMerge {
             ))
         }
 
+        if imageLibraryIsDirty(localFiles: localFiles, remoteFiles: remoteFiles) {
+            for i in files.indices where isImageLibraryPath(files[i].path) {
+                files[i].supportsMerge = true
+                files[i].defaultChoice = {
+                    switch files[i].kind {
+                    case .localOnly: return .local
+                    case .remoteOnly: return .remote
+                    case .conflict, .unchanged: return .merge
+                    }
+                }()
+            }
+        }
+        if notesAreDirty(localFiles: localFiles, remoteFiles: remoteFiles) {
+            for i in files.indices where files[i].path == notesIndexPath || isNoteBodyPath(files[i].path) {
+                files[i].supportsMerge = true
+                files[i].defaultChoice = {
+                    switch files[i].kind {
+                    case .localOnly: return .local
+                    case .remoteOnly: return .remote
+                    case .conflict, .unchanged: return .merge
+                    }
+                }()
+            }
+        }
+
         return SyncConflictReview(files: files, summary: summary)
     }
 
-    static func buildDefaultMergeChoices(review: SyncConflictReview) -> [String: SyncFileChoice] {
+    static func buildDefaultMergeChoices(
+        review: SyncConflictReview,
+        localFiles: [String: Data] = [:],
+        remoteFiles: [String: Data] = [:]
+    ) -> [String: SyncFileChoice] {
         var choices: [String: SyncFileChoice] = [:]
         for file in review.files {
             if file.kind == .unchanged {
@@ -101,6 +132,11 @@ enum SyncMerge {
                 choices[file.path] = file.defaultChoice
             }
         }
+        applyMergeableLibraryDefaults(
+            choices: &choices,
+            localFiles: localFiles,
+            remoteFiles: remoteFiles
+        )
         return choices
     }
 
@@ -116,10 +152,20 @@ enum SyncMerge {
         remoteFiles: [String: Data],
         choices: [String: SyncFileChoice]
     ) -> [String: Data] {
+        var effectiveChoices = choices
+        applyMergeableLibraryDefaults(
+            choices: &effectiveChoices,
+            localFiles: localFiles,
+            remoteFiles: remoteFiles
+        )
+
         let paths = Set(localFiles.keys).union(remoteFiles.keys).sorted()
         var merged: [String: Data] = [:]
         for path in paths {
             if ignoredSyncPaths.contains(path) { continue }
+            if isImageLibraryPath(path) || path == notesIndexPath || isNoteBodyPath(path) {
+                continue
+            }
             let local = localFiles[path]
             let remote = remoteFiles[path]
             let kind: SyncFileChangeKind = {
@@ -129,23 +175,34 @@ enum SyncMerge {
                 if local != nil { return .localOnly }
                 return .remoteOnly
             }()
-            let choice = choices[path] ?? defaultChoice(for: kind, path: path)
+            let choice = effectiveChoices[path] ?? defaultChoice(for: kind, path: path)
             if let bytes = resolveFileBytes(path: path, choice: choice, local: local, remote: remote) {
                 merged[path] = bytes
             }
         }
+        applyImageLibraryMerge(merged: &merged, localFiles: localFiles, remoteFiles: remoteFiles)
+        applyNotesMerge(merged: &merged, localFiles: localFiles, remoteFiles: remoteFiles)
         return merged
     }
 
     static func mergeFileBytes(path: String, local: Data, remote: Data) -> Data {
         if path == "app-state/tasks.json" {
-            return mergeTasksJson(local: local, remote: remote)
+            return mergeIdArrayJson(local: local, remote: remote, arrayKey: "tasks")
+        }
+        if path == notesIndexPath {
+            return mergeIdArrayJson(local: local, remote: remote, arrayKey: "notes")
+        }
+        if path == imagesIndexPath {
+            return mergeImagesJson(local: local, remote: remote)
         }
         if path.hasPrefix("app-state/messages_") {
             return mergeMessagesJson(local: local, remote: remote)
         }
         if path == "settings/settings.json" {
             return mergeSettingsJson(local: local, remote: remote)
+        }
+        if isNoteBodyPath(path) {
+            return local.count >= remote.count ? local : remote
         }
         if path.hasSuffix(".json"),
            let localObj = parseJSONObject(local),
@@ -155,13 +212,62 @@ enum SyncMerge {
         return local.count >= remote.count ? local : remote
     }
 
-    // MARK: - Private
+    // MARK: - Shared helpers (used by SyncMergeLibraries)
 
-    private static func fileBytesEqual(_ a: Data, _ b: Data) -> Bool {
+    static func fileBytesEqual(_ a: Data, _ b: Data) -> Bool {
         a == b
     }
 
+    static func parseJSONObject(_ data: Data) -> [String: Any]? {
+        guard let value = try? JSONSerialization.jsonObject(with: data),
+              let object = value as? [String: Any]
+        else { return nil }
+        return object
+    }
+
+    static func encodeJSON(_ object: Any) -> Data {
+        CanonicalJson.encodePretty(object)
+    }
+
+    static func tsFromValue(_ value: Any?) -> Int64 {
+        guard let obj = value as? [String: Any] else { return 0 }
+        for key in ["updatedAt", "createdAt"] {
+            if let n = obj[key] as? Int64 { return n }
+            if let n = obj[key] as? Int { return Int64(n) }
+            if let n = obj[key] as? Double { return Int64(n) }
+            if let n = obj[key] as? NSNumber { return n.int64Value }
+        }
+        return 0
+    }
+
+    static func mergeIdArrayJson(local: Data, remote: Data, arrayKey: String) -> Data {
+        let localState = parseJSONObject(local) ?? [:]
+        let remoteState = parseJSONObject(remote) ?? [:]
+        let localRows = localState[arrayKey] as? [Any] ?? []
+        let remoteRows = remoteState[arrayKey] as? [Any] ?? []
+
+        var byId: [String: [String: Any]] = [:]
+        for row in remoteRows {
+            guard let obj = row as? [String: Any], let id = obj["id"] as? String else { continue }
+            byId[id] = obj
+        }
+        for row in localRows {
+            guard let obj = row as? [String: Any], let id = obj["id"] as? String else { continue }
+            if let existing = byId[id] {
+                byId[id] = tsFromValue(obj) >= tsFromValue(existing) ? obj : existing
+            } else {
+                byId[id] = obj
+            }
+        }
+        let rows = byId.values.sorted { tsFromValue($0) > tsFromValue($1) }
+        return encodeJSON([arrayKey: rows])
+    }
+
+    // MARK: - Private
+
     private static func supportsMerge(for path: String) -> Bool {
+        if isImageLibraryPath(path) { return true }
+        if isNoteBodyPath(path) { return true }
         if mergeablePaths.contains(path) { return true }
         if path.hasPrefix("app-state/messages_") { return true }
         return false
@@ -186,9 +292,14 @@ enum SyncMerge {
         if path.hasPrefix("app-state/messages_") {
             return String(path.dropFirst("app-state/".count))
         }
+        if path == imagesIndexPath { return "Images library" }
+        if path.hasPrefix(imagesDirPrefix) {
+            return "Image file \(path.dropFirst(imagesDirPrefix.count))"
+        }
         switch path {
         case "app-state/conversations.json": return "Conversation list"
         case "app-state/tasks.json": return "Tasks"
+        case notesIndexPath: return "Notes"
         case "app-state/user_memory.json": return "User context"
         case "app-state/writing.md": return "Writing surface"
         case "settings/settings.json": return "App preferences"
@@ -214,13 +325,6 @@ enum SyncMerge {
         }
     }
 
-    private static func parseJSONObject(_ data: Data) -> [String: Any]? {
-        guard let value = try? JSONSerialization.jsonObject(with: data),
-              let object = value as? [String: Any]
-        else { return nil }
-        return object
-    }
-
     private static func parseJSONArray(_ data: Data) -> [Any]? {
         guard let value = try? JSONSerialization.jsonObject(with: data),
               let array = value as? [Any]
@@ -228,15 +332,7 @@ enum SyncMerge {
         return array
     }
 
-    private static func encodeJSON(_ object: Any) -> Data {
-        CanonicalJson.encodePretty(object)
-    }
-
     private static func jsonEqual(_ a: Any, _ b: Any) -> Bool {
-        // Wrap in a single-element array so that primitive top-level values
-        // (String/Number/Bool) don't trip JSONSerialization's "Invalid top-level
-        // type" NSException — that exception is raised before the Swift bridge
-        // can convert it to a throwable error, so `try?` cannot catch it.
         let wrappedA: [Any] = [a]
         let wrappedB: [Any] = [b]
         guard JSONSerialization.isValidJSONObject(wrappedA),
@@ -245,17 +341,6 @@ enum SyncMerge {
               let db = try? JSONSerialization.data(withJSONObject: wrappedB, options: [.sortedKeys])
         else { return false }
         return da == db
-    }
-
-    private static func tsFromValue(_ value: Any?) -> Int64 {
-        guard let obj = value as? [String: Any] else { return 0 }
-        for key in ["updatedAt", "createdAt"] {
-            if let n = obj[key] as? Int64 { return n }
-            if let n = obj[key] as? Int { return Int64(n) }
-            if let n = obj[key] as? Double { return Int64(n) }
-            if let n = obj[key] as? NSNumber { return n.int64Value }
-        }
-        return 0
     }
 
     private static func mergeJsonRecords(local: [String: Any], remote: [String: Any]) -> [String: Any] {
@@ -269,29 +354,6 @@ enum SyncMerge {
             merged[key] = tsFromValue(localValue) >= tsFromValue(remoteValue) ? localValue : remoteValue
         }
         return merged
-    }
-
-    private static func mergeTasksJson(local: Data, remote: Data) -> Data {
-        let localState = parseJSONObject(local) ?? [:]
-        let remoteState = parseJSONObject(remote) ?? [:]
-        let localTasks = localState["tasks"] as? [Any] ?? []
-        let remoteTasks = remoteState["tasks"] as? [Any] ?? []
-
-        var byId: [String: [String: Any]] = [:]
-        for row in remoteTasks {
-            guard let obj = row as? [String: Any], let id = obj["id"] as? String else { continue }
-            byId[id] = obj
-        }
-        for row in localTasks {
-            guard let obj = row as? [String: Any], let id = obj["id"] as? String else { continue }
-            if let existing = byId[id] {
-                byId[id] = tsFromValue(obj) >= tsFromValue(existing) ? obj : existing
-            } else {
-                byId[id] = obj
-            }
-        }
-        let tasks = byId.values.sorted { tsFromValue($0) > tsFromValue($1) }
-        return encodeJSON(["tasks": tasks])
     }
 
     private static func mergeMessagesJson(local: Data, remote: Data) -> Data {

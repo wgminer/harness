@@ -1,10 +1,4 @@
 import type { Preview } from "@storybook/react-vite";
-import "@fontsource/ibm-plex-sans/400.css";
-import "@fontsource/ibm-plex-sans/500.css";
-import "@fontsource/ibm-plex-sans/600.css";
-import "@fontsource/ibm-plex-sans/700.css";
-import "@fontsource/ibm-plex-mono/400.css";
-import "@fontsource/ibm-plex-mono/500.css";
 import "../src/renderer/base.css";
 import "../src/renderer/modal.css";
 import "../src/renderer/setupNotice.css";

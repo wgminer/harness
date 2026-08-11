@@ -25,7 +25,7 @@ export function useChatScrollController(args: {
   transcriptRef: RefObject<HTMLElement | null>;
   chatPaneRef: RefObject<HTMLDivElement | null>;
   composerDockRef: RefObject<HTMLDivElement | null>;
-  /** False when single-message top-third landing disables follow behavior. */
+  /** False when single-message centered landing disables follow behavior. */
   scrollEnabled: boolean;
   sending: boolean;
 }) {
@@ -204,7 +204,7 @@ export function useChatScrollController(args: {
     runProgrammaticScroll(() => scrollToLiveEdge(scroll));
   }, [args.scrollRef, clearUserTakeover, runProgrammaticScroll]);
 
-  /** Single-message top-third landing: reset scroll and disable follow. */
+  /** Single-message centered landing: reset scroll and disable follow. */
   useLayoutEffect(() => {
     if (args.scrollEnabled) return;
     const scroll = args.scrollRef.current;

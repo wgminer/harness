@@ -87,6 +87,15 @@ describe("settingsSessionCache", () => {
       expect(hydrated.openToComposeOnLaunch).toBe(false);
       expect(hydrated.selectionImageLookup).toBe(true);
       expect(hydrated.accent).toBe("#112233");
+      expect(hydrated.weatherZip).toBe(DEFAULT_SETTINGS.weather!.defaultZip);
+    });
+
+    it("maps weather ZIP when present", () => {
+      const hydrated = nonSecretHydrationFromSettings({
+        ...DEFAULT_SETTINGS,
+        weather: { defaultZip: "10001" },
+      });
+      expect(hydrated.weatherZip).toBe("10001");
     });
   });
 });

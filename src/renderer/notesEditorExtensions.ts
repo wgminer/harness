@@ -6,6 +6,7 @@ import {
   ViewPlugin,
   highlightActiveLine,
   keymap,
+  lineNumbers,
   placeholder,
   type DecorationSet,
   type ViewUpdate,
@@ -329,7 +330,21 @@ export function createNotesCodeEditorTheme(): Extension {
         backgroundColor: "transparent !important",
       },
       ".cm-activeLine": {
-        backgroundColor: "var(--overlay-subtle)",
+        backgroundColor: "transparent",
+      },
+      ".cm-gutters": {
+        backgroundColor: "transparent",
+        border: "none",
+        color: "var(--fg-muted)",
+      },
+      ".cm-gutterElement": {
+        minWidth: "2ch",
+        padding: "0 0.75ch 0 0",
+        opacity: "0.28",
+      },
+      ".cm-activeLineGutter": {
+        backgroundColor: "transparent",
+        color: "var(--fg-muted)",
       },
       ".cm-placeholder": {
         color: "var(--fg-muted)",
@@ -353,6 +368,7 @@ export function createNotesCodeEditorExtensions(options: NotesCodeEditorOptions)
   const extensions: Extension[] = [
     history(),
     Prec.high(notesTextSelectionPlugin),
+    lineNumbers(),
     highlightActiveLine(),
     EditorView.lineWrapping,
     Prec.high(markdownListKeymap),

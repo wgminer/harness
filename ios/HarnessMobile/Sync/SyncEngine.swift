@@ -57,7 +57,7 @@ final class SyncEngine {
         try pruneNonMaterializedFiles()
 
         let remoteManifest = try await remote.readManifest()
-        let remoteBundleData = try await loadRemoteBundleData(from: remote)
+        let remoteBundleData = try await loadRemoteBundleData(from: remote, manifest: remoteManifest)
 
         let dir = localDataDir
         let revisions = try await Task.detached(priority: .userInitiated) {
@@ -90,11 +90,13 @@ final class SyncEngine {
                 remote: remote,
                 localRevision: localRevision,
                 localContentRevision: localContentRevision,
-                passthroughData: remoteBundleData
+                passthroughData: remoteBundleData,
+                previousBundleHash: nil
             )
             return SyncOutcome(kind: .pushed, mergeWarning: nil, localDataChanged: false)
         }
 
+        let previousBundleHash = remoteManifest.bundleHash
         let remoteContentRevision = try remoteContentRevision(
             manifest: remoteManifest,
             remoteBundleData: remoteBundleData
@@ -123,7 +125,8 @@ final class SyncEngine {
                 remote: remote,
                 localRevision: localRevision,
                 localContentRevision: localContentRevision,
-                passthroughData: remoteBundleData
+                passthroughData: remoteBundleData,
+                previousBundleHash: previousBundleHash
             )
             return SyncOutcome(kind: .pushed, mergeWarning: nil, localDataChanged: false)
         case .conflict:
@@ -159,11 +162,14 @@ final class SyncEngine {
         remoteManifest: BackupManifest?,
         remoteBundleData: [String: Data]
     ) async throws -> Int {
-        let bytes = try await remote.readBundle()
+        guard let remoteManifest else {
+            throw SyncEngineError.manifestMissing
+        }
+        let bytes = try await remote.readBundle(bundleHash: remoteManifest.bundleHash)
         guard !bytes.isEmpty else {
             throw SyncEngineError.bundleMissing
         }
-        if let remoteManifest, BundleCodec.hashBundleBytes(bytes) != remoteManifest.bundleHash {
+        if BundleCodec.hashBundleBytes(bytes) != remoteManifest.bundleHash {
             throw SyncEngineError.bundleHashMismatch
         }
         let doc = try BundleCodec.parseBundle(bytes)
@@ -173,15 +179,13 @@ final class SyncEngine {
             try BundleCodec.extractBundle(localDataDir: dir, doc: doc)
         }.value
         try pruneNonMaterializedFiles()
-        let contentRevision: String
-        if let remoteManifest {
-            contentRevision = try remoteContentRevision(manifest: remoteManifest, remoteBundleData: remoteBundleData)
-        } else {
-            contentRevision = BundleCodec.computeContentRevisionFromBundle(doc)
-        }
-        let remoteRevision = remoteManifest?.revision
+        let contentRevision = try remoteContentRevision(
+            manifest: remoteManifest,
+            remoteBundleData: remoteBundleData
+        )
+        let remoteRevision = remoteManifest.revision
         let revision = try await Task.detached(priority: .userInitiated) {
-            if let remoteRevision, !remoteRevision.isEmpty {
+            if !remoteRevision.isEmpty {
                 return remoteRevision
             }
             return try BundleCodec.computeRevision(
@@ -208,7 +212,11 @@ final class SyncEngine {
             try Self.loadLocalScopedFileMap(localDataDir: localDataDir)
         }.value
         let review = SyncMerge.buildConflictReview(localFiles: localFiles, remoteFiles: remoteBundleData)
-        let choices = SyncMerge.buildDefaultMergeChoices(review: review)
+        let choices = SyncMerge.buildDefaultMergeChoices(
+            review: review,
+            localFiles: localFiles,
+            remoteFiles: remoteBundleData
+        )
         let mergeWarning = SyncMerge.mergeWarning(from: review)
         let mergedFiles = SyncMerge.buildMergedFileMap(
             localFiles: localFiles,
@@ -243,7 +251,8 @@ final class SyncEngine {
             remote: remote,
             localRevision: revisions.0,
             localContentRevision: revisions.1,
-            passthroughData: passthrough
+            passthroughData: passthrough,
+            previousBundleHash: remoteManifest?.bundleHash
         )
         return mergeWarning
     }
@@ -253,6 +262,7 @@ final class SyncEngine {
         localRevision: String,
         localContentRevision: String,
         passthroughData: [String: Data],
+        previousBundleHash: String?,
         extraPassthrough: [String: Data] = [:]
     ) async throws -> Int {
         var mergedPassthrough = passthroughData
@@ -275,7 +285,11 @@ final class SyncEngine {
             updatedAt: Int64(Date().timeIntervalSince1970 * 1000),
             bundleHash: built.bundleHash
         )
-        try await remote.writeBundleAndManifest(bundleBytes: built.bytes, manifest: manifest)
+        try await remote.writeBundleAndManifest(
+            bundleBytes: built.bytes,
+            manifest: manifest,
+            previousBundleHash: previousBundleHash
+        )
         recordSyncedRevisions(revision: localRevision, contentRevision: localContentRevision)
         store?.markSynced(revision: localRevision)
         return built.entries.count
@@ -319,10 +333,17 @@ final class SyncEngine {
         }
     }
 
-    private func loadRemoteBundleData(from remote: RemoteBackupStore) async throws -> [String: Data] {
+    private func loadRemoteBundleData(
+        from remote: RemoteBackupStore,
+        manifest: BackupManifest?
+    ) async throws -> [String: Data] {
+        guard let manifest else { return [:] }
         do {
-            let bytes = try await remote.readBundle()
+            let bytes = try await remote.readBundle(bundleHash: manifest.bundleHash)
             guard !bytes.isEmpty else { return [:] }
+            if BundleCodec.hashBundleBytes(bytes) != manifest.bundleHash {
+                throw SyncEngineError.bundleHashMismatch
+            }
             let doc = try BundleCodec.parseBundle(bytes)
             return BundleCodec.entryDataMap(from: doc)
         } catch {

@@ -34,14 +34,15 @@ import {
   DEFAULT_LIBRARY_PEEK_TUNING,
   computeLibraryPeekTarget,
   initialLibraryPeekSpring,
+  isPointerInLibraryEdgeKeepAlive,
   libraryEdgeDistance,
   libraryPeekMaxFraction,
   libraryPeekSpringSettled,
   stepLibraryPeekSpring,
   updateLibraryPeekTowardIntent,
   type LibraryPeekSpring,
+  type LibraryPeekTuning,
 } from "./libraryPeek";
-
 function removeTitleAwaitingId(
   prev: Record<string, true>,
   id: string,
@@ -88,6 +89,9 @@ export default function App() {
   /** Library drawer: pinned open, or temporarily open via dock hover after peek. */
   const [libraryPinned, setLibraryPinned] = useState(false);
   const [libraryHoverOpen, setLibraryHoverOpen] = useState(false);
+  const [libraryPeekTuning] = useState<LibraryPeekTuning>(
+    () => ({ ...DEFAULT_LIBRARY_PEEK_TUNING }),
+  );
   const libraryCloseTimerRef = useRef<number | null>(null);
   const appRef = useRef<HTMLDivElement>(null);
   const libraryPeekRafRef = useRef<number | null>(null);
@@ -96,12 +100,15 @@ export default function App() {
   const libraryPeekTowardRef = useRef(false);
   const libraryPeekSpringRef = useRef<LibraryPeekSpring>(initialLibraryPeekSpring());
   const libraryPeekLastTsRef = useRef<number | null>(null);
+  const libraryLastPointerClientXRef = useRef<number | null>(null);
   const libraryPinnedRef = useRef(libraryPinned);
   const libraryHoverOpenRef = useRef(libraryHoverOpen);
   const librarySideRef = useRef(layout.sidebar);
+  const libraryPeekTuningRef = useRef(libraryPeekTuning);
   libraryPinnedRef.current = libraryPinned;
   libraryHoverOpenRef.current = libraryHoverOpen;
   librarySideRef.current = layout.sidebar;
+  libraryPeekTuningRef.current = libraryPeekTuning;
 
   const libraryOpen = libraryPinned || libraryHoverOpen;
 
@@ -112,6 +119,25 @@ export default function App() {
     }
   }, []);
 
+  const librarySide = useCallback((): "left" | "right" => {
+    return librarySideRef.current === "right" ? "right" : "left";
+  }, []);
+
+  const pointerNearLibraryEdge = useCallback(
+    (clientX: number) => {
+      const el = appRef.current;
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      return isPointerInLibraryEdgeKeepAlive({
+        clientX,
+        side: librarySide(),
+        frameLeft: rect.left,
+        frameRight: rect.right,
+      });
+    },
+    [librarySide],
+  );
+
   const applyLibraryPeekCss = useCallback((peek: number) => {
     const el = appRef.current;
     if (!el) return;
@@ -119,13 +145,22 @@ export default function App() {
     el.dataset.libraryPeeking = peek > 0.02 && peek < 1 ? "true" : "false";
   }, []);
 
+  const applyLibraryPeekTuningCss = useCallback((tuning: LibraryPeekTuning) => {
+    const el = appRef.current;
+    if (!el) return;
+    el.style.setProperty("--library-latch-duration", `${tuning.latchDurationMs}ms`);
+  }, []);
+
   const scheduleLibraryHoverClose = useCallback(() => {
     clearLibraryCloseTimer();
     libraryCloseTimerRef.current = window.setTimeout(() => {
-      setLibraryHoverOpen(false);
       libraryCloseTimerRef.current = null;
-    }, DEFAULT_LIBRARY_PEEK_TUNING.hoverCloseDelayMs);
-  }, [clearLibraryCloseTimer]);
+      const x = libraryLastPointerClientXRef.current;
+      // Latch overshoot can fire leave while the cursor is still on the edge.
+      if (x != null && pointerNearLibraryEdge(x)) return;
+      setLibraryHoverOpen(false);
+    }, libraryPeekTuningRef.current.hoverCloseDelayMs);
+  }, [clearLibraryCloseTimer, pointerNearLibraryEdge]);
 
   const openLibraryHover = useCallback(() => {
     clearLibraryCloseTimer();
@@ -149,13 +184,8 @@ export default function App() {
   useEffect(() => () => clearLibraryCloseTimer(), [clearLibraryCloseTimer]);
 
   useEffect(() => {
-    const el = appRef.current;
-    if (!el) return;
-    el.style.setProperty(
-      "--library-latch-duration",
-      `${DEFAULT_LIBRARY_PEEK_TUNING.latchDurationMs}ms`,
-    );
-  }, []);
+    applyLibraryPeekTuningCss(libraryPeekTuning);
+  }, [libraryPeekTuning, applyLibraryPeekTuningCss]);
 
   // Sync peek CSS when pinned / hover-open latches or releases.
   useEffect(() => {
@@ -167,6 +197,32 @@ export default function App() {
       applyLibraryPeekCss(0);
     }
   }, [libraryPinned, libraryHoverOpen, applyLibraryPeekCss]);
+
+  // While hover-open, close only once the pointer leaves both the dock and the
+  // frame-edge keep-alive strip (overshoot can drop dock hit-testing at x≈0).
+  useEffect(() => {
+    if (!libraryHoverOpen || libraryPinned) return;
+
+    const onPointerMove = (event: PointerEvent) => {
+      libraryLastPointerClientXRef.current = event.clientX;
+      const overDock =
+        event.target instanceof Element && event.target.closest(".sidebar-dock") != null;
+      if (overDock || pointerNearLibraryEdge(event.clientX)) {
+        clearLibraryCloseTimer();
+        return;
+      }
+      scheduleLibraryHoverClose();
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    return () => window.removeEventListener("pointermove", onPointerMove);
+  }, [
+    libraryHoverOpen,
+    libraryPinned,
+    pointerNearLibraryEdge,
+    clearLibraryCloseTimer,
+    scheduleLibraryHoverClose,
+  ]);
 
   // Proximity target + JS spring (CSS transitions can't overshoot while tracking the cursor).
   // Peek only while the pointer is moving toward the library edge; full open is dock hover.
@@ -192,8 +248,7 @@ export default function App() {
       const lastTs = libraryPeekLastTsRef.current;
       libraryPeekLastTsRef.current = now;
       const dtSeconds = Math.min(1 / 30, Math.max(1 / 120, lastTs == null ? 1 / 60 : (now - lastTs) / 1000));
-      const tuning = DEFAULT_LIBRARY_PEEK_TUNING;
-      const peekMax = libraryPeekMaxFraction(tuning.peekMaxPx);
+      const tuning = libraryPeekTuningRef.current;
 
       const rect = el.getBoundingClientRect();
       const x = pendingX - rect.left;
@@ -201,6 +256,7 @@ export default function App() {
       const lastX = libraryPeekLastXRef.current;
       const deltaX = lastX == null ? 0 : pendingX - lastX;
       libraryPeekLastXRef.current = pendingX;
+      const peekMax = libraryPeekMaxFraction(tuning.peekMaxScreenRatio, rect.width);
 
       const distance = libraryEdgeDistance(x, rect.width, side);
       libraryPeekTowardRef.current = updateLibraryPeekTowardIntent({
@@ -244,6 +300,7 @@ export default function App() {
     };
 
     const onPointerMove = (event: PointerEvent) => {
+      libraryLastPointerClientXRef.current = event.clientX;
       libraryPeekPendingXRef.current = event.clientX;
       ensurePeekLoop();
     };
@@ -261,6 +318,7 @@ export default function App() {
   const [pendingHotkeyText, setPendingHotkeyText] = useState<string | null>(null);
   /** When true, hotkey text is always pre-filled (never auto-sent). Used for global recording while the app was unfocused. */
   const [pendingHotkeyDraftOnly, setPendingHotkeyDraftOnly] = useState(false);
+  const [pendingNoteHotkeyText, setPendingNoteHotkeyText] = useState<string | null>(null);
   const [globalHotkeyOverlaySession, setGlobalHotkeyOverlaySession] = useState(false);
   const [globalHotkeyOverlayPhase, setGlobalHotkeyOverlayPhase] =
     useState<GlobalHotkeyOverlayPhase>("idle");
@@ -277,6 +335,10 @@ export default function App() {
 
   const conversationIdRef = useRef(conversationId);
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+  const viewRef = useRef(view);
+  useEffect(() => { viewRef.current = view; }, [view]);
+  const activeNoteIdRef = useRef(activeNoteId);
+  useEffect(() => { activeNoteIdRef.current = activeNoteId; }, [activeNoteId]);
   useEffect(() => {
     overlaySessionRef.current = globalHotkeyOverlaySession;
   }, [globalHotkeyOverlaySession]);
@@ -586,7 +648,6 @@ export default function App() {
   useEffect(() => {
     const normalizeLayout = (raw: LayoutOptions): LayoutOptions => ({
       sidebar: raw.sidebar === "right" ? "right" : "left",
-      wideView: raw.wideView === "centered" ? "centered" : "scaled",
     });
     window.harness.customization.getLayoutOptions().then((raw) => setLayout(normalizeLayout(raw)));
     const unsub = window.harness.customization.onUpdated((p) => {
@@ -725,10 +786,13 @@ export default function App() {
       setFocusComposerNonce,
       setPendingHotkeyText,
       setPendingHotkeyDraftOnly,
+      setPendingNoteHotkeyText,
       setConversations,
       refreshConversations,
       markTitleAwaiting,
       getConversationId: () => conversationIdRef.current,
+      getView: () => viewRef.current,
+      getActiveNoteId: () => activeNoteIdRef.current,
       getOverlaySession: () => overlaySessionRef.current,
     });
     return () => wireGlobalHotkeyActions(null);
@@ -760,7 +824,6 @@ export default function App() {
       ref={appRef}
       className="app"
       data-sidebar={layout.sidebar}
-      data-wide-view={layout.wideView}
       data-library-open={libraryOpen ? "true" : "false"}
       data-library-overlay={libraryHoverOpen && !libraryPinned ? "true" : "false"}
     >
@@ -811,8 +874,12 @@ export default function App() {
           onSyncComplete={refreshLibraryAfterSync}
           onOpenDataSettings={openDataSettings}
           onLibraryPointerEnter={openLibraryHover}
-          onLibraryPointerLeave={() => {
-            if (!libraryPinned) scheduleLibraryHoverClose();
+          onLibraryPointerLeave={(event) => {
+            libraryLastPointerClientXRef.current = event.clientX;
+            if (libraryPinned) return;
+            // Stay open when leave is caused by latch overshoot while parked on the edge.
+            if (pointerNearLibraryEdge(event.clientX)) return;
+            scheduleLibraryHoverClose();
           }}
         />
         <main className="main">
@@ -840,6 +907,11 @@ export default function App() {
                 conversationDictationReplyAction={
                   activeChatConversation?.dictationReplyAction ?? null
                 }
+                conversationCreatedAt={activeChatConversation?.createdAt ?? null}
+                conversationSessionKind={activeChatConversation?.sessionKind ?? null}
+                conversationHasAssistantReply={
+                  activeChatConversation?.hasAssistantReply === true
+                }
                 onConversationCreated={refreshConversations}
                 onAssignConversationId={handleAssignConversationId}
                 pendingHotkeyText={pendingHotkeyText}
@@ -851,6 +923,9 @@ export default function App() {
                 onChatActivityChange={handleChatActivityChange}
                 focusComposerNonce={focusComposerNonce}
                 onOpenNotesView={(noteId) => openNoteInMain(noteId)}
+                onNotesChanged={() => {
+                  void loadNotesList();
+                }}
                 openAIConfigured={!setupStateLoaded || openAIConfigured}
                 mirrorGlobalFnRecording={view === "chat"}
               />
@@ -891,6 +966,9 @@ export default function App() {
               initialOpenNoteIsNew={pendingOpenNoteRequest?.isNew}
               onInitialOpenNoteHandled={() => setPendingOpenNoteRequest(null)}
               onActiveNoteChange={setActiveNoteId}
+              pendingHotkeyText={pendingNoteHotkeyText}
+              onPendingHotkeyTextConsumed={() => setPendingNoteHotkeyText(null)}
+              mirrorGlobalFnRecording={view === "notes"}
             />
           )}
           {view === "images" && (

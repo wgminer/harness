@@ -2,18 +2,70 @@ import XCTest
 @testable import HarnessMobile
 
 final class HeaderQuotePolicyTests: XCTestCase {
-    func testLoadsSharedHomeHeaderQuotesContract() {
-        let quotes = HeaderQuotePolicy.homeHeaderQuotes
-        XCTAssertEqual(quotes.count, 5, "homeHeaderQuotes.json should load five quotes from the app bundle")
-        XCTAssertFalse(quotes.contains(where: \.isEmpty))
+    private var defaults: UserDefaults!
+    private var suiteName: String!
+
+    override func setUp() {
+        super.setUp()
+        suiteName = "HeaderQuotePolicyTests.\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suiteName)
+        defaults.removePersistentDomain(forName: suiteName)
     }
 
-    func testHomeHeaderQuoteRotatesByUtcDay() {
+    override func tearDown() {
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults = nil
+        suiteName = nil
+        super.tearDown()
+    }
+
+    func testLoadsSharedHomeHeaderQuotesContract() {
         let quotes = HeaderQuotePolicy.homeHeaderQuotes
-        let day0 = Date(timeIntervalSince1970: 0)
-        let day1 = Date(timeIntervalSince1970: 86_400)
-        XCTAssertEqual(HeaderQuotePolicy.pickHomeHeaderQuote(date: day0), quotes[0])
-        XCTAssertEqual(HeaderQuotePolicy.pickHomeHeaderQuote(date: day1), quotes[1])
+        XCTAssertGreaterThanOrEqual(quotes.count, 20, "homeHeaderQuotes.json should load ~24 quotes from the app bundle")
+        XCTAssertLessThanOrEqual(quotes.count, 30)
+        XCTAssertFalse(quotes.contains(where: { $0.short.isEmpty }))
+        for quote in quotes {
+            XCTAssertLessThanOrEqual(quote.short.count, 32)
+            XCTAssertTrue(quote.full.contains(quote.short), "full must contain short for \(quote.id)")
+            XCTAssertFalse(quote.id.isEmpty)
+            XCTAssertFalse(quote.author.isEmpty)
+            XCTAssertFalse(quote.source.isEmpty)
+            XCTAssertFalse(quote.context.isEmpty)
+            XCTAssertFalse(quote.moral.isEmpty)
+        }
+    }
+
+    func testShuffleBagDoesNotRepeatUntilExhausted() {
+        let quotes = HeaderQuotePolicy.homeHeaderQuotes
+        XCTAssertFalse(quotes.isEmpty)
+
+        var seen = Set<String>()
+        let random: (Int) -> Int = { _ in 0 }
+        for _ in 0..<quotes.count {
+            let next = HeaderQuotePolicy.nextHomeHeaderQuote(defaults: defaults, random: random)
+            XCTAssertFalse(seen.contains(next.id), "unexpected repeat of \(next.id)")
+            seen.insert(next.id)
+        }
+        XCTAssertEqual(seen.count, quotes.count)
+
+        let afterReshuffle = HeaderQuotePolicy.nextHomeHeaderQuote(defaults: defaults, random: random)
+        XCTAssertTrue(quotes.contains(where: { $0.id == afterReshuffle.id }))
+    }
+
+    func testPersistsRemainingIdsAfterDraw() {
+        defaults.set(["didion-stories", "orwell-windowpane"], forKey: HeaderQuotePolicy.homeHeaderQuoteBagKey)
+        let first = HeaderQuotePolicy.nextHomeHeaderQuote(defaults: defaults, random: { _ in 0 })
+        XCTAssertEqual(first.id, "didion-stories")
+        XCTAssertEqual(
+            defaults.array(forKey: HeaderQuotePolicy.homeHeaderQuoteBagKey) as? [String],
+            ["orwell-windowpane"]
+        )
+        let second = HeaderQuotePolicy.nextHomeHeaderQuote(defaults: defaults, random: { _ in 0 })
+        XCTAssertEqual(second.id, "orwell-windowpane")
+        XCTAssertEqual(
+            defaults.array(forKey: HeaderQuotePolicy.homeHeaderQuoteBagKey) as? [String],
+            []
+        )
     }
 
     func testUsesNumberedListLinesFromNoteContent() {

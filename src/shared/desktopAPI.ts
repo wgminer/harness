@@ -273,6 +273,10 @@ export interface HarnessAPI {
     showInFolder: (path: string) => Promise<void>;
     exportWav: (data: ArrayBuffer, suggestedName?: string) => Promise<{ path: string } | { cancelled: true }>;
     openFolder: () => Promise<void>;
+    /** Count audio files under audio-recordings/ (excludes the local index JSON). */
+    countFiles: () => Promise<number>;
+    /** File count + summed WAV duration under audio-recordings/. */
+    archiveStats: () => Promise<{ fileCount: number; durationMs: number }>;
     transcribe: (
       data: ArrayBuffer,
       options?: { requestId?: string }
@@ -296,6 +300,17 @@ export interface HarnessAPI {
     onGlobalRecordingLevel: (cb: (level: number) => void) => () => void;
     onGlobalTranscriptReady: (cb: (text: string) => void) => () => void;
     onGlobalTranscriptDelivered: (cb: (conversationId: string) => void) => () => void;
+  };
+  weather: {
+    /** Current conditions for Settings default ZIP (compose ambient). */
+    getCurrent: () => Promise<{
+      tempF: number;
+      place: string;
+      state: string;
+      zip: string;
+      weather: string;
+      label: string;
+    }>;
   };
   sync: {
     getStatus: () => Promise<SyncStatus>;

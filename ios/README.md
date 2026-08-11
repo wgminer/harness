@@ -7,7 +7,7 @@ Native SwiftUI chat companion for Harness desktop. It syncs through the **same C
 ## Prerequisites
 
 1. **Desktop Harness** configured with Cloudflare R2 (Settings → Data).
-2. At least one successful **Sync now** on the Mac so `bundle.json.gz` and `manifest.json` exist in the bucket.
+2. At least one successful **Sync now** on the Mac so `manifest.json` and a content-addressed `bundle-<hash>.json.gz` exist in the bucket (older builds also wrote a legacy `bundle.json.gz` mirror).
 3. An **OpenAI API key** (same as desktop Settings, or enter it only on the phone).
 
 ## Open the project
@@ -60,7 +60,7 @@ To import a memo recorded in Voice Memos: open the memo → **Share** → **Save
 | Step | Where |
 |------|--------|
 | Chat on phone | Harness Mobile |
-| Pull-to-refresh, Settings **Sync now**, or return from background (after ~30s idle) | Phone pulls/pushes `bundle.json.gz` + `manifest.json` via R2 |
+| Pull-to-refresh, Settings **Sync now**, or return from background (after ~30s idle) | Phone pulls/pushes content-addressed `bundle-<hash>.json.gz` + `manifest.json` via R2 |
 | **Sync now** | Desktop Harness → Settings → Data |
 
 Backgrounding the app **flushes composer drafts** and allows an in-flight sync to finish via a short background task. It does **not** start a new sync by itself. Dictation uses the `audio` background mode so lock/home during a take can keep capture alive.
@@ -87,7 +87,7 @@ Unit tests assert the sync **revision hash** matches desktop (`syncBundle.test.t
 
 | Path | Role |
 |------|------|
-| `HarnessMobile/Sync/` | `bundle.json.gz` codec, manifest, R2 remote backup |
+| `HarnessMobile/Sync/` | gzip bundle codec, manifest, R2 remote backup |
 | `HarnessMobile/Data/` | `conversations.json`, `messages_*.json`, `tasks.json` (desktop format) |
 | `HarnessMobile/Chat/` | OpenAI streaming, task tools, chat history search, memory selection, Keychain |
 | `HarnessMobile/Dictation/` | Audio capture, transcription, Voice Memos import, local recordings |

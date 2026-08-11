@@ -17,8 +17,7 @@ struct StreamingMarkdownView: View, Equatable {
             }
             if !blocks.trailing.isEmpty {
                 Text(blocks.trailing)
-                    .font(.body)
-                    .lineSpacing(4)
+                    .assistantProseStyle()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
                     .animation(nil, value: blocks.trailing)
@@ -36,8 +35,7 @@ private struct StableStreamingMarkdownBlock: View, Equatable {
     let content: String
 
     var body: some View {
-        HarnessMarkdownView(content: content, isStreaming: false)
-            .lineSpacing(4)
+        HarnessMarkdownView(content: content, isStreaming: false, assistantProse: true)
             .animation(nil, value: content)
     }
 }

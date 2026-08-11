@@ -232,3 +232,176 @@
 .app-modal-footer .btn-danger {
   gap: var(--space-2);
 }
+
+.app-modal-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-modal-meta__row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.app-modal-meta__label {
+  color: var(--fg-muted);
+  font-size: var(--font-size-caption);
+  font-weight: 500;
+  line-height: var(--line-height-caption);
+}
+
+.app-modal-meta__value {
+  min-width: 0;
+  color: var(--fg);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-modal-recording-table {
+  overflow: hidden;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.app-modal-recording-table table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.app-modal-recording-table th,
+.app-modal-recording-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  vertical-align: middle;
+}
+
+.app-modal-recording-table th {
+  color: var(--fg-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-input);
+}
+
+.app-modal-recording-table th:nth-child(1),
+.app-modal-recording-table td:nth-child(1) {
+  width: auto;
+}
+
+.app-modal-recording-table th:nth-child(2),
+.app-modal-recording-table td:nth-child(2),
+.app-modal-recording-table th:nth-child(3),
+.app-modal-recording-table td:nth-child(3) {
+  width: 4.5rem;
+}
+
+.app-modal-recording-table td {
+  color: var(--fg);
+  min-width: 0;
+}
+
+.app-modal-recording-table tbody tr + tr td {
+  border-top: 1px solid var(--border-input);
+}
+
+.app-modal-recording-table__file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.app-modal-recording-table__play {
+  flex-shrink: 0;
+}
+
+.app-modal-recording-table__play svg {
+  display: block;
+}
+
+.app-modal-recording-table__num {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.app-modal-recording-table__link {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-readable);
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-modal-recording-table__link:hover:not(:disabled) {
+  color: var(--fg);
+}
+
+.app-modal-recording-table__link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.app-modal-recording-table__link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.app-modal-recording-table__missing {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+
+.app-modal-skeleton {
+  display: inline-block;
+  border-radius: var(--radius-sm);
+  background: var(--fg-muted);
+  animation: title-skeleton-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
+  vertical-align: middle;
+}
+
+.app-modal-skeleton--play {
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-control-sm);
+  flex-shrink: 0;
+}
+
+.app-modal-skeleton--name {
+  width: min(9rem, 100%);
+  height: 0.72em;
+  flex: 1;
+  min-width: 0;
+}
+
+.app-modal-skeleton--num {
+  width: 2.75rem;
+  height: 0.72em;
+}
+

@@ -3,8 +3,12 @@ use s3::creds::Credentials;
 use s3::region::Region;
 use serde::{Deserialize, Serialize};
 
-pub const BUNDLE_OBJECT_NAME: &str = "bundle.json.gz";
+/// Legacy fixed key (pre content-addressed). Still written for older clients; readers fall back to it.
+pub const LEGACY_BUNDLE_OBJECT_NAME: &str = "bundle.json.gz";
 pub const MANIFEST_OBJECT_NAME: &str = "manifest.json";
+
+/// Backward-compatible alias used by tests and docs.
+pub const BUNDLE_OBJECT_NAME: &str = LEGACY_BUNDLE_OBJECT_NAME;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,8 +46,17 @@ pub fn r2_endpoint(account_id: &str) -> String {
     format!("https://{}.r2.cloudflarestorage.com", account_id.trim())
 }
 
+/// Content-addressed object name for a bundle hash (`bundle-<sha256>.json.gz`).
+pub fn content_addressed_bundle_object_name(bundle_hash: &str) -> String {
+    format!("bundle-{bundle_hash}.json.gz")
+}
+
 fn object_key(prefix: &str, name: &str) -> String {
     format!("{}{name}", normalize_r2_prefix(prefix))
+}
+
+fn is_not_found_error(err: &str) -> bool {
+    err.contains("404") || err.contains("NoSuchKey") || err.contains("Not Found")
 }
 
 pub struct RemoteBackupStore {
@@ -81,8 +94,20 @@ impl RemoteBackupStore {
         object_key(&self.prefix, MANIFEST_OBJECT_NAME)
     }
 
+    pub fn legacy_bundle_key(&self) -> String {
+        object_key(&self.prefix, LEGACY_BUNDLE_OBJECT_NAME)
+    }
+
+    pub fn bundle_key_for_hash(&self, bundle_hash: &str) -> String {
+        object_key(
+            &self.prefix,
+            &content_addressed_bundle_object_name(bundle_hash),
+        )
+    }
+
+    /// Legacy fixed key — prefer [`Self::bundle_key_for_hash`] for new writes/reads.
     pub fn bundle_key(&self) -> String {
-        object_key(&self.prefix, BUNDLE_OBJECT_NAME)
+        self.legacy_bundle_key()
     }
 
     pub async fn read_manifest(&self) -> Result<Option<BackupManifest>, String> {
@@ -111,7 +136,7 @@ impl RemoteBackupStore {
             }
             Err(err) => {
                 let msg = err.to_string();
-                if msg.contains("404") || msg.contains("NoSuchKey") {
+                if is_not_found_error(&msg) {
                     Ok(None)
                 } else {
                     Err(msg)
@@ -120,30 +145,52 @@ impl RemoteBackupStore {
         }
     }
 
-    pub async fn read_bundle(&self) -> Result<Vec<u8>, String> {
-        self.bucket
-            .get_object(&self.bundle_key())
-            .await
-            .map(|data| data.to_vec())
-            .map_err(|e| e.to_string())
+    /// Read the bundle for `bundle_hash`, preferring the content-addressed object and
+    /// falling back to the legacy fixed key for manifests written by older clients.
+    pub async fn read_bundle(&self, bundle_hash: &str) -> Result<Vec<u8>, String> {
+        let addressed_key = self.bundle_key_for_hash(bundle_hash);
+        match self.bucket.get_object(&addressed_key).await {
+            Ok(data) => Ok(data.to_vec()),
+            Err(err) => {
+                let msg = err.to_string();
+                if !is_not_found_error(&msg) {
+                    return Err(msg);
+                }
+                self.bucket
+                    .get_object(&self.legacy_bundle_key())
+                    .await
+                    .map(|data| data.to_vec())
+                    .map_err(|e| e.to_string())
+            }
+        }
     }
 
+    /// Upload an immutable content-addressed bundle, then the manifest that points at it.
+    /// Also mirrors bytes to the legacy key so older clients can still pull.
+    /// Best-effort deletes the previous content-addressed object when the hash changes.
     pub async fn write_bundle_and_manifest(
         &self,
         bundle_bytes: &[u8],
         manifest: &BackupManifest,
+        previous_bundle_hash: Option<&str>,
     ) -> Result<(), String> {
+        let addressed_key = self.bundle_key_for_hash(&manifest.bundle_hash);
         self.bucket
-            .put_object_with_content_type(
-                &self.bundle_key(),
-                bundle_bytes,
-                "application/gzip",
-            )
+            .put_object_with_content_type(&addressed_key, bundle_bytes, "application/gzip")
             .await
             .map_err(|e| e.to_string())?;
 
-        let manifest_json =
-            serde_json::to_string_pretty(manifest).map_err(|e| e.to_string())?;
+        // Compat mirror for clients that still read the fixed key.
+        let _ = self
+            .bucket
+            .put_object_with_content_type(
+                &self.legacy_bundle_key(),
+                bundle_bytes,
+                "application/gzip",
+            )
+            .await;
+
+        let manifest_json = serde_json::to_string_pretty(manifest).map_err(|e| e.to_string())?;
         self.bucket
             .put_object_with_content_type(
                 &self.manifest_key(),
@@ -152,6 +199,15 @@ impl RemoteBackupStore {
             )
             .await
             .map_err(|e| e.to_string())?;
+
+        if let Some(prev) = previous_bundle_hash {
+            if !prev.is_empty() && prev != manifest.bundle_hash.as_str() {
+                let _ = self
+                    .bucket
+                    .delete_object(&self.bundle_key_for_hash(prev))
+                    .await;
+            }
+        }
         Ok(())
     }
 
@@ -162,7 +218,7 @@ impl RemoteBackupStore {
             .map(|_| ())
             .or_else(|err| {
                 let msg = err.to_string();
-                if msg.contains("404") || msg.contains("NoSuchKey") {
+                if is_not_found_error(&msg) {
                     Ok(())
                 } else {
                     Err(msg)
@@ -194,4 +250,24 @@ pub fn is_r2_config_complete(sync: Option<&serde_json::Value>, has_secret: bool)
         .map(str::trim)
         .filter(|s| !s.is_empty());
     account_id.is_some() && bucket.is_some() && access_key_id.is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_addressed_bundle_name_includes_hash() {
+        assert_eq!(
+            content_addressed_bundle_object_name("abc123"),
+            "bundle-abc123.json.gz"
+        );
+    }
+
+    #[test]
+    fn normalize_prefix_defaults_and_trailing_slash() {
+        assert_eq!(normalize_r2_prefix(""), "harness/");
+        assert_eq!(normalize_r2_prefix("custom"), "custom/");
+        assert_eq!(normalize_r2_prefix("/custom/"), "custom/");
+    }
 }

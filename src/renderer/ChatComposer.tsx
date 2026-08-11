@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, type MutableRefObject, type ReactNode } from "react";
-import { Mic, Check, Loader2, X, Paperclip, ArrowUp } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { Mic, Check, Loader2, X, FileAudio, ArrowUp } from "lucide-react";
 import type { VoiceState } from "./chatHelpers";
+import { AUDIO_FILE_ACCEPT, pickAudioAttachFile } from "./audioAttach";
 import { useTypedPlaceholder } from "./useTypedPlaceholder";
+import { formatVoiceTimer } from "./useVoiceCapture";
 
 interface ChatComposerProps {
   input: string;
@@ -20,6 +22,8 @@ interface ChatComposerProps {
   attachmentError: string | null;
   onAttachAudio: (file: File | null) => void;
   onRemoveAttachedAudio: () => void;
+  /** Shown when a drop/pick is not a usable audio file. */
+  onAttachmentError?: (message: string | null) => void;
   focusComposerNonce?: number;
   inputRef?: MutableRefObject<HTMLTextAreaElement | null>;
   placeholder?: string;
@@ -45,6 +49,7 @@ export function ChatComposer({
   attachmentError,
   onAttachAudio,
   onRemoveAttachedAudio,
+  onAttachmentError,
   focusComposerNonce,
   inputRef: externalInputRef,
   placeholder = "Write a message…",
@@ -53,7 +58,12 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const inputRef = useRef<HTMLTextAreaElement | null>(null) as MutableRefObject<HTMLTextAreaElement | null>;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragDepthRef = useRef(0);
+  const [dropTargetActive, setDropTargetActive] = useState(false);
   const typedPlaceholder = useTypedPlaceholder(placeholder);
+
+  const attachDisabled =
+    voiceState !== "idle" || sending || attachmentTranscribing;
 
   // Auto-grow textarea to fit content (up to CSS max-height)
   const adjustInputHeight = useCallback(() => {
@@ -72,6 +82,27 @@ export function ChatComposer({
     inputRef.current?.focus();
   }, [focusComposerNonce]);
 
+  const clearDropTarget = useCallback(() => {
+    dragDepthRef.current = 0;
+    setDropTargetActive(false);
+  }, []);
+
+  const tryAttachAudioFiles = useCallback(
+    (files: FileList | File[] | null | undefined) => {
+      if (attachDisabled) return;
+      const picked = pickAudioAttachFile(files);
+      if (!picked) {
+        if (files && files.length > 0) {
+          onAttachmentError?.("Drop an audio file (m4a, mp3, wav, …).");
+        }
+        return;
+      }
+      onAttachmentError?.(null);
+      onAttachAudio(picked);
+    },
+    [attachDisabled, onAttachAudio, onAttachmentError],
+  );
+
   return (
     <>
       {voiceError && (
@@ -81,29 +112,59 @@ export function ChatComposer({
         <div className="voice-error">{attachmentError}</div>
       )}
       <div
-        className="chat-composer-inner"
+        className={`chat-composer-inner${dropTargetActive ? " chat-composer-inner--drop-target" : ""}`}
         onKeyDown={(e) => {
           if (e.key === "Tab" && e.shiftKey && onCycleMode && !e.altKey && !e.metaKey && !e.ctrlKey) {
             e.preventDefault();
             if (!sending) onCycleMode();
           }
         }}
+        onDragEnter={(e) => {
+          if (attachDisabled) return;
+          if (![...e.dataTransfer.types].includes("Files")) return;
+          e.preventDefault();
+          e.stopPropagation();
+          dragDepthRef.current += 1;
+          setDropTargetActive(true);
+        }}
+        onDragOver={(e) => {
+          if (attachDisabled) return;
+          if (![...e.dataTransfer.types].includes("Files")) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDragLeave={(e) => {
+          if (attachDisabled) return;
+          e.preventDefault();
+          e.stopPropagation();
+          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+          if (dragDepthRef.current === 0) setDropTargetActive(false);
+        }}
+        onDrop={(e) => {
+          if (attachDisabled) return;
+          e.preventDefault();
+          e.stopPropagation();
+          clearDropTarget();
+          tryAttachAudioFiles(e.dataTransfer.files);
+        }}
       >
         <input
           ref={fileInputRef}
           type="file"
           className="chat-audio-file-input"
-          accept="audio/*,.m4a,.mp4,.mpeg4,.aac,.mp3,.wav,.caf,.aif,.aiff"
+          accept={AUDIO_FILE_ACCEPT}
           onChange={(e) => {
             const picked = e.target.files?.[0] ?? null;
-            onAttachAudio(picked);
+            if (picked) tryAttachAudioFiles([picked]);
+            else onAttachAudio(null);
             e.currentTarget.value = "";
           }}
         />
         {attachedAudioName && (
           <div className="chat-attachment-strip">
             <span className="chat-attachment-chip" title={attachedAudioName}>
-              <Paperclip size={12} />
+              <FileAudio size={12} />
               <span className="chat-attachment-name">{attachedAudioName}</span>
               <button
                 type="button"
@@ -147,7 +208,7 @@ export function ChatComposer({
           {modeControl ? <div className="chat-composer-mode-row">{modeControl}</div> : null}
           {voiceState === "recording" && (
             <span className="voice-timer">
-              {`${Math.floor(recordingMs / 60000)}:${String(Math.floor((recordingMs % 60000) / 1000)).padStart(2, "0")}.${Math.floor((recordingMs % 1000) / 100)}`}
+              {formatVoiceTimer(recordingMs)}
             </span>
           )}
           {voiceState === "processing" && (
@@ -161,11 +222,11 @@ export function ChatComposer({
             type="button"
             className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn"
             onClick={() => fileInputRef.current?.click()}
-            disabled={voiceState !== "idle" || sending || attachmentTranscribing}
+            disabled={attachDisabled}
             title="Attach audio file"
             aria-label="Attach audio file"
           >
-            <Paperclip size={15} />
+            <FileAudio size={15} />
           </button>
           {voiceState !== "processing" && (
             <button

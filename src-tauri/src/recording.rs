@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::credentials::resolve_openai_api_key;
+use crate::dictation_recording_index;
 use crate::env_util::is_harness_e2e;
 use crate::memory::show_item_in_folder;
 use crate::paths::{get_recordings_dir, resolve_bundled_resource};
@@ -434,6 +435,16 @@ pub async fn recording_open_folder() -> Result<(), String> {
         let _ = std::process::Command::new("open").arg(&dir).spawn();
     }
     Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn recording_count_files() -> Result<u64, String> {
+    Ok(dictation_recording_index::count_files())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn recording_archive_stats() -> Result<dictation_recording_index::ArchiveStats, String> {
+    Ok(dictation_recording_index::archive_stats())
 }
 
 #[tauri::command(rename_all = "camelCase")]

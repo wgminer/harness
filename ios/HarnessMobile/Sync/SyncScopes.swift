@@ -3,7 +3,9 @@ import Foundation
 enum SyncScopes {
     static let bundleFormatVersion = 1
     static let manifestVersion = 1
-    static let bundleFileName = "bundle.json.gz"
+    /// Legacy fixed key; new writes also use `bundle-<hash>.json.gz`.
+    static let legacyBundleFileName = "bundle.json.gz"
+    static let bundleFileName = legacyBundleFileName
     static let manifestFileName = "manifest.json"
 
     struct Scope: Sendable {

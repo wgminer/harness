@@ -3,11 +3,11 @@
  * `.chat-scroll` is the only scrollport and uses bottom inset padding to keep the latest
  * transcript clear of the composer. Inset is 2× (dock height + gap) so the live edge sits
  * well above the dock. Single-message mode (`.chat-scroll--single-message`) opts out so
- * top-third landing is not skewed by that inset.
+ * centered landing is not skewed by that inset.
  *
  * Compose home (`.new-chat-center`) and single-message / dictation
  * (`.chat-scroll--single-message .chat-area-inner`) share the same optical placement:
- * free space splits 1:2 above/below so the block sits in the top third of the frame.
+ * free space splits 1:1 above/below so the block sits in the vertical center of the frame.
  */
 .chat-pane {
   --chat-composer-dock-height: var(--space-35);
@@ -20,7 +20,7 @@
   width: 100%;
 }
 
-/* Compose-first landing: quote + composer in the top third, no chat header. */
+/* Compose-first landing: quote + composer vertically centered, no chat header. */
 .new-chat-pane {
   position: relative;
   flex: 1;
@@ -28,6 +28,44 @@
   flex-direction: column;
   min-height: 0;
   width: 100%;
+}
+
+.new-chat-corner {
+  position: absolute;
+  z-index: 1;
+  margin: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-ui);
+  line-height: 1.3;
+  color: var(--fg-muted);
+  opacity: 0.45;
+  pointer-events: none;
+  user-select: none;
+}
+
+.new-chat-corner--top-left {
+  top: var(--space-4);
+  left: var(--shell-pad-inline);
+}
+
+.new-chat-corner--top-right {
+  top: var(--space-4);
+  right: var(--shell-pad-inline);
+  text-align: right;
+}
+
+.new-chat-corner--bottom-left {
+  bottom: var(--space-4);
+  left: var(--shell-pad-inline);
+}
+
+.new-chat-corner--bottom-right {
+  bottom: var(--space-4);
+  right: var(--shell-pad-inline);
+  text-align: right;
 }
 
 .new-chat-center {
@@ -51,7 +89,7 @@
 .new-chat-center::after,
 .chat-scroll.chat-scroll--single-message .chat-area-inner::after {
   content: "";
-  flex: 2 1 0;
+  flex: 1 1 0;
   min-height: 0;
   pointer-events: none;
 }
@@ -65,14 +103,20 @@
   flex-shrink: 0;
 }
 
+.new-chat-quote-tooltip .tooltip__label {
+  max-width: min(360px, 80vw);
+  white-space: pre-line;
+  text-align: left;
+  line-height: 1.45;
+}
+
 .new-chat-quote {
   margin: 0;
-  max-width: var(--content-width);
   text-align: center;
-  font-size: var(--font-size-title);
-  font-weight: 600;
-  line-height: var(--line-height-title);
-  color: var(--fg);
+  font-size: var(--font-size-ui);
+  line-height: 1.3;
+  color: var(--fg-muted);
+  opacity: 0.45;
 }
 
 .new-chat-composer {
@@ -131,9 +175,9 @@
 }
 
 /*
- * Single-message threads (e.g. dictation): same top-third landing as compose home.
+ * Single-message threads (e.g. dictation): same centered landing as compose home.
  * Drop the multi-turn composer scroll inset — that padding is only for keeping a
- * back-and-forth transcript clear of the dock, and it skews the 1:2 spacer split.
+ * back-and-forth transcript clear of the dock, and it skews the 1:1 spacer split.
  */
 .chat-scroll.chat-scroll--single-message {
   padding-bottom: 0;
@@ -178,6 +222,8 @@
 }
 
 .message-block.assistant .content {
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-title);
   line-height: var(--line-height-message);
 }
 
@@ -186,7 +232,8 @@
   background: var(--bg-elevated);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
-  line-height: var(--line-height-message);
+  font-size: 14px;
+  line-height: 20px;
 }
 
 /* Bottom fade when user message is line-clamped (collapsed + overflow). */
@@ -366,6 +413,7 @@
 }
 
 .message-block .content code {
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-caption);
   padding: var(--space-1) var(--space-2);
   background: var(--bg-secondary);
@@ -378,11 +426,13 @@
   margin: var(--space-3) 0;
   background: #000;
   border-radius: var(--radius-md);
+  font-family: var(--font-family-mono);
 }
 
 .message-block .content .md-code-block pre {
   margin: 0;
   padding: var(--space-3);
+  font-family: var(--font-family-mono);
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -392,6 +442,7 @@
 }
 
 .message-block .content pre code {
+  font-family: var(--font-family-mono);
   padding: 0;
   background: none;
   border: none;
@@ -400,6 +451,7 @@
 /* Let highlight.js tokens color the text, but inherit the surrounding pre
    background so we keep our themed surface instead of github-dark's #0d1117. */
 .message-block .content pre code.hljs {
+  font-family: var(--font-family-mono);
   background: transparent;
   padding: 0;
   color: inherit;
@@ -501,6 +553,31 @@
   font-size: var(--font-size-caption);
   line-height: var(--line-height-normal);
   color: var(--fg-muted);
+}
+
+.tool-card-note-link {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-normal);
+  color: var(--fg-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tool-card-note-link:hover {
+  color: var(--fg);
+}
+
+.tool-card-note-link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .tool-card-actions {
@@ -687,7 +764,6 @@
 
 .chat-secondary-actions .chat-mode-picker {
   justify-content: center;
-  gap: var(--space-2);
 }
 
 .dictation-suggested-prompts {
@@ -752,37 +828,68 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-start;
-  gap: var(--space-1);
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn {
+  --control-size: var(--space-6);
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
   color: var(--fg-muted);
   font-family: var(--font-family);
-  font-size: 14px;
+  font-size: var(--font-size-ui);
   font-weight: 500;
   line-height: var(--line-height-tight);
-  height: var(--input-height);
-  min-height: var(--input-height);
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-control);
+  height: var(--control-size);
+  min-height: var(--control-size);
+  padding: 0 var(--space-2);
+  border-radius: min(var(--radius-lg), calc(var(--control-size) / 4));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition:
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard),
+    border-color var(--motion-duration-ui) var(--motion-ease-standard),
+    border-radius var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+/* Pack mode chips flush like sidebar nav icons. */
+.chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn + .chat-mode-picker__btn {
+  margin-inline-start: calc(var(--space-2) * -1);
 }
 
 .chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn:hover:not(:disabled) {
   color: var(--fg);
-  background: var(--bg-hover, rgba(127, 127, 127, 0.12));
+  background: var(--overlay-subtle);
+  border-color: transparent;
 }
 
-.chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn--active {
+.chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn--active,
+.chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn--active:hover:not(:disabled) {
   color: var(--fg);
-  border-color: var(--border-edge);
-  background: var(--bg-hover, rgba(127, 127, 127, 0.12));
+  background: var(--overlay-subtle);
+  border-color: transparent;
+}
+
+/* Square shared edges only while hovering a neighbor of the active mode. */
+.chat-mode-picker:not(.chat-mode-picker--outline)
+  .chat-mode-picker__btn:hover:has(+ .chat-mode-picker__btn--active),
+.chat-mode-picker:not(.chat-mode-picker--outline)
+  .chat-mode-picker__btn--active:has(+ .chat-mode-picker__btn:hover) {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.chat-mode-picker:not(.chat-mode-picker--outline)
+  .chat-mode-picker__btn:hover + .chat-mode-picker__btn--active,
+.chat-mode-picker:not(.chat-mode-picker--outline)
+  .chat-mode-picker__btn--active + .chat-mode-picker__btn:hover {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
 }
 
 .chat-mode-picker:not(.chat-mode-picker--outline) .chat-mode-picker__btn:disabled {
@@ -794,20 +901,12 @@
   border-color: var(--border-input-focus);
 }
 
-/* Centered chrome: composer is a complete floating card (full border + radius). */
-@media (min-width: 1600px) {
-  .app[data-wide-view="centered"] .chat-composer-dock {
-    padding-bottom: var(--shell-pad-inline);
-  }
-
-  .app[data-wide-view="centered"] .chat-composer-dock .chat-composer-inner {
-    border-bottom: 1px solid var(--border-input);
-    border-radius: var(--radius-lg);
-  }
-
-  .app[data-wide-view="centered"] .chat-composer-dock .chat-composer-inner:focus-within {
-    border-color: var(--border-input-focus);
-  }
+.chat-composer-inner--drop-target {
+  border-color: var(--border-input-focus);
+  background: var(--accent-tint);
+  box-shadow:
+    0 calc(var(--space-3) * -1) var(--input-height) rgba(0, 0, 0, 0.2),
+    inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
 }
 
 .chat-audio-file-input {
@@ -888,7 +987,7 @@
 
 .input-actions {
   display: flex;
-  align-items: center;
+  align-items: end;
   justify-content: end;
   gap: var(--space-2);
   padding: var(--space-4);
@@ -1465,11 +1564,13 @@
   background: #111;
   border-radius: var(--radius-md);
   color: #ccc;
+  font-family: var(--font-family-mono);
 }
 
 .document-card-overlay__body .md-code-block pre {
   margin: 0;
   padding: var(--space-3);
+  font-family: var(--font-family-mono);
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -1479,6 +1580,7 @@
 
 .document-card-overlay__body .md-code-block pre code,
 .document-card-overlay__body .md-code-block pre code.hljs {
+  font-family: var(--font-family-mono);
   padding: 0;
   background: transparent;
   border: none;

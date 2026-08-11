@@ -120,13 +120,11 @@ struct AssistantMessageView: View {
                             .equatable()
                     } else if !UserMessageCard.looksLikeMarkdown(content) {
                         Text(content)
-                            .font(.body)
-                            .lineSpacing(4)
+                            .assistantProseStyle()
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                     } else {
-                        HarnessMarkdownView(content: content, isStreaming: false)
-                            .lineSpacing(4)
+                        HarnessMarkdownView(content: content, isStreaming: false, assistantProse: true)
                     }
                 }
             }

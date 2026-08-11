@@ -106,10 +106,13 @@ describe("globalHotkeyController", () => {
       setFocusComposerNonce: vi.fn(),
       setPendingHotkeyText: vi.fn(),
       setPendingHotkeyDraftOnly: vi.fn(),
+      setPendingNoteHotkeyText: vi.fn(),
       setConversations: vi.fn(),
       refreshConversations: vi.fn(async () => {}),
       markTitleAwaiting: vi.fn(),
       getConversationId: vi.fn(() => "conv-existing"),
+      getView: vi.fn(() => "chat"),
+      getActiveNoteId: vi.fn(() => null),
       getOverlaySession: vi.fn(() => overlaySession),
     };
     wireGlobalHotkeyActions(actions);
@@ -173,6 +176,25 @@ describe("globalHotkeyController", () => {
     expect(actions.setView).toHaveBeenCalledWith("chat");
     expect(actions.setFocusComposerNonce).toHaveBeenCalled();
     expect(actions.setPendingHotkeyText).toHaveBeenCalledWith("hello world");
+    expect(actions.setPendingNoteHotkeyText).not.toHaveBeenCalled();
+  });
+
+  it("delivers focused transcripts into an open note without switching views", () => {
+    vi.mocked(actions.getView).mockReturnValue("notes");
+    vi.mocked(actions.getActiveNoteId).mockReturnValue("note-1");
+    transcriptReadyCb?.("note dictation");
+    expect(actions.setView).not.toHaveBeenCalled();
+    expect(actions.setPendingHotkeyText).not.toHaveBeenCalled();
+    expect(actions.setPendingNoteHotkeyText).toHaveBeenCalledWith("note dictation");
+  });
+
+  it("falls back to chat when notes view has no active note", () => {
+    vi.mocked(actions.getView).mockReturnValue("notes");
+    vi.mocked(actions.getActiveNoteId).mockReturnValue(null);
+    transcriptReadyCb?.("fallback");
+    expect(actions.setView).toHaveBeenCalledWith("chat");
+    expect(actions.setPendingHotkeyText).toHaveBeenCalledWith("fallback");
+    expect(actions.setPendingNoteHotkeyText).not.toHaveBeenCalled();
   });
 
   it("selects conversation on unfocused delivery", () => {

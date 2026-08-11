@@ -229,6 +229,7 @@ export function ChatMessageList({
                         expanded={expandedToolCards.has(m.id)}
                         onToggleExpanded={() => toggleToolCardExpanded(m.id)}
                         onToolConfirm={onToolConfirm}
+                        onOpenNote={onOpenNoteInEditor}
                       />
                     )}
                     {assistantBubbleBody}

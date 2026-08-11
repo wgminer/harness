@@ -5,6 +5,8 @@ import {
   Check,
   Copy,
   FolderOpen,
+  Loader2,
+  Mic,
   Minimize2,
   MoreVertical,
   PencilLine,
@@ -27,9 +29,11 @@ import {
   type NoteTemplateConfig,
 } from "../shared/writing";
 import { buildNotePrintHtml } from "../shared/notePrint";
+import { transcriptCleanupSkippedMessage } from "../shared/setupState";
 import { NotesCodeEditor, type NotesCodeEditorHandle } from "./NotesCodeEditor";
 import { getNotesEditorCaretCoordinates } from "./notesEditorExtensions";
 import { useScrolledHeader } from "./useScrolledHeader";
+import { formatVoiceTimer, useVoiceCapture, type VoiceTranscriptResult } from "./useVoiceCapture";
 
 type Status =
   | { kind: "idle" }
@@ -77,6 +81,31 @@ interface NotesViewProps {
   initialOpenNoteIsNew?: boolean;
   onInitialOpenNoteHandled?: () => void;
   onActiveNoteChange?: (noteId: string | null) => void;
+  /** Focused Fn transcript waiting to be inserted at the note cursor. */
+  pendingHotkeyText?: string | null;
+  onPendingHotkeyTextConsumed?: () => void;
+  /**
+   * When true, mirror focused Fn global recording into toolbar voice chrome
+   * without starting a second local capture.
+   */
+  mirrorGlobalFnRecording?: boolean;
+}
+
+/** Insert dictation at the caret, adding a leading space when mid-word/mid-line. */
+export function insertNoteDictation(editor: NotesCodeEditorHandle, text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  const view = editor.getView();
+  let insert = trimmed;
+  if (view) {
+    const { from, to } = view.state.selection.main;
+    if (from === to && from > 0) {
+      const prev = view.state.doc.sliceString(from - 1, from);
+      if (!/\s/.test(prev)) insert = ` ${trimmed}`;
+    }
+  }
+  editor.insertAtCursor(insert);
+  return true;
 }
 
 export function NotesView({
@@ -87,6 +116,9 @@ export function NotesView({
   initialOpenNoteIsNew,
   onInitialOpenNoteHandled,
   onActiveNoteChange,
+  pendingHotkeyText,
+  onPendingHotkeyTextConsumed,
+  mirrorGlobalFnRecording = false,
 }: NotesViewProps) {
   const { scrollRef, onScroll } = useScrolledHeader();
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
@@ -123,6 +155,51 @@ export function NotesView({
   const asidePanelRef = useRef<HTMLElement | null>(null);
   const pendingEditorFocusRef = useRef(false);
   const pendingEditorCaretRef = useRef<number | null>(null);
+  const setVoiceErrorRef = useRef<(message: string | null) => void>(() => {});
+  const applyNoteTranscriptRef = useRef<
+    (text: string, result?: VoiceTranscriptResult) => boolean
+  >(() => false);
+
+  const applyNoteTranscript = useCallback(
+    (text: string, result?: VoiceTranscriptResult): boolean => {
+      const editor = editorRef.current;
+      if (!editor || selectedNoteId == null) return false;
+      const applied = insertNoteDictation(editor, text);
+      if (!applied) return false;
+      if (result?.cleanupSkipped === "no_api_key") {
+        setVoiceErrorRef.current(transcriptCleanupSkippedMessage());
+      }
+      return true;
+    },
+    [selectedNoteId],
+  );
+
+  useEffect(() => {
+    applyNoteTranscriptRef.current = applyNoteTranscript;
+  });
+
+  const {
+    voiceState,
+    voiceError,
+    setVoiceError,
+    recordingMs,
+    startRecording,
+    stopAndTranscribe,
+    cancelRecording,
+  } = useVoiceCapture({
+    onTranscript: (text, result) => applyNoteTranscriptRef.current(text, result),
+    mirrorGlobalFnRecording,
+  });
+
+  useEffect(() => {
+    setVoiceErrorRef.current = setVoiceError;
+  });
+
+  useEffect(() => {
+    if (!pendingHotkeyText) return;
+    const applied = applyNoteTranscript(pendingHotkeyText);
+    if (applied) onPendingHotkeyTextConsumed?.();
+  }, [applyNoteTranscript, onPendingHotkeyTextConsumed, pendingHotkeyText]);
 
   const scheduleEditorFocus = useCallback((caret?: number) => {
     pendingEditorFocusRef.current = true;
@@ -692,119 +769,167 @@ export function NotesView({
           ) : (
             <>
               <div className="notes-surface__toolbar">
-                <div className="notes-surface__toolbar-menu-wrap" ref={noteToolbarMenuRef}>
-                  <button
-                    type="button"
-                    className="btn btn-icon notes-surface__details-btn"
-                    aria-expanded={noteToolbarMenuOpen}
-                    aria-haspopup="menu"
-                    aria-label="Note details"
-                    title="Details"
-                    onClick={() => setNoteToolbarMenuOpen((v) => !v)}
-                  >
-                    <MoreVertical size={16} aria-hidden />
-                  </button>
-                  {noteToolbarMenuOpen ? (
-                    <div className="notes-surface__toolbar-menu" role="menu" aria-label="Note details">
-                      <div className="notes-surface__toolbar-menu-meta">
-                        <div className="notes-surface__toolbar-menu-meta-row">
-                          <span className="notes-surface__toolbar-menu-meta-label">Title</span>
-                          <span className="notes-surface__toolbar-menu-meta-value" title={noteTitle}>
-                            {noteTitle}
-                          </span>
-                        </div>
-                        <div className="notes-surface__toolbar-menu-meta-row">
-                          <span className="notes-surface__toolbar-menu-meta-label">Words</span>
-                          <span className="notes-surface__toolbar-menu-meta-value">
-                            {formatNoteWordCount(noteWordCount)}
-                          </span>
-                        </div>
-                        {activeNote ? (
-                          <>
-                            <div className="notes-surface__toolbar-menu-meta-row">
-                              <span className="notes-surface__toolbar-menu-meta-label">Updated</span>
-                              <span className="notes-surface__toolbar-menu-meta-value">
-                                {formatNoteTimestamp(activeNote.updatedAt)}
-                              </span>
-                            </div>
-                            <div className="notes-surface__toolbar-menu-meta-row">
-                              <span className="notes-surface__toolbar-menu-meta-label">Created</span>
-                              <span className="notes-surface__toolbar-menu-meta-value">
-                                {formatNoteTimestamp(activeNote.createdAt)}
-                              </span>
-                            </div>
-                          </>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        className="notes-surface__toolbar-menu-item"
-                        role="menuitem"
-                        onClick={() => {
-                          cycleNoteWidthMode();
-                          setNoteToolbarMenuOpen(false);
-                        }}
-                      >
-                        <ArrowRightLeft size={16} aria-hidden />
-                        <span>Text width ({NOTE_WIDTH_LABELS[noteWidthMode]})</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="notes-surface__toolbar-menu-item"
-                        role="menuitem"
-                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                        onClick={() => {
-                          const html = buildNotePrintHtml(noteTitle, draft);
-                          void window.harness.notes.print(html, noteTitle);
-                          setNoteToolbarMenuOpen(false);
-                        }}
-                      >
-                        <Printer size={16} aria-hidden />
-                        <span>Print</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="notes-surface__toolbar-menu-item"
-                        role="menuitem"
-                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                        onClick={() => {
-                          const id = selectedNoteId;
-                          if (!id) return;
-                          void window.harness.notes.showInFolder(id);
-                          setNoteToolbarMenuOpen(false);
-                        }}
-                      >
-                        <FolderOpen size={16} aria-hidden />
-                        <span>Show file</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="notes-surface__toolbar-menu-item"
-                        role="menuitem"
-                        data-testid="notes-open-in-new-window"
-                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                        onClick={() => {
-                          void openInNewWindow();
-                        }}
-                      >
-                        <SquareArrowOutUpRight size={16} aria-hidden />
-                        <span>Open in new window</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="notes-surface__toolbar-menu-item notes-surface__toolbar-menu-item--danger"
-                        role="menuitem"
-                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                        onClick={() => {
-                          void deleteActiveNote();
-                          setNoteToolbarMenuOpen(false);
-                        }}
-                      >
-                        <Trash2 size={16} aria-hidden />
-                        <span>Delete note</span>
-                      </button>
-                    </div>
+                <div className="notes-surface__toolbar-actions">
+                  {voiceError ? <div className="notes-surface__voice-error">{voiceError}</div> : null}
+                  {voiceState === "recording" ? (
+                    <span className="voice-timer notes-surface__voice-timer">
+                      {formatVoiceTimer(recordingMs)}
+                    </span>
                   ) : null}
+                  {voiceState === "processing" ? (
+                    <span className="voice-status notes-surface__voice-status">
+                      <Loader2 size={13} className="voice-spinner" />
+                      Transcribing…
+                    </span>
+                  ) : null}
+                  {voiceState !== "processing" ? (
+                    <button
+                      type="button"
+                      className={`btn btn-icon notes-surface__details-btn${voiceState === "recording" ? " btn-primary" : " voice-btn"}`}
+                      onClick={() =>
+                        void (voiceState === "recording" ? stopAndTranscribe() : startRecording())
+                      }
+                      disabled={
+                        selectedNoteId == null ||
+                        status.kind === "loading" ||
+                        status.kind === "deleting"
+                      }
+                      title={voiceState === "recording" ? "Stop dictation" : "Dictate into note"}
+                      aria-label={voiceState === "recording" ? "Stop dictation" : "Dictate into note"}
+                      data-testid="notes-dictate"
+                    >
+                      {voiceState === "recording" ? (
+                        <Check size={15} aria-hidden />
+                      ) : (
+                        <Mic size={15} aria-hidden />
+                      )}
+                    </button>
+                  ) : null}
+                  {voiceState !== "idle" ? (
+                    <button
+                      type="button"
+                      className="btn btn-icon btn-danger notes-surface__details-btn"
+                      onClick={() => void cancelRecording()}
+                      title="Cancel dictation"
+                      aria-label="Cancel dictation"
+                    >
+                      <X size={15} aria-hidden />
+                    </button>
+                  ) : null}
+                  <div className="notes-surface__toolbar-menu-wrap" ref={noteToolbarMenuRef}>
+                    <button
+                      type="button"
+                      className="btn btn-icon notes-surface__details-btn"
+                      aria-expanded={noteToolbarMenuOpen}
+                      aria-haspopup="menu"
+                      aria-label="Note details"
+                      title="Details"
+                      onClick={() => setNoteToolbarMenuOpen((v) => !v)}
+                    >
+                      <MoreVertical size={16} aria-hidden />
+                    </button>
+                    {noteToolbarMenuOpen ? (
+                      <div className="notes-surface__toolbar-menu" role="menu" aria-label="Note details">
+                        <div className="notes-surface__toolbar-menu-meta">
+                          <div className="notes-surface__toolbar-menu-meta-row">
+                            <span className="notes-surface__toolbar-menu-meta-label">Title</span>
+                            <span className="notes-surface__toolbar-menu-meta-value" title={noteTitle}>
+                              {noteTitle}
+                            </span>
+                          </div>
+                          <div className="notes-surface__toolbar-menu-meta-row">
+                            <span className="notes-surface__toolbar-menu-meta-label">Words</span>
+                            <span className="notes-surface__toolbar-menu-meta-value">
+                              {formatNoteWordCount(noteWordCount)}
+                            </span>
+                          </div>
+                          {activeNote ? (
+                            <>
+                              <div className="notes-surface__toolbar-menu-meta-row">
+                                <span className="notes-surface__toolbar-menu-meta-label">Updated</span>
+                                <span className="notes-surface__toolbar-menu-meta-value">
+                                  {formatNoteTimestamp(activeNote.updatedAt)}
+                                </span>
+                              </div>
+                              <div className="notes-surface__toolbar-menu-meta-row">
+                                <span className="notes-surface__toolbar-menu-meta-label">Created</span>
+                                <span className="notes-surface__toolbar-menu-meta-value">
+                                  {formatNoteTimestamp(activeNote.createdAt)}
+                                </span>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          className="notes-surface__toolbar-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            cycleNoteWidthMode();
+                            setNoteToolbarMenuOpen(false);
+                          }}
+                        >
+                          <ArrowRightLeft size={16} aria-hidden />
+                          <span>Text width ({NOTE_WIDTH_LABELS[noteWidthMode]})</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="notes-surface__toolbar-menu-item"
+                          role="menuitem"
+                          disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                          onClick={() => {
+                            const html = buildNotePrintHtml(noteTitle, draft);
+                            void window.harness.notes.print(html, noteTitle);
+                            setNoteToolbarMenuOpen(false);
+                          }}
+                        >
+                          <Printer size={16} aria-hidden />
+                          <span>Print</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="notes-surface__toolbar-menu-item"
+                          role="menuitem"
+                          disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                          onClick={() => {
+                            const id = selectedNoteId;
+                            if (!id) return;
+                            void window.harness.notes.showInFolder(id);
+                            setNoteToolbarMenuOpen(false);
+                          }}
+                        >
+                          <FolderOpen size={16} aria-hidden />
+                          <span>Show file</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="notes-surface__toolbar-menu-item"
+                          role="menuitem"
+                          data-testid="notes-open-in-new-window"
+                          disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                          onClick={() => {
+                            void openInNewWindow();
+                          }}
+                        >
+                          <SquareArrowOutUpRight size={16} aria-hidden />
+                          <span>Open in new window</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="notes-surface__toolbar-menu-item notes-surface__toolbar-menu-item--danger"
+                          role="menuitem"
+                          disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                          onClick={() => {
+                            void deleteActiveNote();
+                            setNoteToolbarMenuOpen(false);
+                          }}
+                        >
+                          <Trash2 size={16} aria-hidden />
+                          <span>Delete note</span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               <div

@@ -8,7 +8,7 @@ import { Section } from "./storyHelpers";
 
 function TogglesGallery() {
   const [mode, setMode] = useState<ChatModeId>("chat");
-  const [wideView, setWideView] = useState<"scaled" | "centered">("scaled");
+  const [sidebar, setSidebar] = useState<"left" | "right">("left");
   const [platform, setPlatform] = useState<"desktop" | "ios">("desktop");
   const [tab, setTab] = useState("general");
   const [syncOn, setSyncOn] = useState(true);
@@ -25,24 +25,24 @@ function TogglesGallery() {
       </Section>
 
       <Section title="Settings segmented" stack>
-        <div className="settings-segmented" role="radiogroup" aria-label="Large window layout">
+        <div className="settings-segmented" role="radiogroup" aria-label="Sidebar position">
           <button
             type="button"
             role="radio"
-            className={`settings-segment${wideView === "scaled" ? " settings-segment--active" : ""}`}
-            aria-checked={wideView === "scaled"}
-            onClick={() => setWideView("scaled")}
+            className={`settings-segment${sidebar === "left" ? " settings-segment--active" : ""}`}
+            aria-checked={sidebar === "left"}
+            onClick={() => setSidebar("left")}
           >
-            Scaled
+            Left
           </button>
           <button
             type="button"
             role="radio"
-            className={`settings-segment${wideView === "centered" ? " settings-segment--active" : ""}`}
-            aria-checked={wideView === "centered"}
-            onClick={() => setWideView("centered")}
+            className={`settings-segment${sidebar === "right" ? " settings-segment--active" : ""}`}
+            aria-checked={sidebar === "right"}
+            onClick={() => setSidebar("right")}
           >
-            Centered
+            Right
           </button>
         </div>
       </Section>

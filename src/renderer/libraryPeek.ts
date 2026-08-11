@@ -2,8 +2,8 @@
 export const LIBRARY_PEEK_ZONE_PX = 220;
 
 /**
- * Cap on proximity peek, as a 0–1 fraction of dock travel.
- * Prefer {@link LIBRARY_PEEK_MAX_PX} when tuning.
+ * Cap on proximity peek as a 0–1 fraction of dock travel.
+ * Runtime tuning prefers {@link LIBRARY_PEEK_MAX_SCREEN_RATIO} instead.
  */
 export const LIBRARY_PEEK_MAX = 0.72;
 
@@ -13,8 +13,11 @@ export const LIBRARY_PEEK_MAX = 0.72;
  */
 export const LIBRARY_DOCK_TRAVEL_PX = 70 * 4 + 3 * 4 + 8;
 
-/** Cap on proximity peek, in visible px of dock travel. Full open is hover on the dock. */
-export const LIBRARY_PEEK_MAX_PX = Math.round(LIBRARY_PEEK_MAX * LIBRARY_DOCK_TRAVEL_PX);
+/**
+ * Cap on proximity peek as a fraction of viewport width.
+ * Converted to dock-travel fraction at runtime via {@link libraryPeekMaxFraction}.
+ */
+export const LIBRARY_PEEK_MAX_SCREEN_RATIO = 0.065;
 
 /** How far past the target the spring display may travel (visible bounce). */
 export const LIBRARY_PEEK_OVERSHOOT = 0.14;
@@ -29,7 +32,14 @@ export const LIBRARY_PEEK_DAMPING = 16;
 export const LIBRARY_LATCH_DURATION_MS = 420;
 
 /** Delay before unpinned hover-open closes after pointer leave (ms). */
-export const LIBRARY_HOVER_CLOSE_DELAY_MS = 220;
+export const LIBRARY_HOVER_CLOSE_DELAY_MS = 0;
+
+/**
+ * Keep hover-open / peek alive while the pointer is parked on the library
+ * frame edge. Latch CSS easing overshoots past translateX(0), which can drop
+ * hit-testing off a cursor at x≈0; OS edge clamping also flips deltaX.
+ */
+export const LIBRARY_EDGE_HOLD_PX = 16;
 
 /** Ignore sub-pixel jitter when deciding pointer direction. */
 export const LIBRARY_PEEK_DIRECTION_EPSILON_PX = 0.5;
@@ -53,8 +63,8 @@ export type LibraryPeekTuning = {
   stiffness: number;
   damping: number;
   overshoot: number;
-  /** How many px of the dock may stick out during proximity peek. */
-  peekMaxPx: number;
+  /** How far the dock may stick out during proximity peek, as a fraction of viewport width. */
+  peekMaxScreenRatio: number;
   zonePx: number;
   latchDurationMs: number;
   hoverCloseDelayMs: number;
@@ -64,19 +74,24 @@ export const DEFAULT_LIBRARY_PEEK_TUNING: LibraryPeekTuning = {
   stiffness: LIBRARY_PEEK_STIFFNESS,
   damping: LIBRARY_PEEK_DAMPING,
   overshoot: LIBRARY_PEEK_OVERSHOOT,
-  peekMaxPx: LIBRARY_PEEK_MAX_PX,
+  peekMaxScreenRatio: LIBRARY_PEEK_MAX_SCREEN_RATIO,
   zonePx: LIBRARY_PEEK_ZONE_PX,
   latchDurationMs: LIBRARY_LATCH_DURATION_MS,
   hoverCloseDelayMs: LIBRARY_HOVER_CLOSE_DELAY_MS,
 };
 
-/** Convert visible peek px → 0–1 fraction used by the spring / CSS. */
+/**
+ * Convert a viewport-width ratio → 0–1 dock-travel fraction used by the spring / CSS.
+ * Capped at full dock open.
+ */
 export function libraryPeekMaxFraction(
-  peekMaxPx: number,
+  screenRatio: number,
+  viewportWidth: number,
   travelPx = LIBRARY_DOCK_TRAVEL_PX,
 ): number {
-  if (travelPx <= 0) return 0;
-  return Math.min(1, Math.max(0, peekMaxPx / travelPx));
+  if (travelPx <= 0 || viewportWidth <= 0) return 0;
+  const peekPx = Math.max(0, screenRatio) * viewportWidth;
+  return Math.min(1, peekPx / travelPx);
 }
 
 export type LibraryPeekTargetInput = {
@@ -111,8 +126,28 @@ export function isPointerMovingTowardLibrary(
 }
 
 /**
+ * True when the pointer is parked on the library side of the app frame.
+ * Uses frame bounds (not the transformed dock) so latch overshoot cannot
+ * clear hover keep-alive.
+ */
+export function isPointerInLibraryEdgeKeepAlive(input: {
+  clientX: number;
+  side: LibrarySidebarSide;
+  frameLeft: number;
+  frameRight: number;
+  holdPx?: number;
+}): boolean {
+  const holdPx = input.holdPx ?? LIBRARY_EDGE_HOLD_PX;
+  if (input.side === "left") {
+    return input.clientX <= input.frameLeft + holdPx;
+  }
+  return input.clientX >= input.frameRight - holdPx;
+}
+
+/**
  * Sticky "moving toward" intent for peek gating.
  * Clears outside the peek zone; ignores jitter smaller than epsilon.
+ * Stays true while parked on the edge so clamp jitter cannot collapse peek.
  */
 export function updateLibraryPeekTowardIntent(input: {
   distance: number;
@@ -121,10 +156,13 @@ export function updateLibraryPeekTowardIntent(input: {
   previousToward: boolean;
   zonePx?: number;
   epsilonPx?: number;
+  edgeHoldPx?: number;
 }): boolean {
   const zonePx = input.zonePx ?? LIBRARY_PEEK_ZONE_PX;
   const epsilonPx = input.epsilonPx ?? LIBRARY_PEEK_DIRECTION_EPSILON_PX;
+  const edgeHoldPx = input.edgeHoldPx ?? LIBRARY_EDGE_HOLD_PX;
   if (input.distance > zonePx) return false;
+  if (input.distance <= edgeHoldPx) return true;
   if (Math.abs(input.deltaX) < epsilonPx) return input.previousToward;
   return isPointerMovingTowardLibrary(input.deltaX, input.side);
 }

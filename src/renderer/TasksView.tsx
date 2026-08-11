@@ -469,6 +469,9 @@ export function TasksView() {
             composer.setAttachedAudioFile(null);
             composer.setAttachmentError(null);
           }}
+          onAttachmentError={(message) => {
+            composer.setAttachmentError(message);
+          }}
           inputRef={composer.inputRef}
         />
       </div>

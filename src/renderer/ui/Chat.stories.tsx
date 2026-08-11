@@ -3,9 +3,9 @@ import {
   ArrowUp,
   Check,
   Copy,
+  FileAudio,
   Loader2,
   Mic,
-  Paperclip,
   SquarePen,
   X,
 } from "lucide-react";
@@ -25,7 +25,7 @@ function ComposerIdle() {
         </div>
         <div className="input-actions-spacer" />
         <button type="button" className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn" aria-label="Attach">
-          <Paperclip size={15} />
+          <FileAudio size={15} />
         </button>
         <button type="button" className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn" aria-label="Record">
           <Mic size={15} />
@@ -104,6 +104,7 @@ function ChatGallery() {
       <Section title="Attachment strip" stack>
         <div className="chat-attachment-strip" style={{ maxWidth: 640 }}>
           <span className="chat-attachment-chip">
+            <FileAudio size={12} />
             <span className="chat-attachment-name">interview.m4a</span>
             <button type="button" className="chat-attachment-remove" aria-label="Remove">
               <X size={12} />
@@ -173,9 +174,28 @@ function ChatGallery() {
 
       <Section title="New chat empty state" stack>
         <div className="new-chat-pane" style={{ minHeight: 220 }}>
+          <p className="new-chat-corner new-chat-corner--top-left" aria-hidden="true">
+            8:24 PM
+          </p>
+          <p className="new-chat-corner new-chat-corner--top-right" aria-hidden="true">
+            Monday, Aug 10
+          </p>
+          <p className="new-chat-corner new-chat-corner--bottom-left" aria-hidden="true">
+            3h 12m
+          </p>
+          <p className="new-chat-corner new-chat-corner--bottom-right" aria-hidden="true">
+            72° · Highland
+          </p>
           <div className="new-chat-center">
             <div className="new-chat-center-stack">
-              <p className="new-chat-quote">What are we working on?</p>
+              <span className="tooltip new-chat-quote-tooltip">
+                <p className="new-chat-quote">
+                  “The impediment to action advances action. What stands in the way becomes the way.”
+                </p>
+                <span className="tooltip__label">
+                  {`Marcus Aurelius, Meditations\nPrivate notes a Roman emperor wrote to himself while on campaign.\nTreat the obstacle as the path — resistance can become fuel.`}
+                </span>
+              </span>
             </div>
           </div>
         </div>

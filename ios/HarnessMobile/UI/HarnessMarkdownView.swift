@@ -6,12 +6,20 @@ struct HarnessMarkdownView: View {
     let content: String
     let lineLimit: Int?
     let isStreaming: Bool
+    /// When true, use system serif + desktop-like size/line-height (assistant messages only).
+    let assistantProse: Bool
     @Environment(\.colorScheme) private var colorScheme
 
-    init(content: String, lineLimit: Int? = nil, isStreaming: Bool = false) {
+    init(
+        content: String,
+        lineLimit: Int? = nil,
+        isStreaming: Bool = false,
+        assistantProse: Bool = false
+    ) {
         self.content = content
         self.lineLimit = lineLimit
         self.isStreaming = isStreaming
+        self.assistantProse = assistantProse
     }
 
     var body: some View {
@@ -19,6 +27,7 @@ struct HarnessMarkdownView: View {
             content: content,
             lineLimit: lineLimit,
             isStreaming: isStreaming,
+            assistantProse: assistantProse,
             colorScheme: colorScheme
         )
         .equatable()
@@ -29,11 +38,12 @@ private struct EquatableHarnessMarkdown: View, Equatable {
     let content: String
     let lineLimit: Int?
     let isStreaming: Bool
+    let assistantProse: Bool
     let colorScheme: ColorScheme
 
     var body: some View {
         Markdown(content)
-            .markdownTheme(.harnessChat)
+            .markdownTheme(assistantProse ? .harnessAssistantChat : .harnessChat)
             .markdownCodeSyntaxHighlighter(.harness(streaming: isStreaming, colorScheme: colorScheme))
             .lineLimit(lineLimit)
             .animation(nil, value: content)
@@ -41,9 +51,21 @@ private struct EquatableHarnessMarkdown: View, Equatable {
 }
 
 extension Theme {
-    static let harnessChat = Theme()
+    static let harnessChat = makeHarnessTheme(assistantProse: false)
+    static let harnessAssistantChat = makeHarnessTheme(assistantProse: true)
+}
+
+private func makeHarnessTheme(assistantProse: Bool) -> Theme {
+    let lineSpacingEm = assistantProse ? AssistantProseStyle.lineSpacingEm : 0.08
+
+    return Theme()
         .text {
-            FontSize(.em(1.0))
+            if assistantProse {
+                FontFamily(.system(.serif))
+                FontSize(AssistantProseStyle.basePointSize)
+            } else {
+                FontSize(.em(1.0))
+            }
         }
         .strong {
             FontWeight(.semibold)
@@ -102,8 +124,15 @@ extension Theme {
                 .markdownMargin(top: 0, bottom: 12)
         }
         .paragraph { configuration in
-            configuration.label
-                .markdownMargin(top: 0, bottom: 12)
+            Group {
+                if assistantProse {
+                    configuration.label
+                        .relativeLineSpacing(.em(lineSpacingEm))
+                } else {
+                    configuration.label
+                }
+            }
+            .markdownMargin(top: 0, bottom: 12)
         }
         .list { configuration in
             configuration.label
@@ -111,7 +140,7 @@ extension Theme {
         }
         .listItem { configuration in
             configuration.label
-                .relativeLineSpacing(.em(0.08))
+                .relativeLineSpacing(.em(lineSpacingEm))
                 .markdownMargin(top: 0, bottom: 0)
         }
         .codeBlock { configuration in
@@ -154,7 +183,8 @@ extension Theme {
                 let description: String = "This is a very long line that should wrap inside the code block instead of scrolling horizontally."
             }
             ```
-            """
+            """,
+            assistantProse: true
         )
         .padding(20)
     }

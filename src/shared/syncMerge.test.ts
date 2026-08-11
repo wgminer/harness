@@ -199,7 +199,7 @@ describe("buildMergedFileMap", () => {
     expect(merged["app-state/tasks.json"]?.toString("utf-8")).toBe('{"tasks":[]}');
   });
 
-  it("keeps images.json and image blobs on one side", () => {
+  it("merges images per record and keeps referenced blobs from both sides", () => {
     const localIndex = Buffer.from(
       JSON.stringify({
         images: [
@@ -246,14 +246,73 @@ describe("buildMergedFileMap", () => {
     };
     const review = buildSyncConflictReview(local, remote);
     for (const file of review.files.filter((f) => f.path.startsWith("app-state/images"))) {
-      expect(file.defaultChoice).toBe("local");
-      expect(file.supportsMerge).toBe(false);
+      expect(file.supportsMerge).toBe(true);
     }
     const choices = buildDefaultMergeChoices(review, local, remote);
-    choices["app-state/images/remote-img.png"] = "remote";
     const merged = buildMergedFileMap(local, remote, choices);
-    expect(merged["app-state/images.json"]).toEqual(localIndex);
+    const ids = (JSON.parse(merged["app-state/images.json"]!.toString("utf-8")).images as { id: string }[]).map(
+      (img) => img.id,
+    );
+    expect(ids.sort()).toEqual(["local-img", "remote-img"]);
     expect(merged["app-state/images/local-img.png"]?.toString("utf-8")).toBe("local-bytes");
-    expect(merged["app-state/images/remote-img.png"]).toBeUndefined();
+    expect(merged["app-state/images/remote-img.png"]?.toString("utf-8")).toBe("remote-bytes");
+  });
+
+  it("emits canonical JSON for notes merge (golden fixture)", () => {
+    const merged = mergeFileBytes(
+      "app-state/notes.json",
+      Buffer.from(JSON.stringify({ notes: [{ id: "n1", title: "Local", updatedAt: 20 }] })),
+      Buffer.from(
+        JSON.stringify({
+          notes: [
+            { id: "n1", title: "Remote", updatedAt: 10 },
+            { id: "n2", title: "Only remote", updatedAt: 5 },
+          ],
+        }),
+      ),
+    );
+    expect(merged.toString("utf-8")).toBe(readFixture("notes-merge.expected.json"));
+  });
+
+  it("merges notes by id and prefers newer note body", () => {
+    const local = {
+      "app-state/notes.json": Buffer.from(
+        JSON.stringify({
+          notes: [
+            { id: "n1", title: "Local", createdAt: 1, updatedAt: 20, wordCount: 1 },
+            { id: "n-local", title: "Only local", createdAt: 1, updatedAt: 5, wordCount: 1 },
+          ],
+        }),
+      ),
+      "app-state/notes/n1.md": Buffer.from("local body"),
+      "app-state/notes/n-local.md": Buffer.from("local only"),
+    };
+    const remote = {
+      "app-state/notes.json": Buffer.from(
+        JSON.stringify({
+          notes: [
+            { id: "n1", title: "Remote", createdAt: 1, updatedAt: 10, wordCount: 1 },
+            { id: "n-remote", title: "Only remote", createdAt: 1, updatedAt: 6, wordCount: 1 },
+          ],
+        }),
+      ),
+      "app-state/notes/n1.md": Buffer.from("remote body"),
+      "app-state/notes/n-remote.md": Buffer.from("remote only"),
+    };
+    const review = buildSyncConflictReview(local, remote);
+    const merged = buildMergedFileMap(local, remote, buildDefaultMergeChoices(review, local, remote));
+    const byId = Object.fromEntries(
+      (JSON.parse(merged["app-state/notes.json"]!.toString("utf-8")).notes as { id: string; title: string }[]).map(
+        (n) => [n.id, n.title],
+      ),
+    );
+    expect(byId).toEqual({
+      n1: "Local",
+      "n-local": "Only local",
+      "n-remote": "Only remote",
+    });
+    expect(merged["app-state/notes/n1.md"]?.toString("utf-8")).toBe("local body");
+    expect(merged["app-state/notes/n-local.md"]?.toString("utf-8")).toBe("local only");
+    expect(merged["app-state/notes/n-remote.md"]?.toString("utf-8")).toBe("remote only");
   });
 });

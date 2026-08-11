@@ -27,7 +27,8 @@ enum RemoteBackupStoreError: LocalizedError {
 }
 
 /// Cloudflare R2 remote backup (S3-compatible API).
-/// Stores `bundle.json.gz` + `manifest.json` under a configurable prefix.
+/// Stores content-addressed `bundle-<hash>.json.gz` + `manifest.json` under a configurable prefix,
+/// and mirrors bytes to legacy `bundle.json.gz` for older clients.
 final class RemoteBackupStore: @unchecked Sendable {
     private let s3: S3
     private let bucket: String
@@ -74,6 +75,10 @@ final class RemoteBackupStore: @unchecked Sendable {
         "\(R2SettingsStore.normalizePrefix(prefix))\(name)"
     }
 
+    static func contentAddressedBundleObjectName(bundleHash: String) -> String {
+        "bundle-\(bundleHash).json.gz"
+    }
+
     static func makeConfigured() throws -> RemoteBackupStore {
         guard R2SettingsStore.isConfigured,
               let secret = KeychainStore.loadR2SecretAccessKey() else {
@@ -92,8 +97,17 @@ final class RemoteBackupStore: @unchecked Sendable {
         Self.objectKey(prefix: prefix, name: SyncScopes.manifestFileName)
     }
 
+    func legacyBundleKey() -> String {
+        Self.objectKey(prefix: prefix, name: SyncScopes.legacyBundleFileName)
+    }
+
+    func bundleKey(forHash bundleHash: String) -> String {
+        Self.objectKey(prefix: prefix, name: Self.contentAddressedBundleObjectName(bundleHash: bundleHash))
+    }
+
+    /// Legacy fixed key — prefer `bundleKey(forHash:)`.
     func bundleKey() -> String {
-        Self.objectKey(prefix: prefix, name: SyncScopes.bundleFileName)
+        legacyBundleKey()
     }
 
     func readManifest() async throws -> BackupManifest? {
@@ -107,26 +121,58 @@ final class RemoteBackupStore: @unchecked Sendable {
         }
     }
 
-    func readBundle() async throws -> Data {
-        let response = try await s3.getObject(.init(bucket: bucket, key: bundleKey()))
-        let bytes = try await response.body.collect(upTo: 64 * 1024 * 1024)
-        return Data(bytes.readableBytesView)
+    /// Read the bundle for `bundleHash`, preferring the content-addressed object and
+    /// falling back to the legacy fixed key for manifests written by older clients.
+    func readBundle(bundleHash: String) async throws -> Data {
+        do {
+            let response = try await s3.getObject(.init(bucket: bucket, key: bundleKey(forHash: bundleHash)))
+            let bytes = try await response.body.collect(upTo: 64 * 1024 * 1024)
+            return Data(bytes.readableBytesView)
+        } catch {
+            if !isNotFound(error) { throw error }
+            let response = try await s3.getObject(.init(bucket: bucket, key: legacyBundleKey()))
+            let bytes = try await response.body.collect(upTo: 64 * 1024 * 1024)
+            return Data(bytes.readableBytesView)
+        }
     }
 
-    func writeBundleAndManifest(bundleBytes: Data, manifest: BackupManifest) async throws {
-        let manifestData = try JSONEncoder().encode(manifest)
+    func writeBundleAndManifest(
+        bundleBytes: Data,
+        manifest: BackupManifest,
+        previousBundleHash: String? = nil
+    ) async throws {
+        let addressedKey = bundleKey(forHash: manifest.bundleHash)
         _ = try await s3.putObject(.init(
             body: AWSHTTPBody(bytes: bundleBytes),
             bucket: bucket,
             contentType: "application/gzip",
-            key: bundleKey()
+            key: addressedKey
         ))
+
+        // Compat mirror for clients that still read the fixed key.
+        _ = try? await s3.putObject(.init(
+            body: AWSHTTPBody(bytes: bundleBytes),
+            bucket: bucket,
+            contentType: "application/gzip",
+            key: legacyBundleKey()
+        ))
+
+        let manifestData = try JSONEncoder().encode(manifest)
         _ = try await s3.putObject(.init(
             body: AWSHTTPBody(bytes: manifestData),
             bucket: bucket,
             contentType: "application/json",
             key: manifestKey()
         ))
+
+        if let previousBundleHash,
+           !previousBundleHash.isEmpty,
+           previousBundleHash != manifest.bundleHash {
+            _ = try? await s3.deleteObject(.init(
+                bucket: bucket,
+                key: bundleKey(forHash: previousBundleHash)
+            ))
+        }
     }
 
     func testConnection() async -> (ok: Bool, error: String?) {

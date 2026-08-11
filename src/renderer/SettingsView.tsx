@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useRef, useCallback, type KeyboardEvent }
 import { createPortal } from "react-dom";
 import { ExternalLink, Plus, Settings2 as SettingsIcon, Square, SquareCheck } from "lucide-react";
 import { SETTINGS_PAGE_TITLE, settingsSection } from "../shared/settingsPage";
-import { DEFAULT_SETTINGS, DEFAULT_LAYOUT } from "../shared/types";
-import type { Settings, TranscriptDictionaryEntry, WideView } from "../shared/types";
+import { DEFAULT_SETTINGS } from "../shared/types";
+import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
 import { DEFAULT_ACCENT, applyAccent, normalizeAccentHex } from "../shared/accent";
 import {
   DEFAULT_NOTE_TEMPLATE_ID,
@@ -22,6 +22,7 @@ import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
   SettingsActions,
   SettingsEntryRow,
+  SettingsField,
   SettingsGroup,
   SettingsHint,
   SettingsSwitch,
@@ -83,6 +84,7 @@ type PersistedFormState = {
   r2Prefix: string;
   r2AccessKeyId: string;
   accent: string;
+  weatherZip: string;
 };
 
 function serializeFormState(state: PersistedFormState): string {
@@ -267,7 +269,9 @@ export function SettingsView({
     initialSecrets?.r2SecretAccessKey ?? "",
   );
   const [accent, setAccent] = useState(initialNonSecret?.accent ?? D.appearance?.accent ?? DEFAULT_ACCENT);
-  const [wideView, setWideView] = useState<WideView>(DEFAULT_LAYOUT.wideView);
+  const [weatherZip, setWeatherZip] = useState(
+    initialNonSecret?.weatherZip ?? D.weather!.defaultZip,
+  );
   const [secretsLoaded, setSecretsLoaded] = useState(initialSecrets != null);
   const dataRefreshRef = useRef<(() => Promise<void>) | null>(null);
   const registerDataRefresh = useCallback((refresh: () => Promise<void>) => {
@@ -308,6 +312,7 @@ export function SettingsView({
           r2Prefix: initialNonSecret.r2Prefix,
           r2AccessKeyId: initialNonSecret.r2AccessKeyId,
           accent: initialNonSecret.accent,
+          weatherZip: initialNonSecret.weatherZip,
         })
       : "",
   );
@@ -349,6 +354,7 @@ export function SettingsView({
       r2Prefix: prev.r2Prefix ?? r2Prefix,
       r2AccessKeyId: prev.r2AccessKeyId ?? r2AccessKeyId,
       accent: prev.accent ?? accent,
+      weatherZip: prev.weatherZip ?? weatherZip,
     });
     secretsLoadedRef.current = true;
     setSecretsLoaded(true);
@@ -366,37 +372,12 @@ export function SettingsView({
     r2Bucket,
     r2Prefix,
     transcriptDictionary,
+    weatherZip,
   ]);
 
   useEffect(() => {
     setActiveTab(normalizeSettingsTab(initialTab));
   }, [initialTab]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void window.harness.customization.getLayoutOptions().then((layout) => {
-      if (!cancelled && (layout.wideView === "centered" || layout.wideView === "scaled")) {
-        setWideView(layout.wideView);
-      }
-    });
-    const unsub = window.harness.customization.onUpdated((p) => {
-      if (p.type !== "layout") return;
-      void window.harness.customization.getLayoutOptions().then((layout) => {
-        if (!cancelled && (layout.wideView === "centered" || layout.wideView === "scaled")) {
-          setWideView(layout.wideView);
-        }
-      });
-    });
-    return () => {
-      cancelled = true;
-      unsub();
-    };
-  }, []);
-
-  const handleWideViewChange = useCallback((next: WideView) => {
-    setWideView(next);
-    void window.harness.customization.setLayout({ wideView: next });
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -428,6 +409,7 @@ export function SettingsView({
         r2Prefix: nonSecret.r2Prefix,
         r2AccessKeyId: nonSecret.r2AccessKeyId,
         accent: nonSecret.accent,
+        weatherZip: nonSecret.weatherZip,
       };
       if (secrets) {
         setApiKey(hydrated.apiKey);
@@ -450,6 +432,7 @@ export function SettingsView({
       setR2Prefix(hydrated.r2Prefix);
       setR2AccessKeyId(hydrated.r2AccessKeyId);
       setAccent(hydrated.accent);
+      setWeatherZip(hydrated.weatherZip);
       applyAccent(hydrated.accent);
       setNoteTemplates(nonSecret.noteTemplates);
       setDefaultNoteTemplateId(nonSecret.defaultNoteTemplateId);
@@ -574,6 +557,7 @@ export function SettingsView({
       r2Prefix,
       r2AccessKeyId,
       accent,
+      weatherZip,
     });
     // No-op: stay silent. Toast only after a real write (avoids Strict Mode
     // remount / blur / unmount flush flashing "Saved" on an unchanged form).
@@ -620,6 +604,7 @@ export function SettingsView({
           accessKeyId: next.r2AccessKeyId.trim(),
         },
         appearance: { accent: normalizeAccentHex(next.accent) },
+        weather: { defaultZip: next.weatherZip.trim() },
       });
       try {
         const refreshed = (await window.harness.settings.get()) as Settings;
@@ -675,6 +660,7 @@ export function SettingsView({
     r2AccessKeyId,
     r2SecretAccessKey,
     accent,
+    weatherZip,
     onSettingsChanged,
   ]);
 
@@ -712,6 +698,7 @@ export function SettingsView({
       r2Prefix,
       r2AccessKeyId,
       accent,
+      weatherZip,
     });
     if (current === lastPersistedRef.current) return;
 
@@ -750,6 +737,7 @@ export function SettingsView({
       r2Prefix,
       r2AccessKeyId,
       accent,
+      weatherZip,
     });
     if (current === lastPersistedRef.current) return;
 
@@ -775,6 +763,7 @@ export function SettingsView({
     r2Prefix,
     r2AccessKeyId,
     accent,
+    weatherZip,
     persistSettings,
   ]);
 
@@ -996,38 +985,6 @@ export function SettingsView({
               <AccentColorField value={accent} onChange={setAccent} />
             </SettingsGroup>
 
-            <SettingsGroup
-              title="Large window"
-              description="Centered readable column, or edge-to-edge."
-            >
-              <div
-                className="settings-segmented"
-                role="radiogroup"
-                aria-label="Large window layout"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  className={`settings-segment${wideView === "scaled" ? " settings-segment--active" : ""}`}
-                  aria-checked={wideView === "scaled"}
-                  data-testid="settings-wide-view-scaled"
-                  onClick={() => handleWideViewChange("scaled")}
-                >
-                  Scaled
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  className={`settings-segment${wideView === "centered" ? " settings-segment--active" : ""}`}
-                  aria-checked={wideView === "centered"}
-                  data-testid="settings-wide-view-centered"
-                  onClick={() => handleWideViewChange("centered")}
-                >
-                  Centered
-                </button>
-              </div>
-            </SettingsGroup>
-
             <SettingsGroup title="Sync">
               <SettingsActions>
                 <button
@@ -1095,6 +1052,26 @@ export function SettingsView({
                   ) : null}
                 </>
               ) : null}
+            </SettingsGroup>
+
+            <SettingsGroup
+              title="Weather"
+              description="US ZIP for the temperature shown on the compose screen. Open-Meteo, no API key."
+            >
+              <SettingsField label="Default ZIP" htmlFor="settings-weather-zip">
+                <input
+                  id="settings-weather-zip"
+                  data-testid="settings-weather-zip"
+                  type="text"
+                  value={weatherZip}
+                  onChange={(e) => setWeatherZip(e.target.value)}
+                  placeholder="12528"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  spellCheck={false}
+                  maxLength={5}
+                />
+              </SettingsField>
             </SettingsGroup>
           </SettingsTabPanel>}
 

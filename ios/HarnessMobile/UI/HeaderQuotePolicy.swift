@@ -1,24 +1,65 @@
 import Foundation
 
+struct HomeHeaderQuote: Equatable {
+    let id: String
+    let short: String
+    let full: String
+    let author: String
+    let source: String
+    let job: String
+    let context: String
+    let moral: String
+}
+
 /// Quote shown at the top of the conversation list / compose screen.
 /// Home quotes come from bundled `resources/contracts/homeHeaderQuotes.json`
 /// (same file TypeScript imports).
 enum HeaderQuotePolicy {
-    static var homeHeaderQuotes: [String] { Self.loadHomeHeaderQuotes() }
+    static let homeHeaderQuoteBagKey = "harness.homeHeaderQuoteBag"
+    private static let fallbackShort = "Begin"
 
-    /// Today's compose quote (rotates by UTC day — matches desktop `homeHeaderQuoteForDate`).
+    static var homeHeaderQuotes: [HomeHeaderQuote] { Self.loadHomeHeaderQuotes() }
+
+    /// Short lines only (legacy helpers / tests that want the display strings).
+    static var homeHeaderQuoteShorts: [String] {
+        homeHeaderQuotes.map(\.short)
+    }
+
+    /// Next compose quote from the per-device shuffle bag (matches desktop `nextHomeHeaderQuote`).
     static var homeHeaderQuote: String {
-        pickHomeHeaderQuote()
+        nextHomeHeaderQuote().short
     }
 
     static let clippingsNoteTitle = "Clippings"
 
-    static func pickHomeHeaderQuote(date: Date = Date()) -> String {
+    /// Draw the next quote; persists remaining ids in UserDefaults (not synced).
+    static func nextHomeHeaderQuote(
+        defaults: UserDefaults = .standard,
+        random: (Int) -> Int = { Int.random(in: 0..<$0) }
+    ) -> HomeHeaderQuote {
         let quotes = homeHeaderQuotes
-        guard !quotes.isEmpty else { return "You are here" }
-        let utcDay = Int(date.timeIntervalSince1970 / 86_400)
-        let index = ((utcDay % quotes.count) + quotes.count) % quotes.count
-        return quotes[index]
+        guard !quotes.isEmpty else {
+            return HomeHeaderQuote(
+                id: "fallback",
+                short: fallbackShort,
+                full: fallbackShort,
+                author: "",
+                source: "",
+                job: "center",
+                context: "",
+                moral: ""
+            )
+        }
+
+        var remaining = loadRemainingIds(defaults: defaults, knownIds: Set(quotes.map(\.id)))
+        if remaining.isEmpty {
+            remaining = shuffleIds(quotes.map(\.id), random: random)
+        }
+
+        let id = remaining.removeFirst()
+        saveRemainingIds(remaining, defaults: defaults)
+
+        return quotes.first(where: { $0.id == id }) ?? quotes[0]
     }
 
     static func headerQuote(fromNoteContent content: String, rotationIndex: Int = 0) -> String {
@@ -77,18 +118,63 @@ enum HeaderQuotePolicy {
         return trimmed
     }
 
-    private static func loadHomeHeaderQuotes() -> [String] {
+    /// Fisher–Yates using `random(upperBound)` → index in `0..<upperBound`.
+    static func shuffleIds(_ ids: [String], random: (Int) -> Int) -> [String] {
+        var next = ids
+        guard next.count > 1 else { return next }
+        for i in stride(from: next.count - 1, through: 1, by: -1) {
+            let j = random(i + 1)
+            guard j >= 0, j <= i else { continue }
+            next.swapAt(i, j)
+        }
+        return next
+    }
+
+    private static func loadRemainingIds(defaults: UserDefaults, knownIds: Set<String>) -> [String] {
+        guard let raw = defaults.array(forKey: homeHeaderQuoteBagKey) as? [String] else { return [] }
+        return raw.filter { knownIds.contains($0) }
+    }
+
+    private static func saveRemainingIds(_ remaining: [String], defaults: UserDefaults) {
+        defaults.set(remaining, forKey: homeHeaderQuoteBagKey)
+    }
+
+    private static func loadHomeHeaderQuotes() -> [HomeHeaderQuote] {
         guard let url = Bundle.main.url(forResource: "homeHeaderQuotes", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let quotes = json["quotes"] as? [String]
+              let quotes = json["quotes"] as? [[String: Any]]
         else {
             assertionFailure("resources/contracts/homeHeaderQuotes.json failed to load or parse from the app bundle")
-            return ["You are here"]
+            return []
         }
-        let cleaned = quotes
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        return cleaned.isEmpty ? ["You are here"] : cleaned
+
+        let cleaned: [HomeHeaderQuote] = quotes.compactMap { entry in
+            guard let id = (entry["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let short = (entry["short"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let full = (entry["full"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let author = (entry["author"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let source = (entry["source"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let job = (entry["job"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let context = (entry["context"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let moral = (entry["moral"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !id.isEmpty,
+                  !short.isEmpty,
+                  !full.isEmpty,
+                  !context.isEmpty,
+                  !moral.isEmpty
+            else { return nil }
+            return HomeHeaderQuote(
+                id: id,
+                short: short,
+                full: full,
+                author: author,
+                source: source,
+                job: job,
+                context: context,
+                moral: moral
+            )
+        }
+        return cleaned
     }
 }

@@ -390,7 +390,7 @@ async fn read_remote_content_revision(
     if let Some(content_revision) = &manifest.content_revision {
         return Ok(content_revision.clone());
     }
-    let bytes = store.read_bundle().await?;
+    let bytes = store.read_bundle(&manifest.bundle_hash).await?;
     let doc = parse_bundle(&bytes)?;
     Ok(compute_content_revision_from_bundle(&doc))
 }
@@ -409,7 +409,7 @@ async fn load_remote_scoped_file_map(
     store: &RemoteBackupStore,
     manifest: &BackupManifest,
 ) -> Result<HashMap<String, Vec<u8>>, String> {
-    let bytes = store.read_bundle().await?;
+    let bytes = store.read_bundle(&manifest.bundle_hash).await?;
     let actual_hash = hash_bundle_bytes(&bytes);
     if actual_hash != manifest.bundle_hash {
         return Err("Remote bundle hash does not match its manifest.".into());
@@ -479,6 +479,7 @@ async fn push_local_to_remote(
     store: &RemoteBackupStore,
     local_revision: &str,
     now: i64,
+    previous_bundle_hash: Option<&str>,
 ) -> Result<String, String> {
     let local_data = get_local_data_dir();
     let built = build_bundle(&local_data, DEFAULT_SYNC_SCOPES)
@@ -495,7 +496,7 @@ async fn push_local_to_remote(
         bundle_hash: built.bundle_hash.clone(),
     };
     store
-        .write_bundle_and_manifest(&built.bytes, &manifest)
+        .write_bundle_and_manifest(&built.bytes, &manifest, previous_bundle_hash)
         .await?;
     Ok(built.bundle_hash)
 }
@@ -507,7 +508,7 @@ async fn pull_remote_into_local(
     now: i64,
 ) -> Result<usize, String> {
     suppress_sync_schedule(runtime, SYNC_SUPPRESS_MS).await;
-    let bytes = store.read_bundle().await?;
+    let bytes = store.read_bundle(&manifest.bundle_hash).await?;
     let actual_hash = hash_bundle_bytes(&bytes);
     if actual_hash != manifest.bundle_hash {
         return Err("Remote bundle hash does not match its manifest.".into());
@@ -540,7 +541,13 @@ async fn auto_merge_and_push(
     let local_revision = compute_revision(&get_local_data_dir(), DEFAULT_SYNC_SCOPES)
         .await
         .map_err(|e| e.to_string())?;
-    push_local_to_remote(store, &local_revision, now).await?;
+    push_local_to_remote(
+        store,
+        &local_revision,
+        now,
+        Some(remote_manifest.bundle_hash.as_str()),
+    )
+    .await?;
     Ok(merge_warning)
 }
 
@@ -623,7 +630,7 @@ async fn run_sync_now_inner(runtime: &SyncRuntime) -> SyncResult {
             .map_err(|e| e.to_string())?;
 
         if remote_manifest.is_none() {
-            push_local_to_remote(&store, &local_revision, now).await?;
+            push_local_to_remote(&store, &local_revision, now, None).await?;
             state.last_success_at = Some(now);
             state.last_action = Some(SyncDirection::Push);
             state.last_synced_revision = Some(local_revision.clone());
@@ -639,6 +646,7 @@ async fn run_sync_now_inner(runtime: &SyncRuntime) -> SyncResult {
         }
 
         let remote_manifest = remote_manifest.unwrap();
+        let previous_bundle_hash = remote_manifest.bundle_hash.clone();
         state.remote_revision = Some(remote_manifest.revision.clone());
 
         let local_max_mtime_ms = compute_local_max_mtime(&local_data, USER_CONTENT_SYNC_SCOPES)
@@ -700,7 +708,13 @@ async fn run_sync_now_inner(runtime: &SyncRuntime) -> SyncResult {
                 state.last_error = None;
             }
             SyncDecision::Push => {
-                push_local_to_remote(&store, &local_revision, now).await?;
+                push_local_to_remote(
+                    &store,
+                    &local_revision,
+                    now,
+                    Some(previous_bundle_hash.as_str()),
+                )
+                .await?;
                 state.last_success_at = Some(now);
                 state.last_action = Some(SyncDirection::Push);
                 state.last_synced_revision = Some(local_revision.clone());

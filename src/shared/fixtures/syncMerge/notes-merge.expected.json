@@ -1,0 +1,14 @@
+{
+  "notes": [
+    {
+      "id": "n1",
+      "title": "Local",
+      "updatedAt": 20
+    },
+    {
+      "id": "n2",
+      "title": "Only remote",
+      "updatedAt": 5
+    }
+  ]
+}
