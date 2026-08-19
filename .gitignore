@@ -57,8 +57,12 @@ test-results/
 # Git worktrees (local agent branches)
 .worktrees/
 
-# Agent workflow (local only)
-.cursor/
+# Agent workflow (local only; project skills and rules are committed)
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**
+!.cursor/rules/
+!.cursor/rules/**
 
 # macOS native helpers (built by prebuild)
 resources/HarnessSpeech

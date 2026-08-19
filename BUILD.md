@@ -17,6 +17,9 @@
 | `npm run build:speech-helper` | **(macOS)** Build `native/HarnessSpeech` and copy the CLI into `resources/HarnessSpeech`. Needs Xcode Command Line Tools and Swift. |
 | `npm run build:fn-monitor` | **(macOS)** Build `native/HarnessFnMonitor` for the global Fn dictation shortcut. |
 | `npm run storybook`        | Local-only UI catalog (buttons and other controls against real CSS tokens). Not part of dist/release. |
+| `npm run capture:storybook` | Headless PNGs of all `UI/*` Storybook galleries → `tmp/ui-shots/storybook/`. Uses port 6006 if Storybook is already running; otherwise builds into `tmp/storybook-static`. First run: `npx playwright install chromium`. |
+| `npm run capture:window`   | **(macOS)** Capture the current Harness window → `tmp/ui-shots/window.png` (Screen Recording permission). |
+| `npm run capture:surfaces` | **(macOS)** Walk sidebar surfaces with the demo profile (`--launch`) → `tmp/ui-shots/surfaces/*.png`. |
 
 
 This guide walks you through creating a double-clickable, signed (and optionally notarized) Mac app using your Apple Developer account.
