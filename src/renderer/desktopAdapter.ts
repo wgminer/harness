@@ -266,6 +266,8 @@ export function createHarnessAdapter(): HarnessAPI {
         ),
       saveWav: (data: ArrayBuffer) =>
         invoke<{ path: string }>(cmd("recording:saveWav"), data),
+      stageDroppedAudio: (path: string) =>
+        invoke<{ path: string; name: string }>(cmd("recording:stageDroppedAudio"), { path }),
       showInFolder: (path: string) =>
         invoke(cmd("recording:showInFolder"), { path }),
       exportWav: (data: ArrayBuffer, suggestedName?: string) =>

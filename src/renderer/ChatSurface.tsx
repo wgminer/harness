@@ -57,6 +57,8 @@ interface ChatSurfaceProps {
   placeholder?: string;
   modeControl?: ReactNode;
   onCycleMode?: () => void;
+  /** Hide the dock while dictation reply actions (Run / vocab) own the continue path. */
+  hideComposer?: boolean;
 }
 
 export function ChatSurface({
@@ -102,15 +104,17 @@ export function ChatSurface({
   placeholder,
   modeControl,
   onCycleMode,
+  hideComposer = false,
 }: ChatSurfaceProps) {
   const chatPaneRef = useRef<HTMLDivElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const centerSingleMessage =
     displayMessages.length === 1 && !sending && !streamingContent;
+  const showDictationActions =
+    hideComposer && (polishHintAfterDictation || !!replyModeControl);
 
   const { onScroll, onKeyDown } = useChatScrollController({
     scrollRef: chatAreaRef,
-    transcriptRef,
     chatPaneRef,
     composerDockRef: composerRef,
     scrollEnabled: !centerSingleMessage,
@@ -118,13 +122,15 @@ export function ChatSurface({
   });
 
   useLayoutEffect(() => {
+    if (hideComposer) return;
     if (focusComposerNonce == null || focusComposerNonce < 1) return;
     composerRef.current?.querySelector<HTMLTextAreaElement>(".chat-input")?.focus();
-  }, [composerRef, focusComposerNonce]);
+  }, [composerRef, focusComposerNonce, hideComposer]);
 
   /*
    * `.chat-pane` is `position: relative`. `.chat-scroll` fills it and scrolls; bottom inset
    * padding matches the overlay `.chat-composer-dock` via `--chat-composer-dock-height`.
+   * Keep an empty dock shell when hidden so ResizeObserver can collapse the inset to 0.
    */
   return (
     <div ref={chatPaneRef} className="chat-pane">
@@ -155,41 +161,65 @@ export function ChatSurface({
             onOptionSelect={onOptionSelect}
             liveNoteStream={liveNoteStream}
             onOpenNoteInEditor={onOpenNoteInEditor}
+            dockSecondaryActions={hideComposer}
           />
           <div id="chat-live-edge" className="chat-live-edge" aria-hidden />
         </div>
       </div>
+      {showDictationActions ? (
+        <div
+          className="chat-dictation-actions"
+          data-testid="chat-secondary-actions"
+        >
+          {polishHintAfterDictation ? (
+            <button
+              type="button"
+              className="btn btn-compact chat-pane-btn"
+              onClick={onPolish}
+              disabled={!llmActionsEnabled}
+            >
+              Polish
+            </button>
+          ) : null}
+          {replyModeControl}
+        </div>
+      ) : null}
       <div
         ref={composerRef}
-        className="chat-composer-dock"
+        className={
+          hideComposer ? "chat-composer-dock chat-composer-dock--hidden" : "chat-composer-dock"
+        }
         data-testid={composerTestId}
         role="group"
         aria-label="Message composer"
+        aria-hidden={hideComposer || undefined}
       >
-        <ChatComposer
-          input={input}
-          onInputChange={onInputChange}
-          onSend={onSend}
-          onStop={onStop}
-          sending={sending}
-          voiceState={voiceState}
-          voiceError={voiceError}
-          recordingMs={recordingMs}
-          onStartRecording={onStartRecording}
-          onStopRecording={onStopRecording}
-          onCancelRecording={onCancelRecording}
-          attachedAudioName={attachedAudioName}
-          attachmentTranscribing={attachmentTranscribing}
-          attachmentError={attachmentError}
-          onAttachAudio={onAttachAudio}
-          onRemoveAttachedAudio={onRemoveAttachedAudio}
-          onAttachmentError={onAttachmentError}
-          focusComposerNonce={focusComposerNonce}
-          inputRef={inputRef}
-          placeholder={placeholder}
-          modeControl={modeControl}
-          onCycleMode={onCycleMode}
-        />
+        {hideComposer ? null : (
+          <ChatComposer
+            input={input}
+            onInputChange={onInputChange}
+            onSend={onSend}
+            onStop={onStop}
+            sending={sending}
+            voiceState={voiceState}
+            voiceError={voiceError}
+            recordingMs={recordingMs}
+            onStartRecording={onStartRecording}
+            onStopRecording={onStopRecording}
+            onCancelRecording={onCancelRecording}
+            attachedAudioName={attachedAudioName}
+            attachmentTranscribing={attachmentTranscribing}
+            attachmentError={attachmentError}
+            onAttachAudio={onAttachAudio}
+            onRemoveAttachedAudio={onRemoveAttachedAudio}
+            onAttachmentError={onAttachmentError}
+            focusComposerNonce={focusComposerNonce}
+            inputRef={inputRef}
+            placeholder={placeholder}
+            modeControl={modeControl}
+            onCycleMode={onCycleMode}
+          />
+        )}
       </div>
       <ChatSelectionImagePopover containerRef={chatPaneRef} />
     </div>

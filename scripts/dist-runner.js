@@ -2,7 +2,7 @@
 /**
  * Unified dist runner for Harness (Tauri).
  *
- * Steps: icon -> speech-helper -> fn-monitor -> vite build -> tauri build
+ * Steps: icon -> speech-helper -> vite build -> tauri build
  */
 const fs = require("fs");
 const path = require("path");
@@ -322,10 +322,6 @@ async function main() {
     {
       label: "build:speech-helper",
       run: () => runChild("bash", [path.join(root, "scripts", "build-speech-helper.sh")]),
-    },
-    {
-      label: "build:fn-monitor",
-      run: () => runChild("bash", [path.join(root, "scripts", "build-fn-monitor.sh")]),
     },
     {
       label: "vite build",

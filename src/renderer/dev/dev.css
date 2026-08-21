@@ -1,0 +1,62 @@
+.dev-surface-view {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.dev-chat-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dev-streaming-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dev-stream-controls__speed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--fg-muted);
+}
+
+.dev-stream-controls__speed select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-edge);
+  border-radius: var(--radius-control-sm);
+  padding: 2px var(--space-1);
+}
+
+.dev-controls-dock {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  max-width: min(100% - var(--space-8), 420px);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-edge);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgb(0 0 0 / 12%);
+}
+
+.dev-placeholder-page {
+  flex: 1;
+  min-height: 0;
+}

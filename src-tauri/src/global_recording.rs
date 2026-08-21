@@ -13,7 +13,8 @@ use tokio::sync::Mutex;
 use serde_json::Value;
 
 use crate::env_util::{app_display_name, is_global_hotkey_disabled, is_harness_e2e};
-use crate::fn_monitor::{resolve_fn_monitor_path, FnMonitorCallbacks, FnMonitorProcess};
+#[cfg(target_os = "macos")]
+use crate::fn_tap::{FnTapCallbacks, FnTapMonitor};
 use crate::global_recording_capture::NativeCapture;
 use crate::global_recording_effects::{
     load_tray_image, run_recording_effects, run_stop_pipeline_from_path, show_and_focus_main,
@@ -40,7 +41,8 @@ pub struct GlobalRecordingRuntime {
     hotkey_active: Mutex<bool>,
     frontend_ready: Mutex<bool>,
     monitor_health: Mutex<FnMonitorHealth>,
-    fn_monitor: Mutex<Option<Arc<FnMonitorProcess>>>,
+    #[cfg(target_os = "macos")]
+    fn_tap: Mutex<Option<Arc<FnTapMonitor>>>,
     pub(crate) tray_id: Mutex<Option<String>>,
     session_lock: Mutex<()>,
     pub(crate) escape_registered: StdMutex<bool>,
@@ -57,7 +59,8 @@ impl GlobalRecordingRuntime {
             hotkey_active: Mutex::new(false),
             frontend_ready: Mutex::new(false),
             monitor_health: Mutex::new(FnMonitorHealth::Stopped),
-            fn_monitor: Mutex::new(None),
+            #[cfg(target_os = "macos")]
+            fn_tap: Mutex::new(None),
             tray_id: Mutex::new(None),
             session_lock: Mutex::new(()),
             escape_registered: StdMutex::new(false),
@@ -139,26 +142,23 @@ async fn cancel_global_transcription_inner(app: &AppHandle, runtime: &GlobalReco
     set_tray_state(app, runtime, TrayIconState::Ready).await;
 }
 
+#[cfg(target_os = "macos")]
 async fn start_fn_monitor(app: AppHandle, runtime: Arc<GlobalRecordingRuntime>) {
-    if !cfg!(target_os = "macos") || is_harness_e2e() || is_global_hotkey_disabled() {
+    if is_harness_e2e() || is_global_hotkey_disabled() {
         return;
     }
 
-    let mut guard = runtime.fn_monitor.lock().await;
+    let mut guard = runtime.fn_tap.lock().await;
     if guard.is_some() {
         return;
     }
-
-    let Some(path) = resolve_fn_monitor_path() else {
-        *runtime.monitor_health.lock().await = FnMonitorHealth::Stopped;
-        return;
-    };
 
     *runtime.monitor_health.lock().await = FnMonitorHealth::Running;
 
     let app_edge = app.clone();
     let runtime_edge = runtime.clone();
-    let callbacks = FnMonitorCallbacks {
+    let runtime_denied = runtime.clone();
+    let callbacks = FnTapCallbacks {
         on_edge: Arc::new(move |phase, ms| {
             let phase = phase.to_string();
             let app = app_edge.clone();
@@ -167,24 +167,19 @@ async fn start_fn_monitor(app: AppHandle, runtime: Arc<GlobalRecordingRuntime>) 
                 dispatch_fn_edge(&app, &runtime, &phase, ms).await;
             });
         }),
-        on_exit: Arc::new({
-            let runtime_exit = runtime.clone();
-            move |accessibility_denied| {
-                let runtime = runtime_exit.clone();
-                tauri::async_runtime::spawn(async move {
-                    *runtime.monitor_health.lock().await = if accessibility_denied {
-                        FnMonitorHealth::AccessibilityDenied
-                    } else {
-                        FnMonitorHealth::Stopped
-                    };
-                });
-            }
+        on_accessibility_denied: Arc::new(move || {
+            let runtime = runtime_denied.clone();
+            tauri::async_runtime::spawn(async move {
+                *runtime.monitor_health.lock().await = FnMonitorHealth::AccessibilityDenied;
+                *runtime.fn_tap.lock().await = None;
+            });
         }),
     };
-    let monitor = Arc::new(FnMonitorProcess::new(path, callbacks));
-    monitor.clone().start().await;
-    *guard = Some(monitor);
+    *guard = Some(FnTapMonitor::start(callbacks));
 }
+
+#[cfg(not(target_os = "macos"))]
+async fn start_fn_monitor(_app: AppHandle, _runtime: Arc<GlobalRecordingRuntime>) {}
 
 async fn start_fn_monitor_if_ready(app: AppHandle, runtime: Arc<GlobalRecordingRuntime>) {
     if !*runtime.frontend_ready.lock().await {
@@ -197,8 +192,12 @@ async fn start_fn_monitor_if_ready(app: AppHandle, runtime: Arc<GlobalRecordingR
 }
 
 async fn stop_fn_monitor(runtime: &GlobalRecordingRuntime) {
-    if let Some(monitor) = runtime.fn_monitor.lock().await.take() {
-        monitor.dispose().await;
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(monitor) = runtime.fn_tap.lock().await.take() {
+            // Dispose blocks until the CFRunLoop thread exits — run off the async worker.
+            let _ = tokio::task::spawn_blocking(move || monitor.dispose()).await;
+        }
     }
     *runtime.monitor_health.lock().await = FnMonitorHealth::Stopped;
 }

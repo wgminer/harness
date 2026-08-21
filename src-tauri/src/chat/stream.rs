@@ -14,7 +14,6 @@ use crate::memory::{append_message, AppendMessageMeta, ToolCallRecord};
 use crate::notes;
 use crate::openai::{map_http_cancel, tool_error_result, ChatMessageParam, OpenAIChatClient};
 
-use super::stream_batch::StreamTextBatcher;
 use super::tool::{
     finalize_tool_calls_with_note_stream, finalize_tool_calls_with_note_stream_metadata,
     message_content_for_turn, strip_note_content_from_tool_calls,
@@ -121,8 +120,8 @@ impl ChatController {
         );
     }
 
-    /// Emit batched text to the chat bubble or active note stream UI.
-    fn emit_batched_ui_chunk(&self, conversation_id: &str, chunk: &str) {
+    /// Route streamed text to the chat bubble or active note stream UI.
+    fn emit_ui_text_chunk(&self, conversation_id: &str, chunk: &str) {
         if chunk.is_empty() {
             return;
         }
@@ -137,18 +136,6 @@ impl ChatController {
         }
         drop(guard);
         self.emit_stream_chunk(conversation_id, chunk);
-    }
-
-    fn flush_text_batcher(
-        &self,
-        conversation_id: &str,
-        batcher: &std::sync::Mutex<StreamTextBatcher>,
-    ) {
-        if let Ok(mut guard) = batcher.lock() {
-            if let Some(chunk) = guard.flush() {
-                self.emit_batched_ui_chunk(conversation_id, &chunk);
-            }
-        }
     }
 
     pub(crate) async fn stream_assistant_reply(
@@ -175,13 +162,11 @@ impl ChatController {
         let model_label = Self::active_chat_model_label();
         let tool_calls_this_turn = Arc::new(Mutex::new(Vec::<ToolCallRecord>::new()));
         let mut did_append_assistant = false;
-        let text_batcher = Arc::new(std::sync::Mutex::new(StreamTextBatcher::from_contract()));
 
         let client = OpenAIChatClient::new(api_key).map_err(|e| e.to_string())?;
         let conversation_id_owned = conversation_id.to_string();
         let controller = self.clone();
         let tool_calls_cb = tool_calls_this_turn.clone();
-        let batcher_for_content = text_batcher.clone();
 
         let stream_result = client
             .send_message_with_tools(
@@ -190,37 +175,25 @@ impl ChatController {
                     let mut guard = controller.note_stream.lock().unwrap();
                     if let Some(stream) = guard.as_mut() {
                         if stream.routing_active {
-                            // Persist every delta; only the UI emit is batched.
                             stream.body.push_str(chunk);
+                            let note_id = stream.note_id.clone();
                             drop(guard);
-                            if let Ok(mut batcher) = batcher_for_content.lock() {
-                                if let Some(out) = batcher.push(chunk) {
-                                    controller.emit_batched_ui_chunk(&conversation_id_owned, &out);
-                                }
-                            }
+                            controller.emit_note_stream_chunk(&conversation_id_owned, &note_id, chunk);
                             return;
                         }
                     }
                     drop(guard);
-                    if let Ok(mut batcher) = batcher_for_content.lock() {
-                        if let Some(out) = batcher.push(chunk) {
-                            controller.emit_batched_ui_chunk(&conversation_id_owned, &out);
-                        }
-                    }
+                    controller.emit_ui_text_chunk(&conversation_id_owned, chunk);
                 },
                 {
                     let controller = controller.clone();
                     let conversation_id = conversation_id_owned.clone();
                     let tool_calls_cb = tool_calls_cb.clone();
-                    let batcher_for_tools = text_batcher.clone();
                     move |name, args| {
                         let controller = controller.clone();
                         let conversation_id = conversation_id.clone();
                         let tool_calls_cb = tool_calls_cb.clone();
-                        let batcher_for_tools = batcher_for_tools.clone();
                         async move {
-                            // Flush pending text before tool UI / note routing.
-                            controller.flush_text_batcher(&conversation_id, &batcher_for_tools);
                             match controller
                                 .execute_tool(&name, args, &conversation_id)
                                 .await
@@ -244,8 +217,6 @@ impl ChatController {
                 &cancel,
             )
             .await;
-
-        self.flush_text_batcher(conversation_id, &text_batcher);
 
         let stream_state = self.note_stream.lock().unwrap().take();
         if let Some(ref stream) = stream_state {
@@ -393,27 +364,18 @@ impl ChatController {
             let mut guard = self.cancel_token.lock().await;
             *guard = Some(cancel.clone());
         }
-        let mut batcher = StreamTextBatcher::from_contract();
-
         let mut emitted = String::new();
         if stream_delay_ms == 0 {
             emitted = synthetic.to_string();
-            if let Some(out) = batcher.push(synthetic).or_else(|| batcher.flush()) {
-                self.emit_stream_chunk(conversation_id, &out);
-            }
+            self.emit_stream_chunk(conversation_id, &emitted);
         } else {
             for chunk in split_into_word_chunks(synthetic) {
                 if cancel.is_cancelled() {
                     break;
                 }
                 emitted.push_str(&chunk);
-                if let Some(out) = batcher.push(&chunk) {
-                    self.emit_stream_chunk(conversation_id, &out);
-                }
+                self.emit_stream_chunk(conversation_id, &chunk);
                 tokio::time::sleep(Duration::from_millis(stream_delay_ms)).await;
-            }
-            if let Some(out) = batcher.flush() {
-                self.emit_stream_chunk(conversation_id, &out);
             }
         }
 

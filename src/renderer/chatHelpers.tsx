@@ -1,11 +1,13 @@
 import {
   isValidElement,
+  memo,
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type ReactNode,
 } from "react";
-import { Check, Copy, Loader2, SquarePen } from "lucide-react";
+import { Check, Copy, SquarePen } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkDirective from "remark-directive";
@@ -145,16 +147,6 @@ export function formatMessageNoteTitle(ts: number): string {
   });
 }
 
-/** Inline “waiting for first token” state for the assistant bubble. */
-export function ReplyingIndicator() {
-  return (
-    <span className="voice-status">
-      <Loader2 size={13} className="voice-spinner" />
-      Replying…
-    </span>
-  );
-}
-
 function extractCodeText(node: ReactNode): string {
   if (typeof node === "string") return node;
   if (typeof node === "number") return String(node);
@@ -248,6 +240,37 @@ function CodeBlock({
   );
 }
 
+type MarkdownOptions = ComponentProps<typeof ReactMarkdown>;
+
+/**
+ * Plugin lists and heading overrides never vary, so they live at module scope —
+ * fresh array/function identities per render would re-parse markdown for every
+ * mounted message on each streamed chunk.
+ */
+const REMARK_PLUGINS: MarkdownOptions["remarkPlugins"] = [
+  remarkGfm,
+  remarkDirective,
+  remarkDirectiveToHast,
+];
+
+const REHYPE_PLUGINS: MarkdownOptions["rehypePlugins"] = [
+  [rehypeHighlight, { detect: false, ignoreMissing: true }],
+];
+
+const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
+  <p {...props}>{children}</p>
+);
+
+const STATIC_MARKDOWN_COMPONENTS = {
+  h1: headingAsParagraph,
+  h2: headingAsParagraph,
+  h3: headingAsParagraph,
+  h4: headingAsParagraph,
+  h5: headingAsParagraph,
+  h6: headingAsParagraph,
+  ...directiveComponents,
+};
+
 /**
  * Renders assistant/user markdown.
  *
@@ -255,8 +278,11 @@ function CodeBlock({
  * accidentally blow up the type scale; section structure is signalled instead
  * via the custom layout directives in `markdownDirectives.tsx`.
  * Fenced code blocks flow through highlight.js via `CodeBlock`.
+ *
+ * Memoized: during a stream the transcript re-renders on every chunk, and an
+ * unmemoized parse here costs the full remark/rehype pipeline per message.
  */
-export function MarkdownContent({
+export const MarkdownContent = memo(function MarkdownContent({
   content,
   messageId,
   messageTimestamp,
@@ -273,53 +299,45 @@ export function MarkdownContent({
     [onOptionSelect],
   );
 
-  const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
-    <p {...props}>{children}</p>
-  );
-  const preComponent = ({ children, ...rest }: { children?: ReactNode }) => {
-    const blockIndex = codeBlockIndexRef.current;
-    codeBlockIndexRef.current += 1;
-    const blockKey = messageId != null ? `${messageId}:code:${blockIndex}` : `code:${blockIndex}`;
-    const codeText = extractCodeText(children);
-    return (
-      <CodeBlock
-        blockKey={blockKey}
-        codeText={codeText}
-        copiedId={copiedId}
-        savedToNotesId={savedToNotesId}
-        onCopied={onCopied}
-        onSaveToNotes={onSaveToNotes}
-        messageTimestamp={messageTimestamp}
-        {...rest}
-      >
-        {children}
-      </CodeBlock>
-    );
-  };
-
-  const components = {
-    h1: headingAsParagraph,
-    h2: headingAsParagraph,
-    h3: headingAsParagraph,
-    h4: headingAsParagraph,
-    h5: headingAsParagraph,
-    h6: headingAsParagraph,
-    pre: preComponent,
-    ...directiveComponents,
-  } as unknown as Components;
+  const components = useMemo(() => {
+    const preComponent = ({ children, ...rest }: { children?: ReactNode }) => {
+      const blockIndex = codeBlockIndexRef.current;
+      codeBlockIndexRef.current += 1;
+      const blockKey = messageId != null ? `${messageId}:code:${blockIndex}` : `code:${blockIndex}`;
+      const codeText = extractCodeText(children);
+      return (
+        <CodeBlock
+          blockKey={blockKey}
+          codeText={codeText}
+          copiedId={copiedId}
+          savedToNotesId={savedToNotesId}
+          onCopied={onCopied}
+          onSaveToNotes={onSaveToNotes}
+          messageTimestamp={messageTimestamp}
+          {...rest}
+        >
+          {children}
+        </CodeBlock>
+      );
+    };
+    return {
+      ...STATIC_MARKDOWN_COMPONENTS,
+      pre: preComponent,
+    } as unknown as Components;
+  }, [messageId, messageTimestamp, copiedId, savedToNotesId, onCopied, onSaveToNotes]);
 
   return (
     <MarkdownInteractionContext.Provider value={markdownInteraction}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
-        rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+        remarkPlugins={REMARK_PLUGINS}
+        rehypePlugins={REHYPE_PLUGINS}
         components={components}
       >
         {content}
       </ReactMarkdown>
     </MarkdownInteractionContext.Provider>
   );
-}
+});
 
 /** Minimum tool rows before the card collapses into a summary (inclusive). */
 export const TOOL_CALLS_COMPRESS_THRESHOLD = 2;

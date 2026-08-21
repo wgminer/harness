@@ -17,7 +17,7 @@ struct ChatStreamBatchPolicy: Equatable {
               let newlineMinChars = json["newlineMinChars"] as? Int, newlineMinChars > 0
         else {
             assertionFailure("resources/contracts/chatStreamBatch.json failed to load or parse from the app bundle")
-            return ChatStreamBatchPolicy(minChars: 150, maxHoldMs: 350, newlineMinChars: 40)
+            return ChatStreamBatchPolicy(minChars: 700, maxHoldMs: 700, newlineMinChars: 280)
         }
         return ChatStreamBatchPolicy(
             minChars: minChars,

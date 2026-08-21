@@ -76,8 +76,14 @@ def main() -> int:
         closed = closed.filter(ImageFilter.MinFilter(5))
 
     sil = largest_component(closed)
-    sil = sil.filter(ImageFilter.GaussianBlur(radius=1.2))
+    # Heavier blur + light open/close → fewer path points (cleaner at 16–32px).
+    sil = sil.filter(ImageFilter.GaussianBlur(radius=5.0))
     sil = sil.point(lambda p: 255 if p > 128 else 0)
+    for _ in range(2):
+        sil = sil.filter(ImageFilter.MaxFilter(3))
+    for _ in range(2):
+        sil = sil.filter(ImageFilter.MinFilter(3))
+    sil = largest_component(sil)
 
     W, H = sil.size
     bbox = sil.getbbox()
@@ -106,11 +112,11 @@ def main() -> int:
                 str(raw_svg),
                 "--flat",
                 "--opttolerance",
-                "0.35",
+                "1.4",
                 "--turdsize",
-                "80",
+                "120",
                 "--alphamax",
-                "0.9",
+                "1.0",
                 "--tight",
             ]
         )
@@ -121,6 +127,11 @@ def main() -> int:
         print("potrace SVG missing path", file=sys.stderr)
         return 1
     transform, d = g.group(1), g.group(2)
+    # Stroke only the outer silhouette — inner holes (bridle gaps) muddy small sizes.
+    d = re.sub(r"\s+", " ", d).strip()
+    d = re.split(r"(?<=[Zz])\s+(?=[Mm])", d)[0].strip()
+    if not d.endswith(("z", "Z")):
+        d += "z"
     vb = re.search(r'viewBox="([^"]+)"', raw)
     assert vb
     vbw, vbh = map(float, vb.group(1).split()[2:])
@@ -135,7 +146,8 @@ def main() -> int:
   <!--
     Harness mark — White Pony–style outline of the horse head.
     Source of truth for dist/dev app icons (see scripts/generate-app-icons.js).
-    Regenerate from resources/mark/horse-head-source.png via: npm run icons:trace
+    Outer silhouette only (no inner holes). Stroke is white; backgrounds at generate time.
+    Re-trace from horse-head-source.png: npm run icons:trace
   -->
   <g data-mark-scale="0.82" transform="translate(512,512) scale(0.82) translate(-512,-512)">
     <g transform="translate({x0},{y0}) scale({cw / vbw:.6f},{ch / vbh:.6f})">

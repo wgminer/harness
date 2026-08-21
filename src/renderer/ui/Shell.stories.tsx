@@ -7,12 +7,38 @@ import {
   Search,
   Settings2,
   SquareArrowDownLeft,
+  PanelLeft,
 } from "lucide-react";
 import { Section } from "./storyHelpers";
 
 function ShellGallery() {
   return (
     <div>
+      <Section title="App titlebar" stack>
+        <header className="app-titlebar" style={{ paddingLeft: 16 }}>
+          <button type="button" className="app-titlebar__sidebar-toggle" aria-label="Show sidebar">
+            <PanelLeft size={16} strokeWidth={1.75} aria-hidden />
+          </button>
+          <div className="app-titlebar__title">Product brainstorm</div>
+          <div className="app-titlebar__actions">
+            <button type="button" className="app-titlebar__action" aria-label="Search">
+              <Search size={16} strokeWidth={1.75} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="app-titlebar__action"
+              aria-label="Tasks"
+              aria-pressed
+            >
+              <ListTodo size={16} strokeWidth={1.75} aria-hidden />
+            </button>
+            <button type="button" className="app-titlebar__action" aria-label="Settings">
+              <Settings2 size={16} strokeWidth={1.75} aria-hidden />
+            </button>
+          </div>
+        </header>
+      </Section>
+
       <Section title="Workspace page chrome" stack>
         <div className="workspace-page" style={{ minHeight: 280, border: "1px solid var(--border-edge)" }}>
           <header className="workspace-header">
@@ -38,17 +64,6 @@ function ShellGallery() {
       <Section title="Sidebar button cluster" stack>
         <div className="sidebar" style={{ width: 280, padding: "var(--space-3)", background: "var(--bg)" }}>
           <div className="sidebar-buttons">
-            <button type="button" className="btn btn-icon" aria-label="Search">
-              <Search size={16} />
-            </button>
-            <button type="button" className="btn btn-icon btn-primary" aria-label="Tasks">
-              <ListTodo size={16} />
-            </button>
-            <button type="button" className="btn btn-icon" aria-label="Settings">
-              <Settings2 size={16} />
-            </button>
-          </div>
-          <div style={{ marginTop: "var(--space-3)" }}>
             <button type="button" className="btn sidebar-new-chat-btn">
               New Chat
             </button>

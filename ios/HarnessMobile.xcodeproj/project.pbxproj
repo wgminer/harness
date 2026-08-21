@@ -232,7 +232,7 @@
 		7604E9E23D64274B1ACC1475 /* StreamingMarkdownBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownBlocks.swift; sourceTree = "<group>"; };
 		765261EE8A48169A07C84552 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		79FC826B40EB55FD4B15E0CD /* HeaderQuotePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeaderQuotePolicy.swift; sourceTree = "<group>"; };
-		7F6C077F37C364DAFBCBDC7A /* HarnessMobileRecordingLiveActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = HarnessMobileRecordingLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7F6C077F37C364DAFBCBDC7A /* HarnessMobileRecordingLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HarnessMobileRecordingLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		86F5172174F6290F6B320171 /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		8708CFE5FF3C575653655123 /* SharedToolDefinitionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedToolDefinitionsTests.swift; sourceTree = "<group>"; };
 		88E6573E37354B7074EB23BE /* SyncMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMergeTests.swift; sourceTree = "<group>"; };
@@ -247,7 +247,7 @@
 		9C5735508729C4F3B7EC3348 /* HarnessMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessMarkdownView.swift; sourceTree = "<group>"; };
 		9DC78AD167D055EA2856FE0C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9E1AA82EF9EF53609B518B43 /* StreamingMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownView.swift; sourceTree = "<group>"; };
-		9FBAE9F76A8F49349D173680 /* HarnessMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HarnessMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9FBAE9F76A8F49349D173680 /* HarnessMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HarnessMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1A707405489446956F32F0A /* SyncChangeSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncChangeSummaryTests.swift; sourceTree = "<group>"; };
 		A2351E29292CD00EA870CB08 /* VoiceMemoTranscriptExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMemoTranscriptExtractor.swift; sourceTree = "<group>"; };
 		A39F31DA802C19AA1290D5CA /* TranscriptDictionaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptDictionaryTests.swift; sourceTree = "<group>"; };
@@ -627,12 +627,6 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					215D609463B675FEAD8AD518 = {
-						DevelopmentTeam = "";
-					};
-					8B9C42AB19A9CB6ED213D75C = {
-						DevelopmentTeam = "";
-					};
 					A0864F7614913F9EA08A3B85 = {
 						DevelopmentTeam = "";
 					};
@@ -904,6 +898,7 @@
 		29640546DB76A707DD7AA86F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				DEVELOPMENT_TEAM = C64DYYG928;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HarnessMobileRecordingLiveActivity/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1013,6 +1008,7 @@
 		D5A857E6D6122F7890AEE30F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				DEVELOPMENT_TEAM = C64DYYG928;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HarnessMobileRecordingLiveActivity/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1031,6 +1027,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = C64DYYG928;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HarnessMobile/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1048,6 +1045,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = C64DYYG928;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HarnessMobile/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

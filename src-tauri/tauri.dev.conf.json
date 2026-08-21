@@ -5,7 +5,15 @@
   "app": {
     "windows": [
       {
-        "title": "Harness Dev"
+        "title": "Harness Dev",
+        "minWidth": 800,
+        "minHeight": 600,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 25
+        }
       }
     ]
   },

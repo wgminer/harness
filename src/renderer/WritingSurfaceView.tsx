@@ -273,8 +273,11 @@ export function NotesView({
     if (!view || !range) return;
     const endCoords = getNotesEditorCaretCoordinates(view, range.end);
     if (!endCoords) return;
+    const maxTop = view.dom.clientHeight - NOTES_SELECTION_MENU_H_PX - 12;
+    const aboveTop = endCoords.top - NOTES_SELECTION_MENU_H_PX - NOTES_SELECTION_MENU_GAP_PX;
     const belowTop = endCoords.bottom + NOTES_SELECTION_MENU_GAP_PX;
-    const top = Math.max(12, Math.min(belowTop, view.dom.clientHeight - NOTES_SELECTION_MENU_H_PX - 12));
+    // Prefer above the caret so the menu does not cover the cursor; fall back below if needed.
+    const top = aboveTop >= 12 ? Math.min(aboveTop, maxTop) : Math.max(12, Math.min(belowTop, maxTop));
     const rawLeft = endCoords.left - NOTES_SELECTION_MENU_W_PX + 4;
     const maxLeft = Math.max(12, view.dom.clientWidth - NOTES_SELECTION_MENU_W_PX - 12);
     setMenuPosition({

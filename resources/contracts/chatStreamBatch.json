@@ -1,5 +1,5 @@
 {
-  "minChars": 150,
-  "maxHoldMs": 350,
-  "newlineMinChars": 40
+  "minChars": 700,
+  "maxHoldMs": 700,
+  "newlineMinChars": 280
 }

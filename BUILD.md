@@ -5,7 +5,7 @@
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm install`              | Install project dependencies.                                                                                                                                                                                                                                                                                                                                         |
 | `npm run dev`              | Run the app in development mode with hot reload.                                                                                                                                                                                                                                                                                                                      |
-| `npm run build`            | Runs **prebuild** first: `icon:icns` (`npm run icons`), then `build:speech-helper` and `build:fn-monitor` on macOS, then compiles the renderer to `dist-web/`. |
+| `npm run build`            | Runs **prebuild** first: `icon:icns` (`npm run icons`), then `build:speech-helper` on macOS, then compiles the renderer to `dist-web/`. |
 | `npm run icons`            | Composite `resources/mark/horse-head.svg` onto black → desktop `resources/icon*.png` + `src-tauri/icons/*` (+ `.icns` on macOS); iOS full-bleed `AppIcon-1024.png`. |
 | `npm run icons:trace`      | Optional: re-trace cream paint `resources/mark/horse-head-source.png` → SVG (needs `potrace` + Pillow). |
 | `npm run dist`             | Full pipeline: native helpers → vite build → `tauri build` (DMG + `.app` on macOS). Does **not** bump version unless you pass `--bump`.                                                                                                                                                                  |
@@ -15,7 +15,6 @@
 | `npm run release`          | Bumps patch version, signed+notarized `dist:mac`, verify trust, publish GitHub Release + `latest.json`, push tag. |
 | `npm run icon:icns`        | Alias of `npm run icons` (SVG mark → PNGs + icns + iOS AppIcon).                                                                                                                                                                                                                                                                                                     |
 | `npm run build:speech-helper` | **(macOS)** Build `native/HarnessSpeech` and copy the CLI into `resources/HarnessSpeech`. Needs Xcode Command Line Tools and Swift. |
-| `npm run build:fn-monitor` | **(macOS)** Build `native/HarnessFnMonitor` for the global Fn dictation shortcut. |
 | `npm run storybook`        | Local-only UI catalog (buttons and other controls against real CSS tokens). Not part of dist/release. |
 
 
@@ -32,19 +31,19 @@ This guide walks you through creating a double-clickable, signed (and optionally
 | Development | `npm run dev` | `~/Library/Application Support/Harness Dev` | **Harness Dev** |
 | Installed | `/Applications/Harness.app` or `npm run dist:mac:replace` | `~/Library/Application Support/Harness` | **Harness** |
 
-### What is separate (not shared)
+### What is separate (per profile)
 
-- All app state under that folder: `local-data/` (conversations, messages, tasks, notes, memory, settings, sync state)
-- `audio-recordings/` (local-only; never synced)
+- App state under that folder: `local-data/` (conversations, messages, tasks, notes, memory, settings, sync state)
 - Dev may also write a plaintext `credentials.json` under the Dev folder (see [SECURITY.md](SECURITY.md)); production keeps secrets in the OS keychain
 
-### What is shared or external
+### What is shared
 
+- `audio-recordings/` under the **installed** Harness folder (`~/Library/Application Support/Harness/audio-recordings`) — Dev and Dist both read/write here (local-only; never synced). Opening either profile migrates leftover Dev-folder WAVs into this archive.
 - R2 backup bucket (same credentials → same remote bundle)
 - OpenAI / Tavily API accounts (same keys work in both profiles once entered)
 - Signing / notarization env (`APPLE_SIGNING_IDENTITY`, `APPLE_*`, `TAURI_SIGNING_*`) — build-time only, not per profile
 
-Deleting or moving either Application Support folder forces a **fresh empty profile** on next launch.
+Deleting or moving either Application Support folder forces a **fresh empty profile** on next launch (except shared `audio-recordings/` under installed Harness, which survives deleting only the Dev folder).
 
 ---
 
@@ -54,7 +53,7 @@ Deleting or moving either Application Support folder forces a **fresh empty prof
 npm install
 ```
 
-**Native helpers:** install **Xcode Command Line Tools** (`xcode-select --install`) for Swift builds. `npm run build` (and anything that runs it, e.g. `dist:mac`) automatically runs **prebuild**: icon generation, then `build:speech-helper` and `build:fn-monitor` on macOS. `resources/HarnessSpeech` and `resources/HarnessFnMonitor` are gitignored build outputs.
+**Native helpers:** install **Xcode Command Line Tools** (`xcode-select --install`) for Swift builds. `npm run build` (and anything that runs it, e.g. `dist:mac`) automatically runs **prebuild**: icon generation, then `build:speech-helper` on macOS. `resources/HarnessSpeech` is a gitignored build output. The global Fn dictation shortcut is monitored in-process (no separate helper binary).
 
 ### On-device speech transcription
 
@@ -306,12 +305,11 @@ Use an **app-specific password** in `APPLE_PASSWORD`, not your normal Apple ID p
 - **“The signature of the binary is invalid”**  
 Make sure you’re using a **Developer ID Application** certificate (not “Mac Development” or “Apple Distribution”). Re-install the `.cer` or re-export the `.p12` and try again.
 - **Notarization Invalid: helper “not signed with a valid Developer ID” / missing hardened runtime / no secure timestamp**  
-Apple rejected nested helpers (`HarnessSpeech`, `HarnessFnMonitor` under `Contents/Resources/_up_/resources/`). `dist:mac` must see `APPLE_SIGNING_IDENTITY` when those helpers are built — `scripts/codesign-native-helper.sh` then signs them with `--options runtime --timestamp` before Tauri bundles. Rebuild with `npm run dist:mac` (not a leftover adhoc `resources/` binary from a prior local build).
+Apple rejected nested helpers (`HarnessSpeech` under `Contents/Resources/_up_/resources/`). `dist:mac` must see `APPLE_SIGNING_IDENTITY` when those helpers are built — `scripts/codesign-native-helper.sh` then signs them with `--options runtime --timestamp` before Tauri bundles. Rebuild with `npm run dist:mac` (not a leftover adhoc `resources/` binary from a prior local build).
 - **App crashes on launch**  
-Check Console.app for Rust panics. Ensure native helpers (`HarnessSpeech`, `HarnessFnMonitor`) were built (`npm run prebuild`).
-- **HarnessFnMonitor restart loop / global Fn hotkey not working**  
-If logs show `terminated by signal 9`, Crash Reports will usually say `SIGKILL (Code Signature Invalid)` — rebuild the helper (`npm run build:fn-monitor`) so it is codesigned, then restart the app.  
-If logs show exit code 1 (Accessibility / event tap), enable **Accessibility** for **Harness Dev** (or **Harness**) and **HarnessFnMonitor** if listed separately in System Settings → Privacy & Security → Accessibility, then restart the app. You can also run `resources/HarnessFnMonitor` once from a terminal to trigger the permission prompt.
+Check Console.app for Rust panics. Ensure the speech helper (`HarnessSpeech`) was built (`npm run prebuild`).
+- **Global Fn hotkey not working / Accessibility toggle flips off**  
+Fn monitoring runs in-process in the main Harness binary. Enable **Accessibility** for **Harness** (or **Harness Dev** when using `npm run dev`) in System Settings → Privacy & Security → Accessibility, then quit and reopen the app. After replacing a dist build, reset with `tccutil reset Accessibility com.harness.app` (or `com.harness.app.dev`) and grant again. Settings → Voice shows Accessibility status for the Fn shortcut.
 - **Microphone denied / Harness missing from Privacy → Microphone**  
 Signed builds use the hardened runtime. Without `com.apple.security.device.audio-input` in `bundle.macOS.entitlements`, macOS denies mic access silently (no prompt, no Settings row). Confirm with `codesign -d --entitlements :- /path/to/Harness.app`, rebuild via `npm run dist:mac`, reinstall, then use Settings → Voice → Ask For Microphone.
 - **Build without distribution signing (local only)**  

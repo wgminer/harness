@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
-import { Mic, Check, Loader2, X, FileAudio, ArrowUp } from "lucide-react";
+import { Mic, Check, Loader2, X, FileAudio, ArrowUp, Plus } from "lucide-react";
 import type { VoiceState } from "./chatHelpers";
-import { AUDIO_FILE_ACCEPT, pickAudioAttachFile } from "./audioAttach";
+import {
+  AUDIO_FILE_ACCEPT,
+  fileFromAudioPath,
+  pickAudioAttachFile,
+  pickAudioAttachPath,
+} from "./audioAttach";
 import { useTypedPlaceholder } from "./useTypedPlaceholder";
 import { formatVoiceTimer } from "./useVoiceCapture";
 
@@ -59,11 +64,13 @@ export function ChatComposer({
   const inputRef = useRef<HTMLTextAreaElement | null>(null) as MutableRefObject<HTMLTextAreaElement | null>;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
+  const attachDisabledRef = useRef(false);
   const [dropTargetActive, setDropTargetActive] = useState(false);
   const typedPlaceholder = useTypedPlaceholder(placeholder);
 
   const attachDisabled =
     voiceState !== "idle" || sending || attachmentTranscribing;
+  attachDisabledRef.current = attachDisabled;
 
   // Auto-grow textarea to fit content (up to CSS max-height)
   const adjustInputHeight = useCallback(() => {
@@ -89,7 +96,7 @@ export function ChatComposer({
 
   const tryAttachAudioFiles = useCallback(
     (files: FileList | File[] | null | undefined) => {
-      if (attachDisabled) return;
+      if (attachDisabledRef.current) return;
       const picked = pickAudioAttachFile(files);
       if (!picked) {
         if (files && files.length > 0) {
@@ -100,8 +107,68 @@ export function ChatComposer({
       onAttachmentError?.(null);
       onAttachAudio(picked);
     },
-    [attachDisabled, onAttachAudio, onAttachmentError],
+    [onAttachAudio, onAttachmentError],
   );
+
+  const tryAttachAudioPaths = useCallback(
+    async (paths: string[]) => {
+      if (attachDisabledRef.current) return;
+      const picked = pickAudioAttachPath(paths);
+      if (!picked) {
+        if (paths.length > 0) {
+          onAttachmentError?.("Drop an audio file (m4a, mp3, wav, …).");
+        }
+        return;
+      }
+      try {
+        const staged = await window.harness.recording.stageDroppedAudio(picked);
+        const file = await fileFromAudioPath(staged.path, staged.name);
+        onAttachmentError?.(null);
+        onAttachAudio(file);
+      } catch (err) {
+        onAttachmentError?.(
+          err instanceof Error ? err.message : "Unable to read dropped audio.",
+        );
+      }
+    },
+    [onAttachAudio, onAttachmentError],
+  );
+
+  // Tauri intercepts OS file drops; HTML5 drag events never fire in the webview.
+  // Listen to the native drag-drop API and accept drops anywhere on the window.
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    void (async () => {
+      try {
+        const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+        if (cancelled) return;
+        unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+          const payload = event.payload;
+          if (payload.type === "enter" || payload.type === "over") {
+            if (!attachDisabledRef.current) setDropTargetActive(true);
+            return;
+          }
+          if (payload.type === "leave") {
+            clearDropTarget();
+            return;
+          }
+          if (payload.type === "drop") {
+            clearDropTarget();
+            void tryAttachAudioPaths(payload.paths);
+          }
+        });
+      } catch {
+        // Browser / Storybook — HTML5 handlers below cover file drops.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [clearDropTarget, tryAttachAudioPaths]);
 
   return (
     <>
@@ -164,7 +231,7 @@ export function ChatComposer({
         {attachedAudioName && (
           <div className="chat-attachment-strip">
             <span className="chat-attachment-chip" title={attachedAudioName}>
-              <FileAudio size={12} />
+              <FileAudio size={11} strokeWidth={1.75} />
               <span className="chat-attachment-name">{attachedAudioName}</span>
               <button
                 type="button"
@@ -174,7 +241,7 @@ export function ChatComposer({
                 aria-label="Remove attached audio"
                 title="Remove attached audio"
               >
-                <X size={12} />
+                <X size={11} strokeWidth={1.75} />
               </button>
             </span>
             {attachmentTranscribing && (
@@ -205,7 +272,6 @@ export function ChatComposer({
           rows={1}
         />
         <div className="input-actions">
-          {modeControl ? <div className="chat-composer-mode-row">{modeControl}</div> : null}
           {voiceState === "recording" && (
             <span className="voice-timer">
               {formatVoiceTimer(recordingMs)}
@@ -226,7 +292,7 @@ export function ChatComposer({
             title="Attach audio file"
             aria-label="Attach audio file"
           >
-            <FileAudio size={15} />
+            <Plus size={15} />
           </button>
           {voiceState !== "processing" && (
             <button
@@ -251,6 +317,7 @@ export function ChatComposer({
               <X size={15} />
             </button>
           )}
+          {modeControl}
           {sending ? (
             <button type="button" className="btn chat-pane-btn input-actions-stop" onClick={onStop}>
               Stop

@@ -373,6 +373,58 @@ pub fn recording_microphone_permission_status() -> Result<String, String> {
         .to_string())
 }
 
+const DROPPED_AUDIO_EXTENSIONS: &[&str] = &[
+    "m4a", "mp4", "mpeg4", "aac", "mp3", "wav", "caf", "aif", "aiff", "ogg", "flac", "webm",
+];
+const MAX_DROPPED_AUDIO_BYTES: u64 = 200 * 1024 * 1024;
+
+fn is_dropped_audio_path(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            let lower = ext.to_ascii_lowercase();
+            DROPPED_AUDIO_EXTENSIONS.iter().any(|allowed| *allowed == lower)
+        })
+        .unwrap_or(false)
+}
+
+/// Copy a Finder/OS-dropped audio file into `audio-recordings/drop-cache/` so the
+/// webview can read it via the asset protocol (`convertFileSrc`).
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_stage_dropped_audio(path: String) -> Result<serde_json::Value, String> {
+    let src = PathBuf::from(path.trim());
+    if !src.is_file() {
+        return Err("Dropped path is not a file.".into());
+    }
+    if !is_dropped_audio_path(&src) {
+        return Err("Drop an audio file (m4a, mp3, wav, …).".into());
+    }
+    let meta = tokio::fs::metadata(&src)
+        .await
+        .map_err(|e| e.to_string())?;
+    if meta.len() > MAX_DROPPED_AUDIO_BYTES {
+        return Err("Audio file is too large (max 200 MB).".into());
+    }
+    let name = src
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
+        .ok_or_else(|| "Invalid audio file name.".to_string())?
+        .to_string();
+    let dir = get_recordings_dir().join("drop-cache");
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| e.to_string())?;
+    let dest = dir.join(format!("{}_{}", Uuid::new_v4(), name));
+    tokio::fs::copy(&src, &dest)
+        .await
+        .map_err(|e| format!("Unable to read dropped audio: {e}"))?;
+    Ok(serde_json::json!({
+        "path": dest.display().to_string(),
+        "name": name,
+    }))
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn recording_save_wav(data: Vec<u8>) -> Result<serde_json::Value, String> {
     let dir = get_recordings_dir();

@@ -1749,6 +1749,7 @@ dependencies = [
  "block2",
  "chrono",
  "chrono-tz",
+ "core-foundation 0.10.1",
  "cpal",
  "dirs",
  "flate2",

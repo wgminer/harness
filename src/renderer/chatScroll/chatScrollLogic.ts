@@ -49,6 +49,34 @@ export function shouldRepinFromUserScroll(args: {
   return args.mode;
 }
 
+/**
+ * Turn parking: put the newest turn near the top of the scrollport so the streaming reply
+ * owns the readable area down to the composer. `spacer` is the trailing space the thread
+ * needs before that offset is reachable.
+ */
+export function turnParkPlan(args: {
+  /** Top of the turn anchor (the user message) in scroll-content coordinates. */
+  anchorTop: number;
+  headroom: number;
+  /** Content height excluding the turn spacer. */
+  contentHeight: number;
+  clientHeight: number;
+}): { scrollTop: number; spacer: number } {
+  const scrollTop = Math.max(0, args.anchorTop - args.headroom);
+  const reachable = Math.max(0, args.contentHeight - args.clientHeight);
+  return { scrollTop, spacer: Math.max(0, scrollTop - reachable) };
+}
+
+/** Smallest trailing spacer that keeps `scrollTop` reachable — trims dead space without shifting content. */
+export function trailingSpacerForOffset(args: {
+  scrollTop: number;
+  /** Content height excluding the turn spacer. */
+  contentHeight: number;
+  clientHeight: number;
+}): number {
+  return Math.max(0, args.scrollTop + args.clientHeight - args.contentHeight);
+}
+
 /** When composer dock padding grows/shrinks, keep visible content stable while pinned. */
 export function scrollTopDeltaForPaddingChange(prevPaddingPx: number, nextPaddingPx: number): number {
   return nextPaddingPx - prevPaddingPx;

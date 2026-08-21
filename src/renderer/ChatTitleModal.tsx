@@ -4,6 +4,7 @@ import { getChatMode } from "../shared/chatModes";
 import type { ConversationSessionKind } from "../shared/conversationSession";
 import type { RecordingLink } from "../shared/types";
 import { Modal } from "./Modal";
+import { Skeleton } from "./Skeleton";
 
 interface ChatTitleModalProps {
   open: boolean;
@@ -75,15 +76,15 @@ function RecordingTableSkeleton() {
           <tr>
             <td>
               <div className="app-modal-recording-table__file">
-                <span className="app-modal-skeleton app-modal-skeleton--play" aria-hidden />
-                <span className="app-modal-skeleton app-modal-skeleton--name" aria-hidden />
+                <Skeleton className="ui-skeleton--play" />
+                <Skeleton className="ui-skeleton--name" />
               </div>
             </td>
             <td>
-              <span className="app-modal-skeleton app-modal-skeleton--num" aria-hidden />
+              <Skeleton className="ui-skeleton--num" />
             </td>
             <td>
-              <span className="app-modal-skeleton app-modal-skeleton--num" aria-hidden />
+              <Skeleton className="ui-skeleton--num" />
             </td>
           </tr>
         </tbody>

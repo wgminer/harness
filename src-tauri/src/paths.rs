@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::env_util::user_data_dir;
+use crate::env_util::{user_data_dir, HARNESS_DEV_DATA_DIR_NAME, HARNESS_PROD_DATA_DIR_NAME};
 use crate::storage::{read_json_array_file, read_json_object_file};
 
 const LOCAL_DATA_DIR: &str = "local-data";
@@ -58,7 +58,7 @@ pub fn get_credentials_path() -> PathBuf {
     get_user_data_dir().join("credentials.json")
 }
 
-/// Resolve a bundled native helper or resource file (HarnessFnMonitor, HarnessSpeech, tray PNGs).
+/// Resolve a bundled native helper or resource file (HarnessSpeech, tray PNGs).
 pub fn resolve_bundled_resource(name: &str) -> Option<PathBuf> {
     let mut candidates = Vec::new();
     if let Ok(resource_dir) = std::env::var("RESOURCE_DIR") {
@@ -84,15 +84,85 @@ pub fn resolve_bundled_resource(name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Shared audio archive for Dev + installed profiles.
+///
+/// Credentials / sync identity / recordings are not split across `Harness` vs
+/// `Harness Dev` — only app-state lives per profile. When `HARNESS_DATA_DIR` is
+/// set (tests / alternate profiles), recordings stay under that override.
 pub fn get_recordings_dir() -> PathBuf {
-    let user_data = get_user_data_dir();
-    let legacy = user_data.join("recordings");
-    let next = user_data.join("audio-recordings");
+    let shared_root = shared_recordings_root();
+    let legacy = shared_root.join("recordings");
+    let next = shared_root.join("audio-recordings");
     if legacy.exists() && !next.exists() {
         let _ = std::fs::rename(&legacy, &next);
     }
     std::fs::create_dir_all(&next).ok();
+    migrate_dev_recordings_into_shared(&next);
     next
+}
+
+/// Application Support root that owns `audio-recordings/` (installed Harness,
+/// unless `HARNESS_DATA_DIR` isolates the profile).
+fn shared_recordings_root() -> PathBuf {
+    if let Ok(path) = std::env::var("HARNESS_DATA_DIR") {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+    dirs::data_dir()
+        .expect("data_dir")
+        .join(HARNESS_PROD_DATA_DIR_NAME)
+}
+
+/// Move leftover Dev-profile WAVs into the shared installed archive once.
+fn migrate_dev_recordings_into_shared(shared: &Path) {
+    // Skip when HARNESS_DATA_DIR isolates tests away from real Application Support.
+    if std::env::var("HARNESS_DATA_DIR")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_some()
+    {
+        return;
+    }
+    let Some(data_dir) = dirs::data_dir() else {
+        return;
+    };
+    let legacy = data_dir
+        .join(HARNESS_DEV_DATA_DIR_NAME)
+        .join("audio-recordings");
+    merge_recordings_dir(&legacy, shared);
+}
+
+/// Move files from `from` into `into` when the destination name is missing.
+fn merge_recordings_dir(from: &Path, into: &Path) {
+    if !from.exists() || from == into {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(from) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let src = entry.path();
+        let name = entry.file_name();
+        let dest = into.join(&name);
+        if dest.exists() {
+            continue;
+        }
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() {
+            let _ = copy_dir_recursive(&src, &dest);
+            let _ = std::fs::remove_dir_all(&src);
+        } else if std::fs::rename(&src, &dest).is_err() {
+            if std::fs::copy(&src, &dest).is_ok() {
+                let _ = std::fs::remove_file(&src);
+            }
+        }
+    }
+    // Drop empty leftover folder (ignore errors if anything remains).
+    let _ = std::fs::remove_dir(from);
 }
 
 fn copy_if_missing(from: &Path, to: &Path) {
@@ -237,5 +307,70 @@ mod bundled_resource_tests {
         }
 
         assert_eq!(resolved, Some(icon));
+    }
+}
+
+#[cfg(test)]
+mod recordings_dir_tests {
+    use super::{merge_recordings_dir, shared_recordings_root};
+    use crate::env_util::HARNESS_PROD_DATA_DIR_NAME;
+
+    #[test]
+    fn shared_root_uses_harness_data_dir_override() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let key = "HARNESS_DATA_DIR";
+        let prev = std::env::var(key).ok();
+        unsafe { std::env::set_var(key, tmp.path()) };
+        let root = shared_recordings_root();
+        match prev {
+            Some(v) => unsafe { std::env::set_var(key, v) },
+            None => unsafe { std::env::remove_var(key) },
+        }
+        assert_eq!(root, tmp.path());
+    }
+
+    #[test]
+    fn shared_root_defaults_to_installed_harness() {
+        let key = "HARNESS_DATA_DIR";
+        let prev = std::env::var(key).ok();
+        unsafe { std::env::remove_var(key) };
+        let root = shared_recordings_root();
+        match prev {
+            Some(v) => unsafe { std::env::set_var(key, v) },
+            None => {}
+        }
+        let expected = dirs::data_dir()
+            .expect("data_dir")
+            .join(HARNESS_PROD_DATA_DIR_NAME);
+        assert_eq!(root, expected);
+    }
+
+    #[test]
+    fn merge_moves_missing_files_into_shared() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let shared = tmp.path().join("shared");
+        let legacy = tmp.path().join("legacy");
+        std::fs::create_dir_all(&shared).expect("shared");
+        std::fs::create_dir_all(&legacy).expect("legacy");
+        std::fs::write(legacy.join("rec_a.wav"), b"a").expect("wav");
+        std::fs::write(legacy.join("keep_in_shared.wav"), b"old").expect("wav");
+        std::fs::write(shared.join("keep_in_shared.wav"), b"new").expect("wav");
+        std::fs::create_dir_all(legacy.join("drop-cache")).expect("cache");
+        std::fs::write(legacy.join("drop-cache").join("x.m4a"), b"x").expect("m4a");
+
+        merge_recordings_dir(&legacy, &shared);
+
+        assert_eq!(
+            std::fs::read(shared.join("keep_in_shared.wav")).unwrap(),
+            b"new"
+        );
+        assert_eq!(std::fs::read(shared.join("rec_a.wav")).unwrap(), b"a");
+        assert!(shared.join("drop-cache").join("x.m4a").is_file());
+        assert!(!legacy.join("rec_a.wav").exists());
+        // Conflicting name left in legacy; folder may still exist.
+        assert_eq!(
+            std::fs::read(legacy.join("keep_in_shared.wav")).unwrap(),
+            b"old"
+        );
     }
 }

@@ -231,16 +231,6 @@ button.sidebar-item {
   opacity: 1;
 }
 
-.sidebar-item-title-skeleton {
-  flex: 1;
-  height: 0.72em;
-  max-width: 68%;
-  margin: 0.14em 0;
-  border-radius: var(--radius-sm);
-  background: var(--fg-muted);
-  animation: title-skeleton-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
-}
-
 .sidebar-item-delete {
   --sidebar-item-delete-scrub: var(--bg);
   position: absolute;
@@ -302,49 +292,6 @@ button.sidebar-item {
   padding: 0 var(--space-2);
   box-sizing: border-box;
   border-bottom: 1px solid var(--border-edge);
-}
-
-.sidebar-buttons .btn-icon:not(.btn-primary) {
-  background: transparent;
-  border-color: transparent;
-}
-
-.sidebar-buttons .btn-icon:not(.btn-primary):hover:not(:disabled) {
-  background: var(--overlay-subtle);
-  border-color: transparent;
-}
-
-.sidebar-buttons .btn-icon {
-  transition:
-    color var(--motion-duration-ui) var(--motion-ease-standard),
-    background var(--motion-duration-ui) var(--motion-ease-standard),
-    border-color var(--motion-duration-ui) var(--motion-ease-standard),
-    border-radius var(--motion-duration-ui) var(--motion-ease-standard);
-}
-
-.sidebar-buttons .btn-icon.btn-primary,
-.sidebar-buttons .btn-icon.btn-primary:hover:not(:disabled) {
-  background: var(--overlay-subtle);
-  color: var(--fg);
-  border-color: transparent;
-}
-
-/* Pack Search / Tasks / Settings flush; keep gap after New. */
-.sidebar-buttons .btn-icon + .btn-icon {
-  margin-inline-start: calc(var(--space-2) * -1);
-}
-
-/* Square shared edges only while hovering a neighbor of the selected icon. */
-.sidebar-buttons .btn-icon:hover:has(+ .btn-icon.btn-primary),
-.sidebar-buttons .btn-icon.btn-primary:has(+ .btn-icon:hover) {
-  border-start-end-radius: 0;
-  border-end-end-radius: 0;
-}
-
-.sidebar-buttons .btn-icon:hover + .btn-icon.btn-primary,
-.sidebar-buttons .btn-icon.btn-primary + .btn-icon:hover {
-  border-start-start-radius: 0;
-  border-end-start-radius: 0;
 }
 
 .sidebar-new-chat-btn {
@@ -490,9 +437,8 @@ button.sidebar-item {
   user-select: none;
 }
 
-/* Quiet footer icon controls — sync + pin share the same chrome. */
-.sidebar-footer__sync-toggle,
-.sidebar-footer__pin {
+/* Quiet footer icon controls — sync. */
+.sidebar-footer__sync-toggle {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -513,8 +459,7 @@ button.sidebar-item {
     background var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
-.sidebar-footer__sync-toggle:hover:not(:disabled),
-.sidebar-footer__pin:hover {
+.sidebar-footer__sync-toggle:hover:not(:disabled) {
   opacity: 0.75;
   color: var(--fg);
 }
@@ -557,13 +502,7 @@ button.sidebar-item {
   color: var(--fg);
 }
 
-.sidebar-footer__pin--active {
-  opacity: 0.85;
-  color: var(--fg);
-}
-
-.sidebar-footer__sync-toggle svg,
-.sidebar-footer__pin svg {
+.sidebar-footer__sync-toggle svg {
   width: var(--icon-size-sm);
   height: var(--icon-size-sm);
 }

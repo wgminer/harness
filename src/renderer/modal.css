@@ -378,30 +378,3 @@
   color: var(--fg-muted);
 }
 
-.app-modal-skeleton {
-  display: inline-block;
-  border-radius: var(--radius-sm);
-  background: var(--fg-muted);
-  animation: title-skeleton-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
-  vertical-align: middle;
-}
-
-.app-modal-skeleton--play {
-  width: var(--space-6);
-  height: var(--space-6);
-  border-radius: var(--radius-control-sm);
-  flex-shrink: 0;
-}
-
-.app-modal-skeleton--name {
-  width: min(9rem, 100%);
-  height: 0.72em;
-  flex: 1;
-  min-width: 0;
-}
-
-.app-modal-skeleton--num {
-  width: 2.75rem;
-  height: 0.72em;
-}
-

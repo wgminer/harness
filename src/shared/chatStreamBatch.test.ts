@@ -28,9 +28,11 @@ describe("resources/contracts/chatStreamBatch.json", () => {
     expect(CHAT_STREAM_BATCH).toEqual(c);
   });
 
-  it("is include_str!'d by Rust (stream_batch.rs)", () => {
-    const rust = readFileSync(join(root, "src-tauri/src/chat/stream_batch.rs"), "utf8");
-    expect(rust).toContain('include_str!("../../../resources/contracts/chatStreamBatch.json")');
+  it("is bundled for iOS ChatStreamBatch (shared contract)", () => {
+    const swift = readFileSync(join(root, "ios/HarnessMobile/Chat/ChatStreamBatch.swift"), "utf8");
+    expect(swift).toContain('forResource: "chatStreamBatch"');
+    const pbx = readFileSync(join(root, "ios/HarnessMobile.xcodeproj/project.pbxproj"), "utf8");
+    expect(pbx).toContain("chatStreamBatch.json in Resources");
   });
 });
 

@@ -186,9 +186,9 @@ struct UserMessageCard: View {
                     }
                 }
 
-                if isOverflowing {
-                    Button(isExpanded ? "Show less" : "Show more") {
-                        toggleExpanded()
+                if !isExpanded && isOverflowing {
+                    Button("Show more") {
+                        expand()
                     }
                     .font(.caption)
                     .buttonStyle(.plain)
@@ -203,8 +203,8 @@ struct UserMessageCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture {
-            guard isOverflowing else { return }
-            toggleExpanded()
+            guard !isExpanded && isOverflowing else { return }
+            expand()
         }
         .onChange(of: content) { _, _ in
             if isExpanded { isExpanded = false }
@@ -240,9 +240,10 @@ struct UserMessageCard: View {
         }
     }
 
-    private func toggleExpanded() {
+    private func expand() {
+        guard !isExpanded else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
-            isExpanded.toggle()
+            isExpanded = true
         }
     }
 }

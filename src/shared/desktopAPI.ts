@@ -270,6 +270,11 @@ export interface HarnessAPI {
       "granted" | "denied" | "undetermined" | "unsupported"
     >;
     saveWav: (data: ArrayBuffer) => Promise<{ path: string }>;
+    /**
+     * Copy an OS-dropped audio path into audio-recordings/drop-cache for
+     * `convertFileSrc` / fetch in the webview.
+     */
+    stageDroppedAudio: (path: string) => Promise<{ path: string; name: string }>;
     showInFolder: (path: string) => Promise<void>;
     exportWav: (data: ArrayBuffer, suggestedName?: string) => Promise<{ path: string } | { cancelled: true }>;
     openFolder: () => Promise<void>;

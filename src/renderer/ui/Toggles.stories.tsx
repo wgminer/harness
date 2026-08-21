@@ -16,11 +16,11 @@ function TogglesGallery() {
 
   return (
     <div>
-      <Section title="Chat mode picker (quiet)" stack>
+      <Section title="Chat mode picker (dropdown)" stack>
         <ChatModePicker value={mode} onChange={setMode} />
       </Section>
 
-      <Section title="Chat mode picker (outline)" stack>
+      <Section title="Chat mode picker (outline strip)" stack>
         <ChatModePicker value={mode} onChange={setMode} variant="outline" />
       </Section>
 

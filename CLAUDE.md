@@ -38,7 +38,7 @@ Vitest includes version parity, ipcNames ↔ `generate_handler!` parity, sync-me
 
 ## Dev vs installed data dirs
 
-`npm run dev` sets `HARNESS_DEV=1` and merges `src-tauri/tauri.dev.conf.json`. **Display** name is **Harness Dev** (Dock / window / Accessibility); **data folder** is **`~/Library/Application Support/Harness Dev`**. Installed builds display as **Harness** with data under **`~/Library/Application Support/Harness`**. Bundle IDs remain `com.harness.app.dev` / `com.harness.app`. Credentials, sync, and audio are **not** split — only the on-disk profile root and macOS app identity. See [BUILD.md](BUILD.md) (development vs installed Application Support).
+`npm run dev` sets `HARNESS_DEV=1` and merges `src-tauri/tauri.dev.conf.json`. **Display** name is **Harness Dev** (Dock / window / Accessibility); **data folder** is **`~/Library/Application Support/Harness Dev`**. Installed builds display as **Harness** with data under **`~/Library/Application Support/Harness`**. Bundle IDs remain `com.harness.app.dev` / `com.harness.app`. Credentials, sync, and **audio** (`Harness/audio-recordings/`) are **not** split — only the on-disk app-state profile root and macOS app identity. See [BUILD.md](BUILD.md) (development vs installed Application Support).
 
 ## Dist / release confirmation
 

@@ -10,31 +10,45 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { ChatComposer } from "../ChatComposer";
 import { ChatModePicker } from "../ChatModePicker";
+import { Skeleton } from "../Skeleton";
 import type { ChatModeId } from "../../shared/chatModes";
 import { MessageContent, Section } from "./storyHelpers";
 
 function ComposerIdle() {
   const [mode, setMode] = useState<ChatModeId>("chat");
+  const [input, setInput] = useState("");
+  const [attachedAudioName, setAttachedAudioName] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   return (
-    <div className="chat-composer-inner" style={{ maxWidth: 640 }}>
-      <textarea className="chat-input" rows={2} placeholder="Message…" defaultValue="" />
-      <div className="input-actions">
-        <div className="chat-composer-mode-row">
-          <ChatModePicker value={mode} onChange={setMode} />
-        </div>
-        <div className="input-actions-spacer" />
-        <button type="button" className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn" aria-label="Attach">
-          <FileAudio size={15} />
-        </button>
-        <button type="button" className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn" aria-label="Record">
-          <Mic size={15} />
-        </button>
-        <button type="button" className="btn btn-icon chat-pane-btn chat-pane-btn--icon" aria-label="Send">
-          <ArrowUp size={16} strokeWidth={2.5} />
-        </button>
-      </div>
-    </div>
+    <ChatComposer
+      input={input}
+      onInputChange={setInput}
+      onSend={() => {}}
+      onStop={() => {}}
+      sending={false}
+      voiceState="idle"
+      voiceError={null}
+      recordingMs={0}
+      onStartRecording={() => {}}
+      onStopRecording={() => {}}
+      onCancelRecording={() => {}}
+      attachedAudioName={attachedAudioName}
+      attachmentTranscribing={false}
+      attachmentError={attachmentError}
+      onAttachAudio={(file) => {
+        setAttachedAudioName(file?.name ?? null);
+        setAttachmentError(null);
+      }}
+      onRemoveAttachedAudio={() => {
+        setAttachedAudioName(null);
+        setAttachmentError(null);
+      }}
+      onAttachmentError={setAttachmentError}
+      placeholder="Message…"
+      modeControl={<ChatModePicker value={mode} onChange={setMode} />}
+    />
   );
 }
 
@@ -104,10 +118,10 @@ function ChatGallery() {
       <Section title="Attachment strip" stack>
         <div className="chat-attachment-strip" style={{ maxWidth: 640 }}>
           <span className="chat-attachment-chip">
-            <FileAudio size={12} />
+            <FileAudio size={11} strokeWidth={1.75} />
             <span className="chat-attachment-name">interview.m4a</span>
             <button type="button" className="chat-attachment-remove" aria-label="Remove">
-              <X size={12} />
+              <X size={11} strokeWidth={1.75} />
             </button>
           </span>
         </div>
@@ -127,7 +141,7 @@ function ChatGallery() {
           <button type="button" className="btn chat-pane-title">
             Product brainstorm
           </button>
-          <span className="chat-pane-title-skeleton" aria-hidden />
+          <Skeleton className="ui-skeleton--title" />
         </div>
       </Section>
 

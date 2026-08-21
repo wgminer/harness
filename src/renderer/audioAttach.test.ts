@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isAudioAttachFile, pickAudioAttachFile } from "./audioAttach";
+import {
+  isAudioAttachFile,
+  isAudioAttachPath,
+  pickAudioAttachFile,
+  pickAudioAttachPath,
+} from "./audioAttach";
 
 function file(name: string, type = ""): File {
   return new File([new Uint8Array([1, 2, 3])], name, { type });
@@ -34,5 +39,18 @@ describe("pickAudioAttachFile", () => {
 
   it("returns null when nothing is audio", () => {
     expect(pickAudioAttachFile([file("a.txt"), file("b.png", "image/png")])).toBeNull();
+  });
+});
+
+describe("pickAudioAttachPath", () => {
+  it("picks the first audio path", () => {
+    expect(
+      pickAudioAttachPath(["/tmp/notes.txt", "/Users/me/Desktop/interview.m4a", "/tmp/x.mp3"]),
+    ).toBe("/Users/me/Desktop/interview.m4a");
+  });
+
+  it("rejects non-audio paths", () => {
+    expect(isAudioAttachPath("/tmp/photo.PNG")).toBe(false);
+    expect(pickAudioAttachPath(["/tmp/a.txt", "/tmp/b.pdf"])).toBeNull();
   });
 });

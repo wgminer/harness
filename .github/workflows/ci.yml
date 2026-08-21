@@ -37,6 +37,10 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      - name: Size budgets (advisory)
+        continue-on-error: true
+        run: npm run budget
+
   rust:
     name: Rust unit tests
     runs-on: ubuntu-latest

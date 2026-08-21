@@ -2,7 +2,28 @@ import type { ConversationListRow } from "../shared/conversationSession";
 
 export type Conversation = ConversationListRow;
 
-export type View = "chat" | "settings" | "tasks" | "search" | "notes" | "images";
+export type View =
+  | "chat"
+  | "settings"
+  | "tasks"
+  | "search"
+  | "notes"
+  | "images"
+  | "dev-chat"
+  | "dev-dictation"
+  | "dev-note"
+  | "dev-image";
+
+export type DevView = "dev-chat" | "dev-dictation" | "dev-note" | "dev-image";
+
+export function isDevView(view: View): view is DevView {
+  return (
+    view === "dev-chat" ||
+    view === "dev-dictation" ||
+    view === "dev-note" ||
+    view === "dev-image"
+  );
+}
 
 export type LibraryItemKind = "conversation" | "note" | "image";
 

@@ -52,7 +52,7 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 | **Fn dictation / global hotkey** | Background Fn shortcut (needs Accessibility); optional bring-to-front. |
 | **Transcript cleanup** | Optional post-pass via OpenAI to polish dictation. |
 | **Dictionary** | Deterministic find/replace for repeated mishears. |
-| **Recording** | Captured audio; local-only under `audio-recordings/` (not synced). |
+| **Recording** | Captured audio; local-only under shared `~/Library/Application Support/Harness/audio-recordings/` (Dev + Dist; not synced). |
 
 ## Notes & writing
 

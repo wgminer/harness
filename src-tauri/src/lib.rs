@@ -10,7 +10,8 @@ pub mod dictation_recording_index;
 pub mod dictation_suggested_prompts;
 pub mod env_util;
 pub mod file_tools;
-pub mod fn_monitor;
+#[cfg(target_os = "macos")]
+pub mod fn_tap;
 pub mod global_recording;
 pub mod global_recording_capture;
 pub mod global_recording_effects;
@@ -44,7 +45,7 @@ pub mod weather;
 use memory::AppState;
 use sticky_notes::persist_open_sticky_windows;
 use sync::register_sync_state;
-use tauri::{Manager, RunEvent};
+use tauri::{LogicalSize, Manager, RunEvent};
 
 use crate::chat::ChatController;
 
@@ -65,6 +66,10 @@ pub fn run() {
             }
         }))
         .setup(|app| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.set_min_size(Some(LogicalSize::new(800.0, 600.0)));
+            }
+
             let app_state = AppState::new();
             let sync_runtime = register_sync_state(app_state.clone());
             let recording_runtime = recording::init_recording_runtime(app_state.clone());
@@ -73,16 +78,27 @@ pub fn run() {
             let updater_runtime = updater::init_updater_runtime();
             app.manage(updater_runtime.clone());
 
+            // Only sync init and hotkey registration have to finish before the
+            // first command can be served; the rest would just delay launch.
             tauri::async_runtime::block_on(async {
                 let _ = sync_runtime.init().await;
-                let _ = memory::prune_empty_conversations(&app_state).await;
                 global_recording::register_global_recording(
                     app.handle().clone(),
                     global_recording_runtime.clone(),
                     &app_state.write_chains,
                 )
                 .await;
-                sticky_notes::restore_sticky_windows(&app.handle(), &app_state).await;
+            });
+
+            let prune_state = app_state.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = memory::prune_empty_conversations(&prune_state).await;
+            });
+
+            let sticky_handle = app.handle().clone();
+            let sticky_state = app_state.clone();
+            tauri::async_runtime::spawn(async move {
+                sticky_notes::restore_sticky_windows(&sticky_handle, &sticky_state).await;
             });
 
             let handle = app.handle().clone();
@@ -178,6 +194,7 @@ pub fn run() {
             sync::sync_set_r2_config,
             recording::recording_request_microphone_access,
             recording::recording_microphone_permission_status,
+            recording::recording_stage_dropped_audio,
             recording::recording_save_wav,
             recording::recording_show_in_folder,
             recording::recording_export_wav,

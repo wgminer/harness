@@ -1,11 +1,7 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { ChatView } from "./ChatView";
-import { SettingsView } from "./SettingsView";
-import { setCachedAccessibilityTrusted, setCachedHasOpenAIApiKey, setCachedSettings } from "./settings/settingsSessionCache";
-import { TasksView } from "./TasksView";
-import { SearchView } from "./SearchView";
-import { NotesView } from "./WritingSurfaceView";
-import { ImageCanvasView } from "./ImageCanvasView";
+import { AppTitlebar } from "./AppTitlebar";
+import { getCachedSettings, setCachedAccessibilityTrusted, setCachedHasOpenAIApiKey, setCachedSettings } from "./settings/settingsSessionCache";
 import { Sidebar } from "./Sidebar";
 import { SetupNoticeModal } from "./SetupNoticeModal";
 import { HotkeyRecordingOverlay } from "./HotkeyRecordingOverlay";
@@ -22,27 +18,35 @@ import {
 } from "../shared/writing";
 import type { GeneratedImage } from "../shared/images";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
-import type { Conversation, View } from "./sidebarUtils";
+import type { Conversation, View, DevView } from "./sidebarUtils";
+import { isDevView } from "./sidebarUtils";
+
+/**
+ * Only the chat view is on the boot path. Lazy-loading the rest keeps CodeMirror
+ * (notes) and the QR encoder (settings sync) out of the initial chunk.
+ */
+const SettingsView = lazy(() =>
+  import("./SettingsView").then((m) => ({ default: m.SettingsView })),
+);
+const TasksView = lazy(() => import("./TasksView").then((m) => ({ default: m.TasksView })));
+const SearchView = lazy(() => import("./SearchView").then((m) => ({ default: m.SearchView })));
+const NotesView = lazy(() =>
+  import("./WritingSurfaceView").then((m) => ({ default: m.NotesView })),
+);
+const ImageCanvasView = lazy(() =>
+  import("./ImageCanvasView").then((m) => ({ default: m.ImageCanvasView })),
+);
+
+/** Folds to `null` in production builds, so the playground never ships. */
+const DevViewHost = import.meta.env.DEV ? lazy(() => import("./dev/DevViewHost")) : null;
 import {
   collectSetupGaps,
   shouldShowSetupNotice,
   type SetupGap,
 } from "../shared/setupState";
+import { SETTINGS_PAGE_TITLE } from "../shared/settingsPage";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { IDLE_UPDATE_STATUS, type UpdateStatus } from "../shared/updateStatus";
-import {
-  DEFAULT_LIBRARY_PEEK_TUNING,
-  computeLibraryPeekTarget,
-  initialLibraryPeekSpring,
-  isPointerInLibraryEdgeKeepAlive,
-  libraryEdgeDistance,
-  libraryPeekMaxFraction,
-  libraryPeekSpringSettled,
-  stepLibraryPeekSpring,
-  updateLibraryPeekTowardIntent,
-  type LibraryPeekSpring,
-  type LibraryPeekTuning,
-} from "./libraryPeek";
 function removeTitleAwaitingId(
   prev: Record<string, true>,
   id: string,
@@ -86,234 +90,12 @@ export default function App() {
   const [openNoteInStickyWindow, setOpenNoteInStickyWindow] = useState(
     DEFAULT_UI_SESSION.openNoteInStickyWindow ?? false,
   );
-  /** Library drawer: pinned open, or temporarily open via dock hover after peek. */
-  const [libraryPinned, setLibraryPinned] = useState(false);
-  const [libraryHoverOpen, setLibraryHoverOpen] = useState(false);
-  const [libraryPeekTuning] = useState<LibraryPeekTuning>(
-    () => ({ ...DEFAULT_LIBRARY_PEEK_TUNING }),
-  );
-  const libraryCloseTimerRef = useRef<number | null>(null);
-  const appRef = useRef<HTMLDivElement>(null);
-  const libraryPeekRafRef = useRef<number | null>(null);
-  const libraryPeekPendingXRef = useRef<number | null>(null);
-  const libraryPeekLastXRef = useRef<number | null>(null);
-  const libraryPeekTowardRef = useRef(false);
-  const libraryPeekSpringRef = useRef<LibraryPeekSpring>(initialLibraryPeekSpring());
-  const libraryPeekLastTsRef = useRef<number | null>(null);
-  const libraryLastPointerClientXRef = useRef<number | null>(null);
-  const libraryPinnedRef = useRef(libraryPinned);
-  const libraryHoverOpenRef = useRef(libraryHoverOpen);
-  const librarySideRef = useRef(layout.sidebar);
-  const libraryPeekTuningRef = useRef(libraryPeekTuning);
-  libraryPinnedRef.current = libraryPinned;
-  libraryHoverOpenRef.current = libraryHoverOpen;
-  librarySideRef.current = layout.sidebar;
-  libraryPeekTuningRef.current = libraryPeekTuning;
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [isHarnessDev, setIsHarnessDev] = useState(false);
 
-  const libraryOpen = libraryPinned || libraryHoverOpen;
-
-  const clearLibraryCloseTimer = useCallback(() => {
-    if (libraryCloseTimerRef.current != null) {
-      window.clearTimeout(libraryCloseTimerRef.current);
-      libraryCloseTimerRef.current = null;
-    }
+  const toggleLibraryOpen = useCallback(() => {
+    setLibraryOpen((open) => !open);
   }, []);
-
-  const librarySide = useCallback((): "left" | "right" => {
-    return librarySideRef.current === "right" ? "right" : "left";
-  }, []);
-
-  const pointerNearLibraryEdge = useCallback(
-    (clientX: number) => {
-      const el = appRef.current;
-      if (!el) return false;
-      const rect = el.getBoundingClientRect();
-      return isPointerInLibraryEdgeKeepAlive({
-        clientX,
-        side: librarySide(),
-        frameLeft: rect.left,
-        frameRight: rect.right,
-      });
-    },
-    [librarySide],
-  );
-
-  const applyLibraryPeekCss = useCallback((peek: number) => {
-    const el = appRef.current;
-    if (!el) return;
-    el.style.setProperty("--library-peek", String(peek));
-    el.dataset.libraryPeeking = peek > 0.02 && peek < 1 ? "true" : "false";
-  }, []);
-
-  const applyLibraryPeekTuningCss = useCallback((tuning: LibraryPeekTuning) => {
-    const el = appRef.current;
-    if (!el) return;
-    el.style.setProperty("--library-latch-duration", `${tuning.latchDurationMs}ms`);
-  }, []);
-
-  const scheduleLibraryHoverClose = useCallback(() => {
-    clearLibraryCloseTimer();
-    libraryCloseTimerRef.current = window.setTimeout(() => {
-      libraryCloseTimerRef.current = null;
-      const x = libraryLastPointerClientXRef.current;
-      // Latch overshoot can fire leave while the cursor is still on the edge.
-      if (x != null && pointerNearLibraryEdge(x)) return;
-      setLibraryHoverOpen(false);
-    }, libraryPeekTuningRef.current.hoverCloseDelayMs);
-  }, [clearLibraryCloseTimer, pointerNearLibraryEdge]);
-
-  const openLibraryHover = useCallback(() => {
-    clearLibraryCloseTimer();
-    setLibraryHoverOpen(true);
-  }, [clearLibraryCloseTimer]);
-
-  const toggleLibraryPinned = useCallback(() => {
-    setLibraryPinned((prev) => {
-      const next = !prev;
-      if (next) setLibraryHoverOpen(false);
-      return next;
-    });
-  }, []);
-
-  const closeLibraryIfUnpinned = useCallback(() => {
-    if (!libraryPinned) {
-      setLibraryHoverOpen(false);
-    }
-  }, [libraryPinned]);
-
-  useEffect(() => () => clearLibraryCloseTimer(), [clearLibraryCloseTimer]);
-
-  useEffect(() => {
-    applyLibraryPeekTuningCss(libraryPeekTuning);
-  }, [libraryPeekTuning, applyLibraryPeekTuningCss]);
-
-  // Sync peek CSS when pinned / hover-open latches or releases.
-  useEffect(() => {
-    libraryPeekSpringRef.current = initialLibraryPeekSpring(libraryPinned || libraryHoverOpen ? 1 : 0);
-    libraryPeekLastTsRef.current = null;
-    if (libraryPinned || libraryHoverOpen) {
-      applyLibraryPeekCss(1);
-    } else {
-      applyLibraryPeekCss(0);
-    }
-  }, [libraryPinned, libraryHoverOpen, applyLibraryPeekCss]);
-
-  // While hover-open, close only once the pointer leaves both the dock and the
-  // frame-edge keep-alive strip (overshoot can drop dock hit-testing at x≈0).
-  useEffect(() => {
-    if (!libraryHoverOpen || libraryPinned) return;
-
-    const onPointerMove = (event: PointerEvent) => {
-      libraryLastPointerClientXRef.current = event.clientX;
-      const overDock =
-        event.target instanceof Element && event.target.closest(".sidebar-dock") != null;
-      if (overDock || pointerNearLibraryEdge(event.clientX)) {
-        clearLibraryCloseTimer();
-        return;
-      }
-      scheduleLibraryHoverClose();
-    };
-
-    window.addEventListener("pointermove", onPointerMove);
-    return () => window.removeEventListener("pointermove", onPointerMove);
-  }, [
-    libraryHoverOpen,
-    libraryPinned,
-    pointerNearLibraryEdge,
-    clearLibraryCloseTimer,
-    scheduleLibraryHoverClose,
-  ]);
-
-  // Proximity target + JS spring (CSS transitions can't overshoot while tracking the cursor).
-  // Peek only while the pointer is moving toward the library edge; full open is dock hover.
-  useEffect(() => {
-    if (libraryPinned || libraryHoverOpen) return;
-
-    const stopPeekLoop = () => {
-      if (libraryPeekRafRef.current != null) {
-        window.cancelAnimationFrame(libraryPeekRafRef.current);
-        libraryPeekRafRef.current = null;
-      }
-      libraryPeekLastTsRef.current = null;
-    };
-
-    const tick = (now: number) => {
-      libraryPeekRafRef.current = null;
-      if (libraryPinnedRef.current || libraryHoverOpenRef.current) return;
-
-      const el = appRef.current;
-      const pendingX = libraryPeekPendingXRef.current;
-      if (!el || pendingX == null) return;
-
-      const lastTs = libraryPeekLastTsRef.current;
-      libraryPeekLastTsRef.current = now;
-      const dtSeconds = Math.min(1 / 30, Math.max(1 / 120, lastTs == null ? 1 / 60 : (now - lastTs) / 1000));
-      const tuning = libraryPeekTuningRef.current;
-
-      const rect = el.getBoundingClientRect();
-      const x = pendingX - rect.left;
-      const side = librarySideRef.current === "right" ? "right" : "left";
-      const lastX = libraryPeekLastXRef.current;
-      const deltaX = lastX == null ? 0 : pendingX - lastX;
-      libraryPeekLastXRef.current = pendingX;
-      const peekMax = libraryPeekMaxFraction(tuning.peekMaxScreenRatio, rect.width);
-
-      const distance = libraryEdgeDistance(x, rect.width, side);
-      libraryPeekTowardRef.current = updateLibraryPeekTowardIntent({
-        distance,
-        deltaX,
-        side,
-        previousToward: libraryPeekTowardRef.current,
-        zonePx: tuning.zonePx,
-      });
-
-      const target = computeLibraryPeekTarget({
-        x,
-        viewportWidth: rect.width,
-        side,
-        zonePx: tuning.zonePx,
-        peekMax,
-        movingToward: libraryPeekTowardRef.current,
-      });
-
-      libraryPeekSpringRef.current = stepLibraryPeekSpring(
-        libraryPeekSpringRef.current,
-        target,
-        dtSeconds,
-        {
-          stiffness: tuning.stiffness,
-          damping: tuning.damping,
-          overshoot: tuning.overshoot,
-          peekMax,
-        },
-      );
-      applyLibraryPeekCss(libraryPeekSpringRef.current.value);
-
-      if (!libraryPeekSpringSettled(libraryPeekSpringRef.current, target)) {
-        libraryPeekRafRef.current = window.requestAnimationFrame(tick);
-      }
-    };
-
-    const ensurePeekLoop = () => {
-      if (libraryPeekRafRef.current != null) return;
-      libraryPeekRafRef.current = window.requestAnimationFrame(tick);
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      libraryLastPointerClientXRef.current = event.clientX;
-      libraryPeekPendingXRef.current = event.clientX;
-      ensurePeekLoop();
-    };
-
-    window.addEventListener("pointermove", onPointerMove);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      stopPeekLoop();
-      libraryPeekPendingXRef.current = null;
-      libraryPeekLastXRef.current = null;
-      libraryPeekTowardRef.current = false;
-    };
-  }, [libraryPinned, libraryHoverOpen, applyLibraryPeekCss]);
 
   const [pendingHotkeyText, setPendingHotkeyText] = useState<string | null>(null);
   /** When true, hotkey text is always pre-filled (never auto-sent). Used for global recording while the app was unfocused. */
@@ -343,14 +125,20 @@ export default function App() {
     overlaySessionRef.current = globalHotkeyOverlaySession;
   }, [globalHotkeyOverlaySession]);
 
-  const refreshSetupState = useCallback(async () => {
-    const [settings, syncStatus, credentialStatus, platform] = await Promise.all([
-      window.harness.settings.get() as Promise<Settings>,
+  /**
+   * `refreshSettingsCache` is only needed when settings may have changed — the
+   * gap computation itself doesn't read settings, and boot already primed the
+   * cache in main.tsx.
+   */
+  const refreshSetupState = useCallback(async (refreshSettingsCache = false) => {
+    const [syncStatus, credentialStatus, platform] = await Promise.all([
       window.harness.sync.getStatus(),
       window.harness.credentials.getStatus(),
       window.harness.system.getPlatform(),
+      refreshSettingsCache
+        ? (window.harness.settings.get() as Promise<Settings>).then(setCachedSettings)
+        : Promise.resolve(),
     ]);
-    setCachedSettings(settings);
     setCachedHasOpenAIApiKey(credentialStatus.hasOpenAIApiKey);
     let accessibilityTrusted: boolean | null = null;
     if (platform === "darwin") {
@@ -375,7 +163,7 @@ export default function App() {
     if (prev === "settings" && view !== "settings") {
       // Drop deep-link tab so the next System open defaults to General.
       setSettingsInitialTab(undefined);
-      void refreshSetupState();
+      void refreshSetupState(true);
     }
     prevViewRef.current = view;
   }, [view, refreshSetupState]);
@@ -423,12 +211,15 @@ export default function App() {
   );
 
   const loadConversations = useCallback(async () => {
+    // main.tsx primes the settings cache during boot; only read again if that
+    // hasn't landed yet (the two race).
+    const cachedSettings = getCachedSettings();
     const [list, session, settings] = await Promise.all([
       window.harness.memory.listConversations(),
       window.harness.uiSession.get(),
-      window.harness.settings.get(),
+      cachedSettings ?? window.harness.settings.get(),
     ]);
-    setCachedSettings(settings);
+    if (!cachedSettings) setCachedSettings(settings);
     const openToCompose =
       settings.chat?.openToComposeOnLaunch ?? DEFAULT_SETTINGS.chat!.openToComposeOnLaunch;
     setConversations(list);
@@ -515,6 +306,10 @@ export default function App() {
   }, [openImageInMain]);
 
   useEffect(() => {
+    void window.harness.env.isHarnessDev().then(setIsHarnessDev);
+  }, []);
+
+  useEffect(() => {
     void loadConversations();
   }, [loadConversations]);
 
@@ -572,7 +367,7 @@ export default function App() {
     if (!uiSessionReady) return;
     const timer = window.setTimeout(() => {
       void window.harness.uiSession.set({
-        view,
+        view: isDevView(view) ? "chat" : view,
         conversationId,
         notesOpenNoteId: view === "notes" ? activeNoteId : null,
         imagesOpenImageId: view === "images" ? activeImageId : null,
@@ -819,23 +614,54 @@ export default function App() {
     setActiveChatProcessing(active);
   }, []);
 
+  const handleDevViewSelect = useCallback((devView: DevView) => {
+    setView(devView);
+  }, []);
+
+  const pageTitle = useMemo(() => {
+    switch (view) {
+      case "chat":
+        return activeChatConversation
+          ? conversationDisplayTitle(
+              activeChatConversation.title,
+              activeChatConversation.createdAt
+            )
+          : "New Chat";
+      case "dev-chat":
+        return "Dev · Chat";
+      case "dev-dictation":
+        return "Dev · Dictation";
+      case "dev-note":
+        return "Dev · Note";
+      case "dev-image":
+        return "Dev · Image";
+      case "notes":
+        return "Notes";
+      case "images":
+        return "Images";
+      case "tasks":
+        return "Tasks";
+      case "search":
+        return "Search";
+      case "settings":
+        return SETTINGS_PAGE_TITLE;
+    }
+  }, [view, activeChatConversation]);
+
   return (
     <div
-      ref={appRef}
       className="app"
       data-sidebar={layout.sidebar}
       data-library-open={libraryOpen ? "true" : "false"}
-      data-library-overlay={libraryHoverOpen && !libraryPinned ? "true" : "false"}
     >
+      <AppTitlebar
+        libraryOpen={libraryOpen}
+        onToggleLibrary={toggleLibraryOpen}
+        view={view}
+        onViewChange={handleViewChange}
+        title={pageTitle}
+      />
       <div className="app-frame">
-        <button
-          type="button"
-          className="library-backdrop"
-          aria-label="Close library"
-          aria-hidden={!(libraryHoverOpen && !libraryPinned)}
-          tabIndex={libraryHoverOpen && !libraryPinned ? 0 : -1}
-          onClick={closeLibraryIfUnpinned}
-        />
         <Sidebar
           conversations={sidebarConversations}
           notes={notes}
@@ -853,18 +679,13 @@ export default function App() {
           onImageDelete={handleImageDelete}
           onNewChat={() => {
             void createNew();
-            closeLibraryIfUnpinned();
           }}
           onNewNote={() => {
             void createNewNote();
-            closeLibraryIfUnpinned();
           }}
           onNewImage={() => {
             void createNewImage();
-            closeLibraryIfUnpinned();
           }}
-          libraryPinned={libraryPinned}
-          onToggleLibraryPinned={toggleLibraryPinned}
           activeChatProcessing={activeChatProcessing}
           titleGenInFlight={titleGenInFlight}
           titleAwaitingIds={titleAwaitingIds}
@@ -873,14 +694,8 @@ export default function App() {
           onUpdateClick={handleUpdateClick}
           onSyncComplete={refreshLibraryAfterSync}
           onOpenDataSettings={openDataSettings}
-          onLibraryPointerEnter={openLibraryHover}
-          onLibraryPointerLeave={(event) => {
-            libraryLastPointerClientXRef.current = event.clientX;
-            if (libraryPinned) return;
-            // Stay open when leave is caused by latch overshoot while parked on the edge.
-            if (pointerNearLibraryEdge(event.clientX)) return;
-            scheduleLibraryHoverClose();
-          }}
+          showDevSection={isHarnessDev}
+          onDevViewSelect={handleDevViewSelect}
         />
         <main className="main">
           {(view === "chat" || activeChatProcessing) && (
@@ -931,6 +746,7 @@ export default function App() {
               />
             </div>
           )}
+          <Suspense fallback={null}>
           {view === "settings" && (
             <SettingsView
               initialTab={settingsInitialTab}
@@ -938,7 +754,7 @@ export default function App() {
               onOpenNoteInStickyWindowChange={setOpenNoteInStickyWindow}
               openAIConfigured={openAIConfigured}
               onSettingsChanged={() => {
-                void refreshSetupState();
+                void refreshSetupState(true);
               }}
               onImportComplete={loadConversations}
               onSyncComplete={refreshLibraryAfterSync}
@@ -974,6 +790,8 @@ export default function App() {
           {view === "images" && (
             <ImageCanvasView imageId={activeImageId} onImageUpdated={handleImageUpdated} />
           )}
+          {DevViewHost && isDevView(view) ? <DevViewHost view={view} /> : null}
+          </Suspense>
         </main>
       </div>
       <SetupNoticeModal

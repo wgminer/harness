@@ -48,8 +48,10 @@ cpal = "0.18.1"
 objc2 = "0.6"
 objc2-avf-audio = { version = "0.3", default-features = false, features = ["std", "alloc", "AVAudioApplication", "block2"] }
 block2 = "0.6"
+core-foundation = "0.10"
 
 [profile.release]
 strip = true
 lto = true
 codegen-units = 1
+panic = "abort"

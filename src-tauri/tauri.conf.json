@@ -15,8 +15,15 @@
         "title": "Harness",
         "width": 1024,
         "height": 768,
+        "minWidth": 800,
+        "minHeight": 600,
         "resizable": true,
-        "dragDropEnabled": false
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 15
+        }
       }
     ],
     "security": {
@@ -45,7 +52,6 @@
     ],
     "resources": [
       "../resources/HarnessSpeech",
-      "../resources/HarnessFnMonitor",
       "../resources/icon-tray.png",
       "../resources/icon-tray-recording.png",
       "../resources/icon-tray-processing.png"

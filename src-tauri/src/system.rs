@@ -14,18 +14,45 @@ pub fn system_get_platform() -> String {
 }
 
 #[cfg(target_os = "macos")]
+mod ax {
+    use std::ffi::c_void;
+
+    use core_foundation::base::TCFType;
+    use core_foundation::boolean::CFBoolean;
+    use core_foundation::dictionary::CFDictionary;
+    use core_foundation::string::CFString;
+
+    type CFStringRef = *const c_void;
+    type CFDictionaryRef = *const c_void;
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    unsafe extern "C" {
+        fn AXIsProcessTrusted() -> bool;
+        fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> bool;
+        static kAXTrustedCheckOptionPrompt: CFStringRef;
+    }
+
+    pub fn is_trusted() -> bool {
+        unsafe { AXIsProcessTrusted() }
+    }
+
+    pub fn prompt_and_check() -> bool {
+        unsafe {
+            let key = CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt as *const _);
+            let value = CFBoolean::true_value();
+            let options = CFDictionary::from_CFType_pairs(&[(key, value)]);
+            AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef() as CFDictionaryRef)
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn macos_accessibility_trusted(prompt: bool) -> bool {
     if prompt {
-        let _ = std::process::Command::new("open")
-            .arg(PRIVACY_ACCESSIBILITY)
-            .spawn();
+        ax::prompt_and_check()
+    } else {
+        ax::is_trusted()
     }
-    std::process::Command::new("osascript")
-        .arg("-e")
-        .arg("tell application \"System Events\" to return UI elements enabled")
-        .output()
-        .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "true")
-        .unwrap_or(false)
 }
 
 #[cfg(not(target_os = "macos"))]

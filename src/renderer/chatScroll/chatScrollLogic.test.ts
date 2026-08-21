@@ -9,6 +9,8 @@ import {
   shouldFollowTranscriptResize,
   shouldRepinFromUserScroll,
   shouldUnlockFromScrollDelta,
+  trailingSpacerForOffset,
+  turnParkPlan,
 } from "./chatScrollLogic";
 
 describe("chatScroll geometry", () => {
@@ -104,6 +106,35 @@ describe("scroll mode transitions", () => {
 
   it("does not snap on stream end (no turn-start edge)", () => {
     expect(didTurnJustStart(true, false)).toBe(false);
+  });
+});
+
+describe("turn parking", () => {
+  it("parks the turn anchor below the headroom", () => {
+    expect(
+      turnParkPlan({ anchorTop: 900, headroom: 16, contentHeight: 2000, clientHeight: 800 })
+    ).toEqual({ scrollTop: 884, spacer: 0 });
+  });
+
+  it("adds only the trailing space needed to reach the parked offset", () => {
+    expect(
+      turnParkPlan({ anchorTop: 900, headroom: 16, contentHeight: 1200, clientHeight: 800 })
+    ).toEqual({ scrollTop: 884, spacer: 484 });
+  });
+
+  it("cannot park above the top of the thread", () => {
+    expect(
+      turnParkPlan({ anchorTop: 8, headroom: 16, contentHeight: 900, clientHeight: 800 })
+    ).toEqual({ scrollTop: 0, spacer: 0 });
+  });
+
+  it("keeps the reader's offset reachable when trimming the spacer", () => {
+    expect(
+      trailingSpacerForOffset({ scrollTop: 884, contentHeight: 1200, clientHeight: 800 })
+    ).toBe(484);
+    expect(
+      trailingSpacerForOffset({ scrollTop: 884, contentHeight: 2400, clientHeight: 800 })
+    ).toBe(0);
   });
 });
 

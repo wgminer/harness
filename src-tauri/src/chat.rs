@@ -8,7 +8,6 @@ use tokio_util::sync::CancellationToken;
 use crate::memory::AppState;
 
 mod stream;
-mod stream_batch;
 mod tool;
 mod turn;
 

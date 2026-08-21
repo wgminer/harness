@@ -1,25 +1,14 @@
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
-import {
-  ArrowUpRight,
-  Search,
   StickyNote,
   Image as ImageIcon,
   X,
   Loader2,
   Circle,
+  Dot,
   Plus,
   ChevronDown,
-  Pin,
-  CheckLine,
   ListFilter,
-  Settings2 as SettingsIcon,
   Check,
   AlertCircle,
 } from "lucide-react";
@@ -30,17 +19,18 @@ import {
 } from "../shared/conversationSession";
 import { getDisplayNoteTitle, type NoteSummary } from "../shared/writing";
 import { getDisplayImageTitle, type GeneratedImage } from "../shared/images";
-import { SETTINGS_PAGE_TITLE } from "../shared/settingsPage";
 import {
   sidebarSyncStatusTooltip,
   syncResultChangedLocalData,
   type SyncStatus,
 } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
+import { Skeleton } from "./Skeleton";
 import {
   type Conversation,
   type LibraryRow,
   type View,
+  type DevView,
   type SidebarGroup,
   type SidebarListSortMode,
   SIDEBAR_PAGE_SIZE,
@@ -68,8 +58,6 @@ interface SidebarProps {
   onNewChat: () => void;
   onNewNote: () => void;
   onNewImage: () => void;
-  libraryPinned: boolean;
-  onToggleLibraryPinned: () => void;
   activeChatProcessing: boolean;
   titleGenInFlight: Record<string, number>;
   titleAwaitingIds: Record<string, true>;
@@ -78,8 +66,8 @@ interface SidebarProps {
   onUpdateClick: () => void;
   onSyncComplete?: () => void;
   onOpenDataSettings?: () => void;
-  onLibraryPointerEnter?: () => void;
-  onLibraryPointerLeave?: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  showDevSection?: boolean;
+  onDevViewSelect?: (v: DevView) => void;
 }
 
 export function Sidebar({
@@ -100,8 +88,6 @@ export function Sidebar({
   onNewChat,
   onNewNote,
   onNewImage,
-  libraryPinned,
-  onToggleLibraryPinned,
   activeChatProcessing,
   titleGenInFlight,
   titleAwaitingIds,
@@ -110,8 +96,8 @@ export function Sidebar({
   onUpdateClick,
   onSyncComplete,
   onOpenDataSettings,
-  onLibraryPointerEnter,
-  onLibraryPointerLeave,
+  showDevSection = false,
+  onDevViewSelect,
 }: SidebarProps) {
   const updateButtonLabel = (() => {
     switch (updateStatus.status) {
@@ -274,6 +260,26 @@ export function Sidebar({
     setSidebarVisibleLimit((n) => Math.min(libraryRows.length, n + SIDEBAR_PAGE_SIZE));
   }, [libraryRows.length]);
 
+  const renderDevItem = useCallback(
+    (devView: DevView, label: string, Icon: typeof Circle) => {
+      const isActive = view === devView;
+      return (
+        <li
+          key={devView}
+          className={["sidebar-item", isActive ? "active" : ""].filter(Boolean).join(" ")}
+          data-testid={`sidebar-dev-${devView}`}
+          onClick={() => onDevViewSelect?.(devView)}
+        >
+          <span className="sidebar-item-icon" aria-hidden title={label}>
+            <Icon size={16} className="sidebar-item-icon__svg" />
+          </span>
+          <span className="sidebar-item-title">{label}</span>
+        </li>
+      );
+    },
+    [onDevViewSelect, view],
+  );
+
   const renderLibraryItem = useCallback(
     (row: LibraryRow) => {
       if (row.itemKind === "note") {
@@ -340,7 +346,7 @@ export function Sidebar({
       const chatStreaming =
         view === "chat" && conversationId === c.id && activeChatProcessing;
       const iconKind = conversationSidebarIconKind(c);
-      const Icon = iconKind === "dictation" ? ArrowUpRight : Circle;
+      const Icon = iconKind === "dictation" ? Dot : Circle;
       return (
         <li
           key={c.id}
@@ -368,7 +374,7 @@ export function Sidebar({
             </span>
           )}
           {titlePending ? (
-            <span className="sidebar-item-title-skeleton" aria-label="Generating title" />
+            <Skeleton className="ui-skeleton--sidebar-title" label="Generating title" />
           ) : (
             <span className="sidebar-item-title">
               {conversationDisplayTitle(c.title, c.createdAt)}
@@ -407,12 +413,8 @@ export function Sidebar({
   );
 
   return (
-    <div
-      className="sidebar-dock"
-      onPointerEnter={onLibraryPointerEnter}
-      onPointerLeave={onLibraryPointerLeave}
-    >
-      <aside className="sidebar">
+    <div className="sidebar-dock">
+      <aside className="sidebar" id="app-sidebar">
         <div className="sidebar-buttons">
           <div className="sidebar-new-menu-wrap" ref={newMenuRef}>
             <button
@@ -484,39 +486,6 @@ export function Sidebar({
               </div>
             ) : null}
           </div>
-          <button
-            type="button"
-            className={`btn btn-icon${view === "search" ? " btn-primary" : ""}`}
-            onClick={() => onViewChange("search")}
-            aria-label="Search"
-            aria-pressed={view === "search"}
-            title="Search"
-            data-testid="sidebar-search"
-          >
-            <Search size={16} />
-          </button>
-          <button
-            type="button"
-            className={`btn btn-icon${view === "tasks" ? " btn-primary" : ""}`}
-            onClick={() => onViewChange("tasks")}
-            aria-label="Tasks"
-            aria-pressed={view === "tasks"}
-            title="Tasks"
-            data-testid="library-tasks"
-          >
-            <CheckLine size={16} />
-          </button>
-          <button
-            type="button"
-            className={`btn btn-icon${view === "settings" ? " btn-primary" : ""}`}
-            onClick={() => onViewChange("settings")}
-            aria-label={SETTINGS_PAGE_TITLE}
-            aria-pressed={view === "settings"}
-            title={SETTINGS_PAGE_TITLE}
-            data-testid="library-settings"
-          >
-            <SettingsIcon size={16} />
-          </button>
         </div>
         <div
           className={[
@@ -528,14 +497,42 @@ export function Sidebar({
             .join(" ")}
         >
           <ul ref={sidebarListRef} className="sidebar-list" onScroll={onSidebarListScroll}>
+            {showDevSection ? (
+              <li className="sidebar-group">
+                <span className="sidebar-group-label">Dev</span>
+                <ul className="sidebar-group-items">
+                  {renderDevItem("dev-chat", "Chat", Circle)}
+                  {renderDevItem("dev-dictation", "Dictation", Dot)}
+                  {renderDevItem("dev-note", "Note", StickyNote)}
+                  {renderDevItem("dev-image", "Image", ImageIcon)}
+                </ul>
+              </li>
+            ) : null}
             {sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => {
               const groupLabelTitle =
                 key === "recent"
                   ? `${libraryRows.length} item${libraryRows.length === 1 ? "" : "s"}`
                   : undefined;
+              const showGroupHeader = groupIndex === 0 && !showDevSection;
               return (
                 <li key={key} className="sidebar-group">
-                  {groupIndex === 0 ? (
+                  {showGroupHeader ? (
+                    <div className="sidebar-group-header">
+                      <span className="sidebar-group-label" title={groupLabelTitle}>
+                        {label}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-icon sidebar-group-sort-toggle"
+                        data-testid="sidebar-list-sort-toggle"
+                        aria-label={nextSortModeHint.ariaLabel}
+                        title={nextSortModeHint.title}
+                        onClick={toggleListSortMode}
+                      >
+                        <ListFilter size={10} aria-hidden />
+                      </button>
+                    </div>
+                  ) : showDevSection && groupIndex === 0 ? (
                     <div className="sidebar-group-header">
                       <span className="sidebar-group-label" title={groupLabelTitle}>
                         {label}
@@ -627,17 +624,6 @@ export function Sidebar({
             ) : (
               <Check size={12} strokeWidth={2.5} aria-hidden />
             )}
-          </button>
-          <button
-            type="button"
-            className={`sidebar-footer__pin${libraryPinned ? " sidebar-footer__pin--active" : ""}`}
-            onClick={onToggleLibraryPinned}
-            aria-label={libraryPinned ? "Unpin library" : "Pin library"}
-            aria-pressed={libraryPinned}
-            title={libraryPinned ? "Unpin library" : "Pin library"}
-            data-testid="library-toggle"
-          >
-            <Pin size={12} strokeWidth={2} aria-hidden />
           </button>
         </div>
       </aside>

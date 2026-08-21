@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { WorkspaceListSearch } from "../WorkspaceListSearch";
+import { Skeleton } from "../Skeleton";
 import { Section } from "./storyHelpers";
 
 function ListsGallery() {
@@ -41,7 +42,7 @@ function ListsGallery() {
             </div>
             <div className="sidebar-item">
               <MessageCircle size={14} className="sidebar-item-icon" aria-hidden />
-              <span className="sidebar-item-title sidebar-item-title-skeleton" />
+              <Skeleton className="ui-skeleton--sidebar-title" />
             </div>
             <div className="sidebar-item">
               <StickyNote size={14} className="sidebar-item-icon" aria-hidden />

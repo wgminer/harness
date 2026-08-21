@@ -1,49 +1,83 @@
 /**
  * Chat scroll contract:
- * - pinned: auto-follow transcript growth (batched stream flushes, post-stream layout shifts)
- * - free: never programmatically scroll except explicit scrollToBottom
- * - mode is stored in a ref so wheel/touch unlock is synchronous (no flush-vs-setState race)
- * - userTookOver: once the user scrolls during a turn, auto-follow stays off until they
- *   return to the live edge or a new turn starts
+ * - Park the new turn near the top of the scrollport once when the user sends a message, so the
+ *   streaming reply owns the readable area between the turn and the composer dock.
+ * - No auto-follow during streaming — the thread stays where it was parked until the user scrolls
+ *   or explicitly jumps to the bottom.
+ * - User scroll of the thread is never overridden programmatically except explicit scrollToBottom.
  */
 import { snapToGrid } from "../../shared/grid";
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent, RefObject, UIEvent } from "react";
 import {
   didTurnJustStart,
-  isNearLiveEdge,
   scrollToLiveEdge,
-  scrollTopDeltaForPaddingChange,
-  shouldFollowTranscriptResize,
-  shouldRepinFromUserScroll,
-  shouldUnlockFromScrollDelta,
+  trailingSpacerForOffset,
+  turnParkPlan,
 } from "./chatScrollLogic";
-import type { ScrollMode } from "./chatScrollTypes";
+
+/** Gap left above the parked turn. */
+const TURN_HEADROOM_PX = 16;
+const TURN_SPACER_VAR = "--chat-turn-spacer";
+
+function readTurnSpacer(scroll: HTMLDivElement): number {
+  const px = parseFloat(scroll.style.getPropertyValue(TURN_SPACER_VAR));
+  return Number.isFinite(px) ? px : 0;
+}
+
+function writeTurnSpacer(scroll: HTMLDivElement, px: number): void {
+  scroll.style.setProperty(TURN_SPACER_VAR, `${Math.max(0, Math.round(px))}px`);
+}
+
+/** Top of the newest user message in scroll-content coordinates. */
+function turnAnchorTop(scroll: HTMLDivElement): number | null {
+  const anchors = scroll.querySelectorAll<HTMLElement>('[data-message-role="user"]');
+  const anchor = anchors[anchors.length - 1];
+  if (!anchor) return null;
+  return anchor.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop;
+}
+
+function parkTurn(scroll: HTMLDivElement): void {
+  writeTurnSpacer(scroll, 0);
+  const anchorTop = turnAnchorTop(scroll);
+  if (anchorTop == null) {
+    scrollToLiveEdge(scroll);
+    return;
+  }
+  const plan = turnParkPlan({
+    anchorTop,
+    headroom: TURN_HEADROOM_PX,
+    contentHeight: scroll.scrollHeight,
+    clientHeight: scroll.clientHeight,
+  });
+  writeTurnSpacer(scroll, plan.spacer);
+  // Reading scrollHeight flushes the spacer into layout before the offset is applied.
+  scroll.scrollTop = Math.min(plan.scrollTop, scroll.scrollHeight - scroll.clientHeight);
+}
+
+/** Turn end: give back the parking space the thread no longer needs. */
+function trimTurnSpacer(scroll: HTMLDivElement): void {
+  const spacer = readTurnSpacer(scroll);
+  if (spacer <= 0) return;
+  const next = trailingSpacerForOffset({
+    scrollTop: scroll.scrollTop,
+    contentHeight: scroll.scrollHeight - spacer,
+    clientHeight: scroll.clientHeight,
+  });
+  if (next < spacer) writeTurnSpacer(scroll, next);
+}
 
 export function useChatScrollController(args: {
   scrollRef: RefObject<HTMLDivElement | null>;
-  transcriptRef: RefObject<HTMLElement | null>;
   chatPaneRef: RefObject<HTMLDivElement | null>;
   composerDockRef: RefObject<HTMLDivElement | null>;
   /** False when single-message centered landing disables follow behavior. */
   scrollEnabled: boolean;
   sending: boolean;
 }) {
-  const modeRef = useRef<ScrollMode>("pinned");
-  const userTookOverRef = useRef(false);
   const prevSendingRef = useRef(false);
   const programmaticScrollRef = useRef(false);
   const lastScrollTopRef = useRef(0);
-
-  const markUserTookOver = useCallback(() => {
-    userTookOverRef.current = true;
-    modeRef.current = "free";
-  }, []);
-
-  const clearUserTakeover = useCallback(() => {
-    userTookOverRef.current = false;
-    modeRef.current = "pinned";
-  }, []);
 
   const runProgrammaticScroll = useCallback(
     (fn: () => void) => {
@@ -58,43 +92,21 @@ export function useChatScrollController(args: {
     [args.scrollRef]
   );
 
-  const followLiveEdgeIfPinned = useCallback(() => {
-    if (!shouldFollowTranscriptResize(modeRef.current, userTookOverRef.current)) return;
-    const scroll = args.scrollRef.current;
-    if (!scroll) return;
-    runProgrammaticScroll(() => scrollToLiveEdge(scroll));
-  }, [args.scrollRef, runProgrammaticScroll]);
-
-  /** Turn start: pin and snap once. Stream end does not re-pin. */
+  /** Turn start: park once. Stream growth does not re-pin. */
   useLayoutEffect(() => {
-    if (!args.scrollEnabled) return;
     const scroll = args.scrollRef.current;
     const justStarted = didTurnJustStart(prevSendingRef.current, args.sending);
+    const justEnded = prevSendingRef.current && !args.sending;
     prevSendingRef.current = args.sending;
-    if (!justStarted || !scroll) return;
-    clearUserTakeover();
-    runProgrammaticScroll(() => scrollToLiveEdge(scroll));
-  }, [args.sending, args.scrollEnabled, args.scrollRef, clearUserTakeover, runProgrammaticScroll]);
+    if (!scroll || !args.scrollEnabled) return;
+    if (justStarted) {
+      runProgrammaticScroll(() => parkTurn(scroll));
+      return;
+    }
+    if (justEnded) trimTurnSpacer(scroll);
+  }, [args.sending, args.scrollEnabled, args.scrollRef, runProgrammaticScroll]);
 
-  /** Follow transcript height changes while pinned (batched stream flushes, markdown reflow). */
-  useLayoutEffect(() => {
-    if (!args.scrollEnabled) return;
-    const transcript = args.transcriptRef.current;
-    if (!transcript || typeof ResizeObserver === "undefined") return;
-
-    const ro = new ResizeObserver(() => {
-      followLiveEdgeIfPinned();
-    });
-    ro.observe(transcript);
-    return () => ro.disconnect();
-  }, [args.scrollEnabled, args.transcriptRef, followLiveEdgeIfPinned]);
-
-  const readScrollInset = useCallback((scroll: HTMLDivElement) => {
-    const px = parseFloat(getComputedStyle(scroll).paddingBottom);
-    return snapToGrid(Math.ceil(Number.isFinite(px) ? px : 0));
-  }, []);
-
-  /** Sync composer dock height; compensate scrollTop when pinned and padding changes. */
+  /** Sync composer dock height into scroll inset CSS vars. */
   useLayoutEffect(() => {
     const pane = args.chatPaneRef.current;
     const dock = args.composerDockRef.current;
@@ -104,21 +116,8 @@ export function useChatScrollController(args: {
     const sync = () => {
       const h = Math.ceil(dock.getBoundingClientRect().height);
       const snapped = snapToGrid(h);
-      const prevInset = readScrollInset(scroll);
       pane.style.setProperty("--chat-composer-dock-height", `${snapped}px`);
       scroll.style.setProperty("--chat-composer-dock-height", `${snapped}px`);
-
-      const nextInset = readScrollInset(scroll);
-      if (
-        shouldFollowTranscriptResize(modeRef.current, userTookOverRef.current) &&
-        nextInset !== prevInset &&
-        isNearLiveEdge(scroll)
-      ) {
-        const delta = scrollTopDeltaForPaddingChange(prevInset, nextInset);
-        runProgrammaticScroll(() => {
-          scroll.scrollTop += delta;
-        });
-      }
     };
 
     sync();
@@ -132,83 +131,35 @@ export function useChatScrollController(args: {
       ro?.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [args.chatPaneRef, args.composerDockRef, args.scrollRef, readScrollInset, runProgrammaticScroll]);
-
-  /**
-   * Capture-phase native listeners run before layout-driven ResizeObserver callbacks,
-   * so a wheel/touch during streaming unlocks before the next auto-scroll can fire.
-   */
-  useEffect(() => {
-    if (!args.scrollEnabled) return;
-    const el = args.scrollRef.current;
-    if (!el) return;
-
-    const onWheel = (e: WheelEvent) => {
-      if (e.deltaY !== 0 || e.deltaX !== 0) markUserTookOver();
-    };
-    const onTouchStart = () => {
-      markUserTookOver();
-    };
-
-    el.addEventListener("wheel", onWheel, { capture: true, passive: true });
-    el.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
-    return () => {
-      el.removeEventListener("wheel", onWheel, { capture: true });
-      el.removeEventListener("touchstart", onTouchStart, { capture: true });
-    };
-  }, [args.scrollEnabled, args.scrollRef, markUserTookOver]);
+  }, [args.chatPaneRef, args.composerDockRef, args.scrollRef]);
 
   const onScroll = useCallback(
     (_e: UIEvent<HTMLDivElement>) => {
       const el = args.scrollRef.current;
       if (!el) return;
-
       if (programmaticScrollRef.current) {
         lastScrollTopRef.current = el.scrollTop;
         return;
       }
-
-      const prevTop = lastScrollTopRef.current;
-      const nextTop = el.scrollTop;
-
-      if (shouldUnlockFromScrollDelta(prevTop, nextTop)) {
-        markUserTookOver();
-      } else if (
-        shouldRepinFromUserScroll({
-          mode: modeRef.current,
-          prevScrollTop: prevTop,
-          nextScrollTop: nextTop,
-          nearLiveEdge: isNearLiveEdge(el),
-        }) === "pinned"
-      ) {
-        clearUserTakeover();
-      }
-      lastScrollTopRef.current = nextTop;
+      lastScrollTopRef.current = el.scrollTop;
     },
-    [args.scrollRef, clearUserTakeover, markUserTookOver]
+    [args.scrollRef]
   );
 
-  const onKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === "PageUp" || e.key === "Home" || e.key === "ArrowUp") {
-        markUserTookOver();
-      }
-    },
-    [markUserTookOver]
-  );
+  const onKeyDown = useCallback((_e: KeyboardEvent<HTMLDivElement>) => {}, []);
 
   const scrollToBottom = useCallback(() => {
     const scroll = args.scrollRef.current;
     if (!scroll) return;
-    clearUserTakeover();
     runProgrammaticScroll(() => scrollToLiveEdge(scroll));
-  }, [args.scrollRef, clearUserTakeover, runProgrammaticScroll]);
+  }, [args.scrollRef, runProgrammaticScroll]);
 
-  /** Single-message centered landing: reset scroll and disable follow. */
+  /** Single-message centered landing: reset scroll. */
   useLayoutEffect(() => {
     if (args.scrollEnabled) return;
     const scroll = args.scrollRef.current;
     if (scroll) {
+      writeTurnSpacer(scroll, 0);
       scroll.scrollTop = 0;
       lastScrollTopRef.current = 0;
     }

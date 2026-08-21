@@ -552,6 +552,7 @@
   z-index: 5;
   width: 220px;
   min-width: 220px;
+  border-radius: var(--radius-lg);
 }
 
 .notes-aside-panel {

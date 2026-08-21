@@ -105,7 +105,7 @@ Short list only — refresh when something ships.
 
 - User-visible brand → **Here** / **Here Dev** / **Here Mobile** (Dock, titles, Welcome, boot wordmark, privacy strings, site/docs).
 - Compose quote unchanged: **“You are here”**.
-- Left alone on purpose: `com.harness.*`, Application Support `Harness` / `Harness Dev`, Keychain services, `harness-pair:1:`, R2 prefix `harness/`, `window.harness` / `HARNESS_*` env vars, helper binaries (`HarnessSpeech`, `HarnessFnMonitor`).
+- Left alone on purpose: `com.harness.*`, Application Support `Harness` / `Harness Dev`, Keychain services, `harness-pair:1:`, R2 prefix `harness/`, `window.harness` / `HARNESS_*` env vars, helper binary (`HarnessSpeech`).
 
 ### 2026-08 — v0.9 chat modes + contracts `[O1][O2]`
 
@@ -149,6 +149,9 @@ Nothing below starts until Active now is calm. Not a commitment sequence.
 |------|----------|
 | Chat providers — Anthropic, Gemini APIs | O2, O4 |
 | Agent mode with human-in-the-loop | O2, O4 |
+| Decide / Refine as Q&A — Chat stays back-and-forth; Decide and Refine become interview-style (agent asks, user answers mostly via multiple choice — `::::options` or a dedicated control) | O1, O2 |
+| Chat mode picker — dropdown — Replace the horizontal mode strip with a compact dropdown, right-aligned in the composer action row beside attach / voice / send (not a centered chip strip) | O1 |
+| Cardinal directions UI — Experiment with anchoring surfaces and controls to N/E/S/W layout polarity (not only centered chat); design exploration | O1 |
 | Semantic memory | O2, O4 |
 | Backlog / inbox pipeline | O2, O3 |
 | Capture-first mobile UX | O3 |
@@ -170,4 +173,4 @@ Nothing below starts until Active now is calm. Not a commitment sequence.
 
 ---
 
-*Last updated: 2026-07-28*
+*Last updated: 2026-08-19*

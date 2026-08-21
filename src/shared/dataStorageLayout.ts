@@ -18,7 +18,7 @@ export const DATA_STORAGE_DIAGRAM = `Harness app data folder
 │  ├─ settings/settings.json
 │  └─ sync/  (last sync state; local backups before pull)
 │
-├─ audio-recordings/ .... local-only — never backed up
+├─ audio-recordings/ .... shared Dev+Dist under installed Harness; never synced
 └─ memory/ ................ legacy pre-migration copy (safe to remove)
 
         │  Sync packs app-state + settings

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { CSSProperties } from "react";
+import { Skeleton } from "../Skeleton";
 import { Section } from "./storyHelpers";
 
 const swatchGrid: CSSProperties = {
@@ -108,6 +109,18 @@ function FoundationsGallery() {
             {name.replace("--radius-", "")}
           </div>
         ))}
+      </Section>
+
+      <Section title="Skeletons" stack>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)", maxWidth: 320 }}>
+          <Skeleton className="ui-skeleton--title" label="Title" />
+          <Skeleton className="ui-skeleton--prose-line" label="Prose line" />
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <Skeleton className="ui-skeleton--play" />
+            <Skeleton className="ui-skeleton--name" />
+            <Skeleton className="ui-skeleton--num" />
+          </div>
+        </div>
       </Section>
 
       <Section title="Glass surface" stack>
