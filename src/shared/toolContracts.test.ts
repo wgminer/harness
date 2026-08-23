@@ -50,6 +50,7 @@ describe("resources/contracts/tools.json", () => {
       "note_read",
       "note_save",
       "note_delete",
+      "ask_user",
     ]) {
       expect(names.has(expected), `missing desktop-only tool: ${expected}`).toBe(true);
     }

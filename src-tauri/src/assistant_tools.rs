@@ -87,6 +87,7 @@ pub fn is_assistant_tool_name(name: &str) -> bool {
             | "note_read"
             | "note_save"
             | "note_delete"
+            | "ask_user"
     )
 }
 

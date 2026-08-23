@@ -33,10 +33,11 @@ describe("resources/contracts/systemPrompt.json", () => {
     expect(c.ios.length).toBeGreaterThan(0);
   });
 
-  it("keeps formatting directives on desktop only", () => {
+  it("keeps ask_user on desktop only", () => {
     const c = readContract();
     expect(c.shared).not.toContain("[FORMATTING_CAPABILITIES]");
-    expect(c.desktop).toContain("[FORMATTING_CAPABILITIES]");
+    expect(c.desktop).toContain("ask_user");
+    expect(c.desktop).not.toContain("[FORMATTING_CAPABILITIES]");
     expect(c.ios).not.toContain("[FORMATTING_CAPABILITIES]");
     expect(c.shared).toContain("[CONVERSATION_RECALL]");
   });
@@ -59,9 +60,10 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
     const c = readContract();
     expect(DEFAULT_SYSTEM_PROMPT.shared).toBe(c.shared);
     expect(DEFAULT_SYSTEM_PROMPT.desktop).toContain("[CORE_INSTRUCTIONS]");
-    expect(DEFAULT_SYSTEM_PROMPT.desktop).toContain("[FORMATTING_CAPABILITIES]");
+    expect(DEFAULT_SYSTEM_PROMPT.desktop).toContain("ask_user");
     expect(DEFAULT_SYSTEM_PROMPT.ios).toContain("Harness Mobile");
     expect(DEFAULT_SYSTEM_PROMPT.shared).not.toContain("[FORMATTING_CAPABILITIES]");
+    expect(DEFAULT_SYSTEM_PROMPT.desktop).not.toContain("[FORMATTING_CAPABILITIES]");
   });
 });
 

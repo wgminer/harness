@@ -32,7 +32,7 @@ export function collectSetupGaps(input: {
       kind: "openai_api_key",
       title: "OpenAI API key",
       detail:
-        "Chat, polish, and optional transcript cleanup need an API key. Voice transcription runs locally on your Mac without one.",
+        "Chat and optional transcript cleanup need an API key. Voice transcription runs locally on your Mac without one.",
       settingsTab: "data",
       severity: "required",
     });

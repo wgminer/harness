@@ -38,6 +38,37 @@ function CardsGallery() {
         </MessageContent>
       </Section>
 
+      <Section title="Ask user card" stack>
+        <MessageContent>
+          <div className="ask-user-card">
+            <section className="ask-user-card__question">
+              <span className="ask-user-card__header">Scope</span>
+              <p className="ask-user-card__prompt">Which surface should we ship first?</p>
+              <div className="ask-user-card__options">
+                <button type="button" className="btn ask-user-card__option ask-user-card__option--selected">
+                  <span className="ask-user-card__option-label">Desktop chat</span>
+                  <span className="ask-user-card__option-desc">Primary workflow today</span>
+                </button>
+                <button type="button" className="btn ask-user-card__option">
+                  <span className="ask-user-card__option-label">iOS</span>
+                </button>
+                <button type="button" className="btn ask-user-card__option">
+                  Other
+                </button>
+              </div>
+            </section>
+            <div className="ask-user-card__actions">
+              <button type="button" className="btn btn-primary">
+                Submit
+              </button>
+              <button type="button" className="btn">
+                Skip
+              </button>
+            </div>
+          </div>
+        </MessageContent>
+      </Section>
+
       <Section title="Tool calls card" stack>
         <div className="tool-card">
           <div className="tool-card-row">

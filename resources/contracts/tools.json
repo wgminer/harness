@@ -266,6 +266,55 @@
   {
     "type": "function",
     "function": {
+      "name": "ask_user",
+      "description": "Ask the user structured questions when blocked on a user-owned decision. Prefer one question; use at most four. Each question needs 2-4 discrete options. Put the recommended option first with (Recommended) in the label. Do not author an Other option — the UI adds it. Use multiSelect when choices are not mutually exclusive.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "description": "Complete question ending with ?"
+                },
+                "header": {
+                  "type": "string",
+                  "description": "Short label for display (about 12 characters)"
+                },
+                "options": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 4,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": { "type": "string" },
+                      "description": { "type": "string" }
+                    },
+                    "required": ["label"]
+                  }
+                },
+                "multiSelect": {
+                  "type": "boolean",
+                  "description": "When true, the user may pick more than one option"
+                }
+              },
+              "required": ["question", "options"]
+            }
+          }
+        },
+        "required": ["questions"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "get_datetime",
       "description": "Get the current date and time from the app host.",
       "parameters": {

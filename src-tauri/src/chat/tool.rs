@@ -15,8 +15,21 @@ pub(crate) struct PendingGatedTool {
     respond_to: oneshot::Sender<String>,
 }
 
+fn is_confirm_gated_tool(name: &str) -> bool {
+    matches!(name, "task_delete" | "task_clear_completed" | "task_update")
+}
+
+fn is_user_input_gated_tool(name: &str) -> bool {
+    name == "ask_user"
+}
+
 impl ChatController {
-    pub async fn resolve_gated_tool(&self, pending_id: &str, action: &str) {
+    pub async fn resolve_gated_tool(
+        &self,
+        pending_id: &str,
+        action: &str,
+        payload: Option<Value>,
+    ) {
         let pending = {
             let mut map = self.pending_gated.lock().await;
             map.remove(pending_id)
@@ -24,12 +37,22 @@ impl ChatController {
         let Some(pending) = pending else {
             return;
         };
-        let result = if action == "proceed" {
+        let result = if pending.tool == "ask_user" {
+            if action == "cancel" || action == "decline" {
+                json!({ "declined": true }).to_string()
+            } else {
+                payload
+                    .map(|p| serde_json::to_string(&p).unwrap_or_else(|_| "{}".into()))
+                    .unwrap_or_else(|| json!({ "declined": true }).to_string())
+            }
+        } else if action == "cancel" {
+            json!({ "cancelled": true, "message": "User cancelled the action." }).to_string()
+        } else if action == "proceed" {
             execute_assistant_tool(&self.state, &pending.tool, pending.args)
                 .await
                 .unwrap_or_else(|e| json!({ "error": e.to_string() }).to_string())
         } else {
-            json!({ "cancelled": true, "message": "User cancelled the action." }).to_string()
+            json!({ "error": format!("Unknown gated tool action: {action}") }).to_string()
         };
         let _ = pending.respond_to.send(result);
     }
@@ -40,13 +63,14 @@ impl ChatController {
         args: Value,
         conversation_id: &str,
     ) -> Result<String, String> {
-        let gated = matches!(name, "task_delete" | "task_clear_completed" | "task_update");
+        let confirm_gated = is_confirm_gated_tool(name);
+        let user_input_gated = is_user_input_gated_tool(name);
         let mut skip_tool_panel_update = should_skip_note_stream_tool_panel(name, &args);
 
         let result = if is_customization_tool_name(name) {
             execute_customization_tool(name, &args)
         } else if is_assistant_tool_name(name) {
-            if gated {
+            if confirm_gated || user_input_gated {
                 let pending_id = Uuid::new_v4().to_string();
                 let pending_payload = json!({
                     "pending": true,

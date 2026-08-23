@@ -25,13 +25,12 @@ interface ChatSurfaceProps {
   onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   streamingContent: string;
   sending: boolean;
-  polishHintAfterDictation: boolean;
   llmActionsEnabled?: boolean;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
-  onPolish: () => void;
+  onAskUserSubmit: (tc: ToolCallDisplay, answers: import("./AskUserCard").AskUserAnswers) => void | Promise<void>;
+  onAskUserDecline: (tc: ToolCallDisplay) => void | Promise<void>;
   /** Reply-strip controls while awaiting a reply (suggested prompts or mode picker). */
   replyModeControl?: ReactNode;
-  onOptionSelect?: (label: string) => void | Promise<void>;
   liveNoteStream?: LiveNoteStream | null;
   onOpenNoteInEditor?: (noteId: string) => void;
   input: string;
@@ -71,12 +70,11 @@ export function ChatSurface({
   onSaveToNotes,
   streamingContent,
   sending,
-  polishHintAfterDictation,
   llmActionsEnabled = true,
   onToolConfirm,
-  onPolish,
+  onAskUserSubmit,
+  onAskUserDecline,
   replyModeControl,
-  onOptionSelect,
   liveNoteStream,
   onOpenNoteInEditor,
   input,
@@ -147,12 +145,11 @@ export function ChatSurface({
             onSaveToNotes={onSaveToNotes}
             streamingContent={streamingContent}
             sending={sending}
-            polishHintAfterDictation={polishHintAfterDictation}
             llmActionsEnabled={llmActionsEnabled}
             onToolConfirm={onToolConfirm}
-            onPolish={onPolish}
+            onAskUserSubmit={onAskUserSubmit}
+            onAskUserDecline={onAskUserDecline}
             replyModeControl={replyModeControl}
-            onOptionSelect={onOptionSelect}
             liveNoteStream={liveNoteStream}
             onOpenNoteInEditor={onOpenNoteInEditor}
           />

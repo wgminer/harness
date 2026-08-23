@@ -384,14 +384,6 @@ pub async fn chat_send(
 }
 
 #[command(rename_all = "camelCase")]
-pub async fn chat_polish_last_user(
-    chat: State<'_, ChatController>,
-    conversation_id: String,
-) -> Result<(), String> {
-    chat.polish_last_user(&conversation_id).await
-}
-
-#[command(rename_all = "camelCase")]
 pub async fn chat_generate_reply(
     chat: State<'_, ChatController>,
     conversation_id: String,
@@ -435,8 +427,9 @@ pub async fn chat_resolve_gated_tool(
     chat: State<'_, ChatController>,
     pending_id: String,
     action: String,
+    payload: Option<Value>,
 ) -> Result<(), String> {
-    chat.resolve_gated_tool(&pending_id, &action).await;
+    chat.resolve_gated_tool(&pending_id, &action, payload).await;
     Ok(())
 }
 

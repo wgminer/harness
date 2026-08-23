@@ -74,19 +74,7 @@ function ButtonGallery() {
         </button>
       </Section>
 
-      <Section title="Message options (.md-options > .btn)">
-        <div className="md-options" style={{ marginTop: 0 }}>
-          <button type="button" className="btn">
-            Option
-          </button>
-          <button type="button" className="btn">
-            Longer option label
-          </button>
-          <span className="btn">Static</span>
-        </div>
-      </Section>
-
-      <Section title="Compare: quieter stocks vs message option">
+      <Section title="Compare: quieter stocks">
         <button type="button" className="btn btn-outline">
           Outline
         </button>
@@ -97,7 +85,7 @@ function ButtonGallery() {
           Small Outline
         </button>
         <button type="button" className="btn">
-          Default (option)
+          Default
         </button>
       </Section>
     </MessageContent>

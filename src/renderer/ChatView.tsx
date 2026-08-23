@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
-import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import {
   formatHomeHeaderQuoteTooltip,
   nextHomeHeaderQuote,
@@ -25,6 +24,7 @@ import {
   formatMessageNoteTitle,
   type LiveNoteStream,
 } from "./chatHelpers";
+import type { AskUserAnswers } from "./AskUserCard";
 import { shouldFocusComposerAfterTurn } from "./composerFocusPolicy";
 import { shouldApplyTurnUpdate } from "./chatTurnFlow";
 import {
@@ -158,7 +158,7 @@ interface ChatViewProps {
   onOpenNotesView?: (noteId: string) => void;
   /** Refresh the notes library after agent tools create/update/delete notes. */
   onNotesChanged?: () => void;
-  /** When false, chat/polish/reply are blocked with a setup message. */
+  /** When false, chat/reply are blocked with a setup message. */
   openAIConfigured?: boolean;
   /** Mirror focused Fn recording into the composer mic chrome. */
   mirrorGlobalFnRecording?: boolean;
@@ -217,8 +217,6 @@ export function ChatView({
   const sendingRef = useRef(false);
   const isStreamingRef = useRef(false);
 
-  /** After plain dictation, show polish next to reply (polish targets the dictated turn only). */
-  const [polishHintAfterDictation, setPolishHintAfterDictation] = useState(false);
   const [dictationReplyAction, setDictationReplyAction] = useState<DictationReplyAction | null>(
     null,
   );
@@ -505,7 +503,6 @@ export function ChatView({
         setIsStreaming(false);
         setCopiedId(null);
         setSavedToNotesId(null);
-        setPolishHintAfterDictation(false);
         setDictationReplyAction(null);
         setDictationReplyActionLoading(false);
         dictationReplyEnsureForRef.current = null;
@@ -535,7 +532,6 @@ export function ChatView({
     setIsStreaming(false);
     setCopiedId(null);
     setSavedToNotesId(null);
-    setPolishHintAfterDictation(false);
     setDictationReplyAction(
       conversationDictationReplyAction
         ? clampDictationReplyAction(conversationDictationReplyAction)
@@ -749,9 +745,6 @@ export function ChatView({
         blockLlmAction();
         return;
       }
-      if (opts?.fromDictation) setPolishHintAfterDictation(true);
-      else setPolishHintAfterDictation(false);
-
       conversationIdRef.current = convId;
 
       const { turnId, signal } = beginNewTurn();
@@ -828,55 +821,66 @@ export function ChatView({
     ]
   );
 
-  /** Post-strip polish: replace last user dictation with instruction + same text, then stream. */
-  const polishLastUserFromStrip = useCallback(async () => {
-    if (!effectiveConversationId) return;
-    if (!openAIConfigured) {
-      blockLlmAction();
-      return;
-    }
-    const last = messagesRef.current[messagesRef.current.length - 1];
-    if (!last || last.role !== "user" || !last.content?.trim()) return;
-    setPolishHintAfterDictation(false);
-    const instruction = DICTATION_POLISH_INSTRUCTION;
-    const t1 = Date.now();
-    const t2 = t1 + 1;
-    const transcript = last.content;
-    const { turnId, signal } = beginNewTurn();
-    const instructionId = makeMessageId("user");
-    const transcriptId = makeMessageId("user");
-    const assistantMessageId = makeMessageId("assistant");
-    activeAssistantMessageIdRef.current = null;
-    setActiveAssistantMessageId(null);
-    setMessages((prev) => [
-      ...prev.slice(0, -1),
-      { id: instructionId, role: "user", content: instruction, timestamp: t1 },
-      { id: transcriptId, role: "user", content: transcript, timestamp: t2 },
-    ]);
-    if (!isTurnCurrent(turnId, signal)) return;
-    activeAssistantMessageIdRef.current = assistantMessageId;
-    setActiveAssistantMessageId(assistantMessageId);
-    appendAssistantPlaceholder(assistantMessageId);
-    if (!isTurnCurrent(turnId, signal)) return;
-    setIsTurnPending(false);
-    isStreamingRef.current = true;
-    setIsStreaming(true);
-    await runAssistantTurn({
-      turnId,
-      signal,
-      assistantId: assistantMessageId,
-      backend: () => window.harness.chat.polishLastUser(effectiveConversationId),
-    });
-  }, [
-    appendAssistantPlaceholder,
-    beginNewTurn,
-    blockLlmAction,
-    effectiveConversationId,
-    isTurnCurrent,
-    makeMessageId,
-    openAIConfigured,
-    runAssistantTurn,
-  ]);
+  const resolveAskUserCall = useCallback(
+    async (
+      tc: ToolCallDisplay,
+      action: "proceed" | "decline",
+      answers?: AskUserAnswers,
+    ) => {
+      const payload = tc.payload as {
+        pending?: boolean;
+        pendingId?: string;
+      } | undefined;
+      if (!payload || payload.pending !== true) return;
+
+      const pendingId = payload.pendingId;
+      if (pendingId) {
+        try {
+          if (action === "proceed" && answers) {
+            await window.harness.chat.resolveGatedTool(pendingId, "proceed", { answers });
+          } else {
+            await window.harness.chat.resolveGatedTool(pendingId, "decline");
+          }
+        } catch {
+          // ignore; stream may have been stopped
+        }
+      }
+
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (!m.toolCalls || m.toolCalls.length === 0) return m;
+          let changed = false;
+          const updated = m.toolCalls.map((call) => {
+            if (call !== tc) return call;
+            const base =
+              call.payload && typeof call.payload === "object"
+                ? { ...(call.payload as Record<string, unknown>) }
+                : {};
+            base.pending = false;
+            if (action === "decline") {
+              base.declined = true;
+            } else if (answers) {
+              base.answers = answers;
+            }
+            changed = true;
+            return { ...call, payload: base };
+          });
+          return changed ? { ...m, toolCalls: updated } : m;
+        }),
+      );
+    },
+    [],
+  );
+
+  const handleAskUserSubmit = useCallback(
+    (tc: ToolCallDisplay, answers: AskUserAnswers) => resolveAskUserCall(tc, "proceed", answers),
+    [resolveAskUserCall],
+  );
+
+  const handleAskUserDecline = useCallback(
+    (tc: ToolCallDisplay) => resolveAskUserCall(tc, "decline"),
+    [resolveAskUserCall],
+  );
 
   const composer = useChatComposer({
     onSubmit: ensureConversationAndSend,
@@ -923,11 +927,6 @@ export function ChatView({
     openAIConfigured,
     runAssistantTurn,
   ]);
-
-  const handleOptionSelect = useCallback(
-    (label: string) => void ensureConversationAndSend(label),
-    [ensureConversationAndSend],
-  );
 
   const handleDictationStripSelect = useCallback(
     (prompt: string) => {
@@ -1179,12 +1178,11 @@ export function ChatView({
         onCopied={setCopiedId}
         onSaveToNotes={saveMessageToNotes}
         streamingContent={streamingContent}
-        polishHintAfterDictation={polishHintAfterDictation}
         llmActionsEnabled={openAIConfigured}
         onToolConfirm={handleToolConfirm}
-        onPolish={polishLastUserFromStrip}
+        onAskUserSubmit={handleAskUserSubmit}
+        onAskUserDecline={handleAskUserDecline}
         replyModeControl={replyModeControl}
-        onOptionSelect={handleOptionSelect}
         liveNoteStream={liveNoteStream}
         onOpenNoteInEditor={onOpenNotesView}
         {...composerProps}

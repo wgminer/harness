@@ -186,13 +186,15 @@ export interface HarnessAPI {
   };
   chat: {
     send: (conversationId: string, content: string) => Promise<void>;
-    /** Replace last user message with polish instruction + same text, then stream. */
-    polishLastUser: (conversationId: string) => Promise<void>;
     generateReply: (conversationId: string) => Promise<void>;
     /** Classify-once (or return cached) dictation strip action: `run` or a vocab word. */
     ensureDictationReplyAction: (conversationId: string) => Promise<string>;
     stop: () => Promise<void>;
-    resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") => Promise<void>;
+    resolveGatedTool: (
+      pendingId: string,
+      action: "proceed" | "cancel" | "decline",
+      payload?: unknown,
+    ) => Promise<void>;
     getContextPreview: (conversationId?: string | null) => Promise<ContextPreview>;
     onStreamChunk: (cb: (conversationId: string, chunk: string) => void) => () => void;
     onStreamEnd: (cb: (conversationId: string) => void) => () => void;

@@ -339,6 +339,7 @@ mod tests {
             "note_read",
             "note_save",
             "note_delete",
+            "ask_user",
         ] {
             assert!(names.contains(&expected), "missing desktop-only tool: {expected}");
         }
@@ -358,7 +359,7 @@ mod tests {
             assert!(names.contains(&expected), "missing shared (also-iOS) tool: {expected}");
         }
 
-        assert_eq!(names.len(), 21, "unexpected tool count — update this test if tools.json changed intentionally");
+        assert_eq!(names.len(), 22, "unexpected tool count — update this test if tools.json changed intentionally");
     }
 }
 

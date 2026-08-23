@@ -151,7 +151,8 @@ mod tests {
         assert!(default_shared().contains("[CONVERSATION_RECALL]"));
         assert!(!default_shared().contains("[FORMATTING_CAPABILITIES]"));
         assert!(default_desktop().contains("[CORE_INSTRUCTIONS]"));
-        assert!(default_desktop().contains("[FORMATTING_CAPABILITIES]"));
+        assert!(default_desktop().contains("ask_user"));
+        assert!(!default_desktop().contains("[FORMATTING_CAPABILITIES]"));
         assert!(default_ios().contains("[CORE_INSTRUCTIONS]"));
         assert!(!default_ios().contains("[FORMATTING_CAPABILITIES]"));
         assert!(default_ios().contains("Harness Mobile"));

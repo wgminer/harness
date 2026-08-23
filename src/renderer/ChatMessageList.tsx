@@ -11,10 +11,13 @@ import {
   ReplyingIndicator,
   getInlineWriteup,
   isAttachedNoteCreate,
+  isToolCallPending,
   type LiveNoteStream,
 } from "./chatHelpers";
 import { InlineWriteupCard } from "./DocumentCard";
 import { ToolCallsCard } from "./ToolCallsCard";
+import { AskUserCard, getAskUserToolCall } from "./AskUserCard";
+import type { AskUserAnswers } from "./AskUserCard";
 
 interface ChatMessageListProps {
   displayMessages: Message[];
@@ -24,13 +27,12 @@ interface ChatMessageListProps {
   onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   streamingContent: string;
   sending: boolean;
-  polishHintAfterDictation: boolean;
   llmActionsEnabled?: boolean;
   onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
-  onPolish: () => void;
+  onAskUserSubmit: (tc: ToolCallDisplay, answers: AskUserAnswers) => void | Promise<void>;
+  onAskUserDecline: (tc: ToolCallDisplay) => void | Promise<void>;
   /** Reply-strip controls while awaiting a reply (suggested prompts or mode picker). */
   replyModeControl?: ReactNode;
-  onOptionSelect?: (label: string) => void | Promise<void>;
   liveNoteStream?: LiveNoteStream | null;
   onOpenNoteInEditor?: (noteId: string) => void;
 }
@@ -43,12 +45,11 @@ export function ChatMessageList({
   onSaveToNotes,
   streamingContent,
   sending,
-  polishHintAfterDictation,
   llmActionsEnabled = true,
   onToolConfirm,
-  onPolish,
+  onAskUserSubmit,
+  onAskUserDecline,
   replyModeControl,
-  onOptionSelect,
   liveNoteStream,
   onOpenNoteInEditor,
 }: ChatMessageListProps) {
@@ -96,11 +97,8 @@ export function ChatMessageList({
   const lastMessage = displayMessages[displayMessages.length - 1];
   const showReplyActions =
     displayMessages.length > 0 && lastMessage?.role === "user" && !streamingContent;
-  const optionSelectEnabled =
-    !!onOptionSelect && llmActionsEnabled && !sending && !streamingContent;
-  const showPolishInStrip = showReplyActions && polishHintAfterDictation;
   const showStripModes = showReplyActions && !!replyModeControl;
-  const showSecondaryActions = showPolishInStrip || showStripModes;
+  const showSecondaryActions = showStripModes;
   return (
     <>
       <div className="chat-messages-stack">
@@ -108,6 +106,32 @@ export function ChatMessageList({
           const isAssistant = m.role === "assistant";
           const hasToolCalls = isAssistant && m.toolCalls && m.toolCalls.length > 0;
           const inlineWriteup = isAssistant ? getInlineWriteup(m.toolCalls) : null;
+          const askUserCall = isAssistant ? getAskUserToolCall(m.toolCalls) : null;
+          const visibleToolCalls =
+            hasToolCalls && inlineWriteup
+              ? m.toolCalls!.filter((tc) => {
+                  if (isAttachedNoteCreate(tc)) return false;
+                  if (tc.toolName === "open_long_response") return false;
+                  if (tc.toolName === "ask_user") return false;
+                  return true;
+                })
+              : hasToolCalls
+                ? m.toolCalls!.filter((tc, i, arr) => {
+                    if (tc.toolName === "ask_user") return false;
+                    if (isAttachedNoteCreate(tc)) {
+                      return (
+                        arr.findIndex(
+                          (x) => x.toolName === "note_create" && isAttachedNoteCreate(x),
+                        ) === i
+                      );
+                    }
+                    if (tc.toolName === "open_long_response") {
+                      return arr.findIndex((x) => x.toolName === "open_long_response") === i;
+                    }
+                    return true;
+                  })
+                : [];
+          const showToolCalls = visibleToolCalls.length > 0;
           const isLatestAssistant = isAssistant && idx === displayMessages.length - 1;
           const isStreamingWriteup =
             sending && !!liveNoteStream && isLatestAssistant;
@@ -118,8 +142,14 @@ export function ChatMessageList({
             !m.content &&
             !streamingContent;
 
-          const optionsInteractive =
-            optionSelectEnabled && isAssistant && lastMessage?.id === m.id;
+          const askUserInteractive =
+            llmActionsEnabled &&
+            !sending &&
+            !streamingContent &&
+            isAssistant &&
+            isLatestAssistant &&
+            !!askUserCall &&
+            isToolCallPending(askUserCall);
 
           const cachedNoteBody =
             inlineWriteup?.noteId != null ? noteBodyCache[inlineWriteup.noteId] : undefined;
@@ -144,7 +174,6 @@ export function ChatMessageList({
                   savedToNotesId={savedToNotesId}
                   onCopied={onCopied}
                   onSaveToNotes={onSaveToNotes}
-                  onOptionSelect={optionsInteractive ? onOptionSelect : undefined}
                 />
               );
             else if (isLatestAssistantPending) assistantBubbleBody = <ReplyingIndicator />;
@@ -206,26 +235,9 @@ export function ChatMessageList({
                   </div>
                 ) : (
                   <>
-                    {hasToolCalls && (
+                    {showToolCalls && (
                       <ToolCallsCard
-                        toolCalls={
-                          m.toolCalls!.filter((tc, i, arr) => {
-                            if (isAttachedNoteCreate(tc)) {
-                              return (
-                                arr.findIndex(
-                                  (x) =>
-                                    x.toolName === "note_create" && isAttachedNoteCreate(x),
-                                ) === i
-                              );
-                            }
-                            if (tc.toolName === "open_long_response") {
-                              return (
-                                arr.findIndex((x) => x.toolName === "open_long_response") === i
-                              );
-                            }
-                            return true;
-                          })
-                        }
+                        toolCalls={visibleToolCalls}
                         expanded={expandedToolCards.has(m.id)}
                         onToggleExpanded={() => toggleToolCardExpanded(m.id)}
                         onToolConfirm={onToolConfirm}
@@ -233,6 +245,14 @@ export function ChatMessageList({
                       />
                     )}
                     {assistantBubbleBody}
+                    {askUserCall ? (
+                      <AskUserCard
+                        call={askUserCall}
+                        interactive={askUserInteractive}
+                        onSubmit={onAskUserSubmit}
+                        onDecline={onAskUserDecline}
+                      />
+                    ) : null}
                     {inlineWriteup && (
                       <InlineWriteupCard
                         writeup={inlineWriteup}
@@ -292,16 +312,6 @@ export function ChatMessageList({
       </div>
       {showSecondaryActions && (
         <div className="chat-secondary-actions" data-testid="chat-secondary-actions">
-          {showPolishInStrip && (
-            <button
-              type="button"
-              className="btn btn-compact chat-pane-btn"
-              onClick={onPolish}
-              disabled={!llmActionsEnabled}
-            >
-              Polish
-            </button>
-          )}
           {showStripModes ? replyModeControl : null}
         </div>
       )}

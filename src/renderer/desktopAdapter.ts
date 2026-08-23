@@ -141,15 +141,16 @@ export function createHarnessAdapter(): HarnessAPI {
     chat: {
       send: (conversationId: string, userContent: string) =>
         invoke(cmd("chat:send"), { conversationId, userContent }),
-      polishLastUser: (conversationId: string) =>
-        invoke(cmd("chat:polishLastUser"), { conversationId }),
       generateReply: (conversationId: string) =>
         invoke(cmd("chat:generateReply"), { conversationId }),
       ensureDictationReplyAction: (conversationId: string) =>
         invoke<string>(cmd("chat:ensureDictationReplyAction"), { conversationId }),
       stop: () => invoke(cmd("chat:stop")),
-      resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") =>
-        invoke(cmd("chat:resolveGatedTool"), { pendingId, action }),
+      resolveGatedTool: (
+        pendingId: string,
+        action: "proceed" | "cancel" | "decline",
+        payload?: unknown,
+      ) => invoke(cmd("chat:resolveGatedTool"), { pendingId, action, payload: payload ?? null }),
       getContextPreview: (conversationId?: string | null) =>
         invoke<ContextPreview>(cmd("chat:getContextPreview"), {
           conversationId: conversationId ?? null,

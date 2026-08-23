@@ -1,6 +1,5 @@
 import {
   isValidElement,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -8,13 +7,7 @@ import {
 import { Check, Copy, Loader2, SquarePen } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import remarkDirective from "remark-directive";
 import rehypeHighlight from "rehype-highlight";
-import {
-  MarkdownInteractionContext,
-  directiveComponents,
-  remarkDirectiveToHast,
-} from "./markdownDirectives";
 export interface ToolCallDisplay {
   toolName: string;
   payload?: unknown;
@@ -175,8 +168,6 @@ export interface MarkdownContentProps {
   savedToNotesId?: string | null;
   onCopied?: (id: string | null) => void;
   onSaveToNotes?: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
-  /** When set, `:::option` directives render as clickable buttons that call this handler. */
-  onOptionSelect?: (label: string) => void | Promise<void>;
 }
 
 function CodeBlock({
@@ -252,9 +243,8 @@ function CodeBlock({
  * Renders assistant/user markdown.
  *
  * Headers h1-h6 are intentionally squashed to paragraphs so the model can't
- * accidentally blow up the type scale; section structure is signalled instead
- * via the custom layout directives in `markdownDirectives.tsx`.
- * Fenced code blocks flow through highlight.js via `CodeBlock`.
+ * accidentally blow up the type scale. Fenced code blocks flow through
+ * highlight.js via `CodeBlock`.
  */
 export function MarkdownContent({
   content,
@@ -264,14 +254,9 @@ export function MarkdownContent({
   savedToNotesId,
   onCopied,
   onSaveToNotes,
-  onOptionSelect,
 }: MarkdownContentProps) {
   const codeBlockIndexRef = useRef(0);
   codeBlockIndexRef.current = 0;
-  const markdownInteraction = useMemo(
-    () => (onOptionSelect ? { onOptionSelect } : {}),
-    [onOptionSelect],
-  );
 
   const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
     <p {...props}>{children}</p>
@@ -305,19 +290,16 @@ export function MarkdownContent({
     h5: headingAsParagraph,
     h6: headingAsParagraph,
     pre: preComponent,
-    ...directiveComponents,
   } as unknown as Components;
 
   return (
-    <MarkdownInteractionContext.Provider value={markdownInteraction}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
-        rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
-        components={components}
-      >
-        {content}
-      </ReactMarkdown>
-    </MarkdownInteractionContext.Provider>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+      components={components}
+    >
+      {content}
+    </ReactMarkdown>
   );
 }
 
@@ -370,6 +352,7 @@ export function toolLabel(name: string): string {
     note_read: "Read note",
     note_save: "Saved note",
     note_delete: "Deleted note",
+    ask_user: "Asked you",
     set_layout: "Updated layout",
   };
   return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());

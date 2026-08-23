@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use regex::Regex;
 use serde::Serialize;
 
-use crate::memory::{get_messages, get_user_memory, pop_last_user_message, AppendMessageMeta};
+use crate::memory::{get_messages, get_user_memory, AppendMessageMeta};
 use crate::openai::{tool_definitions, ChatMessageParam};
 use crate::recent_conversations::build_recent_conversations_block;
 use crate::system_prompt::{
@@ -13,9 +13,6 @@ use crate::system_prompt::{
 use crate::conversation_title::schedule_conversation_title_refinement;
 
 use super::ChatController;
-
-pub(crate) const DICTATION_POLISH_INSTRUCTION: &str =
-    "Polish and clarify the following dictation. Fix grammar and wording; keep the meaning. Reply with a clear, concise version.";
 
 #[derive(Debug, Clone)]
 pub(crate) struct ContextAssembly {
@@ -77,51 +74,6 @@ impl ChatController {
         .map_err(|e| e.to_string())?;
         // Match iOS: refine title after each user message (covers first-message threads
         // even if the assistant stream errors before its own schedule runs).
-        schedule_conversation_title_refinement(
-            self.app.clone(),
-            self.state.clone(),
-            conversation_id.to_string(),
-        );
-        self.stream_assistant_reply(conversation_id, messages).await
-    }
-
-    pub async fn polish_last_user(&self, conversation_id: &str) -> Result<(), String> {
-        let transcript = pop_last_user_message(&self.state, conversation_id)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "No user message to polish.".to_string())?;
-        let instruction = DICTATION_POLISH_INSTRUCTION;
-        let t1 = chrono::Utc::now().timestamp_millis();
-        let t2 = t1 + 1;
-        let messages = self
-            .build_message_list(conversation_id, Some(instruction), Some(&transcript))
-            .await?;
-        crate::memory::append_message(
-            &self.state,
-            conversation_id,
-            "user",
-            instruction,
-            Some(AppendMessageMeta {
-                timestamp: Some(t1),
-                tool_calls: None,
-                model: None,
-            }),
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-        crate::memory::append_message(
-            &self.state,
-            conversation_id,
-            "user",
-            &transcript,
-            Some(AppendMessageMeta {
-                timestamp: Some(t2),
-                tool_calls: None,
-                model: None,
-            }),
-        )
-        .await
-        .map_err(|e| e.to_string())?;
         schedule_conversation_title_refinement(
             self.app.clone(),
             self.state.clone(),

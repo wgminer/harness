@@ -11,7 +11,8 @@ final class SystemPromptContractTests: XCTestCase {
         XCTAssertFalse(defaults.ios.isEmpty)
         XCTAssertTrue(defaults.shared.contains("[CONVERSATION_RECALL]"))
         XCTAssertFalse(defaults.shared.contains("[FORMATTING_CAPABILITIES]"))
-        XCTAssertTrue(defaults.desktop.contains("[FORMATTING_CAPABILITIES]"))
+        XCTAssertTrue(defaults.desktop.contains("ask_user"))
+        XCTAssertFalse(defaults.desktop.contains("[FORMATTING_CAPABILITIES]"))
         XCTAssertFalse(defaults.ios.contains("[FORMATTING_CAPABILITIES]"))
         XCTAssertTrue(defaults.ios.contains("Harness Mobile"))
     }
