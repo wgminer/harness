@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import {
+  CheckLine,
   Image as ImageIcon,
-  ListTodo,
   MessageCircle,
   Pin,
   Search,
@@ -19,23 +19,9 @@ function ShellGallery() {
           <button type="button" className="app-titlebar__sidebar-toggle" aria-label="Show sidebar">
             <PanelLeft size={16} strokeWidth={1.75} aria-hidden />
           </button>
-          <div className="app-titlebar__title">Product brainstorm</div>
-          <div className="app-titlebar__actions">
-            <button type="button" className="app-titlebar__action" aria-label="Search">
-              <Search size={16} strokeWidth={1.75} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="app-titlebar__action"
-              aria-label="Tasks"
-              aria-pressed
-            >
-              <ListTodo size={16} strokeWidth={1.75} aria-hidden />
-            </button>
-            <button type="button" className="app-titlebar__action" aria-label="Settings">
-              <Settings2 size={16} strokeWidth={1.75} aria-hidden />
-            </button>
-          </div>
+          <button type="button" className="app-titlebar__title app-titlebar__title--action">
+            Product brainstorm
+          </button>
         </header>
       </Section>
 
@@ -62,11 +48,22 @@ function ShellGallery() {
       </Section>
 
       <Section title="Sidebar button cluster" stack>
-        <div className="sidebar" style={{ width: 280, padding: "var(--space-3)", background: "var(--bg)" }}>
+        <div className="sidebar" style={{ width: 280, background: "var(--bg)" }}>
           <div className="sidebar-buttons">
             <button type="button" className="btn sidebar-new-chat-btn">
-              New Chat
+              New
             </button>
+            <div className="sidebar-nav">
+              <button type="button" className="btn btn-icon" aria-label="Search">
+                <Search size={16} />
+              </button>
+              <button type="button" className="btn btn-icon btn-primary" aria-label="Tasks" aria-pressed>
+                <CheckLine size={16} />
+              </button>
+              <button type="button" className="btn btn-icon" aria-label="Settings">
+                <Settings2 size={16} />
+              </button>
+            </div>
           </div>
         </div>
       </Section>

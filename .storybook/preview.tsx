@@ -12,6 +12,7 @@ import "../src/renderer/notes.css";
 import "../src/renderer/images.css";
 import "../src/renderer/stickyNote.css";
 import "highlight.js/styles/github-dark.css";
+import "./preview.css";
 
 const preview: Preview = {
   parameters: {

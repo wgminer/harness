@@ -1,22 +1,23 @@
 import { useCallback, type MouseEvent as ReactMouseEvent } from "react";
-import { CheckLine, PanelLeft, Search, Settings2 as SettingsIcon } from "lucide-react";
-import { SETTINGS_PAGE_TITLE } from "../shared/settingsPage";
-import type { View } from "./sidebarUtils";
+import { PanelLeft } from "lucide-react";
+import { Skeleton } from "./Skeleton";
 
 type AppTitlebarProps = {
   libraryOpen: boolean;
   onToggleLibrary: () => void;
-  view: View;
-  onViewChange: (v: View) => void;
   title: string;
+  /** When true, the title is a pulsing bar instead of placeholder text. */
+  titlePending?: boolean;
+  /** Opens conversation details when the title is clicked (chat thread only). */
+  onTitleClick?: () => void;
 };
 
 export function AppTitlebar({
   libraryOpen,
   onToggleLibrary,
-  view,
-  onViewChange,
   title,
+  titlePending = false,
+  onTitleClick,
 }: AppTitlebarProps) {
   const onTitlebarMouseDown = useCallback((event: ReactMouseEvent<HTMLElement>) => {
     if (event.button !== 0) return;
@@ -51,47 +52,27 @@ export function AppTitlebar({
       >
         <PanelLeft size={16} strokeWidth={1.75} aria-hidden />
       </button>
-      <div className="app-titlebar__title" data-testid="titlebar-title" title={title}>
-        {title}
-      </div>
-      <div className="app-titlebar__actions">
+      {onTitleClick ? (
         <button
           type="button"
-          className="app-titlebar__action"
+          className="app-titlebar__title app-titlebar__title--action"
           data-tauri-drag-region={false}
-          data-testid="sidebar-search"
-          aria-label="Search"
-          aria-pressed={view === "search"}
-          title="Search"
-          onClick={() => onViewChange("search")}
+          data-testid="titlebar-title"
+          title="Details"
+          aria-busy={titlePending ? true : undefined}
+          onClick={onTitleClick}
         >
-          <Search size={16} strokeWidth={1.75} aria-hidden />
+          {titlePending ? (
+            <Skeleton className="ui-skeleton--title" label="Generating title" />
+          ) : (
+            title
+          )}
         </button>
-        <button
-          type="button"
-          className="app-titlebar__action"
-          data-tauri-drag-region={false}
-          data-testid="library-tasks"
-          aria-label="Tasks"
-          aria-pressed={view === "tasks"}
-          title="Tasks"
-          onClick={() => onViewChange("tasks")}
-        >
-          <CheckLine size={16} strokeWidth={1.75} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className="app-titlebar__action"
-          data-tauri-drag-region={false}
-          data-testid="library-settings"
-          aria-label={SETTINGS_PAGE_TITLE}
-          aria-pressed={view === "settings"}
-          title={SETTINGS_PAGE_TITLE}
-          onClick={() => onViewChange("settings")}
-        >
-          <SettingsIcon size={16} strokeWidth={1.75} aria-hidden />
-        </button>
-      </div>
+      ) : (
+        <div className="app-titlebar__title" data-testid="titlebar-title" title={title}>
+          {title}
+        </div>
+      )}
     </header>
   );
 }

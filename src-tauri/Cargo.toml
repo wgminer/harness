@@ -1,6 +1,6 @@
 [package]
 name = "harness"
-version = "0.9.0"
+version = "0.9.1"
 description = "Personal all-in-one desktop harness for LLMs"
 authors = ["Your Name"]
 edition = "2021"
@@ -46,6 +46,7 @@ cpal = "0.18.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSEvent", "block2"] }
 objc2-avf-audio = { version = "0.3", default-features = false, features = ["std", "alloc", "AVAudioApplication", "block2"] }
 block2 = "0.6"
 core-foundation = "0.10"
@@ -54,4 +55,3 @@ core-foundation = "0.10"
 strip = true
 lto = true
 codegen-units = 1
-panic = "abort"

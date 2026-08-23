@@ -5,6 +5,7 @@ import {
   Check,
   Copy,
   FolderOpen,
+  Hash,
   Loader2,
   Mic,
   Minimize2,
@@ -143,6 +144,7 @@ export function NotesView({
   const [panelMode, setPanelMode] = useState<PanelMode>("prompt");
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [noteWidthMode, setNoteWidthMode] = useState<NoteWidthMode>("comfortable");
+  const [showLineNumbers, setShowLineNumbers] = useState(false);
   const [noteToolbarMenuOpen, setNoteToolbarMenuOpen] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
@@ -535,6 +537,10 @@ export function NotesView({
     });
   }, []);
 
+  const toggleLineNumbers = useCallback(() => {
+    setShowLineNumbers((prev) => !prev);
+  }, []);
+
   const waitForMinSpin = async (loadingStartedAt: number) => {
     const elapsed = performance.now() - loadingStartedAt;
     const remaining = Math.max(0, MIN_REGENERATE_SPIN_MS - elapsed);
@@ -879,6 +885,18 @@ export function NotesView({
                           type="button"
                           className="notes-surface__toolbar-menu-item"
                           role="menuitem"
+                          onClick={() => {
+                            toggleLineNumbers();
+                            setNoteToolbarMenuOpen(false);
+                          }}
+                        >
+                          <Hash size={16} aria-hidden />
+                          <span>Line numbers ({showLineNumbers ? "on" : "off"})</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="notes-surface__toolbar-menu-item"
+                          role="menuitem"
                           disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
                           onClick={() => {
                             const html = buildNotePrintHtml(noteTitle, draft);
@@ -947,6 +965,7 @@ export function NotesView({
                   placeholder={status.kind === "loading" ? "Loading..." : "Write your note here..."}
                   value={draft}
                   readOnly={status.kind === "loading" || status.kind === "deleting"}
+                  showLineNumbers={showLineNumbers}
                   onChange={setDraft}
                   onSelectionChange={updateSelectionState}
                   onScroll={handleEditorScroll}

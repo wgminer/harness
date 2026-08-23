@@ -90,6 +90,37 @@ describe("markdown directives", () => {
     expect(html).toContain('data-unknown-directive="madeupthing"');
   });
 
+  it("turns library hrefs in markdown links and inline code into buttons", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownContent
+        content={"See [Financial planning](/c/conv_1) and `/n/note_1`."}
+        libraryHits={[
+          {
+            kind: "chat",
+            id: "conv_1",
+            title: "Financial planning",
+            activityAt: 1,
+            score: 1,
+          },
+          {
+            kind: "note",
+            id: "note_1",
+            title: "Relocation checklist",
+            activityAt: 2,
+            score: 1,
+          },
+        ]}
+        onOpenConversation={() => {}}
+        onOpenNote={() => {}}
+      />,
+    );
+    expect(html).toContain("library-ref");
+    expect(html).toContain("Financial planning");
+    expect(html).toContain("Relocation checklist");
+    expect(html).not.toContain("/c/conv_1");
+    expect(html).not.toContain("`/n/note_1`");
+  });
+
   it("renders standard markdown (table, bold) alongside directives", () => {
     const html = render("Hello **world**\n\n| a | b |\n|---|---|\n| 1 | 2 |\n");
     expect(html).toContain("<strong>world</strong>");

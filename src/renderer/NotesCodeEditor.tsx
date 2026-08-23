@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { createNotesCodeEditorExtensions } from "./notesEditorExtensions";
+import { createNotesCodeEditorExtensions, notesLineNumbersExtension } from "./notesEditorExtensions";
 
 export interface NotesCodeEditorHandle {
   focus: () => void;
@@ -22,6 +22,7 @@ interface NotesCodeEditorProps {
   onFocus?: () => void;
   onBlur?: () => void;
   onScroll?: () => void;
+  showLineNumbers?: boolean;
 }
 
 export const NotesCodeEditor = forwardRef<NotesCodeEditorHandle, NotesCodeEditorProps>(function NotesCodeEditor(
@@ -37,11 +38,13 @@ export const NotesCodeEditor = forwardRef<NotesCodeEditorHandle, NotesCodeEditor
     onFocus,
     onBlur,
     onScroll,
+    showLineNumbers = false,
   },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const lineNumbersCompartmentRef = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onFocusRef = useRef(onFocus);
@@ -95,20 +98,23 @@ export const NotesCodeEditor = forwardRef<NotesCodeEditorHandle, NotesCodeEditor
     const view = new EditorView({
       state: EditorState.create({
         doc: value,
-        extensions: createNotesCodeEditorExtensions({
-          placeholder: placeholderText,
-          readOnly,
-          onDocChange: (nextValue) => {
-            if (syncingExternalValueRef.current) return;
-            onChangeRef.current(nextValue);
-          },
-          onSelectionChange: () => onSelectionChangeRef.current?.(),
-          onFocusChange: (focused) => {
-            if (focused) onFocusRef.current?.();
-            else onBlurRef.current?.();
-          },
-          onScroll: () => onScrollRef.current?.(),
-        }),
+        extensions: [
+          lineNumbersCompartmentRef.current.of(notesLineNumbersExtension(showLineNumbers)),
+          ...createNotesCodeEditorExtensions({
+            placeholder: placeholderText,
+            readOnly,
+            onDocChange: (nextValue) => {
+              if (syncingExternalValueRef.current) return;
+              onChangeRef.current(nextValue);
+            },
+            onSelectionChange: () => onSelectionChangeRef.current?.(),
+            onFocusChange: (focused) => {
+              if (focused) onFocusRef.current?.();
+              else onBlurRef.current?.();
+            },
+            onScroll: () => onScrollRef.current?.(),
+          }),
+        ],
       }),
       parent: host,
     });
@@ -121,6 +127,14 @@ export const NotesCodeEditor = forwardRef<NotesCodeEditorHandle, NotesCodeEditor
     // Initial doc comes from `value`; ongoing sync is handled in the effect below.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- remount editor only when chrome changes
   }, [placeholderText, readOnly]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: lineNumbersCompartmentRef.current.reconfigure(notesLineNumbersExtension(showLineNumbers)),
+    });
+  }, [showLineNumbers]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -140,7 +154,9 @@ export const NotesCodeEditor = forwardRef<NotesCodeEditorHandle, NotesCodeEditor
   return (
     <div
       ref={hostRef}
-      className={className}
+      className={[className, showLineNumbers ? "notes-code-editor--line-numbers" : null]
+        .filter(Boolean)
+        .join(" ")}
       data-testid={testId}
       aria-label={ariaLabel}
       role="textbox"

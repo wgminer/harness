@@ -16,8 +16,6 @@ export type { LiveNoteStream } from "./chatHelpers";
 interface ChatSurfaceProps {
   chatAreaRef: RefObject<HTMLDivElement>;
   composerRef: RefObject<HTMLDivElement>;
-  headerContent: ReactNode;
-  headerClassName?: string;
   displayMessages: Message[];
   copiedId: string | null;
   savedToNotesId: string | null;
@@ -34,6 +32,8 @@ interface ChatSurfaceProps {
   onOptionSelect?: (label: string) => void | Promise<void>;
   liveNoteStream?: LiveNoteStream | null;
   onOpenNoteInEditor?: (noteId: string) => void;
+  onOpenConversation?: (conversationId: string) => void;
+  onOpenImage?: (imageId: string) => void;
   input: string;
   onInputChange: (next: string) => void;
   onSend: () => void | Promise<void>;
@@ -64,8 +64,6 @@ interface ChatSurfaceProps {
 export function ChatSurface({
   chatAreaRef,
   composerRef,
-  headerContent,
-  headerClassName,
   displayMessages,
   copiedId,
   savedToNotesId,
@@ -81,6 +79,8 @@ export function ChatSurface({
   onOptionSelect,
   liveNoteStream,
   onOpenNoteInEditor,
+  onOpenConversation,
+  onOpenImage,
   input,
   onInputChange,
   onSend,
@@ -141,9 +141,6 @@ export function ChatSurface({
         onKeyDown={onKeyDown}
         tabIndex={-1}
       >
-        <header className={headerClassName ? `chat-pane-header ${headerClassName}` : "chat-pane-header"}>
-          {headerContent}
-        </header>
         <div ref={transcriptRef} className="chat-area-inner" data-testid={messagesTestId}>
           <ChatMessageList
             displayMessages={displayMessages}
@@ -161,6 +158,8 @@ export function ChatSurface({
             onOptionSelect={onOptionSelect}
             liveNoteStream={liveNoteStream}
             onOpenNoteInEditor={onOpenNoteInEditor}
+            onOpenConversation={onOpenConversation}
+            onOpenImage={onOpenImage}
             dockSecondaryActions={hideComposer}
           />
           <div id="chat-live-edge" className="chat-live-edge" aria-hidden />

@@ -13,11 +13,8 @@ export function useScrollFadeEdges(threshold = 1) {
     const el = scrollRef.current;
     if (!el) return;
     const { scrollTop, scrollHeight, clientHeight } = el;
-    const nextTop = scrollTop > threshold;
-    const nextBottom = scrollTop + clientHeight < scrollHeight - threshold;
-    // Scroll fires continuously; bail out when the edges haven't actually flipped.
-    setFadeTop((prev) => (prev === nextTop ? prev : nextTop));
-    setFadeBottom((prev) => (prev === nextBottom ? prev : nextBottom));
+    setFadeTop(scrollTop > threshold);
+    setFadeBottom(scrollTop + clientHeight < scrollHeight - threshold);
   }, [threshold]);
 
   const onScroll = useCallback(() => {

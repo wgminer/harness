@@ -107,9 +107,7 @@ export function useDataSettings(options: {
 
   const syncInlineStatus =
     dataStatus?.sync.configured && !dataStatus.sync.lastError
-      ? syncBusy
-        ? "Syncing…"
-        : syncInlineStatusLine({ lastSuccessAt: dataStatus.sync.lastSuccessAt ?? null })
+      ? syncInlineStatusLine({ lastSuccessAt: dataStatus.sync.lastSuccessAt ?? null })
       : null;
 
   const runImport = useCallback(async () => {

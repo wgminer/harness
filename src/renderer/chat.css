@@ -1,9 +1,10 @@
 /*
  * Chat column: `--chat-composer-dock-height` is measured from the overlay composer dock.
- * `.chat-scroll` is the only scrollport and uses bottom inset padding to keep the latest
- * transcript clear of the composer. Inset is 2× (dock height + gap) so the live edge sits
- * well above the dock. Single-message mode (`.chat-scroll--single-message`) opts out so
- * centered landing is not skewed by that inset.
+ * `.chat-scroll` is the only scrollport (block, not flex — overflow must include padding)
+ * and uses bottom inset padding to keep the latest transcript clear of the composer.
+ * Inset is 2× (dock height + gap) so the live edge sits well above the dock.
+ * Single-message mode (`.chat-scroll--single-message`) opts out so centered landing
+ * is not skewed by that inset.
  *
  * Compose home (`.new-chat-center`) and single-message / dictation
  * (`.chat-scroll--single-message .chat-area-inner`) share the same optical placement:
@@ -147,9 +148,8 @@
   overflow-y: auto;
   overflow-anchor: none;
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: 0 calc(var(--shell-pad-inline) * 2) var(--chat-composer-scroll-inset);
+  padding: var(--space-8) calc(var(--shell-pad-inline) * 2) var(--chat-composer-scroll-inset);
+  scroll-padding-top: var(--space-8);
   scroll-padding-bottom: var(--chat-composer-scroll-inset);
 }
 
@@ -164,18 +164,22 @@
   pointer-events: none;
 }
 
-/* Completed streaming blocks fade in once on mount (opacity only). */
+/* Completed streaming blocks fade in once on mount (opacity + soft lift). */
 @keyframes chat-block-in {
   from {
     opacity: 0;
+    filter: blur(6px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
   }
 }
 
 .chat-stream-block {
-  animation: chat-block-in 200ms ease-out;
+  animation: chat-block-in 800ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -187,12 +191,14 @@
 .chat-streaming-assistant {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-2);
   width: 100%;
 }
 
-/* Empty / placeholder panes (no conversation selected): same flex contract as an active chat */
+/* Empty / placeholder panes (no conversation selected): center in the pane. */
 .chat-scroll.chat-scroll--placeholder {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   align-items: center;
   justify-content: center;
@@ -212,6 +218,8 @@
  * back-and-forth transcript clear of the dock, and it skews the 1:1 spacer split.
  */
 .chat-scroll.chat-scroll--single-message {
+  display: flex;
+  flex-direction: column;
   padding-bottom: 0;
   scroll-padding-bottom: 0;
 }
@@ -227,23 +235,21 @@
   flex-shrink: 0;
 }
 
-/* Transcript column: max-width + flex growth (replaces former chat-area → chat-area-inner chain). */
+/* Transcript column: max-width + auto margins (replaces former chat-area → chat-area-inner chain). */
 .chat-area-inner {
-  flex: 0 0 auto;
   min-width: 0;
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
   padding: 0;
   box-sizing: border-box;
-  display: block;
 }
 
 /* Chronological message flow: oldest at top, newest at bottom. */
 .chat-messages-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 0;
   width: 100%;
   box-sizing: border-box;
   padding: 0;
@@ -264,8 +270,8 @@
   background: var(--bg-elevated);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
 }
 
 /* Bottom fade when user message is line-clamped (collapsed + overflow). */
@@ -365,12 +371,21 @@
   border-radius: var(--radius-sm);
 }
 
-.message-block .content p {
-  margin: 0 0 var(--space-3);
+.message-block .content p,
+.message-block .content ul,
+.message-block .content ol {
+  margin: 0 0 var(--space-2);
 }
 
-.message-block .content p:last-child {
+.message-block .content p:last-child,
+.message-block .content ul:last-child,
+.message-block .content ol:last-child {
   margin-bottom: 0;
+}
+
+.message-block .content p:has(+ ul),
+.message-block .content p:has(+ ol) {
+  margin-bottom: var(--space-1);
 }
 
 .message-block .content strong {
@@ -379,7 +394,6 @@
 
 .message-block .content ul,
 .message-block .content ol {
-  margin: var(--space-2) 0;
   /* em so the marker gutter scales with assistant title-size serif. */
   padding-inline-start: 1.5em;
 }
@@ -390,38 +404,25 @@
 }
 
 .message-block .content li {
-  margin: var(--space-1) 0;
-}
-
-/* Assistant lists: GFM wraps item text in <p>, which doubles vertical rhythm. */
-.message-block.assistant .content p {
-  margin-bottom: var(--space-2);
-}
-
-.message-block.assistant .content p:has(+ ul),
-.message-block.assistant .content p:has(+ ol) {
-  margin-bottom: var(--space-1);
-}
-
-.message-block.assistant .content ul,
-.message-block.assistant .content ol {
-  margin: 0 0 var(--space-3);
-}
-
-.message-block.assistant .content li {
   margin: 0;
 }
 
-.message-block.assistant .content li + li {
+.message-block .content li + li {
   margin-top: 2px;
 }
 
-.message-block.assistant .content li > p {
+/* GFM wraps item text in <p>, which doubles vertical rhythm. */
+.message-block .content li > p {
   margin: 0;
 }
 
-.message-block.assistant .content li > p + p {
+.message-block .content li > p + p {
   margin-top: var(--space-1);
+}
+
+.message-block .content li > ul,
+.message-block .content li > ol {
+  margin: var(--space-1) 0 0;
 }
 
 .message-block .content code {
@@ -593,6 +594,136 @@
   border-radius: var(--radius-xs);
 }
 
+.tool-card--search {
+  max-width: 100%;
+  opacity: 1;
+}
+
+.tool-card-row--search {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  gap: var(--space-3);
+}
+
+.tool-card-search-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tool-card-search-empty {
+  color: var(--fg-muted);
+  font-size: var(--font-size-caption);
+}
+
+.tool-card-search-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.tool-card-search-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--fg);
+  font-family: var(--font-family);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard),
+    border-color var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.tool-card-search-item:hover {
+  background: var(--hover-bg-strong);
+  border-color: var(--border-light);
+}
+
+.tool-card-search-item:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.tool-card-search-item--static {
+  cursor: default;
+}
+
+.tool-card-search-item__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+.tool-card-search-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tool-card-search-item__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.tool-card-search-item__meta {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  color: var(--fg-muted);
+}
+
+.message-block .content .library-ref {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.message-block .content .library-ref:hover {
+  text-decoration-color: currentColor;
+}
+
+.message-block .content .library-ref:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.message-block .content .library-ref--static {
+  cursor: default;
+  text-decoration-color: color-mix(in oklab, currentColor 28%, transparent);
+}
+
 .tool-card-actions {
   display: flex;
   gap: var(--space-2);
@@ -628,8 +759,8 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
-  margin-top: var(--space-2);
-  padding: 0;
+  margin-top: 0;
+  padding: var(--space-2) 0;
 }
 
 .message-block-meta {
@@ -639,6 +770,21 @@
   line-height: var(--line-height-normal);
   letter-spacing: 0.01em;
   color: var(--fg-muted);
+}
+
+/* Role + time: same hover reveal as copy/save in the footer.
+   While streaming, the Assistant/model label stays visible with the spinner. */
+.message-block-meta-role,
+.message-block-meta-text {
+  opacity: 0;
+  transition: opacity var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.message-block:hover .message-block-meta-role,
+.message-block:hover .message-block-meta-text,
+.message-block-footer:focus-within .message-block-meta-role,
+.message-block-footer:focus-within .message-block-meta-text,
+.message-block-meta:has(.message-block-meta-spinner) .message-block-meta-role {
   opacity: 0.4;
 }
 
@@ -650,6 +796,7 @@
   display: inline-block;
   vertical-align: -0.15em;
   margin-right: 0.35em;
+  opacity: 0.4;
 }
 
 .message-block-meta-time {
@@ -676,11 +823,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--btn-bg);
+  background: transparent;
   color: var(--fg-muted);
   border-radius: var(--radius-control-sm);
   cursor: pointer;
-  border: 1px solid var(--border-input);
+  border: 1px solid transparent;
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
     opacity var(--motion-duration-ui) var(--motion-ease-standard),
@@ -691,28 +838,22 @@
   pointer-events: none;
 }
 
-.message-block:hover .message-footer-icon-btn,
-.message-block:hover .message-copy-btn {
-  opacity: 0.72;
-  pointer-events: auto;
-}
-
-.message-block-footer:focus-within .message-footer-icon-btn,
-.message-block-footer:focus-within .message-copy-btn {
-  opacity: 0.72;
-  pointer-events: auto;
-}
-
-.message-footer-icon-btn:focus-visible,
-.message-footer-icon-btn:active,
-.message-copy-btn:focus-visible,
-.message-copy-btn:active {
-  opacity: 1;
+.message-block:hover .message-footer-icon-btn:not(:hover):not(:focus-visible):not(:active),
+.message-block:hover .message-copy-btn:not(:hover):not(:focus-visible):not(:active),
+.message-block-footer:focus-within .message-footer-icon-btn:not(:hover):not(:focus-visible):not(:active),
+.message-block-footer:focus-within .message-copy-btn:not(:hover):not(:focus-visible):not(:active) {
+  opacity: 0.4;
   pointer-events: auto;
 }
 
 .message-footer-icon-btn:hover,
-.message-copy-btn:hover {
+.message-footer-icon-btn:focus-visible,
+.message-footer-icon-btn:active,
+.message-copy-btn:hover,
+.message-copy-btn:focus-visible,
+.message-copy-btn:active {
+  opacity: 1;
+  pointer-events: auto;
   color: var(--fg);
   background: var(--btn-bg-hover);
   border: 1px solid var(--border-input);
@@ -723,44 +864,7 @@
   pointer-events: none;
 }
 
-/* Chat pane: centered title + secondary actions (polish / reply) */
-.chat-pane-header {
-  flex-shrink: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: var(--space-2);
-}
-
-/* Title control: compact text button, transparent until hover */
-.chat-pane-title {
-  max-width: min(var(--content-width), 100%);
-  min-width: 0;
-  margin: 0;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.chat-pane-header .chat-pane-title.btn {
-  font-family: var(--font-family);
-  color: var(--fg);
-  background: transparent;
-  border-color: transparent;
-  height: var(--input-height);
-  padding: 0 var(--space-3);
-  font-size: var(--font-size-body);
-  font-weight: 400;
-  line-height: var(--line-height-body);
-}
-
-.chat-pane-header .chat-pane-title.btn:hover:not(:disabled) {
-  color: var(--fg);
-  background: var(--overlay-subtle);
-  border-color: transparent;
-}
-
+/* Chat pane: secondary actions (polish / reply) */
 .chat-secondary-actions {
   display: flex;
   flex-wrap: wrap;
@@ -771,7 +875,7 @@
   padding: var(--space-1) 0 var(--space-2);
 }
 
-/* Dictation reply strip: pinned to the bottom with more clearance than the title inset. */
+/* Dictation reply strip: pinned to the bottom of the chat pane. */
 .chat-dictation-actions {
   flex-shrink: 0;
   display: flex;
@@ -804,7 +908,17 @@
 .dictation-suggested-prompts__chip--loading {
   color: transparent;
   pointer-events: none;
-  animation: skeleton-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
+  animation: dictation-chip-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
+}
+
+@keyframes dictation-chip-pulse {
+  0%,
+  100% {
+    opacity: 0.38;
+  }
+  50% {
+    opacity: 0.72;
+  }
 }
 
 /* Chat composer dock — transparent shell; glass lives on `.chat-composer-inner`. */

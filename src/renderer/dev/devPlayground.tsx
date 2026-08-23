@@ -111,11 +111,6 @@ function DevDictationTest({
       <ChatSurface
         chatAreaRef={chatAreaRef}
         composerRef={composerRef}
-        headerContent={
-          <span className="chat-pane-title" style={{ cursor: "default" }}>
-            Dictation @ 11:36 AM
-          </span>
-        }
         displayMessages={messages}
         copiedId={copiedId}
         savedToNotesId={null}
@@ -283,11 +278,6 @@ function DevChatStreamTest({
       <ChatSurface
         chatAreaRef={chatAreaRef}
         composerRef={composerRef}
-        headerContent={
-          <span className="chat-pane-title" style={{ cursor: "default" }}>
-            Hotkey Reply Routing and Reveal Order
-          </span>
-        }
         displayMessages={messages}
         copiedId={copiedId}
         savedToNotesId={null}

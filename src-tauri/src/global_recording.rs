@@ -17,8 +17,8 @@ use crate::env_util::{app_display_name, is_global_hotkey_disabled, is_harness_e2
 use crate::fn_tap::{FnTapCallbacks, FnTapMonitor};
 use crate::global_recording_capture::NativeCapture;
 use crate::global_recording_effects::{
-    load_tray_image, run_recording_effects, run_stop_pipeline_from_path, show_and_focus_main,
-    unregister_escape, set_tray_state, TrayIconState,
+    load_tray_image, run_recording_effects, run_stop_pipeline_from_path, set_tray_state,
+    show_and_focus_main, unregister_escape, TrayIconState,
 };
 use crate::global_recording_session::{
     create_initial_fn_recording_state, reduce_escape, reduce_fn_edge, FnEdge, FnRecordingState,
@@ -99,14 +99,17 @@ pub(crate) async fn dispatch_fn_edge(
         return;
     }
 
-    let edge = if phase == "down" { FnEdge::Down } else { FnEdge::Up };
+    let edge = if phase == "down" {
+        FnEdge::Down
+    } else {
+        FnEdge::Up
+    };
     let state = *runtime.fn_state.lock().await;
     let (next, effects) = reduce_fn_edge(state, edge, ms);
     *runtime.fn_state.lock().await = next;
     eprintln!(
         "[Harness:recording] fn {:?} -> session {:?}",
-        edge,
-        next.session
+        edge, next.session
     );
     run_recording_effects(app, runtime, effects).await;
 }
@@ -153,11 +156,14 @@ async fn start_fn_monitor(app: AppHandle, runtime: Arc<GlobalRecordingRuntime>) 
         return;
     }
 
-    *runtime.monitor_health.lock().await = FnMonitorHealth::Running;
+    *runtime.monitor_health.lock().await = if crate::system::macos_accessibility_is_trusted() {
+        FnMonitorHealth::Running
+    } else {
+        FnMonitorHealth::AccessibilityDenied
+    };
 
     let app_edge = app.clone();
     let runtime_edge = runtime.clone();
-    let runtime_denied = runtime.clone();
     let callbacks = FnTapCallbacks {
         on_edge: Arc::new(move |phase, ms| {
             let phase = phase.to_string();
@@ -167,15 +173,8 @@ async fn start_fn_monitor(app: AppHandle, runtime: Arc<GlobalRecordingRuntime>) 
                 dispatch_fn_edge(&app, &runtime, &phase, ms).await;
             });
         }),
-        on_accessibility_denied: Arc::new(move || {
-            let runtime = runtime_denied.clone();
-            tauri::async_runtime::spawn(async move {
-                *runtime.monitor_health.lock().await = FnMonitorHealth::AccessibilityDenied;
-                *runtime.fn_tap.lock().await = None;
-            });
-        }),
     };
-    *guard = Some(FnTapMonitor::start(callbacks));
+    *guard = Some(FnTapMonitor::start(&app, callbacks));
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -195,7 +194,7 @@ async fn stop_fn_monitor(runtime: &GlobalRecordingRuntime) {
     #[cfg(target_os = "macos")]
     {
         if let Some(monitor) = runtime.fn_tap.lock().await.take() {
-            // Dispose blocks until the CFRunLoop thread exits — run off the async worker.
+            // NSEvent::removeMonitor must run on the AppKit main thread.
             let _ = tokio::task::spawn_blocking(move || monitor.dispose()).await;
         }
     }
@@ -311,6 +310,13 @@ pub async fn recording_get_global_status(
     runtime: State<'_, Arc<GlobalRecordingRuntime>>,
 ) -> Result<GlobalRecordingStatus, String> {
     let health = *runtime.monitor_health.lock().await;
+    let health = match health {
+        FnMonitorHealth::AccessibilityDenied if crate::system::macos_accessibility_is_trusted() => {
+            *runtime.monitor_health.lock().await = FnMonitorHealth::Running;
+            FnMonitorHealth::Running
+        }
+        other => other,
+    };
     let monitor_health = match health {
         FnMonitorHealth::Stopped => "stopped",
         FnMonitorHealth::Running => "running",

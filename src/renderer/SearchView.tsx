@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image as ImageIcon, MessageCircle, Search, StickyNote } from "lucide-react";
+import { Image as ImageIcon, MessageCircle, Mic, Search, StickyNote } from "lucide-react";
 import type { SearchResult } from "../shared/types";
+import { searchTitleOnly } from "../shared/conversationSearch";
 import { conversationDisplayTitle } from "../shared/conversationSession";
 import { getDisplayNoteTitle, type NoteSummary } from "../shared/writing";
 import { getDisplayImageTitle, type GeneratedImage } from "../shared/images";
@@ -30,6 +31,65 @@ function HighlightText({ text, range }: { text: string; range?: [number, number]
       <mark className="search-highlight">{text.slice(start, end)}</mark>
       {text.slice(end)}
     </>
+  );
+}
+
+function ConversationResultsSection({
+  headingId,
+  label,
+  icon,
+  results,
+  activeConversationId,
+  onSelectConversation,
+}: {
+  headingId: string;
+  label: string;
+  icon: React.ReactNode;
+  results: SearchResult[];
+  activeConversationId: string | null;
+  onSelectConversation: (id: string) => void;
+}) {
+  if (results.length === 0) return null;
+  return (
+    <section className="workspace-section" aria-labelledby={headingId}>
+      <h2 id={headingId} className="workspace-section-label">
+        {label}
+      </h2>
+      <ul className="search-results-list">
+        {results.map((r) => (
+          <li key={r.id}>
+            <button
+              type="button"
+              className={`search-result-item${activeConversationId === r.id ? " active" : ""}`}
+              onClick={() => onSelectConversation(r.id)}
+            >
+              <span className="search-result-item__icon" aria-hidden>
+                {icon}
+              </span>
+              <span className="search-result-item__body">
+                <span className="search-result-title">
+                  <HighlightText
+                    text={conversationDisplayTitle(r.title, r.createdAt)}
+                    range={r.titleMatched ? r.titleMatchRange ?? undefined : undefined}
+                  />
+                </span>
+                <span className="search-result-snippet">
+                  <HighlightText
+                    text={r.snippet}
+                    range={
+                      r.snippetMatchRange[0] >= 0 &&
+                      r.snippetMatchRange[1] > r.snippetMatchRange[0]
+                        ? r.snippetMatchRange
+                        : undefined
+                    }
+                  />
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -70,27 +130,55 @@ export function SearchView({
   }, [searchQuery]);
 
   const noteSearchMatches = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return notes.filter((n) => getDisplayNoteTitle(n.title).toLowerCase().includes(q));
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return [];
+    const hits = searchTitleOnly(
+      notes.map((n) => ({
+        id: n.id,
+        title: getDisplayNoteTitle(n.title),
+        activityAt: n.updatedAt,
+      })),
+      trimmed,
+      "note",
+    );
+    const byId = new Map(hits.map((h) => [h.id, h]));
+    return notes.filter((n) => byId.has(n.id));
   }, [notes, searchQuery]);
 
   const imageSearchMatches = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return images.filter((img) => getDisplayImageTitle(img.title).toLowerCase().includes(q));
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return [];
+    const hits = searchTitleOnly(
+      images.map((img) => ({
+        id: img.id,
+        title: getDisplayImageTitle(img.title),
+        activityAt: img.updatedAt,
+      })),
+      trimmed,
+      "image",
+    );
+    const byId = new Map(hits.map((h) => [h.id, h]));
+    return images.filter((img) => byId.has(img.id));
   }, [images, searchQuery]);
+
+  const chatResults = useMemo(
+    () => searchResults.filter((r) => r.kind === "chat"),
+    [searchResults],
+  );
+  const dictationResults = useMemo(
+    () => searchResults.filter((r) => r.kind === "dictation"),
+    [searchResults],
+  );
 
   const trimmed = searchQuery.trim();
   const hasQuery = trimmed.length > 0;
-  const hasLocalMatches = noteSearchMatches.length > 0 || imageSearchMatches.length > 0;
-  const empty =
-    hasQuery &&
-    !searchLoading &&
-    searchResults.length === 0 &&
-    !hasLocalMatches;
-  const showSearching =
-    hasQuery && searchLoading && searchResults.length === 0 && !hasLocalMatches;
+  const hasLocalMatches =
+    noteSearchMatches.length > 0 ||
+    imageSearchMatches.length > 0 ||
+    chatResults.length > 0 ||
+    dictationResults.length > 0;
+  const empty = hasQuery && !searchLoading && !hasLocalMatches;
+  const showSearching = hasQuery && searchLoading && !hasLocalMatches;
 
   return (
     <div className="workspace-page search-page">
@@ -170,47 +258,23 @@ export function SearchView({
                 </section>
               ) : null}
 
-              {searchResults.length > 0 ? (
-                <section className="workspace-section" aria-labelledby="search-chats-heading">
-                  <h2 id="search-chats-heading" className="workspace-section-label">
-                    Chats
-                  </h2>
-                  <ul className="search-results-list">
-                    {searchResults.map((r) => (
-                      <li key={r.id}>
-                        <button
-                          type="button"
-                          className={`search-result-item${conversationId === r.id ? " active" : ""}`}
-                          onClick={() => onSelectConversation(r.id)}
-                        >
-                          <span className="search-result-item__icon" aria-hidden>
-                            <MessageCircle size={16} />
-                          </span>
-                          <span className="search-result-item__body">
-                            <span className="search-result-title">
-                              <HighlightText
-                                text={conversationDisplayTitle(r.title, r.createdAt)}
-                                range={r.titleMatched ? r.titleMatchRange ?? undefined : undefined}
-                              />
-                            </span>
-                            <span className="search-result-snippet">
-                              <HighlightText
-                                text={r.snippet}
-                                range={
-                                  r.snippetMatchRange[0] >= 0 &&
-                                  r.snippetMatchRange[1] > r.snippetMatchRange[0]
-                                    ? r.snippetMatchRange
-                                    : undefined
-                                }
-                              />
-                            </span>
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
+              <ConversationResultsSection
+                headingId="search-dictations-heading"
+                label="Dictations"
+                icon={<Mic size={16} />}
+                results={dictationResults}
+                activeConversationId={conversationId}
+                onSelectConversation={onSelectConversation}
+              />
+
+              <ConversationResultsSection
+                headingId="search-chats-heading"
+                label="Chats"
+                icon={<MessageCircle size={16} />}
+                results={chatResults}
+                activeConversationId={conversationId}
+                onSelectConversation={onSelectConversation}
+              />
             </>
           )}
         </div>

@@ -67,28 +67,6 @@ describe("splitStreamingMarkdown", () => {
     }
   });
 
-  it("reuses the previous completed array when only trailing grows", () => {
-    const first = splitStreamingMarkdown("Para one\n\nPara");
-    expect(first.completed).toEqual(["Para one\n\n"]);
-
-    const grown = splitStreamingMarkdown("Para one\n\nPara two", first);
-    expect(grown.completed).toBe(first.completed);
-    expect(grown.trailing).toBe("Para two");
-  });
-
-  it("returns the previous blocks unchanged when content did not change", () => {
-    const first = splitStreamingMarkdown("Para one\n\nPara two");
-    expect(splitStreamingMarkdown("Para one\n\nPara two", first)).toBe(first);
-  });
-
-  it("allocates a new completed array when a block settles", () => {
-    const first = splitStreamingMarkdown("Para one\n\nPara two");
-    const settled = splitStreamingMarkdown("Para one\n\nPara two\n\nPara three", first);
-    expect(settled.completed).not.toBe(first.completed);
-    expect(settled.completed).toEqual(["Para one\n\n", "Para two\n\n"]);
-    expect(settled.trailing).toBe("Para three");
-  });
-
   it("flushStreamingMarkdown appends trailing", () => {
     const blocks = splitStreamingMarkdown("Hello world");
     expect(flushStreamingMarkdown(blocks)).toEqual({

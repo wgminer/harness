@@ -7,6 +7,7 @@ struct MessageRowView: View, Equatable {
     var localDataDir: URL?
     var isStreaming = false
     var onToolConfirm: ((ToolCallRecord, GatedToolAction) -> Void)?
+    var onOpenThread: ((String) -> Void)?
     @State private var isExpanded = false
     @State private var attachmentImages: [UIImage] = []
 
@@ -24,7 +25,8 @@ struct MessageRowView: View, Equatable {
                     content: ChatTemporalContext.stripSentAtPrefix(message.content),
                     isStreaming: isStreaming,
                     toolCalls: message.toolCalls ?? [],
-                    onToolConfirm: onToolConfirm
+                    onToolConfirm: onToolConfirm,
+                    onOpenThread: onOpenThread
                 )
             case .user:
                 UserMessageCard(
@@ -37,7 +39,8 @@ struct MessageRowView: View, Equatable {
                     content: message.content,
                     isStreaming: isStreaming,
                     toolCalls: message.toolCalls ?? [],
-                    onToolConfirm: onToolConfirm
+                    onToolConfirm: onToolConfirm,
+                    onOpenThread: onOpenThread
                 )
             }
         }
@@ -104,13 +107,15 @@ struct AssistantMessageView: View {
     var isStreaming = false
     var toolCalls: [ToolCallRecord]
     var onToolConfirm: ((ToolCallRecord, GatedToolAction) -> Void)?
+    var onOpenThread: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !toolCalls.isEmpty {
                 ToolCallsCardView(
                     toolCalls: toolCalls,
-                    onToolConfirm: { call, action in onToolConfirm?(call, action) }
+                    onToolConfirm: { call, action in onToolConfirm?(call, action) },
+                    onOpenThread: onOpenThread
                 )
             }
             if !content.isEmpty || isStreaming {
@@ -127,6 +132,16 @@ struct AssistantMessageView: View {
                         HarnessMarkdownView(content: content, isStreaming: false, assistantProse: true)
                     }
                 }
+                .environment(\.openURL, OpenURLAction { url in
+                    if let ref = ConversationSearch.parseLibraryHref(url.absoluteString)
+                        ?? ConversationSearch.parseLibraryHref(url.path),
+                       ref.target == .conversation
+                    {
+                        onOpenThread?(ref.id)
+                        return .handled
+                    }
+                    return .systemAction
+                })
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

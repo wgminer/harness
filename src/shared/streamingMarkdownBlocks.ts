@@ -16,30 +16,17 @@ export function splitStreamingMarkdown(
     const prefix = previous.completed.join("");
     if (content.startsWith(prefix)) {
       let remainder = content.slice(prefix.length);
-      let absorbedText: string | null = null;
+      const completed = [...previous.completed];
 
       if (previous.trailing === "" && remainder.length > 0) {
         const absorbed = absorbLeadingBlankLineSeparators(remainder);
         if (absorbed) {
-          absorbedText = absorbed.text;
+          completed[completed.length - 1] += absorbed.text;
           remainder = absorbed.rest;
         }
       }
 
       const remainderSplit = splitStreamingMarkdownFull(remainder);
-
-      // Most streamed chunks only extend `trailing`. Preserve the previous
-      // `completed` identity in that case so callers can skip re-rendering and
-      // re-measuring blocks that already settled.
-      if (absorbedText === null && remainderSplit.completed.length === 0) {
-        if (remainderSplit.trailing === previous.trailing) return previous;
-        return { completed: previous.completed, trailing: remainderSplit.trailing };
-      }
-
-      const completed = [...previous.completed];
-      if (absorbedText !== null) {
-        completed[completed.length - 1] += absorbedText;
-      }
       return {
         completed: completed.concat(remainderSplit.completed),
         trailing: remainderSplit.trailing,

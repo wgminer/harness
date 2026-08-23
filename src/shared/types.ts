@@ -170,13 +170,17 @@ export interface Settings {
 
 export interface SearchResult {
   id: string;
+  kind: import("./conversationSearch").SearchResultKind;
   title: string | null;
   createdAt: number;
   titleMatched: boolean;
   titleMatchRange: [number, number] | undefined;
   snippet: string;
   snippetMatchRange: [number, number];
+  score: number;
 }
+
+export type { MemorySearchHit, SearchResultKind } from "./conversationSearch";
 
 export interface LayoutOptions {
   sidebar: "left" | "right";

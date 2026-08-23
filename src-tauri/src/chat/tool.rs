@@ -25,7 +25,7 @@ impl ChatController {
             return;
         };
         let result = if action == "proceed" {
-            execute_assistant_tool(&self.state, &pending.tool, pending.args)
+            execute_assistant_tool(&self.state, &pending.tool, pending.args, None)
                 .await
                 .unwrap_or_else(|e| json!({ "error": e.to_string() }).to_string())
         } else {
@@ -70,7 +70,7 @@ impl ChatController {
                     json!({ "error": "Gated tool request was cancelled." }).to_string()
                 })
             } else {
-                execute_assistant_tool(&self.state, name, args)
+                execute_assistant_tool(&self.state, name, args, Some(conversation_id))
                     .await
                     .map_err(|e| e.to_string())?
             }

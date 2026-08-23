@@ -187,7 +187,8 @@ struct ChatThreadView: View {
                             isStreaming: false,
                             onToolConfirm: { call, action in
                                 handleToolConfirm(call: call, action: action, messageTimestamp: msg.timestamp)
-                            }
+                            },
+                            onOpenThread: { id in app.openThread(id: id) }
                         )
                         .equatable()
                         .id(rowId(for: msg))
@@ -221,7 +222,8 @@ struct ChatThreadView: View {
                                     action: action,
                                     messageTimestamp: streamingMessageTimestamp
                                 )
-                            }
+                            },
+                            onOpenThread: { id in app.openThread(id: id) }
                         )
                         .id(ChatScrollAnchor.streaming)
                     }

@@ -49,7 +49,8 @@ describe("sidebarUtils", () => {
     expect(grouped[1].items.map((c) => c.id)).toEqual(["yesterday"]);
     expect(grouped[2].items.map((c) => c.id)).toEqual(["older"]);
     for (const group of grouped) {
-      expect(group.label).toMatch(/^[A-Za-z]+, \d{1,2}\/\d{1,2}\/\d{4}$/);
+      expect(group.label).toMatch(/^\d{1,2}·\d{1,2}·\d{4}$/);
+      expect(group.weekday).toMatch(/^[A-Za-z.]+$/);
     }
   });
 

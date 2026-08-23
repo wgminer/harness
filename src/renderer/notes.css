@@ -430,11 +430,11 @@
   overflow: hidden;
   background-color: var(--bg);
   container-type: inline-size;
-  --notes-editor-inline-pad: max(var(--space-4), calc((100% - var(--notes-editor-content-width, 100%)) / 2));
+  --notes-editor-inline-pad: max(var(--space-4), calc((100cqi - var(--notes-editor-content-width, 100cqi)) / 2));
 }
 
 .notes-surface__editor-wrap--narrow {
-  --notes-editor-content-width: 100%;
+  --notes-editor-content-width: 100cqi;
 }
 
 .notes-surface__editor-wrap--narrow .notes-surface__editor {
@@ -454,6 +454,11 @@
   min-height: 0;
   width: 100%;
   overflow: hidden;
+  --notes-editor-gutter-width: 0ch;
+}
+
+.notes-code-editor--line-numbers {
+  --notes-editor-gutter-width: 3.5ch;
 }
 
 .notes-code-editor .cm-editor {
@@ -469,14 +474,15 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  /* Keep gutters beside the content column in comfortable width. */
-  padding-inline-start: max(0px, calc(var(--notes-editor-inline-pad) - 3.5ch));
+  /* Center the text column; gutters sit in the leftover start margin. */
+  padding-inline-start: max(0px, calc(var(--notes-editor-inline-pad) - var(--notes-editor-gutter-width)));
+  padding-inline-end: var(--notes-editor-inline-pad);
 }
 
 .notes-code-editor .cm-content {
   padding-top: clamp(var(--space-4), var(--notes-editor-inline-pad), calc(var(--space-4) + var(--space-12)));
   padding-bottom: var(--space-4);
-  padding-inline: var(--space-3) var(--notes-editor-inline-pad);
+  padding-inline: var(--space-3);
 }
 
 .notes-surface__editor-wrap--narrow .notes-code-editor .cm-content {

@@ -1,8 +1,14 @@
-import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChatView } from "./ChatView";
 import { AppTitlebar } from "./AppTitlebar";
-import { getCachedSettings, setCachedAccessibilityTrusted, setCachedHasOpenAIApiKey, setCachedSettings } from "./settings/settingsSessionCache";
+import { SettingsView } from "./SettingsView";
+import { setCachedAccessibilityTrusted, setCachedHasOpenAIApiKey, setCachedSettings } from "./settings/settingsSessionCache";
+import { TasksView } from "./TasksView";
+import { SearchView } from "./SearchView";
+import { NotesView } from "./WritingSurfaceView";
+import { ImageCanvasView } from "./ImageCanvasView";
 import { Sidebar } from "./Sidebar";
+import { DevChatView, DevDictationView, DevPlaceholderView } from "./dev/devPlayground";
 import { SetupNoticeModal } from "./SetupNoticeModal";
 import { HotkeyRecordingOverlay } from "./HotkeyRecordingOverlay";
 import { wireGlobalHotkeyActions, type GlobalHotkeyOverlayPhase } from "./globalHotkeyController";
@@ -12,6 +18,7 @@ import type {} from "../shared/desktopAPI";
 import { isSidebarVisibleConversation, isTimePlaceholderTitle } from "../shared/conversationSession";
 import {
   getDefaultNoteTemplate,
+  getDisplayNoteTitle,
   normalizeDefaultNoteTemplateId,
   normalizeNoteTemplates,
   type NoteSummary,
@@ -20,25 +27,6 @@ import type { GeneratedImage } from "../shared/images";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chatDisplayTitle";
 import type { Conversation, View, DevView } from "./sidebarUtils";
 import { isDevView } from "./sidebarUtils";
-
-/**
- * Only the chat view is on the boot path. Lazy-loading the rest keeps CodeMirror
- * (notes) and the QR encoder (settings sync) out of the initial chunk.
- */
-const SettingsView = lazy(() =>
-  import("./SettingsView").then((m) => ({ default: m.SettingsView })),
-);
-const TasksView = lazy(() => import("./TasksView").then((m) => ({ default: m.TasksView })));
-const SearchView = lazy(() => import("./SearchView").then((m) => ({ default: m.SearchView })));
-const NotesView = lazy(() =>
-  import("./WritingSurfaceView").then((m) => ({ default: m.NotesView })),
-);
-const ImageCanvasView = lazy(() =>
-  import("./ImageCanvasView").then((m) => ({ default: m.ImageCanvasView })),
-);
-
-/** Folds to `null` in production builds, so the playground never ships. */
-const DevViewHost = import.meta.env.DEV ? lazy(() => import("./dev/DevViewHost")) : null;
 import {
   collectSetupGaps,
   shouldShowSetupNotice,
@@ -65,6 +53,8 @@ export default function App() {
   const [layout, setLayout] = useState<LayoutOptions>(DEFAULT_LAYOUT);
   /** Incremented when the chat composer should be focused. */
   const [focusComposerNonce, setFocusComposerNonce] = useState(0);
+  /** Incremented when the window title is clicked to open conversation details. */
+  const [openTitleModalNonce, setOpenTitleModalNonce] = useState(0);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(IDLE_UPDATE_STATUS);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   /** True while the open chat is waiting on / streaming from the chat model (not composer voice). */
@@ -91,7 +81,6 @@ export default function App() {
     DEFAULT_UI_SESSION.openNoteInStickyWindow ?? false,
   );
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [isHarnessDev, setIsHarnessDev] = useState(false);
 
   const toggleLibraryOpen = useCallback(() => {
     setLibraryOpen((open) => !open);
@@ -125,20 +114,14 @@ export default function App() {
     overlaySessionRef.current = globalHotkeyOverlaySession;
   }, [globalHotkeyOverlaySession]);
 
-  /**
-   * `refreshSettingsCache` is only needed when settings may have changed — the
-   * gap computation itself doesn't read settings, and boot already primed the
-   * cache in main.tsx.
-   */
-  const refreshSetupState = useCallback(async (refreshSettingsCache = false) => {
-    const [syncStatus, credentialStatus, platform] = await Promise.all([
+  const refreshSetupState = useCallback(async () => {
+    const [settings, syncStatus, credentialStatus, platform] = await Promise.all([
+      window.harness.settings.get() as Promise<Settings>,
       window.harness.sync.getStatus(),
       window.harness.credentials.getStatus(),
       window.harness.system.getPlatform(),
-      refreshSettingsCache
-        ? (window.harness.settings.get() as Promise<Settings>).then(setCachedSettings)
-        : Promise.resolve(),
     ]);
+    setCachedSettings(settings);
     setCachedHasOpenAIApiKey(credentialStatus.hasOpenAIApiKey);
     let accessibilityTrusted: boolean | null = null;
     if (platform === "darwin") {
@@ -163,7 +146,7 @@ export default function App() {
     if (prev === "settings" && view !== "settings") {
       // Drop deep-link tab so the next System open defaults to General.
       setSettingsInitialTab(undefined);
-      void refreshSetupState(true);
+      void refreshSetupState();
     }
     prevViewRef.current = view;
   }, [view, refreshSetupState]);
@@ -211,15 +194,12 @@ export default function App() {
   );
 
   const loadConversations = useCallback(async () => {
-    // main.tsx primes the settings cache during boot; only read again if that
-    // hasn't landed yet (the two race).
-    const cachedSettings = getCachedSettings();
     const [list, session, settings] = await Promise.all([
       window.harness.memory.listConversations(),
       window.harness.uiSession.get(),
-      cachedSettings ?? window.harness.settings.get(),
+      window.harness.settings.get(),
     ]);
-    if (!cachedSettings) setCachedSettings(settings);
+    setCachedSettings(settings);
     const openToCompose =
       settings.chat?.openToComposeOnLaunch ?? DEFAULT_SETTINGS.chat!.openToComposeOnLaunch;
     setConversations(list);
@@ -304,10 +284,6 @@ export default function App() {
   const handleSelectImageFromLibrary = useCallback((id: string) => {
     openImageInMain(id);
   }, [openImageInMain]);
-
-  useEffect(() => {
-    void window.harness.env.isHarnessDev().then(setIsHarnessDev);
-  }, []);
 
   useEffect(() => {
     void loadConversations();
@@ -618,6 +594,19 @@ export default function App() {
     setView(devView);
   }, []);
 
+  const chatTitlePending =
+    view === "chat" &&
+    activeChatConversation != null &&
+    isConversationTitlePending(
+      activeChatConversation.title,
+      (titleGenInFlight[activeChatConversation.id] ?? 0) > 0 ||
+        !!titleAwaitingIds[activeChatConversation.id],
+    );
+
+  const openChatTitleModal = useCallback(() => {
+    setOpenTitleModalNonce((n) => n + 1);
+  }, []);
+
   const pageTitle = useMemo(() => {
     switch (view) {
       case "chat":
@@ -635,8 +624,11 @@ export default function App() {
         return "Dev · Note";
       case "dev-image":
         return "Dev · Image";
-      case "notes":
-        return "Notes";
+      case "notes": {
+        const activeNote = notes.find((note) => note.id === activeNoteId);
+        if (!activeNote) return "Notes";
+        return getDisplayNoteTitle(activeNote.title ?? "") || "Notes";
+      }
       case "images":
         return "Images";
       case "tasks":
@@ -646,7 +638,7 @@ export default function App() {
       case "settings":
         return SETTINGS_PAGE_TITLE;
     }
-  }, [view, activeChatConversation]);
+  }, [view, activeChatConversation, notes, activeNoteId]);
 
   return (
     <div
@@ -657,9 +649,11 @@ export default function App() {
       <AppTitlebar
         libraryOpen={libraryOpen}
         onToggleLibrary={toggleLibraryOpen}
-        view={view}
-        onViewChange={handleViewChange}
         title={pageTitle}
+        titlePending={chatTitlePending}
+        onTitleClick={
+          view === "chat" && conversationId ? openChatTitleModal : undefined
+        }
       />
       <div className="app-frame">
         <Sidebar
@@ -694,7 +688,7 @@ export default function App() {
           onUpdateClick={handleUpdateClick}
           onSyncComplete={refreshLibraryAfterSync}
           onOpenDataSettings={openDataSettings}
-          showDevSection={isHarnessDev}
+          showDevSection={false}
           onDevViewSelect={handleDevViewSelect}
         />
         <main className="main">
@@ -710,14 +704,7 @@ export default function App() {
                       )
                     : ""
                 }
-                titlePending={
-                  activeChatConversation != null &&
-                  isConversationTitlePending(
-                    activeChatConversation.title,
-                    (titleGenInFlight[activeChatConversation.id] ?? 0) > 0 ||
-                      !!titleAwaitingIds[activeChatConversation.id]
-                  )
-                }
+                openTitleModalNonce={openTitleModalNonce}
                 conversationChatMode={activeChatConversation?.chatMode}
                 conversationDictationReplyAction={
                   activeChatConversation?.dictationReplyAction ?? null
@@ -738,6 +725,11 @@ export default function App() {
                 onChatActivityChange={handleChatActivityChange}
                 focusComposerNonce={focusComposerNonce}
                 onOpenNotesView={(noteId) => openNoteInMain(noteId)}
+                onOpenConversation={(id) => {
+                  setConversationId(id);
+                  setView("chat");
+                }}
+                onOpenImage={(imageId) => openImageInMain(imageId)}
                 onNotesChanged={() => {
                   void loadNotesList();
                 }}
@@ -746,7 +738,6 @@ export default function App() {
               />
             </div>
           )}
-          <Suspense fallback={null}>
           {view === "settings" && (
             <SettingsView
               initialTab={settingsInitialTab}
@@ -754,7 +745,7 @@ export default function App() {
               onOpenNoteInStickyWindowChange={setOpenNoteInStickyWindow}
               openAIConfigured={openAIConfigured}
               onSettingsChanged={() => {
-                void refreshSetupState(true);
+                void refreshSetupState();
               }}
               onImportComplete={loadConversations}
               onSyncComplete={refreshLibraryAfterSync}
@@ -790,8 +781,10 @@ export default function App() {
           {view === "images" && (
             <ImageCanvasView imageId={activeImageId} onImageUpdated={handleImageUpdated} />
           )}
-          {DevViewHost && isDevView(view) ? <DevViewHost view={view} /> : null}
-          </Suspense>
+          {view === "dev-chat" && <DevChatView />}
+          {view === "dev-dictation" && <DevDictationView />}
+          {view === "dev-note" && <DevPlaceholderView kind="note" />}
+          {view === "dev-image" && <DevPlaceholderView kind="image" />}
         </main>
       </div>
       <SetupNoticeModal

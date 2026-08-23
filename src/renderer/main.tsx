@@ -23,27 +23,19 @@ import "highlight.js/styles/github-dark.css";
 
 window.harness = createHarnessAdapter();
 void (async () => {
-  // These three reads are independent: issue them together so boot costs one
-  // IPC round-trip instead of three chained ones. Side effects stay ordered.
-  const settingsPromise = window.harness.settings.get().then(
-    (s) => s as Settings,
-    // Keep CSS default accent if settings fail to load.
-    () => null,
-  );
-  const stickyPromise = isCurrentStickyWindow();
-  const devPromise = window.harness.env.isHarnessDev();
-
-  const settings = await settingsPromise;
-  if (settings) {
+  try {
+    const settings = (await window.harness.settings.get()) as Settings;
     setCachedSettings(settings);
     applyAccent(settings.appearance?.accent);
+  } catch {
+    // Keep CSS default accent if settings fail to load.
   }
-  const sticky = await stickyPromise;
+  const sticky = await isCurrentStickyWindow();
   if (!sticky) {
     initGlobalHotkeyController();
     void window.harness.recording.signalFrontendReady();
   }
-  const dev = await devPromise;
+  const dev = await window.harness.env.isHarnessDev();
   if (dev && !sticky) document.title = "Harness Dev";
 })();
 

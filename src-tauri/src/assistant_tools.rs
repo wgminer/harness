@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::credentials::resolve_tavily_api_key;
-use crate::memory::{AppState, SearchResult};
+use crate::memory::{AppState, MemorySearchHit};
 use crate::notes;
 use crate::tasks::{
     clear_completed_tasks, create_task, delete_task, list_tasks, update_task, TasksPayload,
@@ -31,7 +31,7 @@ struct MemoryToolPayload {
 struct MemorySearchPayload {
     last_action: String,
     query: String,
-    results: Vec<SearchResult>,
+    results: Vec<MemorySearchHit>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,6 +134,7 @@ async fn list_memories(state: &AppState) -> Result<MemoryToolPayload, std::io::E
 async fn search_memory_conversations(
     state: &AppState,
     args: &Value,
+    exclude_conversation_id: Option<&str>,
 ) -> Result<MemorySearchPayload, std::io::Error> {
     let query = args
         .get("query")
@@ -144,7 +145,7 @@ async fn search_memory_conversations(
     let results = if query.is_empty() {
         Vec::new()
     } else {
-        crate::memory::search_conversations(state, &query, false).await?
+        crate::memory::search_library(state, &query, exclude_conversation_id).await?
     };
     Ok(MemorySearchPayload {
         last_action: "search_conversations".into(),
@@ -518,6 +519,7 @@ pub async fn execute_assistant_tool(
     state: &AppState,
     name: &str,
     args: Value,
+    exclude_conversation_id: Option<&str>,
 ) -> Result<String, std::io::Error> {
     let payload: Value = match name {
         "task_list" => serde_json::to_value(list_tasks(state).await?)?.into(),
@@ -527,9 +529,10 @@ pub async fn execute_assistant_tool(
         "task_clear_completed" => serde_json::to_value(clear_completed_tasks(state).await?)?.into(),
         "memory_set" => serde_json::to_value(set_memory(state, &args).await?)?.into(),
         "memory_list" => serde_json::to_value(list_memories(state).await?)?.into(),
-        "memory_search_conversations" => {
-            serde_json::to_value(search_memory_conversations(state, &args).await?)?.into()
-        }
+        "memory_search_conversations" => serde_json::to_value(
+            search_memory_conversations(state, &args, exclude_conversation_id).await?,
+        )?
+        .into(),
         "get_datetime" => get_datetime(&args),
         "web_search" => serde_json::to_value(fetch_web_search(&args).await)?.into(),
         "note_list" | "note_create" | "note_read" | "note_save" | "note_delete" => {

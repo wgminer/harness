@@ -2,14 +2,23 @@ import Foundation
 
 @MainActor
 enum AssistantTools {
-    static func execute(name: String, args: [String: Any], store: ConversationStore) async throws -> String {
+    static func execute(
+        name: String,
+        args: [String: Any],
+        store: ConversationStore,
+        excludeConversationId: String? = nil
+    ) async throws -> String {
         switch name {
         case "memory_set":
             return try encodeMemoryTool(try store.setUserMemory(args: args))
         case "memory_list":
             return try encodeMemoryTool(try store.listUserMemories())
         case "memory_search_conversations":
-            return try encodeSearchResult(args: args, store: store)
+            return try encodeSearchResult(
+                args: args,
+                store: store,
+                excludeConversationId: excludeConversationId
+            )
         case "get_datetime":
             return encodeJSON(DateTimeTool.result(args: args))
         case "web_search":
@@ -31,23 +40,25 @@ enum AssistantTools {
         return encodeJSON(object)
     }
 
-    private static func encodeSearchResult(args: [String: Any], store: ConversationStore) throws -> String {
+    private static func encodeSearchResult(
+        args: [String: Any],
+        store: ConversationStore,
+        excludeConversationId: String?
+    ) throws -> String {
         let query = (args["query"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let results = query.isEmpty ? [] : try ConversationSearch.search(in: store.localDataDir, query: query)
-        let resultObjects = results.map { result -> [String: Any] in
-            var object: [String: Any] = [
-                "id": result.id,
-                "title": result.title as Any,
-                "createdAt": result.createdAt,
-                "titleMatched": result.titleMatched,
-                "snippet": result.snippet,
-                "snippetMatchRange": result.snippetMatchRange,
-            ]
-            if let titleMatchRange = result.titleMatchRange {
-                object["titleMatchRange"] = titleMatchRange
-            }
-            return object
+        let results: [MemorySearchHit]
+        if query.isEmpty {
+            results = []
+        } else {
+            results = try ConversationSearch.searchLibrary(
+                in: store.localDataDir,
+                query: query,
+                excludeConversationId: excludeConversationId
+            )
         }
+        let encoder = JSONEncoder()
+        let resultsData = try encoder.encode(results)
+        let resultObjects = (try JSONSerialization.jsonObject(with: resultsData) as? [[String: Any]]) ?? []
         return encodeJSON([
             "lastAction": "search_conversations",
             "query": query,

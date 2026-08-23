@@ -364,11 +364,14 @@ export interface NotesCodeEditorOptions {
   readOnly?: boolean;
 }
 
+export function notesLineNumbersExtension(showLineNumbers: boolean): Extension {
+  return showLineNumbers ? lineNumbers() : [];
+}
+
 export function createNotesCodeEditorExtensions(options: NotesCodeEditorOptions): Extension[] {
   const extensions: Extension[] = [
     history(),
     Prec.high(notesTextSelectionPlugin),
-    lineNumbers(),
     highlightActiveLine(),
     EditorView.lineWrapping,
     Prec.high(markdownListKeymap),

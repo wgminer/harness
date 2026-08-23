@@ -74,6 +74,7 @@
   --font-family-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
   --font-size: var(--font-size-body);
   --font-size-caption: 12px;
+  --font-size-sidebar: 14px;
   --font-size-body: 16px;
   --font-size-ui: 12px;
   --font-size-title: 18px;
@@ -122,11 +123,10 @@
   --input-height: calc(var(--grid) * 9);
   --shell-bar-height: calc(var(--grid) * 13);
   --titlebar-height: 48px;
-  --titlebar-traffic-light-y: 14px;
+  --titlebar-traffic-light-y: 25px;
   --titlebar-traffic-light-size: 12px;
   --titlebar-toggle-size: 16px;
   --titlebar-toggle-gap: 16px;
-  --titlebar-actions-gap: 12px;
   --titlebar-controls-inset: 76px;
   --sidebar-width: calc(var(--grid) * 70);
   --content-width: calc(var(--grid) * 150);
@@ -481,8 +481,7 @@ hr {
   cursor: default;
 }
 
-.app-titlebar__sidebar-toggle,
-.app-titlebar__action {
+.app-titlebar__sidebar-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -490,7 +489,7 @@ hr {
   width: var(--titlebar-toggle-size);
   height: var(--titlebar-toggle-size);
   padding: 0;
-  margin: 0;
+  margin: 0 0 0 var(--titlebar-toggle-gap);
   border: none;
   border-radius: 0;
   line-height: 0;
@@ -500,24 +499,17 @@ hr {
   cursor: pointer;
 }
 
-.app-titlebar__sidebar-toggle {
-  margin-left: var(--titlebar-toggle-gap);
-}
-
-.app-titlebar__sidebar-toggle:hover,
-.app-titlebar__action:hover {
+.app-titlebar__sidebar-toggle:hover {
   color: var(--fg);
   opacity: 1;
 }
 
-.app-titlebar__sidebar-toggle:focus-visible,
-.app-titlebar__action:focus-visible {
+.app-titlebar__sidebar-toggle:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
-.app-titlebar__sidebar-toggle svg,
-.app-titlebar__action svg {
+.app-titlebar__sidebar-toggle svg {
   display: block;
   width: var(--titlebar-toggle-size);
   height: var(--titlebar-toggle-size);
@@ -533,22 +525,32 @@ hr {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-family: var(--font-family);
   font-size: var(--font-size-ui);
+  font-weight: 400;
+  line-height: var(--line-height-ui);
   color: var(--fg-muted);
   pointer-events: none;
 }
 
-/* Search / Tasks / Settings, pinned to the trailing edge of the bar. */
-.app-titlebar__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--titlebar-actions-gap);
-  margin-left: auto;
+.app-titlebar__title--action {
+  pointer-events: auto;
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: center;
+  cursor: pointer;
 }
 
-.app-titlebar__action[aria-pressed="true"] {
+.app-titlebar__title--action:hover {
   color: var(--fg);
-  opacity: 1;
+}
+
+.app-titlebar__title--action:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* Sidebar + main unit. No outer box border — gutters share --bg with .app. */
@@ -717,7 +719,7 @@ hr {
 .ui-skeleton {
   display: inline-block;
   border-radius: var(--radius-sm);
-  background: var(--fg-muted);
+  background: var(--bg-elevated);
   vertical-align: middle;
   animation: skeleton-pulse var(--motion-duration-skeleton) var(--motion-ease-in-out) infinite;
 }
@@ -739,6 +741,7 @@ hr {
   width: 100%;
   max-width: 12rem;
   height: var(--line-height-message);
+  border-radius: var(--radius-lg);
 }
 
 .ui-skeleton--play {
@@ -763,10 +766,10 @@ hr {
 @keyframes skeleton-pulse {
   0%,
   100% {
-    opacity: 0.38;
+    background-color: var(--bg-secondary);
   }
   50% {
-    opacity: 0.72;
+    background-color: var(--hover-bg);
   }
 }
 

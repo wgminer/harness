@@ -199,10 +199,6 @@ export function DataSettingsTab({
                   <span className="settings-sync-status" role="status">
                     {data.syncInlineStatus}
                   </span>
-                ) : data.syncBusy ? (
-                  <span className="settings-sync-status" role="status">
-                    Syncing…
-                  </span>
                 ) : null}
               </div>
             </SettingsActions>

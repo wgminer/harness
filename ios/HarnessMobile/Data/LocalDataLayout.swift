@@ -4,6 +4,7 @@ enum LocalDataLayout {
     static let appStateDir = "app-state"
     static let conversationsFile = "app-state/conversations.json"
     static let notesIndexFile = "app-state/notes.json"
+    static let imagesIndexFile = "app-state/images.json"
     static let userMemoryFile = "app-state/user_memory.json"
     static let tasksFile = "app-state/tasks.json"
     static let settingsFile = "settings/settings.json"

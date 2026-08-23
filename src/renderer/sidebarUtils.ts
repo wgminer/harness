@@ -115,7 +115,7 @@ function getDateGroupLabel(key: string): string {
   return key;
 }
 
-export type SidebarGroup = { key: string; label: string; items: LibraryRow[] };
+export type SidebarGroup = { key: string; label: string; weekday?: string; items: LibraryRow[] };
 
 /** Sidebar list grouping: relative date buckets, flat recent, or calendar days. */
 export type SidebarListSortMode = "date" | "recent" | "day";
@@ -127,15 +127,12 @@ export function nextSidebarListSortMode(mode: SidebarListSortMode): SidebarListS
   return SIDEBAR_LIST_SORT_MODES[(index + 1) % SIDEBAR_LIST_SORT_MODES.length];
 }
 
-function getCalendarDayLabel(key: string): string {
+function getCalendarDayParts(key: string): { label: string; weekday: string } {
   const d = new Date(key + "T12:00:00");
-  const weekday = d.toLocaleDateString(undefined, { weekday: "long" });
-  const numericDate = d.toLocaleDateString(undefined, {
-    month: "numeric",
-    day: "numeric",
-    year: "numeric",
-  });
-  return `${weekday}, ${numericDate}`;
+  return {
+    weekday: d.toLocaleDateString(undefined, { weekday: "short" }),
+    label: `${d.getMonth() + 1}·${d.getDate()}·${d.getFullYear()}`,
+  };
 }
 
 function groupConversationsByCalendarDay(conversations: LibraryRow[]): { groups: SidebarGroup[] } {
@@ -153,7 +150,7 @@ function groupConversationsByCalendarDay(conversations: LibraryRow[]): { groups:
   for (const key of Array.from(byKey.keys()).sort((a, b) => b.localeCompare(a))) {
     const items = byKey.get(key);
     if (items?.length) {
-      groups.push({ key, label: getCalendarDayLabel(key), items });
+      groups.push({ key, ...getCalendarDayParts(key), items });
     }
   }
 

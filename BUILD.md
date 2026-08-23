@@ -309,7 +309,7 @@ Apple rejected nested helpers (`HarnessSpeech` under `Contents/Resources/_up_/re
 - **App crashes on launch**  
 Check Console.app for Rust panics. Ensure the speech helper (`HarnessSpeech`) was built (`npm run prebuild`).
 - **Global Fn hotkey not working / Accessibility toggle flips off**  
-Fn monitoring runs in-process in the main Harness binary. Enable **Accessibility** for **Harness** (or **Harness Dev** when using `npm run dev`) in System Settings → Privacy & Security → Accessibility, then quit and reopen the app. After replacing a dist build, reset with `tccutil reset Accessibility com.harness.app` (or `com.harness.app.dev`) and grant again. Settings → Voice shows Accessibility status for the Fn shortcut.
+Fn monitoring runs in-process in the main Harness binary (NSEvent FlagsChanged, not a CGEvent tap). Enable **Accessibility** for **Harness** (or **Harness Dev** when using `npm run dev`) in System Settings → Privacy & Security → Accessibility. Fn still works while the app is focused without that grant; background dictation needs it. After replacing a dist build, reset with `tccutil reset Accessibility com.harness.app` (or `com.harness.app.dev`) and grant again. Settings → General shows Accessibility status for the menu bar shortcut.
 - **Microphone denied / Harness missing from Privacy → Microphone**  
 Signed builds use the hardened runtime. Without `com.apple.security.device.audio-input` in `bundle.macOS.entitlements`, macOS denies mic access silently (no prompt, no Settings row). Confirm with `codesign -d --entitlements :- /path/to/Harness.app`, rebuild via `npm run dist:mac`, reinstall, then use Settings → Voice → Ask For Microphone.
 - **Build without distribution signing (local only)**  

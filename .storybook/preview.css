@@ -1,0 +1,10 @@
+/* App chrome locks the document (`html { overflow: hidden }`); the catalog canvas must scroll. */
+html {
+  overflow: auto;
+}
+
+html,
+body {
+  height: auto;
+  min-height: 100%;
+}

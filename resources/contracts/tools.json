@@ -178,7 +178,7 @@
     "type": "function",
     "function": {
       "name": "memory_search_conversations",
-      "description": "Search all prior conversations for a free-text query. Use whenever cross-thread recall, continuity, names, or prior decisions would help — not only when the user explicitly asks to search chat history.",
+      "description": "Search prior chats, dictations, note titles, and image titles for a free-text query. Use when the user is looking for a past thread, dictation, note, or image — or when cross-thread recall, continuity, names, or prior decisions would help. Results include hrefs; cite them as markdown links like [Title](/c/id) and do not invent ids.",
       "parameters": {
         "type": "object",
         "properties": { "query": { "type": "string", "description": "Search query text" } },

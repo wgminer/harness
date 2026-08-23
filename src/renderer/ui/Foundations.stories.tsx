@@ -12,7 +12,10 @@ const swatchGrid: CSSProperties = {
 
 function Swatch({ name, color }: { name: string; color: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+    <div
+      title={name}
+      style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}
+    >
       <div
         style={{
           height: 48,
@@ -61,13 +64,23 @@ function FoundationsGallery() {
 
       <Section title="Typography" stack>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-          <div style={{ fontSize: "var(--font-size-page)", fontWeight: 600 }}>Page · 28px</div>
-          <div style={{ fontSize: "var(--font-size-title)", fontWeight: 600 }}>Title · 18px</div>
-          <div style={{ fontSize: "var(--font-size-body)" }}>Body · 16px — The quick brown fox</div>
-          <div style={{ fontSize: "var(--font-size-caption)", color: "var(--fg-muted)" }}>
+          <div title="--font-size-page" style={{ fontSize: "var(--font-size-page)", fontWeight: 600 }}>
+            Page · 28px
+          </div>
+          <div title="--font-size-title" style={{ fontSize: "var(--font-size-title)", fontWeight: 600 }}>
+            Title · 18px
+          </div>
+          <div title="--font-size-body" style={{ fontSize: "var(--font-size-body)" }}>
+            Body · 16px — The quick brown fox
+          </div>
+          <div
+            title="--font-size-caption"
+            style={{ fontSize: "var(--font-size-caption)", color: "var(--fg-muted)" }}
+          >
             Caption · 12px muted
           </div>
           <div
+            title="--font-size-ui / --font-family-mono"
             style={{
               fontSize: "var(--font-size-ui)",
               fontFamily: "var(--font-family-mono)",
@@ -113,18 +126,23 @@ function FoundationsGallery() {
 
       <Section title="Skeletons" stack>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)", maxWidth: 320 }}>
-          <Skeleton className="ui-skeleton--title" label="Title" />
-          <Skeleton className="ui-skeleton--prose-line" label="Prose line" />
+          <Skeleton className="ui-skeleton--title" label="Title" title="ui-skeleton--title" />
+          <Skeleton
+            className="ui-skeleton--prose-line"
+            label="Prose line"
+            title="ui-skeleton--prose-line"
+          />
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-            <Skeleton className="ui-skeleton--play" />
-            <Skeleton className="ui-skeleton--name" />
-            <Skeleton className="ui-skeleton--num" />
+            <Skeleton className="ui-skeleton--play" title="ui-skeleton--play" />
+            <Skeleton className="ui-skeleton--name" title="ui-skeleton--name" />
+            <Skeleton className="ui-skeleton--num" title="ui-skeleton--num" />
           </div>
         </div>
       </Section>
 
       <Section title="Glass surface" stack>
         <div
+          title="--accent over --bg-secondary"
           style={{
             padding: "var(--space-5)",
             background:
@@ -132,19 +150,25 @@ function FoundationsGallery() {
             borderRadius: "var(--radius-lg)",
           }}
         >
-          <div className="surface-elevated-glass" style={{ padding: "var(--space-4)" }}>
+          <div
+            className="surface-elevated-glass"
+            title="surface-elevated-glass"
+            style={{ padding: "var(--space-4)" }}
+          >
             .surface-elevated-glass over a gradient
           </div>
         </div>
       </Section>
 
       <Section title="Divider">
-        <hr style={{ width: "100%" }} />
+        <hr title="hr" style={{ width: "100%" }} />
       </Section>
 
       <Section title="Boot wordmark" stack>
-        <div className="harness-boot" style={{ minHeight: 120, position: "relative" }}>
-          <span className="harness-boot__wordmark">Harness</span>
+        <div className="harness-boot" title="harness-boot" style={{ minHeight: 120, position: "relative" }}>
+          <span className="harness-boot__wordmark" title="harness-boot__wordmark">
+            Harness
+          </span>
         </div>
       </Section>
     </div>

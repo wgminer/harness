@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import {
@@ -18,7 +18,6 @@ import { ChatSurface } from "./ChatSurface";
 import { ChatComposer } from "./ChatComposer";
 import { ChatModePicker } from "./ChatModePicker";
 import { DictationSuggestedPromptChips } from "./DictationSuggestedPromptChips";
-import { Skeleton } from "./Skeleton";
 import { useChatComposer } from "./useChatComposer";
 import {
   type Message,
@@ -140,10 +139,10 @@ function ComposeCornerMeta() {
 
 interface ChatViewProps {
   conversationId: string | null;
-  /** Shown in header; matches sidebar label for this conversation. */
+  /** Seed for the details modal title field; matches the sidebar / window title. */
   displayTitle: string;
-  /** When true, header shows a skeleton instead of placeholder title text. */
-  titlePending?: boolean;
+  /** Parent increments when the window title is clicked to open conversation details. */
+  openTitleModalNonce?: number;
   onConversationCreated: () => void;
   /** Called when the first message creates a new conversation (compose splash). */
   onAssignConversationId: (id: string) => void;
@@ -157,6 +156,8 @@ interface ChatViewProps {
   /** Parent increments when the composer should be focused. */
   focusComposerNonce?: number;
   onOpenNotesView?: (noteId: string) => void;
+  onOpenConversation?: (conversationId: string) => void;
+  onOpenImage?: (imageId: string) => void;
   /** Refresh the notes library after agent tools create/update/delete notes. */
   onNotesChanged?: () => void;
   /** When false, chat/polish/reply are blocked with a setup message. */
@@ -178,7 +179,7 @@ interface ChatViewProps {
 export function ChatView({
   conversationId,
   displayTitle,
-  titlePending = false,
+  openTitleModalNonce,
   onConversationCreated,
   onAssignConversationId,
   pendingHotkeyText,
@@ -187,6 +188,8 @@ export function ChatView({
   onChatActivityChange,
   focusComposerNonce,
   onOpenNotesView,
+  onOpenConversation,
+  onOpenImage,
   onNotesChanged,
   openAIConfigured = true,
   mirrorGlobalFnRecording = false,
@@ -207,8 +210,6 @@ export function ChatView({
   const [optimisticChatMode, setOptimisticChatMode] = useState<ChatModeId | null>(null);
   const [modeSwitching, setModeSwitching] = useState(false);
   const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<string | null>(null);
-  const [streamingText, setStreamingText] = useState("");
-  const streamingTextRef = useRef("");
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const [isTurnPending, setIsTurnPending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -400,49 +401,20 @@ export function ChatView({
     turnIdRef.current = nextTurnId;
     activeTurnIdRef.current = nextTurnId;
     streamAbortRef.current = new AbortController();
-    streamingTextRef.current = "";
-    setStreamingText("");
     setIsTurnPending(true);
     setIsStreaming(false);
     setLiveNoteStream(null);
     return { turnId: nextTurnId, signal: streamAbortRef.current.signal };
   }, []);
 
-  /**
-   * In-flight assistant text lives outside `messages` so a streamed chunk does
-   * not clone the whole transcript (and re-render every settled row). It is
-   * committed into the message once, at stream end.
-   */
-  const appendStreamingText = useCallback((chunk: string) => {
-    const next = stripSentAtPrefix(streamingTextRef.current + chunk);
-    streamingTextRef.current = next;
-    setStreamingText(next);
-  }, []);
-
-  /** Replaces assistant content outright (error text, note summary). */
-  const setAssistantContent = useCallback((assistantId: string, content: string) => {
-    streamingTextRef.current = "";
-    setStreamingText("");
+  const applyAssistantChunk = useCallback((assistantId: string, updater: (prev: string) => string) => {
     setMessages((prev) =>
       prev.map((message) =>
-        message.id === assistantId ? { ...message, content } : message
-      )
-    );
-  }, []);
-
-  /**
-   * Fold the streamed buffer into the message before storage sync runs, so a
-   * failed sync can never blank out a reply the user already watched arrive.
-   */
-  const commitStreamingText = useCallback((assistantId: string | null) => {
-    const text = streamingTextRef.current;
-    streamingTextRef.current = "";
-    setStreamingText("");
-    if (!assistantId || !text) return;
-    setMessages((prev) =>
-      prev.map((message) =>
-        message.id === assistantId && message.content !== text
-          ? { ...message, content: text }
+        message.id === assistantId
+          ? {
+              ...message,
+              content: updater(message.content),
+            }
           : message
       )
     );
@@ -498,11 +470,11 @@ export function ChatView({
         }
         if (!isTurnCurrent(turnId, signal)) return;
         const errorText = `[Error: ${e instanceof Error ? e.message : String(e)}]`;
-        setAssistantContent(assistantId, errorText);
+        applyAssistantChunk(assistantId, () => errorText);
         completeTurn(turnId);
       }
     },
-    [setAssistantContent, completeTurn, isTurnCurrent, onConversationCreated]
+    [applyAssistantChunk, completeTurn, isTurnCurrent, onConversationCreated]
   );
 
   useEffect(() => {
@@ -530,8 +502,6 @@ export function ChatView({
         activeTurnIdRef.current = null;
         void window.harness.chat.stop().catch(() => {});
         setMessages([]);
-        streamingTextRef.current = "";
-        setStreamingText("");
         activeAssistantMessageIdRef.current = null;
         isStreamingRef.current = false;
         setActiveAssistantMessageId(null);
@@ -562,8 +532,6 @@ export function ChatView({
     activeTurnIdRef.current = null;
     void window.harness.chat.stop().catch(() => {});
     setMessages([]);
-    streamingTextRef.current = "";
-    setStreamingText("");
     activeAssistantMessageIdRef.current = null;
     isStreamingRef.current = false;
     setActiveAssistantMessageId(null);
@@ -617,7 +585,7 @@ export function ChatView({
           summary?: string;
         };
         if (p?.attachedToMessage && typeof p.summary === "string" && p.summary.trim()) {
-          setAssistantContent(assistantId, p.summary.trim());
+          applyAssistantChunk(assistantId, () => p.summary!.trim());
           setAssistantToolCall(assistantId, toolName, payload);
         } else {
           setAssistantToolCall(assistantId, toolName, payload);
@@ -638,7 +606,7 @@ export function ChatView({
     return () => {
       unsub();
     };
-  }, [activeAssistantMessageId, setAssistantContent, isTurnCurrent, onNotesChanged, setAssistantToolCall]);
+  }, [activeAssistantMessageId, applyAssistantChunk, isTurnCurrent, onNotesChanged, setAssistantToolCall]);
 
   useEffect(() => {
     const unsubChunk = window.harness.chat.onStreamChunk((cid, chunk) => {
@@ -648,7 +616,7 @@ export function ChatView({
       const turnId = activeTurnIdRef.current;
       const signal = streamAbortRef.current?.signal;
       if (!assistantId || turnId == null || !isTurnCurrent(turnId, signal)) return;
-      appendStreamingText(chunk);
+      applyAssistantChunk(assistantId, (prev) => stripSentAtPrefix(prev + chunk));
     });
     const unsubEnd = window.harness.chat.onStreamEnd((cid) => {
       if (cid !== conversationIdRef.current) return;
@@ -659,7 +627,6 @@ export function ChatView({
       if (turnId == null) return;
       const assistantId = activeAssistantMessageIdRef.current;
       const documentHasFocus = document.hasFocus();
-      commitStreamingText(assistantId);
       void syncAssistantFromStorage(cid, assistantId).finally(() => {
         scheduleAfterStreamEndSync(() => {
           if (activeTurnIdRef.current === turnId) {
@@ -672,7 +639,7 @@ export function ChatView({
       unsubChunk();
       unsubEnd();
     };
-  }, [appendStreamingText, commitStreamingText, completeTurn, isTurnCurrent, syncAssistantFromStorage]);
+  }, [applyAssistantChunk, completeTurn, isTurnCurrent, syncAssistantFromStorage]);
 
   useEffect(() => {
     const unsubOpen = window.harness.chat.onNoteStreamOpen((cid, noteId, title, summary) => {
@@ -680,7 +647,7 @@ export function ChatView({
       const assistantId = activeAssistantMessageIdRef.current;
       if (!assistantId) return;
       setLiveNoteStream({ noteId, title, summary, body: "" });
-      setAssistantContent(assistantId, summary);
+      applyAssistantChunk(assistantId, () => summary);
       setAssistantToolCall(assistantId, "note_create", {
         note: { id: noteId, title },
         summary,
@@ -716,7 +683,7 @@ export function ChatView({
       unsubChunk();
       unsubClose();
     };
-  }, [setAssistantContent, onNotesChanged, setAssistantToolCall]);
+  }, [applyAssistantChunk, onNotesChanged, setAssistantToolCall]);
 
   useEffect(() => {
     return () => {
@@ -728,9 +695,7 @@ export function ChatView({
   }, []);
 
   const streamingContent = activeAssistantMessageId
-    ? streamingText ||
-      messages.find((m) => m.id === activeAssistantMessageId)?.content ||
-      ""
+    ? messages.find((m) => m.id === activeAssistantMessageId)?.content ?? ""
     : "";
 
   const handleToolConfirm = useCallback(
@@ -1007,6 +972,14 @@ export function ChatView({
     setTitleModalOpen(true);
   }, [displayTitle]);
 
+  const openTitleModalRef = useRef(openTitleModal);
+  openTitleModalRef.current = openTitleModal;
+
+  useEffect(() => {
+    if (openTitleModalNonce == null || openTitleModalNonce < 1) return;
+    openTitleModalRef.current();
+  }, [openTitleModalNonce]);
+
   useEffect(() => {
     if (!titleModalOpen || !effectiveConversationId) {
       if (!titleModalOpen) {
@@ -1061,20 +1034,12 @@ export function ChatView({
   /** Single user turn (dictation): suggested prompts in the reply strip. */
   const isDictationReplyStrip = awaitingReply && messages.length === 1;
 
-  const handleModeChange = useCallback(
-    (mode: ChatModeId) => void handleChatModeChange(mode),
-    [handleChatModeChange],
-  );
-
-  const modePicker = useMemo(
-    () => (
-      <ChatModePicker
-        value={activeChatMode}
-        onChange={handleModeChange}
-        disabled={sending || modeSwitching}
-      />
-    ),
-    [activeChatMode, handleModeChange, sending, modeSwitching],
+  const modePicker = (
+    <ChatModePicker
+      value={activeChatMode}
+      onChange={(mode) => void handleChatModeChange(mode)}
+      disabled={sending || modeSwitching}
+    />
   );
 
   useEffect(() => {
@@ -1138,102 +1103,43 @@ export function ChatView({
     />
   ) : null;
 
-  const {
-    input: composerInput,
-    setInput: setComposerInput,
-    inputRef: composerInputRef,
-    send: composerSend,
-    voiceState,
-    voiceError,
-    recordingMs,
-    startRecording,
-    stopAndTranscribe,
-    cancelRecording,
-    attachedAudioFile,
-    attachmentTranscribing,
-    attachmentError,
-    setAttachedAudioFile,
-    setAttachmentError,
-    composerBusy,
-  } = composer;
-
-  const handleSend = useCallback(() => void composerSend(), [composerSend]);
-
-  const handleStopTurn = useCallback(() => {
-    const turnId = activeTurnIdRef.current;
-    streamAbortRef.current?.abort();
-    void window.harness.chat.stop().catch(() => {});
-    if (turnId != null) completeTurn(turnId);
-  }, [completeTurn]);
-
-  const handleStartRecording = useCallback(() => void startRecording(), [startRecording]);
-  const handleStopRecording = useCallback(() => void stopAndTranscribe(), [stopAndTranscribe]);
-  const handleCancelRecording = useCallback(() => void cancelRecording(), [cancelRecording]);
-
-  const handleAttachAudio = useCallback(
-    (file: File | null) => {
-      setAttachedAudioFile(file);
-      setAttachmentError(null);
+  const composerProps = {
+    input: composer.input,
+    onInputChange: composer.setInput,
+    onSend: () => void composer.send(),
+    onStop: () => {
+      const turnId = activeTurnIdRef.current;
+      streamAbortRef.current?.abort();
+      void window.harness.chat.stop().catch(() => {});
+      if (turnId != null) completeTurn(turnId);
     },
-    [setAttachedAudioFile, setAttachmentError],
-  );
-
-  const handleRemoveAttachedAudio = useCallback(() => {
-    setAttachedAudioFile(null);
-    setAttachmentError(null);
-  }, [setAttachedAudioFile, setAttachmentError]);
-
-  const composerProps = useMemo(
-    () => ({
-      input: composerInput,
-      onInputChange: setComposerInput,
-      onSend: handleSend,
-      onStop: handleStopTurn,
-      sending: sending || composerBusy,
-      voiceState,
-      voiceError,
-      recordingMs,
-      onStartRecording: handleStartRecording,
-      onStopRecording: handleStopRecording,
-      onCancelRecording: handleCancelRecording,
-      attachedAudioName: attachedAudioFile?.name ?? null,
-      attachmentTranscribing,
-      attachmentError,
-      onAttachAudio: handleAttachAudio,
-      onRemoveAttachedAudio: handleRemoveAttachedAudio,
-      onAttachmentError: setAttachmentError,
-      focusComposerNonce,
-      inputRef: composerInputRef,
-      placeholder: chatModePlaceholder(activeChatMode),
-      modeControl: modePicker,
-      onCycleMode: handleCycleMode,
-    }),
-    [
-      composerInput,
-      setComposerInput,
-      handleSend,
-      handleStopTurn,
-      sending,
-      composerBusy,
-      voiceState,
-      voiceError,
-      recordingMs,
-      handleStartRecording,
-      handleStopRecording,
-      handleCancelRecording,
-      attachedAudioFile,
-      attachmentTranscribing,
-      attachmentError,
-      handleAttachAudio,
-      handleRemoveAttachedAudio,
-      setAttachmentError,
-      focusComposerNonce,
-      composerInputRef,
-      activeChatMode,
-      modePicker,
-      handleCycleMode,
-    ],
-  );
+    sending: sending || composer.composerBusy,
+    voiceState: composer.voiceState,
+    voiceError: composer.voiceError,
+    recordingMs: composer.recordingMs,
+    onStartRecording: () => void composer.startRecording(),
+    onStopRecording: () => void composer.stopAndTranscribe(),
+    onCancelRecording: () => void composer.cancelRecording(),
+    attachedAudioName: composer.attachedAudioFile?.name ?? null,
+    attachmentTranscribing: composer.attachmentTranscribing,
+    attachmentError: composer.attachmentError,
+    onAttachAudio: (file: File | null) => {
+      composer.setAttachedAudioFile(file);
+      composer.setAttachmentError(null);
+    },
+    onRemoveAttachedAudio: () => {
+      composer.setAttachedAudioFile(null);
+      composer.setAttachmentError(null);
+    },
+    onAttachmentError: (message: string | null) => {
+      composer.setAttachmentError(message);
+    },
+    focusComposerNonce,
+    inputRef: composer.inputRef,
+    placeholder: chatModePlaceholder(activeChatMode),
+    modeControl: modePicker,
+    onCycleMode: handleCycleMode,
+  };
 
   if (isComposeMode) {
     return (
@@ -1264,21 +1170,6 @@ export function ChatView({
       <ChatSurface
         chatAreaRef={chatAreaRef}
         composerRef={composerRef}
-        headerContent={(
-          <button
-            type="button"
-            className="btn chat-pane-title"
-            onClick={openTitleModal}
-            title="Details"
-            aria-busy={titlePending ? true : undefined}
-          >
-            {titlePending ? (
-              <Skeleton className="ui-skeleton--title" label="Generating title" />
-            ) : (
-              displayTitle
-            )}
-          </button>
-        )}
         displayMessages={messages}
         copiedId={copiedId}
         savedToNotesId={savedToNotesId}
@@ -1293,6 +1184,8 @@ export function ChatView({
         onOptionSelect={handleOptionSelect}
         liveNoteStream={liveNoteStream}
         onOpenNoteInEditor={onOpenNotesView}
+        onOpenConversation={onOpenConversation}
+        onOpenImage={onOpenImage}
         {...composerProps}
         messagesTestId="chat-messages"
         composerTestId="chat-composer"

@@ -33,19 +33,19 @@ function ListsGallery() {
         <div className="sidebar" style={{ width: 280, background: "var(--bg)", padding: "var(--space-2)" }}>
           <div className="sidebar-list">
             <div className="sidebar-item active">
-              <MessageCircle size={14} className="sidebar-item-icon" aria-hidden />
+              <MessageCircle size={12} className="sidebar-item-icon" aria-hidden />
               <span className="sidebar-item-title">Active conversation</span>
             </div>
             <div className="sidebar-item">
-              <Loader2 size={14} className="sidebar-item-spinner" aria-hidden />
+              <Loader2 size={12} className="sidebar-item-spinner" aria-hidden />
               <span className="sidebar-item-title">Processing…</span>
             </div>
             <div className="sidebar-item">
-              <MessageCircle size={14} className="sidebar-item-icon" aria-hidden />
-              <Skeleton className="ui-skeleton--sidebar-title" />
+              <MessageCircle size={12} className="sidebar-item-icon" aria-hidden />
+              <Skeleton className="ui-skeleton--sidebar-title" title="ui-skeleton--sidebar-title" />
             </div>
             <div className="sidebar-item">
-              <StickyNote size={14} className="sidebar-item-icon" aria-hidden />
+              <StickyNote size={12} className="sidebar-item-icon" aria-hidden />
               <span className="sidebar-item-title">Pinned note draft</span>
             </div>
           </div>

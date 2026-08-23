@@ -21,9 +21,7 @@ pub const CLIPPINGS_FILE: &str = "clippings.json";
 const CONVERSATIONS_FILE: &str = "conversations.json";
 const USER_MEMORY_FILE: &str = "user_memory.json";
 
-const SNIPPET_CHARS_BEFORE: usize = 80;
-const SNIPPET_CHARS_AFTER: usize = 120;
-const SNIPPET_MAX_LINES: usize = 3;
+pub use crate::conversation_search::{MemorySearchHit, SearchResult, SearchResultKind};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -148,19 +146,6 @@ pub struct ConversationSummary {
     pub chat_mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dictation_reply_action: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchResult {
-    pub id: String,
-    pub title: Option<String>,
-    pub created_at: i64,
-    pub title_matched: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title_match_range: Option<[usize; 2]>,
-    pub snippet: String,
-    pub snippet_match_range: [i64; 2],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -735,58 +720,31 @@ pub async fn delete_user_memory_key(state: &AppState, key: &str) -> Result<(), s
     Ok(())
 }
 
-pub fn extract_snippet(
-    content: &str,
-    query_lower: &str,
-    match_index: usize,
-) -> (String, [usize; 2]) {
-    let window_start = match_index.saturating_sub(SNIPPET_CHARS_BEFORE);
-    let match_end_in_content = match_index + query_lower.len();
-    let window_end = (match_end_in_content + SNIPPET_CHARS_AFTER).min(content.len());
-    let mut snippet_start = window_start;
-    let mut snippet_end = window_end;
+fn conversation_activity_at(messages: &[MessageRecord], created_at: i64) -> i64 {
+    messages
+        .iter()
+        .filter_map(|m| m.timestamp)
+        .max()
+        .unwrap_or(created_at)
+}
 
-    if let Some(last_newline_before) = content[..match_index.min(content.len())].rfind('\n') {
-        if last_newline_before >= window_start {
-            snippet_start = last_newline_before + 1;
-        }
+async fn load_conversation_search_candidates(
+    state: &AppState,
+    memory_dir: &Path,
+) -> Vec<crate::conversation_search::SearchConversationCandidate> {
+    let conv = load_conversations_map(state, memory_dir).await;
+    let mut out = Vec::new();
+    for (id, meta) in conv {
+        let messages = load_messages_in(state, memory_dir, &id).await;
+        let activity_at = conversation_activity_at(&messages, meta.created_at);
+        out.push(crate::conversation_search::SearchConversationCandidate {
+            id,
+            meta,
+            messages,
+            activity_at,
+        });
     }
-    if match_end_in_content < content.len() {
-        if let Some(next_newline_after) = content[match_end_in_content..].find('\n') {
-            let idx = match_end_in_content + next_newline_after;
-            if idx <= window_end {
-                snippet_end = idx + 1;
-            }
-        }
-    }
-
-    let mut line_count = 1usize;
-    for ch in content[snippet_start..snippet_end].chars() {
-        if ch == '\n' {
-            line_count += 1;
-        }
-        if line_count >= SNIPPET_MAX_LINES {
-            break;
-        }
-    }
-    if line_count >= SNIPPET_MAX_LINES {
-        let first = content[snippet_start..].find('\n').map(|i| snippet_start + i);
-        if let Some(first_nl) = first {
-            if let Some(second_nl) = content[first_nl + 1..].find('\n') {
-                let end = first_nl + 1 + second_nl + 1;
-                if end < snippet_end {
-                    snippet_end = end;
-                }
-            }
-        }
-    }
-
-    let snippet = content[snippet_start..snippet_end].to_string();
-    let match_start_in_snippet = match_index.saturating_sub(snippet_start);
-    let match_end_in_snippet = match_start_in_snippet + query_lower.len();
-    let clamped_start = match_start_in_snippet.min(snippet.len());
-    let clamped_end = clamped_start.max(match_end_in_snippet.min(snippet.len()));
-    (snippet, [clamped_start, clamped_end])
+    out
 }
 
 pub async fn search_conversations(
@@ -794,76 +752,53 @@ pub async fn search_conversations(
     query: &str,
     compose_first_only: bool,
 ) -> Result<Vec<SearchResult>, std::io::Error> {
-    let raw = query.trim();
-    let q = raw.to_lowercase();
-    if q.is_empty() {
-        return Ok(Vec::new());
-    }
-
     let memory_dir = get_memory_dir();
-    let conv = load_conversations_map(state, &memory_dir).await;
-    let mut results = Vec::new();
+    let candidates = load_conversation_search_candidates(state, &memory_dir).await;
+    Ok(crate::conversation_search::search_conversation_candidates(
+        &candidates,
+        query,
+        None,
+        compose_first_only,
+    ))
+}
 
-    for (id, meta) in conv {
-        if compose_first_only && meta.has_messages != Some(true) {
-            continue;
-        }
-        let title_str = meta.title.clone().unwrap_or_default();
-        let title_matched = title_str.to_lowercase().contains(&q);
-        let title_match_range = if title_matched {
-            let idx = title_str.to_lowercase().find(&q).unwrap_or(0);
-            Some([idx, idx + q.len()])
-        } else {
-            None
-        };
+pub async fn search_library(
+    state: &AppState,
+    query: &str,
+    exclude_conversation_id: Option<&str>,
+) -> Result<Vec<MemorySearchHit>, std::io::Error> {
+    let memory_dir = get_memory_dir();
+    let conversations = load_conversation_search_candidates(state, &memory_dir).await;
 
-        let messages = load_messages_in(state, &memory_dir, &id).await;
-        let mut snippet = String::new();
-        let mut snippet_match_range = [-1i64, -1i64];
-        let mut content_matched = false;
+    let note_candidates: Vec<crate::conversation_search::SearchTitleCandidate> =
+        crate::notes::list_notes(state)
+            .await?
+            .into_iter()
+            .map(|n| crate::conversation_search::SearchTitleCandidate {
+                id: n.id,
+                title: n.title,
+                activity_at: n.updated_at,
+            })
+            .collect();
 
-        for msg in &messages {
-            let lower = msg.content.to_lowercase();
-            if let Some(idx) = lower.find(&q) {
-                content_matched = true;
-                let (s, range) = extract_snippet(&msg.content, &q, idx);
-                snippet = s;
-                snippet_match_range = [range[0] as i64, range[1] as i64];
-                break;
-            }
-        }
+    let image_candidates: Vec<crate::conversation_search::SearchTitleCandidate> =
+        crate::images::list_images(state)
+            .await?
+            .into_iter()
+            .map(|img| crate::conversation_search::SearchTitleCandidate {
+                id: img.id,
+                title: img.title,
+                activity_at: img.updated_at,
+            })
+            .collect();
 
-        if !title_matched && !content_matched {
-            continue;
-        }
-
-        if !content_matched {
-            let first = messages.first().map(|m| m.content.as_str()).unwrap_or("");
-            let lines: Vec<&str> = first.lines().take(SNIPPET_MAX_LINES).collect();
-            snippet = lines.join("\n").trim().to_string();
-            if snippet.is_empty() {
-                snippet = "No message content".into();
-            }
-            snippet_match_range = [-1, -1];
-        }
-
-        results.push(SearchResult {
-            id,
-            title: if title_str.is_empty() {
-                None
-            } else {
-                Some(title_str)
-            },
-            created_at: meta.created_at,
-            title_matched,
-            title_match_range,
-            snippet,
-            snippet_match_range,
-        });
-    }
-
-    results.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-    Ok(results)
+    Ok(crate::conversation_search::build_memory_search_hits(
+        &conversations,
+        &note_candidates,
+        &image_candidates,
+        query,
+        exclude_conversation_id,
+    ))
 }
 
 pub async fn prune_empty_conversations(state: &AppState) -> Result<PruneResult, std::io::Error> {

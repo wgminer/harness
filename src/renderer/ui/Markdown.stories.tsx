@@ -6,6 +6,7 @@ import {
   Info,
   Lightbulb,
 } from "lucide-react";
+import { MarkdownContent } from "../chatHelpers";
 import { MessageContent, Section } from "./storyHelpers";
 
 function MarkdownGallery() {
@@ -116,18 +117,51 @@ function MarkdownGallery() {
         </div>
       </Section>
 
+      <Section title="Library citations" stack>
+        <MarkdownContent
+          content={[
+            "Best hits:",
+            "",
+            "1. **Three-year financial and relocation planning** — mentions moving for schools.",
+            "`/c/conv_1`",
+            "2. **Relocation checklist** — the saved note.",
+            "[Relocation checklist](/n/note_1)",
+          ].join("\n")}
+          libraryHits={[
+            {
+              kind: "chat",
+              id: "conv_1",
+              title: "Financial planning",
+              activityAt: 1,
+              score: 1,
+            },
+            {
+              kind: "note",
+              id: "note_1",
+              title: "Relocation checklist",
+              activityAt: 2,
+              score: 1,
+            },
+          ]}
+          onOpenConversation={() => {}}
+          onOpenNote={() => {}}
+        />
+      </Section>
+
       <Section title="Assistant prose" stack>
-        <p>
-          Regular paragraph with <strong>strong</strong> and <code>inline code</code>.
-        </p>
-        <ul>
-          <li>
-            <p>List item one</p>
-          </li>
-          <li>
-            <p>List item two</p>
-          </li>
-        </ul>
+        <div>
+          <p>
+            Regular paragraph with <strong>strong</strong> and <code>inline code</code>.
+          </p>
+          <ul>
+            <li>
+              <p>List item one</p>
+            </li>
+            <li>
+              <p>List item two</p>
+            </li>
+          </ul>
+        </div>
       </Section>
     </MessageContent>
   );

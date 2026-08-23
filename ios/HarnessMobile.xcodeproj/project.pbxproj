@@ -87,6 +87,7 @@
 		8B949E6C2E8C25A74443B526 /* DictationSuggestedPromptsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C18C653DD30A62345F4F5B6 /* DictationSuggestedPromptsTests.swift */; };
 		8C2C14C6EBDB74B20E4C5292 /* DictationReplyStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EFC4E3EC5C2436FBDFAD51 /* DictationReplyStrip.swift */; };
 		8D1D147CC0BE74DF6930CAC4 /* dictationSuggestedPrompts.json in Resources */ = {isa = PBXBuildFile; fileRef = 0A2C3CBEF61E359099DDE1C4 /* dictationSuggestedPrompts.json */; };
+		B2C3D4E5F60718293A4B5C6D /* conversationSearch.json in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* conversationSearch.json */; };
 		9405865D9D6FCF8A594A473E /* ConversationSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A16A22E55364018036822 /* ConversationSearchTests.swift */; };
 		97941B84CF5AC90DCF4CF5E6 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B4EBBBE10E0C397F313E3F /* ChatService.swift */; };
 		979B41A93A1C87AACFA155A6 /* AssistantProseStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52F62B543CA294A706909B6 /* AssistantProseStyle.swift */; };
@@ -172,6 +173,7 @@
 		07B902543D8716C83660DCB1 /* ChatThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatThreadView.swift; sourceTree = "<group>"; };
 		08B0FCE2A6EE7BDD32D1893E /* SystemPromptContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemPromptContractTests.swift; sourceTree = "<group>"; };
 		0A2C3CBEF61E359099DDE1C4 /* dictationSuggestedPrompts.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = dictationSuggestedPrompts.json; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* conversationSearch.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = conversationSearch.json; sourceTree = "<group>"; };
 		0CAE0B4C85AB63CD5FA804D4 /* TasksListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksListView.swift; sourceTree = "<group>"; };
 		106BB0C874DBAF12707F4E03 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
 		12D592F556DDF4B30E19716B /* StreamingMarkdownBlocksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownBlocksTests.swift; sourceTree = "<group>"; };
@@ -429,8 +431,9 @@
 		5F67EB393E03AF9A4A6AD26D /* SharedContracts */ = {
 			isa = PBXGroup;
 			children = (
-				B55F302D3C3BA8E876D37C0C /* chatModes.json */,
+        B55F302D3C3BA8E876D37C0C /* chatModes.json */,
 				DDC66AD86EBDB6926EA8CA6D /* chatStreamBatch.json */,
+				A1B2C3D4E5F60718293A4B5C /* conversationSearch.json */,
 				0A2C3CBEF61E359099DDE1C4 /* dictationSuggestedPrompts.json */,
 				E90E7CFD57B34D24487E7F3A /* homeHeaderQuotes.json */,
 				2A4D2A2493AA2A75269530AF /* systemPrompt.json */,
@@ -667,6 +670,7 @@
 				014C5B012FEE0F8825859159 /* chatModes.json in Resources */,
 				4907EDFD2A3A59632C58C634 /* chatStreamBatch.json in Resources */,
 				8D1D147CC0BE74DF6930CAC4 /* dictationSuggestedPrompts.json in Resources */,
+				B2C3D4E5F60718293A4B5C6D /* conversationSearch.json in Resources */,
 				66362B5081D179E06AAEE85B /* homeHeaderQuotes.json in Resources */,
 				9D2723E45244DBD7CEBED8A5 /* systemPrompt.json in Resources */,
 				5EC46457CDA92F533F459CA4 /* tools.json in Resources */,

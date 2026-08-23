@@ -3,6 +3,7 @@ pub mod canonical_json;
 pub mod chat;
 pub mod chat_modes;
 pub mod commands;
+pub mod conversation_search;
 pub mod conversation_title;
 pub mod credentials;
 pub mod customization;
@@ -78,27 +79,16 @@ pub fn run() {
             let updater_runtime = updater::init_updater_runtime();
             app.manage(updater_runtime.clone());
 
-            // Only sync init and hotkey registration have to finish before the
-            // first command can be served; the rest would just delay launch.
             tauri::async_runtime::block_on(async {
                 let _ = sync_runtime.init().await;
+                let _ = memory::prune_empty_conversations(&app_state).await;
                 global_recording::register_global_recording(
                     app.handle().clone(),
                     global_recording_runtime.clone(),
                     &app_state.write_chains,
                 )
                 .await;
-            });
-
-            let prune_state = app_state.clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = memory::prune_empty_conversations(&prune_state).await;
-            });
-
-            let sticky_handle = app.handle().clone();
-            let sticky_state = app_state.clone();
-            tauri::async_runtime::spawn(async move {
-                sticky_notes::restore_sticky_windows(&sticky_handle, &sticky_state).await;
+                sticky_notes::restore_sticky_windows(&app.handle(), &app_state).await;
             });
 
             let handle = app.handle().clone();

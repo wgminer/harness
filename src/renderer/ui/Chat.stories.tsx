@@ -12,7 +12,6 @@ import {
 import { useState } from "react";
 import { ChatComposer } from "../ChatComposer";
 import { ChatModePicker } from "../ChatModePicker";
-import { Skeleton } from "../Skeleton";
 import type { ChatModeId } from "../../shared/chatModes";
 import { MessageContent, Section } from "./storyHelpers";
 
@@ -136,23 +135,16 @@ function ChatGallery() {
         </div>
       </Section>
 
-      <Section title="Chat pane header" stack>
-        <div className="chat-pane-header" style={{ maxWidth: 640 }}>
-          <button type="button" className="btn chat-pane-title">
-            Product brainstorm
-          </button>
-          <Skeleton className="ui-skeleton--title" />
-        </div>
-      </Section>
-
       <Section title="Message footer" stack>
         <MessageContent>
           <p>Assistant reply ends here.</p>
           <div className="message-block-footer">
             <div className="message-block-meta">
-              <span className="message-block-meta-model">gpt-5</span>
-              <span className="message-block-meta-sep">·</span>
-              <span className="message-block-meta-time">2:14 PM</span>
+              <span className="message-block-meta-role message-block-meta-model">gpt-5</span>
+              <span className="message-block-meta-text">
+                <span className="message-block-meta-sep">·</span>
+                <span className="message-block-meta-time">2:14 PM</span>
+              </span>
             </div>
             <div className="message-block-footer-actions">
               <button type="button" className="message-footer-icon-btn" aria-label="Edit">

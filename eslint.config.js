@@ -45,18 +45,6 @@ export default tseslint.config({
     ...js.configs.recommended.rules,
   },
 }, {
-  // Storybook config lives outside tsconfig's `include`, so parse it without the project service.
-  files: ['.storybook/**/*.{ts,tsx}'],
-  extends: [
-    js.configs.recommended,
-    ...tseslint.configs.recommended,
-  ],
-  languageOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    globals: globals.node,
-  },
-}, {
   files: ['src/**/*.{ts,tsx}'],
   extends: [
     js.configs.recommended,

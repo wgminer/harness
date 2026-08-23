@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ChevronDown, FileText, Loader2, Plus, Wrench } from "lucide-react";
 import { SettingsEntryRow } from "../settings/SettingsEntryRow";
+import { ToolCallsCard } from "../ToolCallsCard";
 import { MessageContent, Section, SettingsFrame } from "./storyHelpers";
 
 function CardsGallery() {
@@ -35,6 +36,51 @@ function CardsGallery() {
               </span>
             </button>
           </div>
+        </MessageContent>
+      </Section>
+
+      <Section title="Library search card" stack>
+        <MessageContent>
+          <ToolCallsCard
+            toolCalls={[
+              {
+                toolName: "memory_search_conversations",
+                payload: {
+                  results: [
+                    {
+                      kind: "chat",
+                      id: "conv_1",
+                      title: "Financial planning",
+                      activityAt: 1,
+                      score: 20,
+                      snippet: "re thinking about saving for school…",
+                    },
+                    {
+                      kind: "chat",
+                      id: "conv_2",
+                      title: "Saving Run Data in Running App",
+                      activityAt: 2,
+                      score: 12,
+                      snippet: "import CoreLocation",
+                    },
+                    {
+                      kind: "note",
+                      id: "note_1",
+                      title: "Relocation checklist",
+                      activityAt: 3,
+                      score: 8,
+                      snippet: "Relocation checklist",
+                    },
+                  ],
+                },
+              },
+            ]}
+            expanded
+            onToggleExpanded={() => {}}
+            onToolConfirm={() => {}}
+            onOpenConversation={() => {}}
+            onOpenNote={() => {}}
+          />
         </MessageContent>
       </Section>
 

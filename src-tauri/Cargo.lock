@@ -1741,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "harness"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "arboard",
  "async-trait",
@@ -1757,6 +1757,7 @@ dependencies = [
  "iana-time-zone",
  "keyring",
  "objc2",
+ "objc2-app-kit",
  "objc2-avf-audio",
  "rand",
  "regex",

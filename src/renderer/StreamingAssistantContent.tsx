@@ -5,7 +5,7 @@ import {
   splitStreamingMarkdown,
   type StreamingMarkdownBlocks,
 } from "../shared/streamingMarkdownBlocks";
-import { MarkdownContent } from "./chatHelpers";
+import { MarkdownContent, type MemorySearchHit } from "./chatHelpers";
 import { Skeleton } from "./Skeleton";
 
 interface StreamingAssistantContentProps {
@@ -18,6 +18,10 @@ interface StreamingAssistantContentProps {
   onCopied: (id: string | null) => void;
   onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   onOptionSelect?: (label: string) => void | Promise<void>;
+  libraryHits?: MemorySearchHit[];
+  onOpenConversation?: (conversationId: string) => void;
+  onOpenNote?: (noteId: string) => void;
+  onOpenImage?: (imageId: string) => void;
 }
 
 function StreamWaitSkeleton() {
@@ -34,6 +38,10 @@ export function StreamingAssistantContent({
   onCopied,
   onSaveToNotes,
   onOptionSelect,
+  libraryHits,
+  onOpenConversation,
+  onOpenNote,
+  onOpenImage,
 }: StreamingAssistantContentProps) {
   const stripped = stripSentAtPrefix(content);
   const blocksRef = useRef<StreamingMarkdownBlocks>({ completed: [], trailing: "" });
@@ -70,6 +78,10 @@ export function StreamingAssistantContent({
             onCopied={onCopied}
             onSaveToNotes={onSaveToNotes}
             onOptionSelect={onOptionSelect}
+            libraryHits={libraryHits}
+            onOpenConversation={onOpenConversation}
+            onOpenNote={onOpenNote}
+            onOpenImage={onOpenImage}
           />
         </div>
       ))}

@@ -165,7 +165,7 @@ final class ChatService: ObservableObject {
         let result = try await client.streamChatWithTools(
             messages: apiMessages,
             tools: AssistantToolDefinitions.openAITools(in: store.localDataDir),
-            executeTool: makeToolExecutor(onToolCall: onToolCall),
+            executeTool: makeToolExecutor(conversationId: conversationId, onToolCall: onToolCall),
             onChunk: onStreamChunk
         )
         try throwIfStopped()
@@ -186,7 +186,7 @@ final class ChatService: ObservableObject {
         let result = try await client.streamChatWithTools(
             messages: apiMessages,
             tools: AssistantToolDefinitions.openAITools(in: store.localDataDir),
-            executeTool: makeToolExecutor(onToolCall: onToolCall),
+            executeTool: makeToolExecutor(conversationId: conversationId, onToolCall: onToolCall),
             onChunk: onStreamChunk
         )
         try throwIfStopped()
@@ -208,6 +208,7 @@ final class ChatService: ObservableObject {
     }
 
     private func makeToolExecutor(
+        conversationId: String,
         onToolCall: @escaping (ToolCallRecord) -> Void
     ) -> (String, [String: Any]) async throws -> String {
         { [weak self] name, args in
@@ -228,7 +229,12 @@ final class ChatService: ObservableObject {
                 }
                 toolResult = try await taskToolExecutor.execute(name: name, args: args)
             } else if ChatToolDefinitions.toolNames.contains(name) {
-                toolResult = try await AssistantTools.execute(name: name, args: args, store: self.store)
+                toolResult = try await AssistantTools.execute(
+                    name: name,
+                    args: args,
+                    store: self.store,
+                    excludeConversationId: conversationId
+                )
             } else {
                 toolResult = #"{"error":"Unknown tool: \(name)"}"#
             }

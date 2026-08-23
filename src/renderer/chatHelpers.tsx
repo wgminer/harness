@@ -1,10 +1,8 @@
 import {
   isValidElement,
-  memo,
   useMemo,
   useRef,
   useState,
-  type ComponentProps,
   type ReactNode,
 } from "react";
 import { Check, Copy, SquarePen } from "lucide-react";
@@ -17,6 +15,21 @@ import {
   directiveComponents,
   remarkDirectiveToHast,
 } from "./markdownDirectives";
+import {
+  libraryRefFallbackLabel,
+  memorySearchHitsFromPayload,
+  parseLibraryHref,
+  type LibraryRef,
+  type MemorySearchHit,
+} from "../shared/conversationSearch";
+
+export type { MemorySearchHit };
+export { memorySearchHitsFromPayload };
+
+export function memorySearchHitsFromToolCall(call: ToolCallDisplay): MemorySearchHit[] {
+  if (call.toolName !== "memory_search_conversations") return [];
+  return memorySearchHitsFromPayload(call.payload);
+}
 export interface ToolCallDisplay {
   toolName: string;
   payload?: unknown;
@@ -169,6 +182,33 @@ export interface MarkdownContentProps {
   onSaveToNotes?: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   /** When set, `:::option` directives render as clickable buttons that call this handler. */
   onOptionSelect?: (label: string) => void | Promise<void>;
+  libraryHits?: MemorySearchHit[];
+  onOpenConversation?: (conversationId: string) => void;
+  onOpenNote?: (noteId: string) => void;
+  onOpenImage?: (imageId: string) => void;
+}
+
+function LibraryRefLink({
+  libraryRef,
+  children,
+  titles,
+  onOpen,
+}: {
+  libraryRef: LibraryRef;
+  children?: ReactNode;
+  titles: Map<string, string>;
+  onOpen?: (ref: LibraryRef) => void;
+}) {
+  const text = extractCodeText(children).trim();
+  const label =
+    text && !parseLibraryHref(text) ? children : titles.get(libraryRef.id) || libraryRefFallbackLabel(libraryRef.target);
+  return onOpen ? (
+    <button type="button" className="library-ref" onClick={() => onOpen(libraryRef)}>
+      {label}
+    </button>
+  ) : (
+    <span className="library-ref library-ref--static">{label}</span>
+  );
 }
 
 function CodeBlock({
@@ -240,37 +280,6 @@ function CodeBlock({
   );
 }
 
-type MarkdownOptions = ComponentProps<typeof ReactMarkdown>;
-
-/**
- * Plugin lists and heading overrides never vary, so they live at module scope —
- * fresh array/function identities per render would re-parse markdown for every
- * mounted message on each streamed chunk.
- */
-const REMARK_PLUGINS: MarkdownOptions["remarkPlugins"] = [
-  remarkGfm,
-  remarkDirective,
-  remarkDirectiveToHast,
-];
-
-const REHYPE_PLUGINS: MarkdownOptions["rehypePlugins"] = [
-  [rehypeHighlight, { detect: false, ignoreMissing: true }],
-];
-
-const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
-  <p {...props}>{children}</p>
-);
-
-const STATIC_MARKDOWN_COMPONENTS = {
-  h1: headingAsParagraph,
-  h2: headingAsParagraph,
-  h3: headingAsParagraph,
-  h4: headingAsParagraph,
-  h5: headingAsParagraph,
-  h6: headingAsParagraph,
-  ...directiveComponents,
-};
-
 /**
  * Renders assistant/user markdown.
  *
@@ -278,11 +287,8 @@ const STATIC_MARKDOWN_COMPONENTS = {
  * accidentally blow up the type scale; section structure is signalled instead
  * via the custom layout directives in `markdownDirectives.tsx`.
  * Fenced code blocks flow through highlight.js via `CodeBlock`.
- *
- * Memoized: during a stream the transcript re-renders on every chunk, and an
- * unmemoized parse here costs the full remark/rehype pipeline per message.
  */
-export const MarkdownContent = memo(function MarkdownContent({
+export function MarkdownContent({
   content,
   messageId,
   messageTimestamp,
@@ -291,6 +297,10 @@ export const MarkdownContent = memo(function MarkdownContent({
   onCopied,
   onSaveToNotes,
   onOptionSelect,
+  libraryHits,
+  onOpenConversation,
+  onOpenNote,
+  onOpenImage,
 }: MarkdownContentProps) {
   const codeBlockIndexRef = useRef(0);
   codeBlockIndexRef.current = 0;
@@ -298,46 +308,87 @@ export const MarkdownContent = memo(function MarkdownContent({
     () => (onOptionSelect ? { onOptionSelect } : {}),
     [onOptionSelect],
   );
+  const libraryTitles = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const hit of libraryHits ?? []) map.set(hit.id, hit.title);
+    return map;
+  }, [libraryHits]);
+  const openLibrary =
+    onOpenConversation || onOpenNote || onOpenImage
+      ? (ref: LibraryRef) => {
+          if (ref.target === "conversation") onOpenConversation?.(ref.id);
+          else if (ref.target === "note") onOpenNote?.(ref.id);
+          else onOpenImage?.(ref.id);
+        }
+      : undefined;
 
-  const components = useMemo(() => {
-    const preComponent = ({ children, ...rest }: { children?: ReactNode }) => {
-      const blockIndex = codeBlockIndexRef.current;
-      codeBlockIndexRef.current += 1;
-      const blockKey = messageId != null ? `${messageId}:code:${blockIndex}` : `code:${blockIndex}`;
-      const codeText = extractCodeText(children);
-      return (
-        <CodeBlock
-          blockKey={blockKey}
-          codeText={codeText}
-          copiedId={copiedId}
-          savedToNotesId={savedToNotesId}
-          onCopied={onCopied}
-          onSaveToNotes={onSaveToNotes}
-          messageTimestamp={messageTimestamp}
-          {...rest}
-        >
+  const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
+    <p {...props}>{children}</p>
+  );
+  const preComponent = ({ children, ...rest }: { children?: ReactNode }) => {
+    const blockIndex = codeBlockIndexRef.current;
+    codeBlockIndexRef.current += 1;
+    const blockKey = messageId != null ? `${messageId}:code:${blockIndex}` : `code:${blockIndex}`;
+    const codeText = extractCodeText(children);
+    return (
+      <CodeBlock
+        blockKey={blockKey}
+        codeText={codeText}
+        copiedId={copiedId}
+        savedToNotesId={savedToNotesId}
+        onCopied={onCopied}
+        onSaveToNotes={onSaveToNotes}
+        messageTimestamp={messageTimestamp}
+        {...rest}
+      >
+        {children}
+      </CodeBlock>
+    );
+  };
+
+  const components = {
+    h1: headingAsParagraph,
+    h2: headingAsParagraph,
+    h3: headingAsParagraph,
+    h4: headingAsParagraph,
+    h5: headingAsParagraph,
+    h6: headingAsParagraph,
+    pre: preComponent,
+    a: ({ href, children, ...props }: { href?: string; children?: ReactNode }) => {
+      const ref = href ? parseLibraryHref(href) : null;
+      return ref ? (
+        <LibraryRefLink libraryRef={ref} titles={libraryTitles} onOpen={openLibrary}>
           {children}
-        </CodeBlock>
+        </LibraryRefLink>
+      ) : (
+        <a href={href} {...props}>{children}</a>
       );
-    };
-    return {
-      ...STATIC_MARKDOWN_COMPONENTS,
-      pre: preComponent,
-    } as unknown as Components;
-  }, [messageId, messageTimestamp, copiedId, savedToNotesId, onCopied, onSaveToNotes]);
+    },
+    code: ({ className, children, ...props }: { className?: string; children?: ReactNode }) => {
+      const ref = className ? null : parseLibraryHref(extractCodeText(children).trim());
+      return ref ? (
+        <LibraryRefLink libraryRef={ref} titles={libraryTitles} onOpen={openLibrary}>
+          {children}
+        </LibraryRefLink>
+      ) : (
+        <code className={className} {...props}>{children}</code>
+      );
+    },
+    ...directiveComponents,
+  } as unknown as Components;
 
   return (
     <MarkdownInteractionContext.Provider value={markdownInteraction}>
       <ReactMarkdown
-        remarkPlugins={REMARK_PLUGINS}
-        rehypePlugins={REHYPE_PLUGINS}
+        remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
+        rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
         components={components}
       >
         {content}
       </ReactMarkdown>
     </MarkdownInteractionContext.Provider>
   );
-});
+}
 
 /** Minimum tool rows before the card collapses into a summary (inclusive). */
 export const TOOL_CALLS_COMPRESS_THRESHOLD = 2;
@@ -381,7 +432,7 @@ export function toolLabel(name: string): string {
     // Display aliases for older tool IDs in chat history.
     memory_set_fact: "Updated context",
     memory_list_facts: "Listed context",
-    memory_search_conversations: "Searched history",
+    memory_search_conversations: "Searched library",
     get_datetime: "Checked date & time",
     note_list: "Listed notes",
     note_create: "Created note",

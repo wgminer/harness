@@ -5,10 +5,13 @@ import {
   X,
   Loader2,
   Circle,
-  Dot,
+  ArrowUpRight,
   Plus,
   ChevronDown,
+  Search,
+  CheckLine,
   ListFilter,
+  Settings2 as SettingsIcon,
   Check,
   AlertCircle,
 } from "lucide-react";
@@ -19,6 +22,7 @@ import {
 } from "../shared/conversationSession";
 import { getDisplayNoteTitle, type NoteSummary } from "../shared/writing";
 import { getDisplayImageTitle, type GeneratedImage } from "../shared/images";
+import { SETTINGS_PAGE_TITLE } from "../shared/settingsPage";
 import {
   sidebarSyncStatusTooltip,
   syncResultChangedLocalData,
@@ -271,7 +275,7 @@ export function Sidebar({
           onClick={() => onDevViewSelect?.(devView)}
         >
           <span className="sidebar-item-icon" aria-hidden title={label}>
-            <Icon size={16} className="sidebar-item-icon__svg" />
+            <Icon size={12} className="sidebar-item-icon__svg" />
           </span>
           <span className="sidebar-item-title">{label}</span>
         </li>
@@ -293,7 +297,7 @@ export function Sidebar({
             onClick={() => onSelectNote(row.id)}
           >
             <span className="sidebar-item-icon" aria-hidden title="Note">
-              <StickyNote size={16} className="sidebar-item-icon__svg" />
+              <StickyNote size={12} className="sidebar-item-icon__svg" />
             </span>
             <span className="sidebar-item-title">{getDisplayNoteTitle(row.title ?? "")}</span>
             <button
@@ -321,7 +325,7 @@ export function Sidebar({
             onClick={() => onSelectImage(row.id)}
           >
             <span className="sidebar-item-icon" aria-hidden title="Image">
-              <ImageIcon size={16} className="sidebar-item-icon__svg" />
+              <ImageIcon size={12} className="sidebar-item-icon__svg" />
             </span>
             <span className="sidebar-item-title">{getDisplayImageTitle(row.title)}</span>
             <button
@@ -346,7 +350,7 @@ export function Sidebar({
       const chatStreaming =
         view === "chat" && conversationId === c.id && activeChatProcessing;
       const iconKind = conversationSidebarIconKind(c);
-      const Icon = iconKind === "dictation" ? Dot : Circle;
+      const Icon = iconKind === "dictation" ? ArrowUpRight : Circle;
       return (
         <li
           key={c.id}
@@ -362,7 +366,7 @@ export function Sidebar({
         >
           {chatStreaming ? (
             <span className="sidebar-item-spinner" aria-hidden>
-              <Loader2 size={16} className="voice-spinner" />
+              <Loader2 size={12} className="voice-spinner" />
             </span>
           ) : (
             <span
@@ -370,7 +374,7 @@ export function Sidebar({
               aria-hidden
               title={iconKind === "dictation" ? "Dictation" : "Chat"}
             >
-              <Icon size={16} className="sidebar-item-icon__svg" />
+              <Icon size={12} className="sidebar-item-icon__svg" />
             </span>
           )}
           {titlePending ? (
@@ -486,6 +490,41 @@ export function Sidebar({
               </div>
             ) : null}
           </div>
+          <div className="sidebar-nav">
+            <button
+              type="button"
+              className={`btn btn-icon${view === "search" ? " btn-primary" : ""}`}
+              onClick={() => onViewChange("search")}
+              aria-label="Search"
+              aria-pressed={view === "search"}
+              title="Search"
+              data-testid="sidebar-search"
+            >
+              <Search size={16} />
+            </button>
+            <button
+              type="button"
+              className={`btn btn-icon${view === "tasks" ? " btn-primary" : ""}`}
+              onClick={() => onViewChange("tasks")}
+              aria-label="Tasks"
+              aria-pressed={view === "tasks"}
+              title="Tasks"
+              data-testid="library-tasks"
+            >
+              <CheckLine size={16} />
+            </button>
+            <button
+              type="button"
+              className={`btn btn-icon${view === "settings" ? " btn-primary" : ""}`}
+              onClick={() => onViewChange("settings")}
+              aria-label={SETTINGS_PAGE_TITLE}
+              aria-pressed={view === "settings"}
+              title={SETTINGS_PAGE_TITLE}
+              data-testid="library-settings"
+            >
+              <SettingsIcon size={16} />
+            </button>
+          </div>
         </div>
         <div
           className={[
@@ -502,25 +541,29 @@ export function Sidebar({
                 <span className="sidebar-group-label">Dev</span>
                 <ul className="sidebar-group-items">
                   {renderDevItem("dev-chat", "Chat", Circle)}
-                  {renderDevItem("dev-dictation", "Dictation", Dot)}
+                  {renderDevItem("dev-dictation", "Dictation", ArrowUpRight)}
                   {renderDevItem("dev-note", "Note", StickyNote)}
                   {renderDevItem("dev-image", "Image", ImageIcon)}
                 </ul>
               </li>
             ) : null}
-            {sidebarGroups.map(({ key, label, items }: SidebarGroup, groupIndex) => {
+            {sidebarGroups.map(({ key, label, weekday, items }: SidebarGroup, groupIndex) => {
               const groupLabelTitle =
                 key === "recent"
                   ? `${libraryRows.length} item${libraryRows.length === 1 ? "" : "s"}`
                   : undefined;
               const showGroupHeader = groupIndex === 0 && !showDevSection;
+              const groupLabel = (
+                <span className="sidebar-group-label" title={groupLabelTitle}>
+                  {label}
+                  {weekday ? <span className="sidebar-group-weekday">{weekday}</span> : null}
+                </span>
+              );
               return (
                 <li key={key} className="sidebar-group">
                   {showGroupHeader ? (
                     <div className="sidebar-group-header">
-                      <span className="sidebar-group-label" title={groupLabelTitle}>
-                        {label}
-                      </span>
+                      {groupLabel}
                       <button
                         type="button"
                         className="btn btn-icon sidebar-group-sort-toggle"
@@ -534,9 +577,7 @@ export function Sidebar({
                     </div>
                   ) : showDevSection && groupIndex === 0 ? (
                     <div className="sidebar-group-header">
-                      <span className="sidebar-group-label" title={groupLabelTitle}>
-                        {label}
-                      </span>
+                      {groupLabel}
                       <button
                         type="button"
                         className="btn btn-icon sidebar-group-sort-toggle"
@@ -549,9 +590,7 @@ export function Sidebar({
                       </button>
                     </div>
                   ) : (
-                    <span className="sidebar-group-label" title={groupLabelTitle}>
-                      {label}
-                    </span>
+                    groupLabel
                   )}
                   <ul className="sidebar-group-items">
                     {items.map((row) => renderLibraryItem(row))}

@@ -136,7 +136,7 @@ enum ToolCallLabels {
         case "task_clear_completed": return "Cleared completed"
         case "memory_set", "memory_set_fact": return "Updated context"
         case "memory_list", "memory_list_facts": return "Listed context"
-        case "memory_search_conversations": return "Searched history"
+        case "memory_search_conversations": return "Searched library"
         case "get_datetime": return "Checked date & time"
         case "web_search": return "Searched the web"
         case "note_list": return "Listed notes"

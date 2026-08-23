@@ -69,9 +69,13 @@ async fn open_privacy_pane(app: &AppHandle, url: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+pub fn macos_accessibility_is_trusted() -> bool {
+    macos_accessibility_trusted(false)
+}
+
 #[command(rename_all = "camelCase")]
 pub fn system_macos_accessibility_trusted() -> bool {
-    macos_accessibility_trusted(false)
+    macos_accessibility_is_trusted()
 }
 
 #[command(rename_all = "camelCase")]
