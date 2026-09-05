@@ -4,6 +4,7 @@ import Foundation
 final class ConversationStore: ObservableObject {
     @Published private(set) var conversations: [ConversationListItem] = []
     @Published private(set) var hasLocalEdits = false
+    let recentlyPulled = RecentlyPulledTracker()
 
     /// Fired after local synced content is written (not after sync pulls).
     var onContentChanged: (() -> Void)?

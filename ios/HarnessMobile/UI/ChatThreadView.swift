@@ -29,7 +29,6 @@ struct ChatThreadView: View {
     @State private var renameDraft = ""
     @State private var showDeleteConfirm = false
     @State private var didInitialScrollToLiveEdge = false
-    @State private var showDictationSheet = false
     @State private var pendingImage: UIImage?
     @State private var showCamera = false
     @State private var conversationTitle = "Chat"
@@ -153,15 +152,11 @@ struct ChatThreadView: View {
         } message: {
             Text(loadError ?? "")
         }
-        .sheet(isPresented: $showDictationSheet) {
-            DictationRecordingSheet(
-                app: app,
-                mode: .sendToConversation(conversationId: conversationId),
-                isPresented: $showDictationSheet,
-                onTranscriptSent: { transcript in
-                    Task { await send(text: transcript) }
-                }
-            )
+        .onReceive(NotificationCenter.default.publisher(for: .harnessDictationDelivered)) { note in
+            guard (note.object as? String) == conversationId else { return }
+            if let pending = app.takePendingOutboundMessage(conversationId: conversationId) {
+                Task { await send(text: pending.text, imageJPEG: pending.imageJPEG) }
+            }
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView(isPresented: $showCamera) { image in
@@ -303,7 +298,7 @@ struct ChatThreadView: View {
             onClearPendingImage: { pendingImage = nil },
             onSend: { payload in Task { await send(text: payload.text, imageJPEG: payload.imageJPEG) } },
             onStop: { chatService.stop() },
-            onDictate: { showDictationSheet = true },
+            onDictate: { app.beginThreadDictation(conversationId: conversationId) },
             onCamera: { showCamera = true },
             isFocused: $isComposerFocused
         )

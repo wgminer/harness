@@ -16,7 +16,10 @@ import {
 import { InlineWriteupCard } from "./DocumentCard";
 import { ToolCallsCard } from "./ToolCallsCard";
 import { StreamingAssistantContent } from "./StreamingAssistantContent";
-import { hasVisibleStreamingBlocks } from "../shared/streamingMarkdownBlocks";
+import {
+  shouldUseStreamingAssistantRenderer,
+  useStreamedAssistantIds,
+} from "./streamRevealHold";
 
 interface ChatMessageListProps {
   displayMessages: Message[];
@@ -103,6 +106,8 @@ export function ChatMessageList({
   }, [displayMessages, expandedUserCards]);
 
   const lastMessage = displayMessages[displayMessages.length - 1];
+  const liveAssistantId = lastMessage?.role === "assistant" ? lastMessage.id : null;
+  const streamedAssistantIds = useStreamedAssistantIds(sending, liveAssistantId);
   const showReplyActions =
     displayMessages.length > 0 && lastMessage?.role === "user" && !streamingContent;
   const optionSelectEnabled =
@@ -122,8 +127,13 @@ export function ChatMessageList({
           const isStreamingWriteup =
             sending && !!liveNoteStream && isLatestAssistant;
           const isStreamingAssistantText = isLatestAssistant && sending;
-          const showStreamFooterSpinner =
-            isStreamingAssistantText && hasVisibleStreamingBlocks(m.content, sending);
+          const useStreamingAssistant =
+            shouldUseStreamingAssistantRenderer(
+              isLatestAssistant,
+              m.id,
+              streamedAssistantIds,
+            ) || (isLatestAssistant && sending);
+          const showStreamFooterSpinner = isStreamingAssistantText;
 
           const optionsInteractive =
             optionSelectEnabled && isAssistant && lastMessage?.id === m.id;
@@ -151,11 +161,11 @@ export function ChatMessageList({
 
           let assistantBubbleBody: ReactNode = null;
           if (m.role !== "user") {
-            if (isStreamingAssistantText) {
+            if (useStreamingAssistant) {
               assistantBubbleBody = (
                 <StreamingAssistantContent
                   content={m.content}
-                  isStreaming={sending}
+                  isStreaming={isStreamingAssistantText}
                   messageId={m.id}
                   messageTimestamp={m.timestamp}
                   copiedId={copiedId}

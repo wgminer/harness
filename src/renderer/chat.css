@@ -164,22 +164,29 @@
   pointer-events: none;
 }
 
-/* Completed streaming blocks fade in once on mount (opacity + soft lift). */
+/* Completed streaming blocks fade in once on mount (opacity + soft blur, in place). */
 @keyframes chat-block-in {
   from {
     opacity: 0;
-    filter: blur(6px);
-    transform: translateY(12px);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
     filter: blur(0);
-    transform: translateY(0);
   }
 }
 
 .chat-stream-block {
-  animation: chat-block-in 800ms ease-out;
+  animation: chat-block-in var(--motion-duration-stream-in) var(--motion-ease-out);
+}
+
+.chat-stream-block:first-child {
+  min-height: var(--line-height-message);
+}
+
+/* Wait copy sits in the first-block slot without the entrance animation. */
+.chat-stream-block--wait {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -760,7 +767,11 @@
   justify-content: flex-end;
   gap: var(--space-3);
   margin-top: 0;
-  padding: var(--space-2) 0;
+  padding: var(--space-1) 0 var(--space-3);
+}
+
+.message-block.assistant .message-block-footer {
+  padding-top: var(--space-1);
 }
 
 .message-block-meta {
@@ -996,6 +1007,10 @@
 .chat-mode-picker__trigger-chevron {
   flex-shrink: 0;
   opacity: 0.9;
+}
+
+.chat-mode-picker__trigger-chevron--up {
+  transform: rotate(180deg);
 }
 
 .chat-mode-picker__menu {
@@ -1493,9 +1508,13 @@
     border-color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
-.document-card__pill:hover {
+.document-card__pill:hover:not(:disabled) {
   background: var(--hover-bg-strong);
   border-color: var(--border-light);
+}
+
+.document-card__pill:disabled {
+  cursor: default;
 }
 
 .document-card__pill:focus-visible {
@@ -1557,246 +1576,6 @@
 
 .document-card__pill--error .document-card__pill-meta {
   color: var(--danger-fg);
-}
-
-.document-card__placeholder {
-  margin: 0;
-  color: #777;
-  font-size: var(--font-size-caption);
-}
-
-.document-card__placeholder--error {
-  color: var(--danger-fg);
-}
-
-/* Letter-shaped document viewer over chat. */
-.document-card-overlay-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 2100;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  padding: var(--space-4);
-  background: rgb(0 0 0 / 0.72);
-  -webkit-backdrop-filter: blur(12px) saturate(0.85);
-  backdrop-filter: blur(12px) saturate(0.85);
-}
-
-.document-card-overlay {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  /* ~letter readable width at desktop density */
-  width: min(100%, 42rem);
-  min-height: 0;
-  max-height: 100%;
-}
-
-.document-card-overlay__chrome {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-shrink: 0;
-  min-width: 0;
-}
-
-.document-card-overlay__chrome-title {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  color: var(--fg);
-  font-size: var(--font-size-caption);
-}
-
-.document-card-overlay__chrome-title span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.document-card-overlay__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex-shrink: 0;
-}
-
-.document-card-overlay__sheet {
-  --document-fg: #1c1c1c;
-  --document-muted: #666;
-  --document-rule: #e2e2e0;
-  --document-code-bg: #f0f0ee;
-
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  /* Letter page: readable column width lives on the overlay shell. */
-  background: #f7f7f5;
-  color: var(--document-fg);
-  border-radius: var(--radius-lg);
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.35) inset,
-    0 18px 48px rgb(0 0 0 / 0.45),
-    0 2px 8px rgb(0 0 0 / 0.3);
-  scrollbar-color: #b0b0ae #ececea;
-}
-
-.document-card-overlay__sheet::-webkit-scrollbar-track {
-  background: #ececea;
-}
-
-.document-card-overlay__sheet::-webkit-scrollbar-thumb {
-  background: #b0b0ae;
-}
-
-.document-card-overlay__masthead {
-  padding: var(--space-8) var(--space-8) var(--space-4);
-  border-bottom: 1px solid var(--document-rule);
-}
-
-.document-card-overlay__heading {
-  margin: 0;
-  font-family: var(--font-family);
-  font-size: var(--font-size-title);
-  font-weight: 600;
-  line-height: var(--line-height-title);
-  color: var(--document-fg);
-  letter-spacing: -0.01em;
-}
-
-.document-card-overlay__body {
-  padding: var(--space-6) var(--space-8) var(--space-10);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  line-height: var(--line-height-prose);
-  color: var(--document-fg);
-}
-
-.document-card-overlay__body > :first-child {
-  margin-top: 0;
-}
-
-.document-card-overlay__body > :last-child {
-  margin-bottom: 0;
-}
-
-.document-card-overlay__body p {
-  margin: 0 0 var(--space-4);
-}
-
-.document-card-overlay__body p:last-child {
-  margin-bottom: 0;
-}
-
-.document-card-overlay__body strong {
-  font-weight: 600;
-}
-
-.document-card-overlay__body ul,
-.document-card-overlay__body ol {
-  margin: 0 0 var(--space-4);
-  padding-inline-start: 1.5em;
-}
-
-.document-card-overlay__body ol {
-  padding-inline-start: 2em;
-}
-
-.document-card-overlay__body li {
-  margin: var(--space-1) 0;
-}
-
-.document-card-overlay__body li > p {
-  margin: 0;
-}
-
-.document-card-overlay__body li > p + p {
-  margin-top: var(--space-2);
-}
-
-.document-card-overlay__body a {
-  color: #1a5fb4;
-}
-
-.document-card-overlay__body code {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-caption);
-  padding: 1px var(--space-1);
-  background: var(--document-code-bg);
-  border: 1px solid var(--document-rule);
-  border-radius: var(--radius-xs);
-  color: var(--document-fg);
-}
-
-.document-card-overlay__body .md-code-block {
-  position: relative;
-  margin: var(--space-4) 0;
-  background: #111;
-  border-radius: var(--radius-md);
-  color: #ccc;
-  font-family: var(--font-family-mono);
-}
-
-.document-card-overlay__body .md-code-block pre {
-  margin: 0;
-  padding: var(--space-3);
-  font-family: var(--font-family-mono);
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  word-break: break-word;
-  background: transparent;
-  border: none;
-}
-
-.document-card-overlay__body .md-code-block pre code,
-.document-card-overlay__body .md-code-block pre code.hljs {
-  font-family: var(--font-family-mono);
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: inherit;
-  white-space: pre-wrap;
-}
-
-.document-card-overlay__body .md-code-block:hover .md-code-block__toolbar,
-.document-card-overlay__body .md-code-block:focus-within .md-code-block__toolbar {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.document-card-overlay__body blockquote {
-  margin: 0 0 var(--space-4);
-  padding-left: var(--space-3);
-  border-left: 3px solid var(--document-rule);
-  color: var(--document-muted);
-}
-
-.document-card-overlay__body hr {
-  margin: var(--space-5) 0;
-  border-top-color: var(--document-rule);
-}
-
-.document-card-overlay__body table {
-  width: 100%;
-  margin: 0 0 var(--space-4);
-  border-collapse: collapse;
-  font-size: var(--font-size-caption);
-}
-
-.document-card-overlay__body th,
-.document-card-overlay__body td {
-  padding: var(--space-2);
-  border: 1px solid var(--document-rule);
-  text-align: left;
-}
-
-.document-card-overlay__body th {
-  background: var(--document-code-bg);
-  font-weight: 600;
 }
 
 /* Selection → Tavily image popover (desktop chat MVP) */

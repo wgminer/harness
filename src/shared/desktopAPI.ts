@@ -56,6 +56,8 @@ export interface HarnessAPI {
     isHarnessDev: () => Promise<boolean>;
     /** When true, image generate/adjust writes stub PNGs (no OpenAI). */
     isStubImages: () => Promise<boolean>;
+    /** True when the renderer is running as the browser debug shell (no Tauri). */
+    isHarnessWeb: () => Promise<boolean>;
   };
   system: {
     getPlatform: () => Promise<NodeJS.Platform>;

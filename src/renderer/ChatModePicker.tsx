@@ -2,8 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import { CHAT_MODES, getChatMode, type ChatModeId } from "../shared/chatModes";
-
-const MENU_GAP_PX = 8;
+import {
+  CHAT_MODE_MENU_FALLBACK_HEIGHT_PX,
+  CHAT_MODE_MENU_FALLBACK_WIDTH_PX,
+  placeChatModeMenu,
+  type ChatModeMenuPosition,
+} from "./chatModeMenuPosition";
 
 interface ChatModePickerProps {
   value: ChatModeId;
@@ -57,7 +61,7 @@ function ChatModePickerDropdown({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<ChatModeMenuPosition | null>(null);
   const activeMode = getChatMode(value);
 
   useLayoutEffect(() => {
@@ -69,14 +73,26 @@ function ChatModePickerDropdown({
       const trigger = triggerRef.current;
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
-      const menuWidth = menuRef.current?.offsetWidth ?? 136;
-      setMenuPos({
-        top: rect.bottom + MENU_GAP_PX,
-        left: Math.max(MENU_GAP_PX, rect.right - menuWidth),
-      });
+      setMenuPos(
+        placeChatModeMenu(
+          rect,
+          {
+            width: menuRef.current?.offsetWidth ?? CHAT_MODE_MENU_FALLBACK_WIDTH_PX,
+            height: menuRef.current?.offsetHeight ?? CHAT_MODE_MENU_FALLBACK_HEIGHT_PX,
+          },
+          { width: window.innerWidth, height: window.innerHeight },
+        ),
+      );
     };
     update();
-    requestAnimationFrame(update);
+    const frame = requestAnimationFrame(update);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
   }, [open, value]);
 
   useEffect(() => {
@@ -104,6 +120,7 @@ function ChatModePickerDropdown({
             className="chat-mode-picker__menu chat-mode-picker__menu--portal"
             role="menu"
             aria-label="Chat mode"
+            data-placement={menuPos?.placement ?? "down"}
             style={
               menuPos
                 ? { top: menuPos.top, left: menuPos.left }
@@ -153,7 +170,13 @@ function ChatModePickerDropdown({
         onClick={() => setOpen((prev) => !prev)}
       >
         <span className="chat-mode-picker__trigger-label">{activeMode.label}</span>
-        <ChevronDown size={15} className="chat-mode-picker__trigger-chevron" aria-hidden />
+        <ChevronDown
+          size={15}
+          className={`chat-mode-picker__trigger-chevron${
+            open && menuPos?.placement === "up" ? " chat-mode-picker__trigger-chevron--up" : ""
+          }`}
+          aria-hidden
+        />
       </button>
       {menu}
     </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChatView } from "./ChatView";
+import { ChatLayoutDebugHost } from "./layoutDebug/ChatLayoutDebugHost";
 import { AppTitlebar } from "./AppTitlebar";
 import { SettingsView } from "./SettingsView";
 import { setCachedAccessibilityTrusted, setCachedHasOpenAIApiKey, setCachedSettings } from "./settings/settingsSessionCache";
@@ -33,8 +34,15 @@ import {
   type SetupGap,
 } from "../shared/setupState";
 import { SETTINGS_PAGE_TITLE } from "../shared/settingsPage";
+import {
+  arrivedLibraryIds as collectArrivedLibraryIds,
+  consumeArrivalId,
+  mergeArrivalTimes,
+  pruneArrivalTimes,
+  snapshotLibraryFingerprints,
+} from "../shared/libraryArrival";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
-import { IDLE_UPDATE_STATUS, type UpdateStatus } from "../shared/updateStatus";
+import { canStartUpdate, IDLE_UPDATE_STATUS, type UpdateStatus } from "../shared/updateStatus";
 function removeTitleAwaitingId(
   prev: Record<string, true>,
   id: string,
@@ -81,6 +89,8 @@ export default function App() {
     DEFAULT_UI_SESSION.openNoteInStickyWindow ?? false,
   );
   const [libraryOpen, setLibraryOpen] = useState(false);
+  /** Ids pulled/merged from R2 in this session — faded “arrived” mark in the library. */
+  const [arrivedLibraryIds, setArrivedLibraryIds] = useState<Record<string, number>>({});
 
   const toggleLibraryOpen = useCallback(() => {
     setLibraryOpen((open) => !open);
@@ -110,16 +120,23 @@ export default function App() {
   useEffect(() => { viewRef.current = view; }, [view]);
   const activeNoteIdRef = useRef(activeNoteId);
   useEffect(() => { activeNoteIdRef.current = activeNoteId; }, [activeNoteId]);
+  const conversationsRef = useRef(conversations);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+  const notesRef = useRef(notes);
+  useEffect(() => { notesRef.current = notes; }, [notes]);
+  const imagesRef = useRef(images);
+  useEffect(() => { imagesRef.current = images; }, [images]);
   useEffect(() => {
     overlaySessionRef.current = globalHotkeyOverlaySession;
   }, [globalHotkeyOverlaySession]);
 
   const refreshSetupState = useCallback(async () => {
-    const [settings, syncStatus, credentialStatus, platform] = await Promise.all([
+    const [settings, syncStatus, credentialStatus, platform, webClient] = await Promise.all([
       window.harness.settings.get() as Promise<Settings>,
       window.harness.sync.getStatus(),
       window.harness.credentials.getStatus(),
       window.harness.system.getPlatform(),
+      window.harness.env.isHarnessWeb(),
     ]);
     setCachedSettings(settings);
     setCachedHasOpenAIApiKey(credentialStatus.hasOpenAIApiKey);
@@ -133,6 +150,7 @@ export default function App() {
       syncConfigured: syncStatus.configured,
       platform,
       accessibilityTrusted,
+      webClient,
     });
     setSetupGaps(gaps);
     setOpenAIConfigured(credentialStatus.hasOpenAIApiKey);
@@ -159,6 +177,7 @@ export default function App() {
   }, []);
 
   const handleConversationSelect = useCallback((id: string) => {
+    setArrivedLibraryIds((prev) => consumeArrivalId(prev, id));
     setConversationId(id);
     setView("chat");
   }, []);
@@ -192,6 +211,46 @@ export default function App() {
     },
     []
   );
+
+  const refreshLibraryAfterSync = useCallback(async () => {
+    const before = snapshotLibraryFingerprints({
+      conversations: conversationsRef.current,
+      notes: notesRef.current,
+      images: imagesRef.current,
+    });
+    const [list, noteList, imageList] = await Promise.all([
+      window.harness.memory.listConversations(),
+      window.harness.notes.list(),
+      window.harness.images.list(),
+    ]);
+    setConversations(list);
+    setConversationId((current) => resolveConversationId(list, current));
+    setTitleAwaitingIds((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of Object.keys(prev)) {
+        const row = list.find((c) => c.id === id);
+        if (row && !isTimePlaceholderTitle(row.title)) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    setNotes(noteList);
+    setImages(imageList);
+    const after = snapshotLibraryFingerprints({
+      conversations: list,
+      notes: noteList,
+      images: imageList,
+    });
+    const arrived = collectArrivedLibraryIds(before, after);
+    if (arrived.length === 0) {
+      setArrivedLibraryIds((prev) => pruneArrivalTimes(prev));
+      return;
+    }
+    setArrivedLibraryIds((prev) => mergeArrivalTimes(prev, arrived));
+  }, [resolveConversationId]);
 
   const loadConversations = useCallback(async () => {
     const [list, session, settings] = await Promise.all([
@@ -278,10 +337,12 @@ export default function App() {
   }, [loadImagesList]);
 
   const handleSelectNoteFromLibrary = useCallback((id: string) => {
+    setArrivedLibraryIds((prev) => consumeArrivalId(prev, id));
     openNoteInMain(id);
   }, [openNoteInMain]);
 
   const handleSelectImageFromLibrary = useCallback((id: string) => {
+    setArrivedLibraryIds((prev) => consumeArrivalId(prev, id));
     openImageInMain(id);
   }, [openImageInMain]);
 
@@ -327,10 +388,10 @@ export default function App() {
 
   useEffect(() => {
     const unsub = window.harness.sync.onChanged(() => {
-      void refreshConversations();
+      void refreshLibraryAfterSync();
     });
     return unsub;
-  }, [refreshConversations]);
+  }, [refreshLibraryAfterSync]);
 
   useEffect(() => {
     const unsub = window.harness.notes.onOpenInMain((noteId) => {
@@ -405,16 +466,16 @@ export default function App() {
 
   useEffect(() => {
     void window.harness.updater.getStatus().then(setUpdateStatus).catch(() => {});
-    const unsub = window.harness.updater.onStatus(setUpdateStatus);
-    void window.harness.updater.check();
-    return unsub;
+    return window.harness.updater.onStatus(setUpdateStatus);
   }, []);
 
   const handleUpdateClick = useCallback(() => {
-    if (updateStatus.status === "available") {
-      void window.harness.updater.downloadAndInstall();
-    }
-  }, [updateStatus.status]);
+    if (!canStartUpdate(updateStatus)) return;
+    void window.harness.updater.downloadAndInstall().catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      setUpdateStatus({ status: "error", message: message || "Update failed" });
+    });
+  }, [updateStatus]);
 
   useEffect(() => {
     const normalizeLayout = (raw: LayoutOptions): LayoutOptions => ({
@@ -543,10 +604,6 @@ export default function App() {
     setActiveImageId((prev) => prev ?? image.id);
   }, []);
 
-  const refreshLibraryAfterSync = useCallback(async () => {
-    await Promise.all([refreshConversations(), loadNotesList(), loadImagesList()]);
-  }, [refreshConversations, loadNotesList, loadImagesList]);
-
   useEffect(() => {
     wireGlobalHotkeyActions({
       setGlobalHotkeyOverlaySession,
@@ -564,10 +621,11 @@ export default function App() {
       getConversationId: () => conversationIdRef.current,
       getView: () => viewRef.current,
       getActiveNoteId: () => activeNoteIdRef.current,
+      setActiveNoteId,
       getOverlaySession: () => overlaySessionRef.current,
     });
     return () => wireGlobalHotkeyActions(null);
-  }, [markTitleAwaiting, refreshConversations, setGlobalHotkeyError]);
+  }, [markTitleAwaiting, refreshConversations, setActiveNoteId, setGlobalHotkeyError]);
 
   useEffect(() => {
     // Auto-clear focused-path error chips only (overlay failed stays until dismiss).
@@ -690,52 +748,55 @@ export default function App() {
           onOpenDataSettings={openDataSettings}
           showDevSection={false}
           onDevViewSelect={handleDevViewSelect}
+          arrivedLibraryIds={arrivedLibraryIds}
         />
         <main className="main">
           {(view === "chat" || activeChatProcessing) && (
             <div className="main-chat-host" hidden={view !== "chat"}>
-              <ChatView
-                conversationId={conversationId}
-                displayTitle={
-                  activeChatConversation
-                    ? conversationDisplayTitle(
-                        activeChatConversation.title,
-                        activeChatConversation.createdAt
-                      )
-                    : ""
-                }
-                openTitleModalNonce={openTitleModalNonce}
-                conversationChatMode={activeChatConversation?.chatMode}
-                conversationDictationReplyAction={
-                  activeChatConversation?.dictationReplyAction ?? null
-                }
-                conversationCreatedAt={activeChatConversation?.createdAt ?? null}
-                conversationSessionKind={activeChatConversation?.sessionKind ?? null}
-                conversationHasAssistantReply={
-                  activeChatConversation?.hasAssistantReply === true
-                }
-                onConversationCreated={refreshConversations}
-                onAssignConversationId={handleAssignConversationId}
-                pendingHotkeyText={pendingHotkeyText}
-                pendingHotkeyDraftOnly={pendingHotkeyDraftOnly}
-                onPendingHotkeyTextConsumed={() => {
-                  setPendingHotkeyText(null);
-                  setPendingHotkeyDraftOnly(false);
-                }}
-                onChatActivityChange={handleChatActivityChange}
-                focusComposerNonce={focusComposerNonce}
-                onOpenNotesView={(noteId) => openNoteInMain(noteId)}
-                onOpenConversation={(id) => {
-                  setConversationId(id);
-                  setView("chat");
-                }}
-                onOpenImage={(imageId) => openImageInMain(imageId)}
-                onNotesChanged={() => {
-                  void loadNotesList();
-                }}
-                openAIConfigured={!setupStateLoaded || openAIConfigured}
-                mirrorGlobalFnRecording={view === "chat"}
-              />
+              <ChatLayoutDebugHost active={view === "chat"}>
+                <ChatView
+                  conversationId={conversationId}
+                  displayTitle={
+                    activeChatConversation
+                      ? conversationDisplayTitle(
+                          activeChatConversation.title,
+                          activeChatConversation.createdAt
+                        )
+                      : ""
+                  }
+                  openTitleModalNonce={openTitleModalNonce}
+                  conversationChatMode={activeChatConversation?.chatMode}
+                  conversationDictationReplyAction={
+                    activeChatConversation?.dictationReplyAction ?? null
+                  }
+                  conversationCreatedAt={activeChatConversation?.createdAt ?? null}
+                  conversationSessionKind={activeChatConversation?.sessionKind ?? null}
+                  conversationHasAssistantReply={
+                    activeChatConversation?.hasAssistantReply === true
+                  }
+                  onConversationCreated={refreshConversations}
+                  onAssignConversationId={handleAssignConversationId}
+                  pendingHotkeyText={pendingHotkeyText}
+                  pendingHotkeyDraftOnly={pendingHotkeyDraftOnly}
+                  onPendingHotkeyTextConsumed={() => {
+                    setPendingHotkeyText(null);
+                    setPendingHotkeyDraftOnly(false);
+                  }}
+                  onChatActivityChange={handleChatActivityChange}
+                  focusComposerNonce={focusComposerNonce}
+                  onOpenNotesView={(noteId) => openNoteInMain(noteId)}
+                  onOpenConversation={(id) => {
+                    setConversationId(id);
+                    setView("chat");
+                  }}
+                  onOpenImage={(imageId) => openImageInMain(imageId)}
+                  onNotesChanged={() => {
+                    void loadNotesList();
+                  }}
+                  openAIConfigured={!setupStateLoaded || openAIConfigured}
+                  mirrorGlobalFnRecording={view === "chat"}
+                />
+              </ChatLayoutDebugHost>
             </div>
           )}
           {view === "settings" && (

@@ -239,6 +239,18 @@ export function getDefaultNoteTemplate(
 export const UNTITLED_NOTE_TITLE = "Untitled";
 
 /**
+ * Ensures note markdown starts with an ATX H1 so `titleFromMarkdownContent` can resolve a title.
+ * Leaves existing leading H1s untouched. Mirrored by Rust `notes::ensure_leading_note_h1`.
+ */
+export function ensureLeadingNoteH1(content: string, title: string): string {
+  if (titleFromMarkdownContent(content, "")) return content;
+  const headingText = stripLeadingMarkdownHeading(title) || UNTITLED_NOTE_TITLE;
+  const heading = `# ${headingText}`;
+  const body = content.trim();
+  return body ? `${heading}\n\n${body}` : `${heading}\n`;
+}
+
+/**
  * Derives a note title from an ATX H1 on the first non-empty line; otherwise uses fallback.
  * Does not infer titles from plain text or lower-level headings.
  */

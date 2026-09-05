@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 struct ConversationSnapshot: Equatable, Codable {
@@ -72,6 +73,26 @@ enum SyncChangeSummary {
         return parts.joined(separator: " · ")
     }
 
+    /// Conversation ids that appeared or changed during a pull/merge.
+    static func changedConversationIds(
+        before: [String: ConversationSnapshot],
+        after: [String: ConversationSnapshot]
+    ) -> [String] {
+        var ids: [String] = []
+        for (id, afterSnap) in after {
+            guard let beforeSnap = before[id] else {
+                ids.append(id)
+                continue
+            }
+            if beforeSnap.title != afterSnap.title
+                || beforeSnap.messageCount != afterSnap.messageCount
+                || beforeSnap.hasAssistantReply != afterSnap.hasAssistantReply {
+                ids.append(id)
+            }
+        }
+        return ids
+    }
+
     /// Human-readable pending changes since the last successful sync.
     static func describePendingLocalChanges(
         baseline: [String: ConversationSnapshot],
@@ -82,6 +103,49 @@ enum SyncChangeSummary {
             return changes
         }
         return "Task list changed."
+    }
+}
+
+@MainActor
+final class RecentlyPulledTracker: ObservableObject {
+    static let ttl: TimeInterval = 90
+
+    @Published private(set) var ids: Set<String> = []
+    private var pulledAt: [String: Date] = [:]
+
+    func mark(_ incoming: [String], now: Date = Date()) {
+        guard !incoming.isEmpty else { return }
+        pulledAt.merge(incoming.map { ($0, now) }, uniquingKeysWith: { _, new in new })
+        prune(now: now)
+        ids = Set(pulledAt.keys)
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.ttl * 1_000_000_000))
+            self?.expire()
+        }
+    }
+
+    func expire(now: Date = Date()) {
+        prune(now: now)
+        ids = Set(pulledAt.keys)
+    }
+
+    func consume(_ id: String) {
+        pulledAt.removeValue(forKey: id)
+        ids.remove(id)
+    }
+
+    func contains(_ id: String) -> Bool {
+        ids.contains(id)
+    }
+
+    func setForPreview(_ incoming: [String]) {
+        ids = Set(incoming)
+        let now = Date()
+        pulledAt = Dictionary(uniqueKeysWithValues: incoming.map { ($0, now) })
+    }
+
+    private func prune(now: Date) {
+        pulledAt = pulledAt.filter { now.timeIntervalSince($0.value) < Self.ttl }
     }
 }
 

@@ -28,7 +28,13 @@ import {
   syncResultChangedLocalData,
   type SyncStatus,
 } from "../shared/sync";
-import type { UpdateStatus } from "../shared/updateStatus";
+import {
+  isUpdateButtonDisabled,
+  shouldShowUpdateButton,
+  updateButtonLabel,
+  updateButtonTitle,
+  type UpdateStatus,
+} from "../shared/updateStatus";
 import { Skeleton } from "./Skeleton";
 import {
   type Conversation,
@@ -72,6 +78,8 @@ interface SidebarProps {
   onOpenDataSettings?: () => void;
   showDevSection?: boolean;
   onDevViewSelect?: (v: DevView) => void;
+  /** Library ids recently pulled from R2. */
+  arrivedLibraryIds?: Record<string, number>;
 }
 
 export function Sidebar({
@@ -102,32 +110,11 @@ export function Sidebar({
   onOpenDataSettings,
   showDevSection = false,
   onDevViewSelect,
+  arrivedLibraryIds = {},
 }: SidebarProps) {
-  const updateButtonLabel = (() => {
-    switch (updateStatus.status) {
-      case "available":
-        return updateStatus.version ? `Update to v${updateStatus.version}` : "Update";
-      case "downloading":
-        return `Updating… ${updateStatus.percent}%`;
-      case "ready":
-        return "Restarting…";
-      case "checking":
-        return "Checking…";
-      default:
-        return "Update";
-    }
-  })();
-
-  const showUpdateButton =
-    updateStatus.status === "available" ||
-    updateStatus.status === "downloading" ||
-    updateStatus.status === "ready" ||
-    updateStatus.status === "checking";
-
-  const updateButtonDisabled =
-    updateStatus.status === "downloading" ||
-    updateStatus.status === "ready" ||
-    updateStatus.status === "checking";
+  const updateLabel = updateButtonLabel(updateStatus);
+  const showUpdateButton = shouldShowUpdateButton(updateStatus);
+  const updateButtonDisabled = isUpdateButtonDisabled(updateStatus);
 
   const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_PAGE_SIZE);
   const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("recent");
@@ -291,7 +278,13 @@ export function Sidebar({
         return (
           <li
             key={row.id}
-            className={["sidebar-item", isActive ? "active" : ""].filter(Boolean).join(" ")}
+            className={[
+              "sidebar-item",
+              isActive ? "active" : "",
+              arrivedLibraryIds[row.id] ? "sidebar-item--arrived" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             data-testid="sidebar-note"
             data-note-id={row.id}
             onClick={() => onSelectNote(row.id)}
@@ -319,7 +312,13 @@ export function Sidebar({
         return (
           <li
             key={row.id}
-            className={["sidebar-item", isActive ? "active" : ""].filter(Boolean).join(" ")}
+            className={[
+              "sidebar-item",
+              isActive ? "active" : "",
+              arrivedLibraryIds[row.id] ? "sidebar-item--arrived" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             data-testid="sidebar-image"
             data-image-id={row.id}
             onClick={() => onSelectImage(row.id)}
@@ -354,7 +353,13 @@ export function Sidebar({
       return (
         <li
           key={c.id}
-          className={["sidebar-item", isActive ? "active" : ""].filter(Boolean).join(" ")}
+          className={[
+            "sidebar-item",
+            isActive ? "active" : "",
+            arrivedLibraryIds[c.id] ? "sidebar-item--arrived" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
           data-testid="sidebar-conversation"
           data-conversation-id={c.id}
           data-session-icon={iconKind}
@@ -412,6 +417,7 @@ export function Sidebar({
       onViewChange,
       titleGenInFlight,
       titleAwaitingIds,
+      arrivedLibraryIds,
       view,
     ]
   );
@@ -623,13 +629,17 @@ export function Sidebar({
             {showUpdateButton ? (
               <button
                 type="button"
-                className="btn sidebar-footer__update-btn"
+                className={
+                  updateStatus.status === "error"
+                    ? "btn sidebar-footer__update-btn sidebar-footer__update-btn--error"
+                    : "btn sidebar-footer__update-btn"
+                }
                 data-testid="sidebar-update"
                 onClick={onUpdateClick}
                 disabled={updateButtonDisabled}
-                title={updateButtonLabel}
+                title={updateButtonTitle(updateStatus)}
               >
-                {updateButtonLabel}
+                {updateLabel}
               </button>
             ) : null}
           </div>

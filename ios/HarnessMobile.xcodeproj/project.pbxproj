@@ -31,6 +31,7 @@
 		2FD683AE85D47B8BEB2B82B4 /* SettingsSecretsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4485CC6393915027618C569 /* SettingsSecretsTests.swift */; };
 		357D3D4146091B409203F23D /* SyncScopes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4730A624D3A95A9CB16A575B /* SyncScopes.swift */; };
 		37F67E23F63A033EE3A42042 /* ConversationListWindowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A47325C1428961108452D7 /* ConversationListWindowTests.swift */; };
+		389CCBD980A7634EBC9E449F /* conversationSearch.json in Resources */ = {isa = PBXBuildFile; fileRef = 56C85BC0FEB6EC8445305569 /* conversationSearch.json */; };
 		3A3C082A177417B9140AFACA /* HarnessBootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB12E12148FC37481B0D07FC /* HarnessBootView.swift */; };
 		3B761F1F1F77F11316E05A02 /* AssistantToolsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D93A774F93E9AAD621493C8 /* AssistantToolsTests.swift */; };
 		3F4969401B9DD8FF599F754D /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D0CE51605069EA771540E8 /* HapticFeedback.swift */; };
@@ -87,7 +88,6 @@
 		8B949E6C2E8C25A74443B526 /* DictationSuggestedPromptsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C18C653DD30A62345F4F5B6 /* DictationSuggestedPromptsTests.swift */; };
 		8C2C14C6EBDB74B20E4C5292 /* DictationReplyStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EFC4E3EC5C2436FBDFAD51 /* DictationReplyStrip.swift */; };
 		8D1D147CC0BE74DF6930CAC4 /* dictationSuggestedPrompts.json in Resources */ = {isa = PBXBuildFile; fileRef = 0A2C3CBEF61E359099DDE1C4 /* dictationSuggestedPrompts.json */; };
-		B2C3D4E5F60718293A4B5C6D /* conversationSearch.json in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* conversationSearch.json */; };
 		9405865D9D6FCF8A594A473E /* ConversationSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A16A22E55364018036822 /* ConversationSearchTests.swift */; };
 		97941B84CF5AC90DCF4CF5E6 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B4EBBBE10E0C397F313E3F /* ChatService.swift */; };
 		979B41A93A1C87AACFA155A6 /* AssistantProseStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52F62B543CA294A706909B6 /* AssistantProseStyle.swift */; };
@@ -173,7 +173,6 @@
 		07B902543D8716C83660DCB1 /* ChatThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatThreadView.swift; sourceTree = "<group>"; };
 		08B0FCE2A6EE7BDD32D1893E /* SystemPromptContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemPromptContractTests.swift; sourceTree = "<group>"; };
 		0A2C3CBEF61E359099DDE1C4 /* dictationSuggestedPrompts.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = dictationSuggestedPrompts.json; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B5C /* conversationSearch.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = conversationSearch.json; sourceTree = "<group>"; };
 		0CAE0B4C85AB63CD5FA804D4 /* TasksListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksListView.swift; sourceTree = "<group>"; };
 		106BB0C874DBAF12707F4E03 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
 		12D592F556DDF4B30E19716B /* StreamingMarkdownBlocksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownBlocksTests.swift; sourceTree = "<group>"; };
@@ -217,6 +216,7 @@
 		533229EA4E1BECE9636B6F31 /* SyncChangeSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncChangeSummary.swift; sourceTree = "<group>"; };
 		53DAF78FF2D79400916203AD /* R2SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = R2SettingsStore.swift; sourceTree = "<group>"; };
 		555BF784A2F175103C5A8FED /* ChatRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRouter.swift; sourceTree = "<group>"; };
+		56C85BC0FEB6EC8445305569 /* conversationSearch.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = conversationSearch.json; sourceTree = "<group>"; };
 		5939BA2C176C994D4536A45E /* SettingsSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSecrets.swift; sourceTree = "<group>"; };
 		5C1C3333EE2C6332A24424BE /* PairingPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingPayloadTests.swift; sourceTree = "<group>"; };
 		5E61F0E1B823D181A12D870A /* SyncStatusSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusSnapshot.swift; sourceTree = "<group>"; };
@@ -234,7 +234,7 @@
 		7604E9E23D64274B1ACC1475 /* StreamingMarkdownBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownBlocks.swift; sourceTree = "<group>"; };
 		765261EE8A48169A07C84552 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		79FC826B40EB55FD4B15E0CD /* HeaderQuotePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeaderQuotePolicy.swift; sourceTree = "<group>"; };
-		7F6C077F37C364DAFBCBDC7A /* HarnessMobileRecordingLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HarnessMobileRecordingLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7F6C077F37C364DAFBCBDC7A /* HarnessMobileRecordingLiveActivity.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = HarnessMobileRecordingLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		86F5172174F6290F6B320171 /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		8708CFE5FF3C575653655123 /* SharedToolDefinitionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedToolDefinitionsTests.swift; sourceTree = "<group>"; };
 		88E6573E37354B7074EB23BE /* SyncMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMergeTests.swift; sourceTree = "<group>"; };
@@ -249,7 +249,7 @@
 		9C5735508729C4F3B7EC3348 /* HarnessMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessMarkdownView.swift; sourceTree = "<group>"; };
 		9DC78AD167D055EA2856FE0C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9E1AA82EF9EF53609B518B43 /* StreamingMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownView.swift; sourceTree = "<group>"; };
-		9FBAE9F76A8F49349D173680 /* HarnessMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HarnessMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9FBAE9F76A8F49349D173680 /* HarnessMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HarnessMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1A707405489446956F32F0A /* SyncChangeSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncChangeSummaryTests.swift; sourceTree = "<group>"; };
 		A2351E29292CD00EA870CB08 /* VoiceMemoTranscriptExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMemoTranscriptExtractor.swift; sourceTree = "<group>"; };
 		A39F31DA802C19AA1290D5CA /* TranscriptDictionaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptDictionaryTests.swift; sourceTree = "<group>"; };
@@ -431,9 +431,9 @@
 		5F67EB393E03AF9A4A6AD26D /* SharedContracts */ = {
 			isa = PBXGroup;
 			children = (
-        B55F302D3C3BA8E876D37C0C /* chatModes.json */,
+				B55F302D3C3BA8E876D37C0C /* chatModes.json */,
 				DDC66AD86EBDB6926EA8CA6D /* chatStreamBatch.json */,
-				A1B2C3D4E5F60718293A4B5C /* conversationSearch.json */,
+				56C85BC0FEB6EC8445305569 /* conversationSearch.json */,
 				0A2C3CBEF61E359099DDE1C4 /* dictationSuggestedPrompts.json */,
 				E90E7CFD57B34D24487E7F3A /* homeHeaderQuotes.json */,
 				2A4D2A2493AA2A75269530AF /* systemPrompt.json */,
@@ -630,6 +630,12 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					215D609463B675FEAD8AD518 = {
+						DevelopmentTeam = "";
+					};
+					8B9C42AB19A9CB6ED213D75C = {
+						DevelopmentTeam = "";
+					};
 					A0864F7614913F9EA08A3B85 = {
 						DevelopmentTeam = "";
 					};
@@ -669,8 +675,8 @@
 				EDE4E8454465F36E27939DA4 /* Assets.xcassets in Resources */,
 				014C5B012FEE0F8825859159 /* chatModes.json in Resources */,
 				4907EDFD2A3A59632C58C634 /* chatStreamBatch.json in Resources */,
+				389CCBD980A7634EBC9E449F /* conversationSearch.json in Resources */,
 				8D1D147CC0BE74DF6930CAC4 /* dictationSuggestedPrompts.json in Resources */,
-				B2C3D4E5F60718293A4B5C6D /* conversationSearch.json in Resources */,
 				66362B5081D179E06AAEE85B /* homeHeaderQuotes.json in Resources */,
 				9D2723E45244DBD7CEBED8A5 /* systemPrompt.json in Resources */,
 				5EC46457CDA92F533F459CA4 /* tools.json in Resources */,
@@ -902,7 +908,6 @@
 		29640546DB76A707DD7AA86F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				DEVELOPMENT_TEAM = C64DYYG928;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HarnessMobileRecordingLiveActivity/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1012,7 +1017,6 @@
 		D5A857E6D6122F7890AEE30F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				DEVELOPMENT_TEAM = C64DYYG928;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HarnessMobileRecordingLiveActivity/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1031,7 +1035,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = C64DYYG928;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HarnessMobile/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1049,7 +1052,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = C64DYYG928;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HarnessMobile/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -8,7 +8,7 @@ export type GlobalHotkeyActions = {
   setGlobalHotkeyOverlaySession: (active: boolean) => void;
   setGlobalHotkeyOverlayPhase: (phase: GlobalHotkeyOverlayPhase) => void;
   setGlobalHotkeyError: (message: string | null, recordingPath?: string | null) => void;
-  setView: (view: "chat") => void;
+  setView: (view: "chat" | "notes") => void;
   setConversationId: (id: string | null) => void;
   setFocusComposerNonce: (updater: (n: number) => number) => void;
   setPendingHotkeyText: (text: string | null) => void;
@@ -19,15 +19,22 @@ export type GlobalHotkeyActions = {
   refreshConversations: () => Promise<void>;
   markTitleAwaiting: (id: string) => void;
   getConversationId: () => string | null;
-  /** Current main-window surface (used to keep focused dictation in notes). */
+  /** Current main-window surface (used to pin focused dictation at start). */
   getView: () => string;
   /** Active writing-surface note, if any. */
   getActiveNoteId: () => string | null;
+  /** Restore a pinned note after the user navigates during the take. */
+  setActiveNoteId: (id: string | null) => void;
   /** Whether the current take is showing the overlay session. */
   getOverlaySession: () => boolean;
 };
 
+type FocusedLanding =
+  | { surface: "note"; noteId: string }
+  | { surface: "chat"; conversationId: string | null };
+
 let actions: GlobalHotkeyActions | null = null;
+let focusedLanding: FocusedLanding | null = null;
 
 export function wireGlobalHotkeyActions(next: GlobalHotkeyActions | null): void {
   actions = next;
@@ -36,6 +43,51 @@ export function wireGlobalHotkeyActions(next: GlobalHotkeyActions | null): void 
 /** Reset module state (tests only). */
 export function resetGlobalHotkeyControllerForTests(): void {
   actions = null;
+  focusedLanding = null;
+}
+
+function pinFocusedLanding(): void {
+  if (actions?.getView() === "notes") {
+    const noteId = actions.getActiveNoteId();
+    if (noteId) {
+      focusedLanding = { surface: "note", noteId };
+      return;
+    }
+  }
+  focusedLanding = {
+    surface: "chat",
+    conversationId: actions?.getConversationId() ?? null,
+  };
+}
+
+function clearFocusedLanding(): void {
+  focusedLanding = null;
+}
+
+function deliverFocusedTranscript(text: string): void {
+  const landing = focusedLanding;
+  clearFocusedLanding();
+  const toNote =
+    landing?.surface === "note"
+      ? landing.noteId
+      : landing == null && actions?.getView() === "notes"
+        ? actions.getActiveNoteId()
+        : null;
+  if (toNote) {
+    actions?.setView("notes");
+    actions?.setActiveNoteId(toNote);
+    actions?.setPendingNoteHotkeyText(text);
+    return;
+  }
+  actions?.setView("chat");
+  if (landing?.surface === "chat") {
+    actions?.setConversationId(landing.conversationId);
+  } else if (!actions?.getConversationId()) {
+    actions?.setConversationId(null);
+  }
+  actions?.setFocusComposerNonce((n) => n + 1);
+  actions?.setPendingHotkeyDraftOnly(false);
+  actions?.setPendingHotkeyText(text);
 }
 
 function clearOverlay(): void {
@@ -48,9 +100,11 @@ export function createGlobalHotkeyController(): () => void {
   const unsubStarted = window.harness.recording.onGlobalRecordingStarted(({ focused }) => {
     actions?.setGlobalHotkeyError(null, null);
     if (focused) {
+      pinFocusedLanding();
       actions?.setGlobalHotkeyOverlaySession(false);
       actions?.setGlobalHotkeyOverlayPhase("idle");
     } else {
+      clearFocusedLanding();
       actions?.setGlobalHotkeyOverlaySession(true);
       actions?.setGlobalHotkeyOverlayPhase("recording");
     }
@@ -71,11 +125,13 @@ export function createGlobalHotkeyController(): () => void {
   });
 
   const unsubCancelled = window.harness.recording.onGlobalRecordingCancelled(() => {
+    clearFocusedLanding();
     clearOverlay();
     void playCancelChime();
   });
 
   const unsubError = window.harness.recording.onGlobalRecordingError(({ message, recordingPath }) => {
+    clearFocusedLanding();
     if (actions?.getOverlaySession()) {
       actions.setGlobalHotkeyError(message, recordingPath ?? null);
       actions.setGlobalHotkeyOverlayPhase("failed");
@@ -88,21 +144,12 @@ export function createGlobalHotkeyController(): () => void {
 
   const unsubTranscriptReady = window.harness.recording.onGlobalTranscriptReady((text) => {
     clearOverlay();
-    if (actions?.getView() === "notes" && actions.getActiveNoteId()) {
-      actions.setPendingNoteHotkeyText(text);
-      return;
-    }
-    actions?.setView("chat");
-    if (!actions?.getConversationId()) {
-      actions?.setConversationId(null);
-    }
-    actions?.setFocusComposerNonce((n) => n + 1);
-    actions?.setPendingHotkeyDraftOnly(false);
-    actions?.setPendingHotkeyText(text);
+    deliverFocusedTranscript(text);
   });
 
   const unsubTranscriptDelivered = window.harness.recording.onGlobalTranscriptDelivered(
     (conversationId) => {
+      clearFocusedLanding();
       clearOverlay();
       actions?.setView("chat");
       actions?.setConversationId(conversationId);

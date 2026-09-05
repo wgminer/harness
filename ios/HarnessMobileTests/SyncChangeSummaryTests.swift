@@ -53,6 +53,21 @@ final class SyncChangeSummaryTests: XCTestCase {
         XCTAssertEqual(detail, "Task list changed.")
     }
 
+    func testChangedConversationIdsIncludesNewAndUpdated() {
+        let before: [String: ConversationSnapshot] = [
+            "a": ConversationSnapshot(id: "a", title: "Old", createdAt: 1, hasAssistantReply: false, messageCount: 1),
+            "kept": ConversationSnapshot(id: "kept", title: "Same", createdAt: 2, hasAssistantReply: true, messageCount: 2),
+        ]
+        let after: [String: ConversationSnapshot] = [
+            "a": ConversationSnapshot(id: "a", title: "New", createdAt: 1, hasAssistantReply: true, messageCount: 2),
+            "kept": ConversationSnapshot(id: "kept", title: "Same", createdAt: 2, hasAssistantReply: true, messageCount: 2),
+            "b": ConversationSnapshot(id: "b", title: "Fresh", createdAt: 3, hasAssistantReply: false, messageCount: 1),
+        ]
+
+        let ids = Set(SyncChangeSummary.changedConversationIds(before: before, after: after))
+        XCTAssertEqual(ids, ["a", "b"])
+    }
+
     func testDescribePendingLocalChangesWithoutBaseline() {
         let current = [
             "a": ConversationSnapshot(id: "a", title: "Alpha", createdAt: 1, hasAssistantReply: false, messageCount: 1),

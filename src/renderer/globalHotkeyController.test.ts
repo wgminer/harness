@@ -113,6 +113,7 @@ describe("globalHotkeyController", () => {
       getConversationId: vi.fn(() => "conv-existing"),
       getView: vi.fn(() => "chat"),
       getActiveNoteId: vi.fn(() => null),
+      setActiveNoteId: vi.fn(),
       getOverlaySession: vi.fn(() => overlaySession),
     };
     wireGlobalHotkeyActions(actions);
@@ -183,7 +184,8 @@ describe("globalHotkeyController", () => {
     vi.mocked(actions.getView).mockReturnValue("notes");
     vi.mocked(actions.getActiveNoteId).mockReturnValue("note-1");
     transcriptReadyCb?.("note dictation");
-    expect(actions.setView).not.toHaveBeenCalled();
+    expect(actions.setView).toHaveBeenCalledWith("notes");
+    expect(actions.setActiveNoteId).toHaveBeenCalledWith("note-1");
     expect(actions.setPendingHotkeyText).not.toHaveBeenCalled();
     expect(actions.setPendingNoteHotkeyText).toHaveBeenCalledWith("note dictation");
   });
@@ -195,6 +197,31 @@ describe("globalHotkeyController", () => {
     expect(actions.setView).toHaveBeenCalledWith("chat");
     expect(actions.setPendingHotkeyText).toHaveBeenCalledWith("fallback");
     expect(actions.setPendingNoteHotkeyText).not.toHaveBeenCalled();
+  });
+
+  it("pins chat landing at record start when the user navigates to notes", () => {
+    startedCb?.({ focused: true });
+    vi.mocked(actions.getView).mockReturnValue("notes");
+    vi.mocked(actions.getActiveNoteId).mockReturnValue("note-1");
+    transcriptReadyCb?.("stay in chat");
+    expect(actions.setView).toHaveBeenCalledWith("chat");
+    expect(actions.setConversationId).toHaveBeenCalledWith("conv-existing");
+    expect(actions.setPendingHotkeyText).toHaveBeenCalledWith("stay in chat");
+    expect(actions.setPendingNoteHotkeyText).not.toHaveBeenCalled();
+  });
+
+  it("pins note landing at record start when the user navigates to chat", () => {
+    vi.mocked(actions.getView).mockReturnValue("notes");
+    vi.mocked(actions.getActiveNoteId).mockReturnValue("note-1");
+    startedCb?.({ focused: true });
+    vi.mocked(actions.getView).mockReturnValue("chat");
+    vi.mocked(actions.getActiveNoteId).mockReturnValue(null);
+    vi.mocked(actions.getConversationId).mockReturnValue("conv-other");
+    transcriptReadyCb?.("stay in note");
+    expect(actions.setView).toHaveBeenCalledWith("notes");
+    expect(actions.setActiveNoteId).toHaveBeenCalledWith("note-1");
+    expect(actions.setPendingNoteHotkeyText).toHaveBeenCalledWith("stay in note");
+    expect(actions.setPendingHotkeyText).not.toHaveBeenCalled();
   });
 
   it("selects conversation on unfocused delivery", () => {

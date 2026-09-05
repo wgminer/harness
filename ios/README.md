@@ -60,7 +60,7 @@ To import a memo recorded in Voice Memos: open the memo → **Share** → **Save
 | Step | Where |
 |------|--------|
 | Chat on phone | Harness Mobile |
-| Pull-to-refresh, Settings **Sync now**, or return from background (after ~30s idle) | Phone pulls/pushes content-addressed `bundle-<hash>.json.gz` + `manifest.json` via R2 |
+| Cold launch, pull-to-refresh, Settings **Sync now**, or return from background | Phone pulls/pushes content-addressed `bundle-<hash>.json.gz` + `manifest.json` via R2 |
 | **Sync now** | Desktop Harness → Settings → Data |
 
 Backgrounding the app **flushes composer drafts** and allows an in-flight sync to finish via a short background task. It does **not** start a new sync by itself. Dictation uses the `audio` background mode so lock/home during a take can keep capture alive.

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   NOTE_TEMPLATE_CURSOR_TOKEN,
@@ -16,6 +18,8 @@ import {
   resolveNoteTemplateContent,
   stripLeadingMarkdownHeading,
   titleFromMarkdownContent,
+  ensureLeadingNoteH1,
+  UNTITLED_NOTE_TITLE,
 } from "./writing";
 
 describe("resolveNoteTemplateContent", () => {
@@ -269,5 +273,33 @@ describe("titleFromMarkdownContent", () => {
 
   it("falls back when the first non-empty line is blank or missing", () => {
     expect(titleFromMarkdownContent("\n\n", "Untitled")).toBe("Untitled");
+  });
+});
+
+describe("ensureLeadingNoteH1", () => {
+  it("prepends an H1 when content has none", () => {
+    expect(ensureLeadingNoteH1("", "Roadmap")).toBe("# Roadmap\n");
+    expect(ensureLeadingNoteH1("Next steps", "Roadmap")).toBe("# Roadmap\n\nNext steps");
+    expect(titleFromMarkdownContent(ensureLeadingNoteH1("Body", "Roadmap"), "Untitled")).toBe(
+      "Roadmap",
+    );
+  });
+
+  it("leaves an existing leading H1 in place", () => {
+    expect(ensureLeadingNoteH1("# Already\n\nBody", "Ignored")).toBe("# Already\n\nBody");
+  });
+
+  it("strips a markdown marker from the supplied title and falls back to Untitled", () => {
+    expect(ensureLeadingNoteH1("", "# Weekly notes")).toBe("# Weekly notes\n");
+    expect(ensureLeadingNoteH1("", "   ")).toBe(`# ${UNTITLED_NOTE_TITLE}\n`);
+  });
+
+  it("is mirrored by Rust notes::ensure_leading_note_h1", () => {
+    const root = join(__dirname, "../..");
+    const rustNotes = readFileSync(join(root, "src-tauri/src/notes.rs"), "utf8");
+    const rustStream = readFileSync(join(root, "src-tauri/src/chat/stream.rs"), "utf8");
+    expect(rustNotes).toContain("pub fn ensure_leading_note_h1");
+    expect(rustNotes).toContain("ensure_leading_note_h1(&normalized_content, &fallback_title)");
+    expect(rustStream).toContain("notes::ensure_leading_note_h1(&stream.body, &stream.title)");
   });
 });

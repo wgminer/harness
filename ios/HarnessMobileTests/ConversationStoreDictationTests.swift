@@ -63,4 +63,20 @@ final class ConversationStoreDictationTests: XCTestCase {
         XCTAssertEqual(messages.first?.content, "Dictated into open chat")
         XCTAssertEqual(DictationRecordingIndex.recordingURL(for: id)?.lastPathComponent, recording.lastPathComponent)
     }
+
+    func testRecentlyPulledMarksConsumesAndExpires() {
+        let store = ConversationStore(localDataDir: tempDir)
+        store.recentlyPulled.mark(["a", "b"], now: Date())
+        XCTAssertTrue(store.recentlyPulled.contains("a"))
+        store.recentlyPulled.consume("a")
+        XCTAssertFalse(store.recentlyPulled.contains("a"))
+        XCTAssertTrue(store.recentlyPulled.contains("b"))
+
+        store.recentlyPulled.mark(
+            ["stale"],
+            now: Date().addingTimeInterval(-RecentlyPulledTracker.ttl - 1)
+        )
+        store.recentlyPulled.expire()
+        XCTAssertFalse(store.recentlyPulled.contains("stale"))
+    }
 }

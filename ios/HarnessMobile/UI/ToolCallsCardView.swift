@@ -64,7 +64,7 @@ struct ToolCallsCardView: View {
     @ViewBuilder
     private func toolRow(_ call: ToolCallRecord) -> some View {
         if call.toolName == "memory_search_conversations" {
-            let hits = MemorySearchHit.array(from: call.payload)
+            let hits = MemorySearchHit.array(from: call.payloadDictionary)
             if !hits.isEmpty {
                 searchToolRow(hits: hits)
             } else {

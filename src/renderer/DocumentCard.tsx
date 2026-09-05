@@ -1,11 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Check, Copy, FileText, Loader2, Printer, SquarePen, X } from "lucide-react";
-import { buildNotePrintHtml } from "../shared/notePrint";
-import { MarkdownContent } from "./chatHelpers";
+import { useEffect, useState } from "react";
+import { FileText, Loader2 } from "lucide-react";
 import type { InlineWriteupPayload, LiveNoteStream } from "./chatHelpers";
-
-const SCROLL_PIN_THRESHOLD_PX = 24;
 
 interface DocumentCardProps {
   title: string;
@@ -60,35 +55,6 @@ function documentPillMeta({
   return parts.join(" · ");
 }
 
-function useScrollFollow(
-  scrollRef: React.RefObject<HTMLDivElement | null>,
-  body: string,
-  streaming: boolean,
-  active: boolean,
-) {
-  const [pinnedToBottom, setPinnedToBottom] = useState(true);
-
-  useEffect(() => {
-    if (!active) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const atBottom =
-        el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_PIN_THRESHOLD_PX;
-      setPinnedToBottom(atBottom);
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [active, scrollRef]);
-
-  useEffect(() => {
-    if (!active || !streaming || !pinnedToBottom) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [active, body, streaming, pinnedToBottom, scrollRef]);
-}
-
 export function DocumentCard({
   title,
   body,
@@ -99,194 +65,42 @@ export function DocumentCard({
   streaming = false,
   onOpenInEditor,
 }: DocumentCardProps) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [printing, setPrinting] = useState(false);
-  const sheetScrollRef = useRef<HTMLDivElement>(null);
-  const wasStreamingRef = useRef(false);
-
-  useScrollFollow(sheetScrollRef, body, streaming, open);
-
-  // Auto-open while a writeup is streaming so the user can watch it land.
-  useEffect(() => {
-    if (streaming && !wasStreamingRef.current) {
-      setOpen(true);
-    }
-    wasStreamingRef.current = streaming;
-  }, [streaming]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setOpen(false);
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  const handleCopy = useCallback(async () => {
-    if (!body.trim()) return;
-    try {
-      await navigator.clipboard.writeText(body);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
-    }
-  }, [body]);
-
-  const handlePrint = useCallback(async () => {
-    if (!body.trim() || printing) return;
-    setPrinting(true);
-    try {
-      const html = buildNotePrintHtml(title, body);
-      await window.harness.notes.print(html, title.trim() || "Note");
-    } catch {
-      /* ignore */
-    } finally {
-      setPrinting(false);
-    }
-  }, [body, printing, title]);
-
-  const canAct = !loading && !error && !!body.trim();
-
-  const bodyContent = loading ? (
-    <p className="document-card__placeholder">Loading note…</p>
-  ) : error ? (
-    <p className="document-card__placeholder document-card__placeholder--error">{error}</p>
-  ) : (
-    <MarkdownContent content={body} />
-  );
-
-  const overlay =
-    open &&
-    createPortal(
-      <div
-        className="document-card-overlay-backdrop"
-        role="presentation"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) setOpen(false);
-        }}
-      >
-        <div
-          className="document-card-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="document-card-overlay__chrome">
-            <div className="document-card-overlay__chrome-title">
-              <FileText size={14} aria-hidden />
-              <span>{title}</span>
-            </div>
-            <div className="document-card-overlay__actions">
-              {noteId && onOpenInEditor && !streaming ? (
-                <button
-                  type="button"
-                  className="btn btn-icon-sm"
-                  onClick={() => onOpenInEditor(noteId)}
-                  title="Open in Editor"
-                  aria-label="Open in Editor"
-                >
-                  <SquarePen size={14} />
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="btn btn-icon-sm"
-                onClick={() => void handlePrint()}
-                disabled={!canAct || printing}
-                title="Print"
-                aria-label="Print note"
-              >
-                <Printer size={14} />
-              </button>
-              <button
-                type="button"
-                className="btn btn-icon-sm"
-                onClick={() => void handleCopy()}
-                disabled={!canAct}
-                title={copied ? "Copied!" : "Copy"}
-                aria-label={copied ? "Copied!" : "Copy note content"}
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-              </button>
-              <button
-                type="button"
-                className="btn btn-icon-sm"
-                onClick={() => setOpen(false)}
-                title="Close"
-                aria-label="Close note"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-
-          <article className="document-card-overlay__sheet" ref={sheetScrollRef}>
-            <header className="document-card-overlay__masthead">
-              <h1 className="document-card-overlay__heading">{title}</h1>
-            </header>
-            <div className="document-card-overlay__body">{bodyContent}</div>
-          </article>
-        </div>
-      </div>,
-      document.body,
-    );
-
-  const canOpenInEditor = !!noteId && !!onOpenInEditor && !streaming;
-
-  const handlePillClick = () => {
-    if (canOpenInEditor) {
-      onOpenInEditor!(noteId!);
-      return;
-    }
-    setOpen(true);
-  };
-
+  const canOpenInEditor = !!noteId && !!onOpenInEditor && !error;
   const pillTitle = error ? "Couldn't open note" : loading ? "Loading note…" : title;
   const pillMeta = documentPillMeta({ summary, body, loading, error, streaming });
   const pillBusy = loading || streaming;
 
+  const handlePillClick = () => {
+    if (!canOpenInEditor) return;
+    onOpenInEditor!(noteId!);
+  };
+
   return (
-    <>
-      <div className="document-card">
-        <button
-          type="button"
-          className={[
-            "document-card__pill",
-            error ? "document-card__pill--error" : null,
-            streaming ? "document-card__pill--streaming" : null,
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          onClick={handlePillClick}
-          aria-haspopup={canOpenInEditor ? undefined : "dialog"}
-          aria-expanded={canOpenInEditor ? undefined : open}
-          title={
-            error ??
-            (canOpenInEditor
-              ? `Open “${title}”`
-              : [title, summary?.trim()].filter(Boolean).join(" — "))
-          }
-        >
-          {pillBusy ? (
-            <Loader2 size={18} className="document-card__pill-spinner" aria-hidden />
-          ) : (
-            <FileText size={18} aria-hidden />
-          )}
-          <span className="document-card__pill-text">
-            <span className="document-card__pill-title">{pillTitle}</span>
-            <span className="document-card__pill-meta">{pillMeta}</span>
-          </span>
-        </button>
-      </div>
-      {overlay}
-    </>
+    <div className="document-card">
+      <button
+        type="button"
+        className={[
+          "document-card__pill",
+          error ? "document-card__pill--error" : null,
+          streaming ? "document-card__pill--streaming" : null,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onClick={handlePillClick}
+        disabled={!canOpenInEditor}
+        title={error ?? (canOpenInEditor ? `Open “${title}”` : title)}
+      >
+        {pillBusy ? (
+          <Loader2 size={18} className="document-card__pill-spinner" aria-hidden />
+        ) : (
+          <FileText size={18} aria-hidden />
+        )}
+        <span className="document-card__pill-text">
+          <span className="document-card__pill-title">{pillTitle}</span>
+          <span className="document-card__pill-meta">{pillMeta}</span>
+        </span>
+      </button>
+    </div>
   );
 }
 

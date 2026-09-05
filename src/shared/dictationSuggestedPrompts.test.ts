@@ -25,6 +25,8 @@ describe("dictationSuggestedPrompts contract", () => {
     ]);
     expect(DICTATION_REPLY_RUN_ACTION).toBe("run");
     expect(contract.vocabulary).toEqual(DICTATION_SUGGEST_VOCABULARY);
+    expect(DICTATION_SUGGEST_SYSTEM_PROMPT).toMatch(/Proofread/i);
+    expect(DICTATION_SUGGEST_SYSTEM_PROMPT).toMatch(/outgoing text/i);
   });
 
   it("is include_str!'d by Rust", () => {

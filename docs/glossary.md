@@ -9,6 +9,7 @@ Shared vocabulary for product and agent conversations. Prefer these terms over n
 | **Harness** | The product: a personal, offline-first place around a language model (chat, voice, notes, tasks, memory). |
 | **Harness Dev** | Dev build (`npm run dev`): separate Dock name + data dir; credentials, sync, and audio are not split from installed. |
 | **Desktop** | Tauri app (Rust + React) — primary client. |
+| **Browser / Harness Web** | Debug shell: the desktop React chat UI in a regular browser (`npm run dev:browser`). localStorage only; not a shipped client. |
 | **Harness Mobile / iOS** | Native companion: capture + Q&A + sync — not desktop parity. |
 
 ## Surfaces
@@ -90,3 +91,4 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 - **Memory ≠ conversation history** — memories are curated facts; history is the thread.
 - **Surface ≠ Desktop/iOS** — a surface is a part of the app UI; Desktop and Mobile are clients.
 - **Harness vs Harness Dev** — display name + data folder only; not a separate sync identity.
+- **Browser / Harness Web ≠ Desktop** — same React chat UI for local debugging; localStorage, no Tauri, not a shipped client.

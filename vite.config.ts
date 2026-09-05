@@ -8,6 +8,14 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    proxy: {
+      // Browser debug shell (`npm run dev:browser`) — OpenAI does not allow browser CORS.
+      "/openai": {
+        target: "https://api.openai.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/openai/, ""),
+      },
+    },
   },
   build: {
     outDir: resolve(__dirname, "dist-web"),

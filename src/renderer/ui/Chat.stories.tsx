@@ -13,6 +13,7 @@ import { useState } from "react";
 import { ChatComposer } from "../ChatComposer";
 import { ChatModePicker } from "../ChatModePicker";
 import type { ChatModeId } from "../../shared/chatModes";
+import { STREAM_WAIT_LABEL } from "../StreamingAssistantContent";
 import { MessageContent, Section } from "./storyHelpers";
 
 function ComposerIdle() {
@@ -133,6 +134,16 @@ function ChatGallery() {
             Open settings
           </button>
         </div>
+      </Section>
+
+      <Section title="Stream wait label" stack>
+        <MessageContent>
+          <div className="chat-streaming-assistant">
+            <div className="chat-stream-block chat-stream-block--wait">
+              <p aria-busy="true">{STREAM_WAIT_LABEL}</p>
+            </div>
+          </div>
+        </MessageContent>
       </Section>
 
       <Section title="Message footer" stack>

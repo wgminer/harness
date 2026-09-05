@@ -6,6 +6,15 @@ enum ChatRoute: Hashable {
     case thread(id: String)
 }
 
+enum ActiveDictation: Equatable {
+    case createSession
+    case sendToConversation(String)
+}
+
+extension Notification.Name {
+    static let harnessDictationDelivered = Notification.Name("harness.dictationDelivered")
+}
+
 struct PendingOutboundMessage {
     let text: String
     let imageJPEG: Data?
@@ -67,6 +76,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var setupNoticeDismissed = false
     @Published var lastSuccessfulSyncAt: Date?
     @Published private(set) var hasCompletedInitialLoad = false
+    @Published var activeDictation: ActiveDictation?
 
     let localDataDir: URL
     let store: ConversationStore
@@ -101,15 +111,13 @@ final class AppModel: ObservableObject {
     private static let autoSyncDelayNs: UInt64 = 2_500_000_000
     private static let pendingStateRefreshDelayNs: UInt64 = 200_000_000
     private static let draftPersistDelayNs: UInt64 = 300_000_000
-    /// Skip Control Center flickers; only sync after a real background.
-    private static let foregroundSyncMinInterval: TimeInterval = 30
+    /// Skip Control Center flickers; still require a real background.
 
     private var scheduledSyncTask: Task<Void, Never>?
     private var pendingStateRefreshTask: Task<Void, Never>?
     private var threadDraftPersistTask: Task<Void, Never>?
     private var composeDraftPersistTask: Task<Void, Never>?
     private var syncBackgroundTask: UIBackgroundTaskIdentifier = .invalid
-    private var lastForegroundSyncAt: Date?
     private var didEnterBackground = false
     @Published private(set) var hasScheduledSync = false
 
@@ -260,7 +268,31 @@ final class AppModel: ObservableObject {
     }
 
     func openThread(id: String) {
+        store.recentlyPulled.consume(id)
         chatRouter?.openThread(id: id)
+    }
+
+    func beginCreateSessionDictation() {
+        activeDictation = .createSession
+    }
+
+    func beginThreadDictation(conversationId: String) {
+        activeDictation = .sendToConversation(conversationId)
+    }
+
+    func dismissDictation() {
+        activeDictation = nil
+    }
+
+    func finishThreadDictation(transcript: String) {
+        guard case .sendToConversation(let conversationId) = activeDictation else {
+            activeDictation = nil
+            return
+        }
+        queueOutboundMessage(conversationId: conversationId, text: transcript)
+        activeDictation = nil
+        NotificationCenter.default.post(name: .harnessDictationDelivered, object: conversationId)
+        openThread(id: conversationId)
     }
 
     func bootstrap() async {
@@ -330,10 +362,6 @@ final class AppModel: ObservableObject {
     func syncOnForeground() async {
         guard R2SettingsStore.isConfigured, didEnterBackground else { return }
         didEnterBackground = false
-        if let last = lastForegroundSyncAt,
-           Date().timeIntervalSince(last) < Self.foregroundSyncMinInterval {
-            return
-        }
         await performSync()
     }
 
@@ -355,13 +383,19 @@ final class AppModel: ObservableObject {
             endSyncBackgroundTaskIfNeeded()
         }
 
+        let beforePull = (try? store.snapshotConversations()) ?? [:]
+
         do {
             let outcome = try await syncEngine.syncNow(forcePull: forcePull)
             applyOutcome(outcome)
-            lastForegroundSyncAt = Date()
             if outcome.localDataChanged {
                 try await store.reloadAsync()
                 try tasksStore.reload()
+                if let after = try? store.snapshotConversations() {
+                    store.recentlyPulled.mark(
+                        SyncChangeSummary.changedConversationIds(before: beforePull, after: after)
+                    )
+                }
             }
             await store.refreshPendingSyncState()
             if outcome.localDataChanged {

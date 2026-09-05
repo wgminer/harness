@@ -36,6 +36,7 @@ export function createHarnessAdapter(): HarnessAPI {
       isHarnessE2E: () => invoke<boolean>(cmd("env:isHarnessE2E")),
       isHarnessDev: () => invoke<boolean>(cmd("env:isHarnessDev")),
       isStubImages: () => invoke<boolean>(cmd("env:isStubImages")),
+      isHarnessWeb: () => Promise.resolve(false),
     },
     system: {
       getPlatform: () => invoke<NodeJS.Platform>(cmd("system:getPlatform")),

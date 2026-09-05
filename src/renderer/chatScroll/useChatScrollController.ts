@@ -11,6 +11,7 @@ import { useCallback, useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent, RefObject, UIEvent } from "react";
 import {
   didTurnJustStart,
+  parkContentHeight,
   scrollToLiveEdge,
   trailingSpacerForOffset,
   turnParkPlan,
@@ -44,10 +45,12 @@ function parkTurn(scroll: HTMLDivElement): void {
     scrollToLiveEdge(scroll);
     return;
   }
+  const wait = scroll.querySelector<HTMLElement>(".chat-stream-block--wait");
+  const waitHeight = wait?.getBoundingClientRect().height ?? 0;
   const plan = turnParkPlan({
     anchorTop,
     headroom: TURN_HEADROOM_PX,
-    contentHeight: scroll.scrollHeight,
+    contentHeight: parkContentHeight(scroll.scrollHeight, waitHeight),
     clientHeight: scroll.clientHeight,
   });
   writeTurnSpacer(scroll, plan.spacer);

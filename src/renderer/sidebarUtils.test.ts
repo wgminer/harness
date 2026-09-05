@@ -8,7 +8,7 @@ import {
 
 describe("sidebarUtils", () => {
   it("uses one page size for the initial window and each More click", () => {
-    expect(SIDEBAR_PAGE_SIZE).toBe(25);
+    expect(SIDEBAR_PAGE_SIZE).toBe(10);
   });
 
   it("always includes the active row in the preview window", () => {

@@ -31,7 +31,7 @@ export type LibraryItemKind = "conversation" | "note" | "image";
 export type LibraryRow = ConversationListRow & { itemKind?: LibraryItemKind };
 
 /** Rows shown initially in the sidebar, and added per "More" click. */
-export const SIDEBAR_PAGE_SIZE = 25;
+export const SIDEBAR_PAGE_SIZE = 10;
 
 /**
  * Newest N rows; always includes the active item when it falls outside the window.

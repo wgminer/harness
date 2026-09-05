@@ -215,8 +215,8 @@ export function ChatView({
   const [isStreaming, setIsStreaming] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savedToNotesId, setSavedToNotesId] = useState<string | null>(null);
-  const [activeChatModel, setActiveChatModel] = useState("");
-  const activeChatModelRef = useRef("");
+  const [activeChatModel, setActiveChatModel] = useState(OPENAI_CHAT_MODEL);
+  const activeChatModelRef = useRef(OPENAI_CHAT_MODEL);
   const conversationIdRef = useRef<string | null>(conversationId);
   const sendingRef = useRef(false);
   const isStreamingRef = useRef(false);

@@ -218,6 +218,51 @@ fn parse_markdown_heading_line(line: &str) -> Option<(u8, usize)> {
     Some((level, indent.len() + hashes.len() + 1))
 }
 
+fn strip_leading_markdown_heading(text: &str) -> String {
+    let trimmed = text.trim();
+    let re = Regex::new(r"^(\s{0,3})(#{1,6})\s*").unwrap();
+    re.replace(trimmed, "").trim().to_string()
+}
+
+/// Ensures note markdown starts with an ATX H1 so `title_from_markdown_content` can resolve a title.
+/// Leaves existing leading H1s untouched. Mirrored by TypeScript `ensureLeadingNoteH1`.
+pub fn ensure_leading_note_h1(content: &str, title: &str) -> String {
+    if !title_from_markdown_content(content, "").is_empty() {
+        return content.to_string();
+    }
+    let heading_text = {
+        let stripped = strip_leading_markdown_heading(title);
+        if stripped.is_empty() {
+            UNTITLED_NOTE_TITLE.to_string()
+        } else {
+            stripped
+        }
+    };
+    let heading = format!("# {heading_text}");
+    let body = content.trim();
+    if body.is_empty() {
+        format!("{heading}\n")
+    } else {
+        format!("{heading}\n\n{body}")
+    }
+}
+
+/// True when markdown is empty or only a leading H1 (no body yet) so a write-up can still stream in.
+pub fn is_title_only_note_content(content: &str) -> bool {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    if title_from_markdown_content(trimmed, "").is_empty() {
+        return false;
+    }
+    trimmed
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count()
+        == 1
+}
+
 pub fn title_from_markdown_content(content: &str, fallback: &str) -> String {
     let first_line = content
         .lines()
@@ -338,28 +383,38 @@ pub async fn create_note(
     let normalized_content = normalize_content(&resolved_content);
     let interpolated_title = title.map(interpolate_note_template_string);
     let fallback_title = normalize_title(interpolated_title.as_deref(), UNTITLED_NOTE_TITLE);
+    let ensured_content = ensure_leading_note_h1(&normalized_content, &fallback_title);
     let entry = NotesIndexEntry {
         id: id.clone(),
-        title: title_from_markdown_content(&normalized_content, &fallback_title),
+        title: title_from_markdown_content(&ensured_content, &fallback_title),
         created_at: now,
         updated_at: now,
-        word_count: count_words(&normalized_content),
+        word_count: count_words(&ensured_content),
     };
     atomic_write_utf8(
         &state.write_chains,
         &note_path(&memory_dir, &id),
-        &normalized_content,
+        &ensured_content,
     )
     .await?;
     let mut notes = index.notes;
     notes.insert(0, entry.clone());
     save_notes_index(state, &memory_dir, &NotesIndex { notes }).await?;
 
+    let cursor_shift = if ensured_content == normalized_content {
+        0
+    } else {
+        ensured_content
+            .strip_suffix(normalized_content.trim())
+            .map(|prefix| prefix.len())
+            .unwrap_or(0)
+    };
     let normalized_cursor_offset = cursor_offset.map(|offset| {
         normalize_content(&resolved_content[..offset.min(resolved_content.len())]).len()
+            + cursor_shift
     });
     let initial_cursor_offset = normalized_cursor_offset.map(|offset| {
-        offset.min(normalized_content.len())
+        offset.min(ensured_content.len())
     });
 
     Ok(Note {
@@ -368,7 +423,7 @@ pub async fn create_note(
         created_at: entry.created_at,
         updated_at: entry.updated_at,
         word_count: entry.word_count,
-        content: normalized_content,
+        content: ensured_content,
         initial_cursor_offset,
     })
 }
@@ -560,5 +615,49 @@ pub async fn propose_note_spell_check(input: &serde_json::Value) -> Result<NoteE
     Ok(NoteEditProposal {
         proposed_text: text,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensure_leading_note_h1_prepends_when_missing() {
+        assert_eq!(ensure_leading_note_h1("", "Roadmap"), "# Roadmap\n");
+        assert_eq!(
+            ensure_leading_note_h1("Next steps", "Roadmap"),
+            "# Roadmap\n\nNext steps"
+        );
+        assert_eq!(
+            title_from_markdown_content(&ensure_leading_note_h1("Body", "Roadmap"), "Untitled"),
+            "Roadmap"
+        );
+    }
+
+    #[test]
+    fn ensure_leading_note_h1_keeps_existing_h1() {
+        assert_eq!(
+            ensure_leading_note_h1("# Already\n\nBody", "Ignored"),
+            "# Already\n\nBody"
+        );
+    }
+
+    #[test]
+    fn ensure_leading_note_h1_normalizes_title_arg() {
+        assert_eq!(
+            ensure_leading_note_h1("", "# Weekly notes"),
+            "# Weekly notes\n"
+        );
+        assert_eq!(ensure_leading_note_h1("", "   "), "# Untitled\n");
+    }
+
+    #[test]
+    fn title_only_note_content_allows_streaming() {
+        assert!(is_title_only_note_content(""));
+        assert!(is_title_only_note_content("# Roadmap\n"));
+        assert!(is_title_only_note_content("  # Roadmap  \n\n"));
+        assert!(!is_title_only_note_content("# Roadmap\n\nNext"));
+        assert!(!is_title_only_note_content("Plain body"));
+    }
 }
 

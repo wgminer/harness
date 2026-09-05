@@ -22,6 +22,16 @@ describe("collectSetupGaps", () => {
     });
     expect(gaps).toEqual([]);
   });
+
+  it("skips desktop-only recommended gaps on the browser client", () => {
+    const gaps = collectSetupGaps({
+      hasOpenAIApiKey: false,
+      syncConfigured: false,
+      platform: "linux",
+      webClient: true,
+    });
+    expect(gaps.map((g) => g.kind)).toEqual(["openai_api_key"]);
+  });
 });
 
 describe("shouldShowSetupNotice", () => {

@@ -34,7 +34,11 @@ Run before landing cross-surface changes:
 npm test
 ```
 
-Vitest includes version parity, ipcNames ↔ `generate_handler!` parity, sync-merge fixtures, **iOS app size budget** (`iosAppBudget.test.ts`), and other guards under `src/shared/*.test.ts`. CI runs the same `npm test` in the static job.
+Vitest includes version parity, ipcNames ↔ `generate_handler!` parity, sync-merge fixtures, and other guards under `src/shared/*.test.ts`. CI runs the same `npm test` in the static job.
+
+## Browser debug shell
+
+`npm run dev:browser` (or `npm run dev:web`) serves the same React renderer without Tauri. `main.tsx` picks `createBrowserAdapter()` when `__TAURI_INTERNALS__` is missing. Chat/settings/notes/tasks persist in `localStorage` (`harness.web.v1`). Completions go through the Vite `/openai` proxy. Tools, dictation, sync, and images are stubbed. Do not treat this as a third product client.
 
 ## Dev vs installed data dirs
 

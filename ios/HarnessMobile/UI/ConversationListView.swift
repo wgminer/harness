@@ -24,10 +24,10 @@ struct ConversationListView: View {
     /// Not `@ObservedObject` — observing `AppModel` rebuilds the list on chat route / sync chrome changes.
     let app: AppModel
     @ObservedObject private var store: ConversationStore
+    @ObservedObject private var arrivals: RecentlyPulledTracker
     let onSelect: (String) -> Void
 
     @State private var createError: String?
-    @State private var showDictationSheet = false
     @State private var showComposeSheet = false
     @State private var searchQuery = ""
     @State private var visibleLimit = ConversationListWindow.pageSize
@@ -38,6 +38,7 @@ struct ConversationListView: View {
     init(app: AppModel, onSelect: @escaping (String) -> Void) {
         self.app = app
         self.store = app.store
+        self.arrivals = app.store.recentlyPulled
         self.onSelect = onSelect
     }
 
@@ -77,10 +78,13 @@ struct ConversationListView: View {
                 .accessibilityLabel("Tasks")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    MobileSettingsView(app: app)
-                } label: {
-                    Image(systemName: "gearshape")
+                HStack(spacing: 12) {
+                    HomeSyncIndicator(app: app)
+                    NavigationLink {
+                        MobileSettingsView(app: app)
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
                 }
             }
         }
@@ -106,16 +110,6 @@ struct ConversationListView: View {
             Button("Cancel", role: .cancel) {
                 conversationToRename = nil
             }
-        }
-        .sheet(isPresented: $showDictationSheet) {
-            DictationRecordingSheet(
-                app: app,
-                mode: .createSession,
-                isPresented: $showDictationSheet,
-                onConversationCreated: { conversationId in
-                    onSelect(conversationId)
-                }
-            )
         }
         .sheet(isPresented: $showComposeSheet) {
             ComposeChatView(app: app) { conversationId in
@@ -203,7 +197,7 @@ struct ConversationListView: View {
 
             Button {
                 HapticFeedback.medium()
-                showDictationSheet = true
+                app.beginCreateSessionDictation()
             } label: {
                 Image(systemName: "mic.fill")
                     .font(.system(size: 20, weight: .semibold))
@@ -251,7 +245,7 @@ struct ConversationListView: View {
         Button {
             onSelect(item.id)
         } label: {
-            ConversationRow(item: item)
+            ConversationRow(item: item, recentlyPulled: arrivals.contains(item.id))
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
@@ -279,11 +273,59 @@ struct ConversationListView: View {
 
 private struct ConversationRow: View {
     let item: ConversationListItem
+    var recentlyPulled = false
 
     var body: some View {
-        Text(item.displayTitle)
-            .font(.headline)
-            .foregroundStyle(.primary)
+        HStack(spacing: 10) {
+            Text(item.displayTitle)
+                .font(.headline)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if recentlyPulled {
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 7, height: 7)
+                    .accessibilityLabel("Arrived from sync")
+            }
+        }
+        .padding(.vertical, 2)
+        .overlay {
+            if recentlyPulled {
+                ArrivalHalo()
+            }
+        }
+    }
+}
+
+private struct ArrivalHalo: View {
+    @State private var glow = true
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .stroke(Color.accentColor.opacity(glow ? 0.55 : 0), lineWidth: 1)
+            .padding(.horizontal, -8)
+            .padding(.vertical, -4)
+            .allowsHitTesting(false)
+            .onAppear {
+                withAnimation(.easeOut(duration: 8)) {
+                    glow = false
+                }
+            }
+    }
+}
+
+/// Observes AppModel only for sync chrome — does not rebuild the conversation list.
+private struct HomeSyncIndicator: View {
+    @ObservedObject var app: AppModel
+
+    var body: some View {
+        if app.isSyncing {
+            ProgressView()
+                .controlSize(.small)
+                .accessibilityLabel("Syncing")
+        }
     }
 }
 
@@ -308,5 +350,17 @@ private struct ConversationRow: View {
 #Preview("Pending edits") {
     PreviewNavigationRoot {
         ConversationListView(app: PreviewSupport.populatedApp(hasLocalEdits: true)) { _ in }
+    }
+}
+
+#Preview("Arrived from sync") {
+    PreviewNavigationRoot {
+        ConversationListView(
+            app: {
+                let app = PreviewSupport.populatedApp()
+                app.store.recentlyPulled.setForPreview([PreviewSupport.sampleConversationId])
+                return app
+            }()
+        ) { _ in }
     }
 }

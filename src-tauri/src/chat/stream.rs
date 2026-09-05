@@ -227,7 +227,8 @@ impl ChatController {
         let mut tool_calls_this_turn = tool_calls_this_turn.lock().await.clone();
         if let Some(ref stream) = stream_state {
             if !stream.body.is_empty() {
-                if let Ok(note) = notes::save_note(&self.state, &stream.note_id, &stream.body).await
+                let body = notes::ensure_leading_note_h1(&stream.body, &stream.title);
+                if let Ok(note) = notes::save_note(&self.state, &stream.note_id, &body).await
                 {
                     tool_calls_this_turn =
                         finalize_tool_calls_with_note_stream(tool_calls_this_turn, stream, &note);
@@ -440,9 +441,8 @@ pub(crate) fn activate_note_stream_from_payload(
     let content = note
         .get("content")
         .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim();
-    if !content.is_empty() {
+        .unwrap_or("");
+    if !notes::is_title_only_note_content(content) {
         return;
     }
 

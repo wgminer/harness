@@ -25,10 +25,7 @@ enum DictationRecordingIndex {
     }
 
     private static func indexFileURL() throws -> URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let dir = docs.appendingPathComponent("recordings", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent(indexFileName)
+        try RecordingStorage.recordingsDirectory().appendingPathComponent(indexFileName)
     }
 
     private static func loadMap() -> [String: String] {

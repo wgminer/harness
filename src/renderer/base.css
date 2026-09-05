@@ -141,6 +141,7 @@
   --motion-duration-emphasis: 360ms;
   --motion-duration-loading: 900ms;
   --motion-duration-skeleton: 1150ms;
+  --motion-duration-stream-in: 800ms;
   --motion-ease-standard: ease;
   --motion-ease-out: ease-out;
   --motion-ease-in-out: ease-in-out;

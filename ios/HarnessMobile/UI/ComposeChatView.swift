@@ -7,8 +7,6 @@ struct ComposeChatView: View {
     var onConversationCreated: (String) -> Void
 
     @State private var sendError: String?
-    @State private var showDictationSheet = false
-    @State private var dictationConversationId: String?
     @State private var pendingImage: UIImage?
     @State private var showCamera = false
     /// Drawn once per compose visit (shuffle bag); not recomputed on re-render.
@@ -56,24 +54,6 @@ struct ComposeChatView: View {
         }
         .onDisappear {
             app.flushComposerDrafts()
-        }
-        .sheet(isPresented: $showDictationSheet) {
-            if let conversationId = dictationConversationId {
-                DictationRecordingSheet(
-                    app: app,
-                    mode: .sendToConversation(conversationId: conversationId),
-                    isPresented: $showDictationSheet,
-                    onTranscriptSent: { transcript in
-                        app.queueOutboundMessage(conversationId: conversationId, text: transcript)
-                        onConversationCreated(conversationId)
-                    }
-                )
-            }
-        }
-        .onChange(of: showDictationSheet) { _, isPresented in
-            if !isPresented {
-                dictationConversationId = nil
-            }
         }
         .onAppear {
             isComposerFocused = true
@@ -133,8 +113,8 @@ struct ComposeChatView: View {
     private func startComposeDictation() {
         do {
             let id = try app.store.createConversation()
-            dictationConversationId = id
-            showDictationSheet = true
+            app.beginThreadDictation(conversationId: id)
+            onConversationCreated(id)
         } catch {
             sendError = error.localizedDescription
         }

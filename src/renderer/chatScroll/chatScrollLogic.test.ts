@@ -9,6 +9,7 @@ import {
   shouldFollowTranscriptResize,
   shouldRepinFromUserScroll,
   shouldUnlockFromScrollDelta,
+  parkContentHeight,
   trailingSpacerForOffset,
   turnParkPlan,
 } from "./chatScrollLogic";
@@ -120,6 +121,18 @@ describe("turn parking", () => {
     expect(
       turnParkPlan({ anchorTop: 900, headroom: 16, contentHeight: 1200, clientHeight: 800 })
     ).toEqual({ scrollTop: 884, spacer: 484 });
+  });
+
+  it("does not let the wait line shrink the park spacer", () => {
+    expect(parkContentHeight(1200, 28)).toBe(1172);
+    expect(
+      turnParkPlan({
+        anchorTop: 900,
+        headroom: 16,
+        contentHeight: parkContentHeight(1200, 28),
+        clientHeight: 800,
+      })
+    ).toEqual({ scrollTop: 884, spacer: 512 });
   });
 
   it("cannot park above the top of the thread", () => {

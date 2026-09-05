@@ -213,7 +213,7 @@
     "type": "function",
     "function": {
       "name": "note_create",
-      "description": "Create a new note. For long chat replies, pass title and summary (1-3 sentences shown in chat), leave content empty, then write the full body in your following output. For background notes, pass title/content without summary.",
+      "description": "Create a new note. Always start content with an H1 `# Title` matching title. For long chat replies, pass title and summary (1-3 sentences shown in chat), leave content empty, then write the full body in your following output starting with `# Title`. For background notes, pass title/content without summary.",
       "parameters": {
         "type": "object",
         "properties": {

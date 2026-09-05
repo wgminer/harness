@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { applyAccent } from "../shared/accent";
 import type { Settings } from "../shared/types";
+import { createBrowserAdapter } from "./browser/browserAdapter";
+import { isTauriRuntime } from "./browser/isTauriRuntime";
 import { createHarnessAdapter } from "./desktopAdapter";
 import { initGlobalHotkeyController } from "./globalHotkeyController";
 import { RootApp } from "./RootApp";
@@ -21,7 +23,11 @@ import "./images.css";
 import "./stickyNote.css";
 import "highlight.js/styles/github-dark.css";
 
-window.harness = createHarnessAdapter();
+const webClient = !isTauriRuntime();
+window.harness = webClient ? createBrowserAdapter() : createHarnessAdapter();
+if (webClient) {
+  document.documentElement.dataset.harnessClient = "web";
+}
 void (async () => {
   try {
     const settings = (await window.harness.settings.get()) as Settings;
@@ -35,8 +41,10 @@ void (async () => {
     initGlobalHotkeyController();
     void window.harness.recording.signalFrontendReady();
   }
+  const web = await window.harness.env.isHarnessWeb();
   const dev = await window.harness.env.isHarnessDev();
-  if (dev && !sticky) document.title = "Harness Dev";
+  if (web && !sticky) document.title = "Harness Web";
+  else if (dev && !sticky) document.title = "Harness Dev";
 })();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

@@ -6,7 +6,9 @@ import {
   type StreamingMarkdownBlocks,
 } from "../shared/streamingMarkdownBlocks";
 import { MarkdownContent, type MemorySearchHit } from "./chatHelpers";
-import { Skeleton } from "./Skeleton";
+
+/** First-line wait copy — same slot as the opening reply paragraph. Swap later for generated text. */
+export const STREAM_WAIT_LABEL = "THINKING";
 
 interface StreamingAssistantContentProps {
   content: string;
@@ -24,8 +26,14 @@ interface StreamingAssistantContentProps {
   onOpenImage?: (imageId: string) => void;
 }
 
-function StreamWaitSkeleton() {
-  return <Skeleton className="ui-skeleton--prose-line" label="Generating reply" aria-busy="true" />;
+function StreamWaitLabel() {
+  return (
+    <div className="chat-streaming-assistant">
+      <div className="chat-stream-block chat-stream-block--wait">
+        <p aria-busy="true">{STREAM_WAIT_LABEL}</p>
+      </div>
+    </div>
+  );
 }
 
 export function StreamingAssistantContent({
@@ -62,7 +70,7 @@ export function StreamingAssistantContent({
   }, [isStreaming, split]);
 
   if (isStreaming && blocks.length === 0) {
-    return <StreamWaitSkeleton />;
+    return <StreamWaitLabel />;
   }
 
   return (

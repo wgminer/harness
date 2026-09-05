@@ -49,6 +49,11 @@ export function shouldRepinFromUserScroll(args: {
   return args.mode;
 }
 
+/** Wait copy is already in the thread when we park — don't let it shrink the trailing spacer. */
+export function parkContentHeight(scrollHeight: number, waitSlotHeight: number): number {
+  return Math.max(0, scrollHeight - Math.max(0, waitSlotHeight));
+}
+
 /**
  * Turn parking: put the newest turn near the top of the scrollport so the streaming reply
  * owns the readable area down to the composer. `spacer` is the trailing space the thread

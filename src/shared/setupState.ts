@@ -24,6 +24,8 @@ export function collectSetupGaps(input: {
   syncConfigured: boolean;
   platform: NodeJS.Platform;
   accessibilityTrusted?: boolean | null;
+  /** Browser debug shell — skip desktop-only recommended gaps (R2, Accessibility). */
+  webClient?: boolean;
 }): SetupGap[] {
   const gaps: SetupGap[] = [];
 
@@ -31,14 +33,15 @@ export function collectSetupGaps(input: {
     gaps.push({
       kind: "openai_api_key",
       title: "OpenAI API key",
-      detail:
-        "Chat, polish, and optional transcript cleanup need an API key. Voice transcription runs locally on your Mac without one.",
+      detail: input.webClient
+        ? "Chat needs an API key. Paste it in Data, or set VITE_OPENAI_API_KEY in .env."
+        : "Chat, polish, and optional transcript cleanup need an API key. Voice transcription runs locally on your Mac without one.",
       settingsTab: "data",
       severity: "required",
     });
   }
 
-  if (!input.syncConfigured) {
+  if (!input.webClient && !input.syncConfigured) {
     gaps.push({
       kind: "sync_r2",
       title: "Cloud sync (R2)",
@@ -49,7 +52,7 @@ export function collectSetupGaps(input: {
     });
   }
 
-  if (input.platform === "darwin" && input.accessibilityTrusted === false) {
+  if (!input.webClient && input.platform === "darwin" && input.accessibilityTrusted === false) {
     gaps.push({
       kind: "macos_accessibility",
       title: "Accessibility permission",

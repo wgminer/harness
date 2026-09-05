@@ -49,6 +49,36 @@ struct ContentView: View {
                 app.refreshSetupFlags()
             }
         }
+        .sheet(isPresented: dictationPresented) {
+            DictationRecordingSheet(
+                app: app,
+                mode: dictationMode,
+                isPresented: dictationPresented,
+                onConversationCreated: { conversationId in
+                    app.dismissDictation()
+                    app.openThread(id: conversationId)
+                },
+                onTranscriptSent: { transcript in
+                    app.finishThreadDictation(transcript: transcript)
+                }
+            )
+        }
+    }
+
+    private var dictationPresented: Binding<Bool> {
+        Binding(
+            get: { app.activeDictation != nil },
+            set: { if !$0 { app.dismissDictation() } }
+        )
+    }
+
+    private var dictationMode: DictationRecordingMode {
+        switch app.activeDictation {
+        case .sendToConversation(let id):
+            return .sendToConversation(conversationId: id)
+        case .createSession, .none:
+            return .createSession
+        }
     }
 
     private var mainNavigation: some View {

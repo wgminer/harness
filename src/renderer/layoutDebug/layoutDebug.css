@@ -1,0 +1,201 @@
+.layout-debug-shell {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.layout-debug-shell__chat {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.layout-debug-tab {
+  position: absolute;
+  top: var(--space-4);
+  right: 0;
+  z-index: 6;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-edge);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  color: var(--fg-muted);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.layout-debug-tab:hover,
+.layout-debug-tab:focus-visible {
+  color: var(--fg);
+}
+
+.layout-debug-tab:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.layout-debug-panel {
+  flex: 0 0 248px;
+  width: 248px;
+  min-width: 248px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border-left: 1px solid var(--border-edge);
+  background: var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+}
+
+.layout-debug-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-2);
+}
+
+.layout-debug-panel__title {
+  margin: 0;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-caption);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.layout-debug-panel__close {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fg-muted);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  cursor: pointer;
+}
+
+.layout-debug-panel__close:hover,
+.layout-debug-panel__close:focus-visible {
+  color: var(--fg);
+}
+
+.layout-debug-panel__close:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.layout-debug-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-edge);
+  font-size: var(--font-size-ui);
+  color: var(--fg);
+  cursor: pointer;
+  user-select: none;
+}
+
+.layout-debug-toggle input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.layout-debug-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--space-2) 0 var(--space-4);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.layout-debug-list__item {
+  padding: 0 var(--space-3);
+}
+
+.layout-debug-list__row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-6);
+  cursor: pointer;
+}
+
+.layout-debug-list__row input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.layout-debug-swatch {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 1px;
+}
+
+.layout-debug-list__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-caption);
+  color: var(--fg);
+}
+
+.layout-debug-list__size,
+.layout-debug-list__instance {
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  line-height: var(--line-height-caption);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.layout-debug-list__instance {
+  margin: 0 0 var(--space-1) calc(var(--space-5) + var(--space-2));
+}
+
+.layout-debug-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
+
+.layout-debug-box {
+  position: fixed;
+  box-sizing: border-box;
+  border: 1px solid var(--layout-debug-color);
+  background: color-mix(in srgb, var(--layout-debug-color) 10%, transparent);
+}
+
+.layout-debug-box__label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 1px 4px;
+  background: color-mix(in srgb, var(--layout-debug-color) 88%, black);
+  color: #111;
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+}
