@@ -60,6 +60,7 @@ test-results/
 
 # Agent workflow (local only)
 .cursor/
+.agents/board.md
 
 # macOS native helpers (built by prebuild)
 resources/HarnessSpeech

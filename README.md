@@ -67,4 +67,5 @@ npm run capture:hero      # refresh media/hero.png from a running Harness Dev wi
 - [BUILD.md](BUILD.md) — packaging, signing, Dev vs installed
 - [SECURITY.md](SECURITY.md) — trust boundaries and reporting
 - [docs/glossary.md](docs/glossary.md) — shared product vocabulary
-- [CLAUDE.md](CLAUDE.md) — agent notes (contracts, IPC, radius)
+- [AGENTS.md](AGENTS.md) — notes for coding agents (contracts, IPC, parallel-work board)
+- [CLAUDE.md](CLAUDE.md) — Claude Code entrypoint (`@AGENTS.md`)
