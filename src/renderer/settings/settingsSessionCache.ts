@@ -1,7 +1,6 @@
 import { DEFAULT_ACCENT, normalizeAccentHex } from "../../shared/accent";
 import { DEFAULT_SETTINGS, type Settings, type TranscriptDictionaryEntry } from "../../shared/types";
 import {
-  DEFAULT_NOTE_TEMPLATE_ID,
   normalizeDefaultNoteTemplateId,
   normalizeNoteTemplates,
   type NoteTemplateConfig,

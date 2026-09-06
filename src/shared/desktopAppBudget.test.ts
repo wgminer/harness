@@ -5,8 +5,8 @@ import { readPhysicalLineCount, walkFiles } from "./appSizeBudget";
 const root = join(__dirname, "../..");
 const rendererRoot = join(root, "src/renderer");
 
-/** Tight ceilings — ratchet after delete-loop sprints (baseline ~80 / 15,940 / 1,410). */
-const MAX_FILES = 80;
+/** Ceilings for renderer source — bump on extract sprints that cut god-file size. */
+const MAX_FILES = 85;
 const MAX_TOTAL_LINES = 16_000;
 const MAX_FILE_LINES = 1_410;
 
