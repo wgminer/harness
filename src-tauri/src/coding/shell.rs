@@ -15,8 +15,6 @@ const AUTO_RUN_PREFIXES: &[&str] = &[
     "git status",
     "git diff",
     "git log",
-    "ls",
-    "rg",
     "npm run typecheck",
     "npx eslint",
     "npx tsc --noEmit",
@@ -26,6 +24,9 @@ const AUTO_RUN_PREFIXES: &[&str] = &[
 pub fn is_command_allowlisted(command: &str) -> bool {
     let trimmed = command.trim();
     if trimmed.is_empty() {
+        return false;
+    }
+    if contains_control_chars(trimmed) {
         return false;
     }
     // Reject shell chaining / redirection for auto-run safety.
@@ -39,9 +40,13 @@ pub fn is_command_allowlisted(command: &str) -> bool {
     {
         return false;
     }
-    AUTO_RUN_PREFIXES.iter().any(|prefix| {
-        trimmed == *prefix || trimmed.starts_with(&format!("{prefix} "))
-    })
+    AUTO_RUN_PREFIXES
+        .iter()
+        .any(|prefix| trimmed == *prefix || trimmed.starts_with(&format!("{prefix} ")))
+}
+
+fn contains_control_chars(command: &str) -> bool {
+    command.chars().any(|c| c == '\n' || c == '\r' || c == '\0')
 }
 
 pub fn needs_gate_for_run_command(args: &Value) -> bool {
@@ -91,7 +96,11 @@ async fn execute_shell(scope: &CodingScope, command: &str) -> String {
         Err(e) => return json!({ "error": format!("Failed to spawn: {e}") }).to_string(),
     };
 
-    let output = match timeout(Duration::from_secs(COMMAND_TIMEOUT_SECS), child.wait_with_output()).await
+    let output = match timeout(
+        Duration::from_secs(COMMAND_TIMEOUT_SECS),
+        child.wait_with_output(),
+    )
+    .await
     {
         Ok(Ok(out)) => out,
         Ok(Err(e)) => return json!({ "error": format!("Command failed: {e}") }).to_string(),
@@ -140,8 +149,11 @@ mod tests {
         assert!(is_command_allowlisted("git status -sb"));
         assert!(is_command_allowlisted("npm run typecheck"));
         assert!(is_command_allowlisted("npx eslint src/renderer/App.tsx"));
+        assert!(!is_command_allowlisted("ls"));
+        assert!(!is_command_allowlisted("rg TODO src"));
         assert!(!is_command_allowlisted("npm test"));
+        assert!(!is_command_allowlisted("git status\ncat /etc/passwd"));
         assert!(!is_command_allowlisted("git status; rm -rf /"));
-        assert!(!is_command_allowlisted("ls | rm"));
+        assert!(!is_command_allowlisted("git diff | cat"));
     }
 }

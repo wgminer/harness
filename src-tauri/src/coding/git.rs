@@ -2,35 +2,55 @@ use serde_json::{json, Value};
 use tokio::process::Command;
 
 use super::scope::CodingScope;
-use super::shell::run_command;
 
 pub async fn execute_git_tool(scope: &CodingScope, name: &str, args: &Value) -> String {
     match name {
-        "git_status" => {
-            run_command(
-                scope,
-                &json!({ "command": "git status --short --branch" }),
-            )
-            .await
-        }
-        "git_diff" => {
-            let path = args
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .trim();
-            let command = if path.is_empty() {
-                "git diff --no-color".to_string()
-            } else if path.contains("..") || path.starts_with('/') {
-                return json!({ "error": "Invalid path" }).to_string();
-            } else {
-                format!("git diff --no-color -- {path}")
-            };
-            run_command(scope, &json!({ "command": command })).await
-        }
+        "git_status" => run_git(scope, &["status", "--short", "--branch"]).await,
+        "git_diff" => git_diff(scope, args).await,
         "git_checkout_branch" => checkout_branch(scope, args).await,
         _ => json!({ "error": format!("Unknown git tool: {name}") }).to_string(),
     }
+}
+
+async fn run_git(scope: &CodingScope, args: &[&str]) -> String {
+    match Command::new("git")
+        .args(args)
+        .current_dir(&scope.root)
+        .output()
+        .await
+    {
+        Ok(out) => json!({
+            "command": format!("git {}", args.join(" ")),
+            "exitCode": out.status.code(),
+            "stdout": String::from_utf8_lossy(&out.stdout),
+            "stderr": String::from_utf8_lossy(&out.stderr),
+            "cwd": scope.root.display().to_string()
+        })
+        .to_string(),
+        Err(e) => json!({ "error": format!("Command failed: {e}") }).to_string(),
+    }
+}
+
+async fn git_diff(scope: &CodingScope, args: &Value) -> String {
+    let path = args
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if path.is_empty() {
+        return run_git(scope, &["diff", "--no-color"]).await;
+    }
+
+    let absolute = match scope.resolve_relative(path) {
+        Ok(p) => p,
+        Err(e) => return json!({ "error": e }).to_string(),
+    };
+    // Allow both files and directories if they are inside scope and permitted.
+    if !scope.is_path_allowed(&absolute, false) && !scope.is_path_allowed(&absolute, true) {
+        return json!({ "error": "Invalid path" }).to_string();
+    }
+
+    run_git(scope, &["diff", "--no-color", "--", path]).await
 }
 
 pub async fn current_branch(scope: &CodingScope) -> Result<String, String> {
@@ -60,27 +80,32 @@ async fn checkout_branch(scope: &CodingScope, args: &Value) -> String {
     if branch.is_empty() {
         return json!({ "error": "branch is required" }).to_string();
     }
-    if branch.contains("..")
-        || branch.contains('/') && branch.starts_with('-')
-        || branch.chars().any(|c| c.is_whitespace())
+    if branch.starts_with('-') || !is_valid_branch_name(scope, &branch).await {
+        return json!({ "error": "Invalid branch name" }).to_string();
+    }
+    if branch
+        .chars()
+        .any(|c| c.is_whitespace() || c == ';' || c == '|' || c == '&')
     {
-        // Keep branch names simple; still allow feature/foo style.
-        if branch.chars().any(|c| c.is_whitespace() || c == ';' || c == '|' || c == '&') {
-            return json!({ "error": "Invalid branch name" }).to_string();
-        }
+        return json!({ "error": "Invalid branch name" }).to_string();
+    }
+    if branch.contains('\n') || branch.contains('\r') || branch.contains('\0') {
+        return json!({ "error": "Invalid branch name" }).to_string();
     }
     if is_protected_branch(&branch) {
         return json!({ "error": "Refusing to checkout protected branch main/master via tool" })
             .to_string();
     }
 
-    let create = args
-        .get("create")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+    let create = args.get("create").and_then(|v| v.as_bool()).unwrap_or(true);
 
     let exists = Command::new("git")
-        .args(["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])
+        .args([
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ])
         .current_dir(&scope.root)
         .status()
         .await
@@ -121,4 +146,14 @@ pub async fn refuse_mutation_on_protected_branch(scope: &CodingScope) -> Option<
         ),
         _ => None,
     }
+}
+
+async fn is_valid_branch_name(scope: &CodingScope, branch: &str) -> bool {
+    Command::new("git")
+        .args(["check-ref-format", "--branch", branch])
+        .current_dir(&scope.root)
+        .status()
+        .await
+        .map(|s| s.success())
+        .unwrap_or(false)
 }

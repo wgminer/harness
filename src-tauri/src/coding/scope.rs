@@ -87,7 +87,10 @@ fn build_globset(patterns: &[String]) -> Result<GlobSet, String> {
 }
 
 fn project_deny_patterns() -> Vec<String> {
-    PROJECT_DENY_GLOBS.iter().map(|s| (*s).to_string()).collect()
+    PROJECT_DENY_GLOBS
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
 }
 
 pub fn self_aspect_patterns() -> Vec<String> {
@@ -165,7 +168,10 @@ impl CodingScope {
         if rel.is_absolute() {
             return Err("Path must be relative to the coding scope root".into());
         }
-        if rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        if rel
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
             return Err("Path must not contain `..`".into());
         }
         Ok(self.root.join(rel))
@@ -189,14 +195,7 @@ impl CodingScope {
     /// Directories use a trailing slash style match so tree listing can include folders
     /// that may contain allowed files.
     pub fn is_path_allowed(&self, absolute: &Path, is_dir: bool) -> bool {
-        let Ok(resolved) = absolute.canonicalize().or_else(|_| {
-            // Non-existent paths (writes): check parent chain against root.
-            if absolute.starts_with(&self.root) {
-                Ok(absolute.to_path_buf())
-            } else {
-                Err(std::io::Error::other("outside root"))
-            }
-        }) else {
+        let Ok(resolved) = resolve_path_for_scope_check(absolute) else {
             return false;
         };
         if !resolved.starts_with(&self.root) && resolved != self.root {
@@ -251,6 +250,26 @@ impl CodingScope {
         }
         false
     }
+}
+
+fn resolve_path_for_scope_check(path: &Path) -> std::io::Result<PathBuf> {
+    if let Ok(resolved) = path.canonicalize() {
+        return Ok(resolved);
+    }
+
+    let mut existing_ancestor = path;
+    while !existing_ancestor.exists() {
+        let Some(parent) = existing_ancestor.parent() else {
+            return Err(std::io::Error::other("path has no existing ancestor"));
+        };
+        existing_ancestor = parent;
+    }
+
+    let resolved_ancestor = existing_ancestor.canonicalize()?;
+    let suffix = path
+        .strip_prefix(existing_ancestor)
+        .map_err(|_| std::io::Error::other("failed to strip ancestor prefix"))?;
+    Ok(resolved_ancestor.join(suffix))
 }
 
 pub fn canonicalize_existing_dir(path: &Path) -> Result<PathBuf, String> {
@@ -363,5 +382,19 @@ mod tests {
         let patterns = self_aspect_patterns();
         assert!(patterns.iter().any(|p| p.contains("*.tsx")));
         assert!(patterns.iter().any(|p| p.contains("*.css")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_existent_path_under_symlink_outside_root_is_rejected() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        symlink(outside.path(), root.join("escape")).unwrap();
+
+        let scope = CodingScope::project(root).unwrap();
+        assert!(!scope.is_path_allowed(&dir.path().join("escape/new.txt"), false));
     }
 }
