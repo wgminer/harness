@@ -91,7 +91,7 @@ function CardsGallery() {
               <Wrench size={14} aria-hidden />
             </span>
             <div className="tool-card-row-text">
-              <span className="tool-card-label">read_file · src/renderer/base.css</span>
+              <span className="tool-card-label">ws_read · src/renderer/base.css</span>
             </div>
             <span className="tool-card-actions">
               <button type="button" className="btn btn-sm btn-primary">

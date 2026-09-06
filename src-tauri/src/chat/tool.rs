@@ -3,8 +3,12 @@ use tokio::sync::oneshot;
 use uuid::Uuid;
 
 use crate::assistant_tools::{execute_assistant_tool, is_assistant_tool_name};
+use crate::coding::{
+    coding_gated_preview, coding_tool_is_gated, coding_tool_name_is, execute_coding_tool,
+    scope_from_meta,
+};
 use crate::customization::{execute_customization_tool, is_customization_tool_name};
-use crate::file_tools::execute_file_tool;
+use crate::memory::get_conversation_coding_scope;
 
 use super::stream::{activate_note_stream_from_payload, NoteStreamState};
 use super::ChatController;
@@ -12,10 +16,27 @@ use super::ChatController;
 pub(crate) struct PendingGatedTool {
     tool: String,
     args: Value,
+    conversation_id: String,
     respond_to: oneshot::Sender<String>,
 }
 
 impl ChatController {
+    pub async fn cancel_all_gated_tools(&self, message: &str) {
+        let pending: Vec<_> = {
+            let mut map = self.pending_gated.lock().await;
+            map.drain().map(|(_, pending)| pending).collect()
+        };
+        let result = json!({
+            "cancelled": true,
+            "stopped": true,
+            "message": message
+        })
+        .to_string();
+        for pending in pending {
+            let _ = pending.respond_to.send(result.clone());
+        }
+    }
+
     pub async fn resolve_gated_tool(&self, pending_id: &str, action: &str) {
         let pending = {
             let mut map = self.pending_gated.lock().await;
@@ -25,13 +46,20 @@ impl ChatController {
             return;
         };
         let result = if action == "proceed" {
-            execute_assistant_tool(&self.state, &pending.tool, pending.args, None)
-                .await
-                .unwrap_or_else(|e| json!({ "error": e.to_string() }).to_string())
+            if coding_tool_name_is(&pending.tool) {
+                match load_scope_for_conversation(&self.state, &pending.conversation_id).await {
+                    Ok(scope) => execute_coding_tool(&scope, &pending.tool, pending.args).await,
+                    Err(e) => json!({ "error": e }).to_string(),
+                }
+            } else {
+                execute_assistant_tool(&self.state, &pending.tool, pending.args, None)
+                    .await
+                    .unwrap_or_else(|e| json!({ "error": e.to_string() }).to_string())
+            }
         } else {
             json!({ "cancelled": true, "message": "User cancelled the action." }).to_string()
         };
-        let _ = pending.respond_to.send(result);
+        let _ = pending.respond_to.send(with_pending_id(&result, pending_id));
     }
 
     pub(crate) async fn execute_tool(
@@ -40,13 +68,44 @@ impl ChatController {
         args: Value,
         conversation_id: &str,
     ) -> Result<String, String> {
-        let gated = matches!(name, "task_delete" | "task_clear_completed" | "task_update");
-        let mut skip_tool_panel_update = should_skip_note_stream_tool_panel(name, &args);
+        let gated_task = matches!(name, "task_delete" | "task_clear_completed" | "task_update");
+        let skip_tool_panel_update = should_skip_note_stream_tool_panel(name, &args);
 
         let result = if is_customization_tool_name(name) {
             execute_customization_tool(name, &args)
+        } else if coding_tool_name_is(name) {
+            let scope = load_scope_for_conversation(&self.state, conversation_id).await?;
+            if coding_tool_is_gated(name, &args) {
+                let pending_id = Uuid::new_v4().to_string();
+                let mut pending_payload = coding_gated_preview(&scope, name, &args);
+                if let Some(obj) = pending_payload.as_object_mut() {
+                    obj.insert("pendingId".into(), json!(pending_id));
+                    obj.insert("pending".into(), json!(true));
+                    obj.insert("tool".into(), json!(name));
+                }
+                self.emit_tool_panel_update(conversation_id, name, pending_payload);
+
+                let (tx, rx) = oneshot::channel();
+                self.pending_gated.lock().await.insert(
+                    pending_id.clone(),
+                    PendingGatedTool {
+                        tool: name.to_string(),
+                        args,
+                        conversation_id: conversation_id.to_string(),
+                        respond_to: tx,
+                    },
+                );
+                with_pending_id(
+                    &rx.await.unwrap_or_else(|_| {
+                        json!({ "error": "Gated tool request was cancelled." }).to_string()
+                    }),
+                    &pending_id,
+                )
+            } else {
+                execute_coding_tool(&scope, name, args).await
+            }
         } else if is_assistant_tool_name(name) {
-            if gated {
+            if gated_task {
                 let pending_id = Uuid::new_v4().to_string();
                 let pending_payload = json!({
                     "pending": true,
@@ -58,28 +117,35 @@ impl ChatController {
 
                 let (tx, rx) = oneshot::channel();
                 self.pending_gated.lock().await.insert(
-                    pending_id,
+                    pending_id.clone(),
                     PendingGatedTool {
                         tool: name.to_string(),
                         args,
+                        conversation_id: conversation_id.to_string(),
                         respond_to: tx,
                     },
                 );
-                skip_tool_panel_update = true;
-                rx.await.unwrap_or_else(|_| {
-                    json!({ "error": "Gated tool request was cancelled." }).to_string()
-                })
+                with_pending_id(
+                    &rx.await.unwrap_or_else(|_| {
+                        json!({ "error": "Gated tool request was cancelled." }).to_string()
+                    }),
+                    &pending_id,
+                )
             } else {
                 execute_assistant_tool(&self.state, name, args, Some(conversation_id))
                     .await
                     .map_err(|e| e.to_string())?
             }
         } else {
-            execute_file_tool(name, &args)
+            json!({ "error": format!("Unknown tool: {name}") }).to_string()
         };
 
-        if is_assistant_tool_name(name) && !skip_tool_panel_update {
-            let payload = serde_json::from_str::<Value>(&result).unwrap_or_else(|_| json!(result));
+        if (is_assistant_tool_name(name) || coding_tool_name_is(name)) && !skip_tool_panel_update {
+            let mut payload =
+                serde_json::from_str::<Value>(&result).unwrap_or_else(|_| json!(result));
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert("pending".into(), json!(false));
+            }
             self.emit_tool_panel_update(conversation_id, name, payload);
         }
 
@@ -91,6 +157,35 @@ impl ChatController {
 
         Ok(result)
     }
+}
+
+fn with_pending_id(result: &str, pending_id: &str) -> String {
+    let mut payload = serde_json::from_str::<Value>(result).unwrap_or_else(|_| json!(result));
+    if let Some(obj) = payload.as_object_mut() {
+        obj.insert("pendingId".into(), json!(pending_id));
+        obj.insert("pending".into(), json!(false));
+        return payload.to_string();
+    }
+    json!({
+        "result": result,
+        "pendingId": pending_id,
+        "pending": false
+    })
+    .to_string()
+}
+
+async fn load_scope_for_conversation(
+    state: &crate::memory::AppState,
+    conversation_id: &str,
+) -> Result<crate::coding::scope::CodingScope, String> {
+    let meta = get_conversation_coding_scope(state, conversation_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| {
+            "No coding scope set for this conversation. Choose a project folder or Harness UI first."
+                .to_string()
+        })?;
+    scope_from_meta(&meta)
 }
 
 fn should_skip_note_stream_tool_panel(name: &str, args: &Value) -> bool {

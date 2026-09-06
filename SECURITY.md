@@ -1,4 +1,4 @@
-# Security
+## Security
 
 Harness is a local-first desktop app that runs an LLM with tools against your filesystem and cloud sync bucket. This document describes intentional security boundaries and how to report issues.
 
@@ -6,15 +6,16 @@ Harness is a local-first desktop app that runs an LLM with tools against your fi
 
 If you find a security issue, please **do not** open a public GitHub issue with exploit details. Email the maintainer via the contact on [github.com/wgminer/harness](https://github.com/wgminer/harness) or use GitHub **Private vulnerability reporting** if enabled on the repository.
 
-## LLM file tools
+## LLM coding tools
 
-The assistant can call file tools (`list_directory`, `read_file`, `write_file`, `delete_file`, `create_directory`) when the model requests them. Allowed roots are:
+When a conversation has a **coding scope**, the assistant can call scoped tools (`ws_list_tree`, `ws_search`, `ws_read`, `ws_edit`, `ws_write`, `ws_delete`, `run_command`, `git_*`).
 
-- Harness user data directory (on disk: `~/Library/Application Support/Harness` or `Harness Dev`)
-- Your home directory
-- Your desktop directory (when available)
+- **Project scope:** a user-chosen folder. Paths must stay under that root; heavy dirs (`.git`, `node_modules`, `target`, `dist*`) are denied from listings/search.
+- **Self scope (Harness Dev only):** the detected Harness repo root, limited to predefined aspect globs (`src/renderer/**/*.tsx`, `src/renderer/**/*.css`, `src/renderer/index.html`).
+- Mutating tools (`ws_edit`, `ws_write`, `ws_delete`, non-allowlisted `run_command`, `git_checkout_branch`) require explicit Proceed/Cancel in the UI.
+- `run_command` runs with the scope root as cwd, with timeout/output caps and scrubbed secret env vars. Only a small allowlist auto-runs.
 
-Any path under those roots is reachable. A manipulated or compromised model response could read, modify, or delete files in those locations. Treat API keys, provider choice, and conversation content as part of your trust boundary.
+Treat API keys, provider choice, and conversation content as part of your trust boundary.
 
 ## Credentials and secrets
 

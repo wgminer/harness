@@ -33,10 +33,13 @@ pub(crate) struct NoteStreamState {
 
 impl ChatController {
     pub async fn stop(&self) {
-        let guard = self.cancel_token.lock().await;
-        if let Some(token) = guard.as_ref() {
-            token.cancel();
+        {
+            let guard = self.cancel_token.lock().await;
+            if let Some(token) = guard.as_ref() {
+                token.cancel();
+            }
         }
+        self.cancel_all_gated_tools("Stopped.").await;
     }
 
     pub(crate) fn active_chat_model_label() -> String {
@@ -168,9 +171,17 @@ impl ChatController {
         let controller = self.clone();
         let tool_calls_cb = tool_calls_this_turn.clone();
 
+        let include_coding = crate::memory::get_conversation_coding_scope(&self.state, conversation_id)
+            .await
+            .ok()
+            .flatten()
+            .is_some();
+        let tools = crate::openai::tools_for_request(include_coding);
+
         let stream_result = client
             .send_message_with_tools(
                 messages,
+                tools,
                 |chunk| {
                     let mut guard = controller.note_stream.lock().unwrap();
                     if let Some(stream) = guard.as_mut() {
@@ -199,7 +210,9 @@ impl ChatController {
                                 .await
                             {
                                 Ok(result) => {
-                                    if is_assistant_tool_name(&name) {
+                                    if is_assistant_tool_name(&name)
+                                        || crate::coding::coding_tool_name_is(&name)
+                                    {
                                         let payload = serde_json::from_str::<Value>(&result)
                                             .unwrap_or_else(|_| json!(result));
                                         tool_calls_cb.lock().await.push(ToolCallRecord {

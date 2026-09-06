@@ -102,6 +102,17 @@ pub fn tool_definitions() -> Value {
         .expect("resources/contracts/tools.json must be a valid tool-definitions array")
 }
 
+pub fn tools_for_request(include_coding: bool) -> Value {
+    if include_coding {
+        crate::coding::merge_tool_definitions(
+            tool_definitions(),
+            crate::coding::coding_tool_definitions(),
+        )
+    } else {
+        tool_definitions()
+    }
+}
+
 pub async fn generate_thread_title_with_openai(
     api_key: &str,
     previous_title: Option<&str>,
@@ -328,11 +339,6 @@ mod tests {
             .collect();
 
         for expected in [
-            "list_directory",
-            "read_file",
-            "write_file",
-            "delete_file",
-            "create_directory",
             "set_layout",
             "note_list",
             "note_create",
@@ -358,7 +364,7 @@ mod tests {
             assert!(names.contains(&expected), "missing shared (also-iOS) tool: {expected}");
         }
 
-        assert_eq!(names.len(), 21, "unexpected tool count — update this test if tools.json changed intentionally");
+        assert_eq!(names.len(), 16, "unexpected tool count — update this test if tools.json changed intentionally");
     }
 }
 
@@ -649,6 +655,7 @@ impl OpenAIChatClient {
     pub async fn send_message_with_tools<F, G, Fut>(
         &self,
         mut messages: Vec<ChatMessageParam>,
+        tools: Value,
         mut on_content: F,
         execute_tool: G,
         cancel: &CancellationToken,
@@ -675,7 +682,7 @@ impl OpenAIChatClient {
                 "model": openai_chat_model(),
                 "messages": messages,
                 "stream": true,
-                "tools": tool_definitions(),
+                "tools": tools,
                 "tool_choice": "auto"
             });
 

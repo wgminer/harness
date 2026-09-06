@@ -14,9 +14,9 @@ export interface HomeHeaderQuote {
   author: string;
   source: string;
   job: HomeHeaderQuoteJob;
-  /** Brief literary / historical setting for the tooltip. */
+  /** Lead-in sentence for the tooltip (setting). */
   context: string;
-  /** Short takeaway shown under attribution in the tooltip. */
+  /** Takeaway sentence shown after the lead-in. */
   moral: string;
 }
 
@@ -98,9 +98,17 @@ function writeBag(storage: BagStorage | null, state: HomeHeaderQuoteBagState): v
   }
 }
 
+export function homeHeaderQuoteAttribution(quote: HomeHeaderQuote): string {
+  return [quote.author, quote.source].filter(Boolean).join(", ");
+}
+
+/** Context + moral as two sentences in one wrapping line. */
+export function homeHeaderQuoteNote(quote: HomeHeaderQuote): string {
+  return [quote.context, quote.moral].filter(Boolean).join(" ");
+}
+
 export function formatHomeHeaderQuoteTooltip(quote: HomeHeaderQuote): string {
-  const attribution = [quote.author, quote.source].filter(Boolean).join(", ");
-  return [attribution, quote.context, quote.moral].filter(Boolean).join("\n");
+  return [homeHeaderQuoteAttribution(quote), homeHeaderQuoteNote(quote)].filter(Boolean).join("\n");
 }
 
 /**

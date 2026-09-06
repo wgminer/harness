@@ -81,6 +81,9 @@ pub struct ConversationMeta {
     /// Desktop cognitive mode (`chat` | `decide` | `write` | `refine`). Omitted = chat.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chat_mode: Option<String>,
+    /// Optional coding agent scope (`project` folder or Harness self).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coding_scope: Option<crate::coding::scope::CodingScopeMeta>,
     /// Dictation reply-strip action (`run` | Summarize | Distill | Breakdown | Proofread).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dictation_reply_action: Option<String>,
@@ -144,6 +147,8 @@ pub struct ConversationSummary {
     pub has_messages: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chat_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coding_scope: Option<crate::coding::scope::CodingScopeMeta>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dictation_reply_action: Option<String>,
 }
@@ -372,6 +377,7 @@ pub async fn create_conversation_with_mode(
             has_assistant_reply: None,
             has_messages: None,
             chat_mode: chat_mode_field,
+            coding_scope: None,
             dictation_reply_action: None,
         },
     );
@@ -413,6 +419,33 @@ pub async fn get_conversation_chat_mode(
         conv.get(conversation_id)
             .and_then(|m| m.chat_mode.as_deref()),
     ))
+}
+
+pub async fn set_conversation_coding_scope(
+    state: &AppState,
+    conversation_id: &str,
+    coding_scope: Option<crate::coding::scope::CodingScopeMeta>,
+) -> Result<(), std::io::Error> {
+    patch_conversation_meta(
+        state,
+        conversation_id,
+        ConversationMetaPatch {
+            coding_scope: Some(CodingScopePatch::Set(coding_scope)),
+            ..Default::default()
+        },
+    )
+    .await
+}
+
+pub async fn get_conversation_coding_scope(
+    state: &AppState,
+    conversation_id: &str,
+) -> Result<Option<crate::coding::scope::CodingScopeMeta>, std::io::Error> {
+    let memory_dir = get_memory_dir();
+    let conv = load_conversations_map(state, &memory_dir).await;
+    Ok(conv
+        .get(conversation_id)
+        .and_then(|m| m.coding_scope.clone()))
 }
 
 /// One message inside a ChatGPT / Claude import batch.
@@ -519,6 +552,7 @@ pub async fn import_conversations(
                 has_assistant_reply: if has_assistant_reply { Some(true) } else { None },
                 has_messages: if has_messages { Some(true) } else { None },
                 chat_mode: None,
+                coding_scope: None,
                 dictation_reply_action: None,
             },
         );
@@ -551,6 +585,7 @@ pub async fn get_conversation(
         has_assistant_reply: c.has_assistant_reply,
         has_messages: c.has_messages,
         chat_mode: c.chat_mode.clone(),
+        coding_scope: c.coding_scope.clone(),
         dictation_reply_action: c.dictation_reply_action.clone(),
     }))
 }
@@ -568,6 +603,7 @@ pub async fn list_conversations(state: &AppState) -> Result<Vec<ConversationSumm
             has_assistant_reply: c.has_assistant_reply,
             has_messages: c.has_messages,
             chat_mode: c.chat_mode,
+            coding_scope: c.coding_scope,
             dictation_reply_action: c.dictation_reply_action,
         })
         .collect();
@@ -958,11 +994,16 @@ struct ConversationMetaPatch {
     has_assistant_reply: Option<bool>,
     has_messages: Option<bool>,
     chat_mode: Option<ChatModePatch>,
+    coding_scope: Option<CodingScopePatch>,
     dictation_reply_action: Option<String>,
 }
 
 enum ChatModePatch {
     Set(Option<String>),
+}
+
+enum CodingScopePatch {
+    Set(Option<crate::coding::scope::CodingScopeMeta>),
 }
 
 async fn patch_conversation_meta(
@@ -992,6 +1033,9 @@ async fn patch_conversation_meta(
     }
     if let Some(ChatModePatch::Set(chat_mode)) = patch.chat_mode {
         meta.chat_mode = chat_mode;
+    }
+    if let Some(CodingScopePatch::Set(coding_scope)) = patch.coding_scope {
+        meta.coding_scope = coding_scope;
     }
     if let Some(dictation_reply_action) = patch.dictation_reply_action {
         meta.dictation_reply_action = Some(dictation_reply_action);

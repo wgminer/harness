@@ -170,6 +170,7 @@ impl ChatController {
             &fields,
             platform,
             &mode_overlay,
+            "",
             &memory_block,
             &recent_conversations_block,
             &temporal_context,
@@ -189,7 +190,7 @@ impl ChatController {
                 .into_iter()
                 .map(|(key, value)| SystemPromptPreviewMemory { key, value })
                 .collect(),
-            tools: tool_summaries_for_platform(platform)
+            tools: tool_summaries_for_platform(platform, false)
                 .into_iter()
                 .map(|tool| SystemPromptPreviewTool {
                     name: tool.name,
@@ -271,10 +272,22 @@ impl ChatController {
             crate::chat_modes::ChatMode::Chat
         };
         let mode_overlay = crate::chat_modes::mode_overlay(chat_mode);
+        let coding_scope_block = if let Some(conversation_id) = conversation_id {
+            match crate::memory::get_conversation_coding_scope(&self.state, conversation_id).await {
+                Ok(Some(meta)) => match crate::coding::scope_from_meta(&meta) {
+                    Ok(scope) => crate::coding::build_coding_scope_prompt_block(&scope),
+                    Err(_) => String::new(),
+                },
+                _ => String::new(),
+            }
+        } else {
+            String::new()
+        };
         let system_prompt = build_system_prompt_with_mode(
             &fields,
             "desktop",
             &mode_overlay,
+            &coding_scope_block,
             &memory_block,
             &recent_conversations_block,
             &temporal_context,
@@ -341,11 +354,15 @@ impl ChatController {
 }
 
 fn tool_summaries() -> Vec<ContextPreviewTool> {
-    tool_summaries_for_platform("desktop")
+    tool_summaries_for_platform("desktop", false)
 }
 
-fn tool_summaries_for_platform(platform: &str) -> Vec<ContextPreviewTool> {
-    let defs = tool_definitions();
+fn tool_summaries_for_platform(platform: &str, include_coding: bool) -> Vec<ContextPreviewTool> {
+    let defs = if include_coding {
+        crate::openai::tools_for_request(true)
+    } else {
+        tool_definitions()
+    };
     let Some(items) = defs.as_array() else {
         return Vec::new();
     };
@@ -450,7 +467,7 @@ mod context_preview_tests {
     #[test]
     fn tool_summaries_include_known_tools() {
         let tools = tool_summaries();
-        assert!(tools.iter().any(|t| t.name == "list_directory"));
+        assert!(tools.iter().any(|t| t.name == "set_layout"));
         assert!(tools.iter().any(|t| t.name == "task_create"));
         assert!(tools
             .iter()

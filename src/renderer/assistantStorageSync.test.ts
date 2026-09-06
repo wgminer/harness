@@ -8,7 +8,7 @@ import {
 describe("mergeAssistantFromStorage", () => {
   it("does not replace a shorter streamed reply with a longer previous assistant", () => {
     const merged = mergeAssistantFromStorage(
-      { content: "Done.", toolCalls: [{ toolName: "list_directory", payload: {} }] },
+      { content: "Done.", toolCalls: [{ toolName: "ws_list_tree", payload: {} }] },
       { content: "Here is a long previous answer about something else entirely." }
     );
     expect(merged).toBeNull();

@@ -19,9 +19,12 @@ final class SharedToolDefinitionsTests: XCTestCase {
 
     func testContainsDesktopOnlyToolNames() {
         let names = toolNames(from: SharedToolDefinitions.all)
-        for name in ["list_directory", "read_file", "write_file", "delete_file", "create_directory", "set_layout",
+        for name in ["set_layout",
                      "note_list", "note_create", "note_read", "note_save", "note_delete"] {
             XCTAssertTrue(names.contains(name), "shared tools.json is missing desktop-only tool: \(name)")
+        }
+        for name in ["list_directory", "read_file", "write_file", "delete_file", "create_directory"] {
+            XCTAssertFalse(names.contains(name), "legacy unscoped file tool should be removed: \(name)")
         }
     }
 

@@ -333,6 +333,7 @@ mod tests {
       has_assistant_reply: None,
       has_messages: None,
       chat_mode: None,
+      coding_scope: None,
       dictation_reply_action: None,
     }
   }

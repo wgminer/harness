@@ -2,75 +2,19 @@
   {
     "type": "function",
     "function": {
-      "name": "list_directory",
-      "description": "List contents of a directory (files and subdirectories). Path must be under allowed roots.",
-      "parameters": {
-        "type": "object",
-        "properties": { "path": { "type": "string", "description": "Absolute path to the directory" } },
-        "required": ["path"]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "read_file",
-      "description": "Read plain text content of a file. Size limit 1MB.",
-      "parameters": {
-        "type": "object",
-        "properties": { "path": { "type": "string", "description": "Absolute path to the file" } },
-        "required": ["path"]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "write_file",
-      "description": "Create or overwrite a file with the given content. Path must be under allowed roots.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "path": { "type": "string", "description": "Absolute path to the file" },
-          "content": { "type": "string", "description": "Content to write" }
-        },
-        "required": ["path", "content"]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "delete_file",
-      "description": "Delete a file. Path must be under allowed roots.",
-      "parameters": {
-        "type": "object",
-        "properties": { "path": { "type": "string", "description": "Absolute path to the file" } },
-        "required": ["path"]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "create_directory",
-      "description": "Create a directory. Path must be under allowed roots.",
-      "parameters": {
-        "type": "object",
-        "properties": { "path": { "type": "string", "description": "Absolute path for the new directory" } },
-        "required": ["path"]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
       "name": "set_layout",
       "description": "Change app layout: sidebar position (left/right).",
       "parameters": {
         "type": "object",
         "properties": {
-          "sidebar": { "type": "string", "enum": ["left", "right"], "description": "Sidebar position" }
+          "sidebar": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "description": "Sidebar position"
+          }
         }
       }
     }
@@ -80,7 +24,10 @@
     "function": {
       "name": "task_list",
       "description": "List all persistent assistant tasks. Use this to understand current open work items before adding or changing tasks.",
-      "parameters": { "type": "object", "properties": {} }
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
     }
   },
   {
@@ -91,15 +38,25 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "title": { "type": "string", "description": "Short description of the task" },
+          "title": {
+            "type": "string",
+            "description": "Short description of the task"
+          },
           "status": {
             "type": "string",
-            "enum": ["pending", "in_progress", "completed", "cancelled"],
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ],
             "description": "Workflow state for the task. Defaults to pending."
           },
           "tags": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Optional filterable labels (e.g. urgent, research)."
           },
           "metadata": {
@@ -107,7 +64,9 @@
             "description": "Optional extra structured information about the task."
           }
         },
-        "required": ["title"]
+        "required": [
+          "title"
+        ]
       }
     }
   },
@@ -119,15 +78,48 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "description": "ID of the task to update" },
-          "title": { "type": "string", "description": "New title, if you want to rename the task" },
-          "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"] },
-          "tags": { "type": "array", "items": { "type": "string" } },
-          "add_tags": { "type": "array", "items": { "type": "string" } },
-          "remove_tags": { "type": "array", "items": { "type": "string" } },
-          "metadata": { "type": "object" }
+          "id": {
+            "type": "string",
+            "description": "ID of the task to update"
+          },
+          "title": {
+            "type": "string",
+            "description": "New title, if you want to rename the task"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "add_tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remove_tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata": {
+            "type": "object"
+          }
         },
-        "required": ["id"]
+        "required": [
+          "id"
+        ]
       }
     }
   },
@@ -138,8 +130,15 @@
       "description": "Delete a persistent assistant task by ID when it is no longer relevant.",
       "parameters": {
         "type": "object",
-        "properties": { "id": { "type": "string", "description": "ID of the task to delete" } },
-        "required": ["id"]
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the task to delete"
+          }
+        },
+        "required": [
+          "id"
+        ]
       }
     }
   },
@@ -148,7 +147,10 @@
     "function": {
       "name": "task_clear_completed",
       "description": "Remove all tasks whose status is completed or cancelled to keep the task list tidy.",
-      "parameters": { "type": "object", "properties": {} }
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
     }
   },
   {
@@ -159,10 +161,17 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "key": { "type": "string" },
-          "value": { "type": "string" }
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
         },
-        "required": ["key", "value"]
+        "required": [
+          "key",
+          "value"
+        ]
       }
     }
   },
@@ -171,18 +180,28 @@
     "function": {
       "name": "memory_list",
       "description": "List all stored persistent user memories and preferences.",
-      "parameters": { "type": "object", "properties": {} }
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
     }
   },
   {
     "type": "function",
     "function": {
       "name": "memory_search_conversations",
-      "description": "Search prior chats, dictations, note titles, and image titles for a free-text query. Use when the user is looking for a past thread, dictation, note, or image — or when cross-thread recall, continuity, names, or prior decisions would help. Results include hrefs; cite them as markdown links like [Title](/c/id) and do not invent ids.",
+      "description": "Search prior chats, dictations, note titles, and image titles for a free-text query. Use when the user is looking for a past thread, dictation, note, or image \u2014 or when cross-thread recall, continuity, names, or prior decisions would help. Results include hrefs; cite them as markdown links like [Title](/c/id) and do not invent ids.",
       "parameters": {
         "type": "object",
-        "properties": { "query": { "type": "string", "description": "Search query text" } },
-        "required": ["query"]
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query text"
+          }
+        },
+        "required": [
+          "query"
+        ]
       }
     }
   },
@@ -194,10 +213,16 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "query": { "type": "string" },
-          "max_results": { "type": "number" }
+          "query": {
+            "type": "string"
+          },
+          "max_results": {
+            "type": "number"
+          }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       }
     }
   },
@@ -206,7 +231,10 @@
     "function": {
       "name": "note_list",
       "description": "List all persisted notes with their ids, titles, and timestamps.",
-      "parameters": { "type": "object", "properties": {} }
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
     }
   },
   {
@@ -217,9 +245,18 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "title": { "type": "string", "description": "Note title shown in the editor and inline preview" },
-          "summary": { "type": "string", "description": "Optional 1-3 sentence summary for chat when attaching a long write-up inline" },
-          "content": { "type": "string", "description": "Initial note body (usually empty when streaming a long reply)" }
+          "title": {
+            "type": "string",
+            "description": "Note title shown in the editor and inline preview"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Optional 1-3 sentence summary for chat when attaching a long write-up inline"
+          },
+          "content": {
+            "type": "string",
+            "description": "Initial note body (usually empty when streaming a long reply)"
+          }
         }
       }
     }
@@ -231,8 +268,14 @@
       "description": "Read one note by id.",
       "parameters": {
         "type": "object",
-        "properties": { "id": { "type": "string" } },
-        "required": ["id"]
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
       }
     }
   },
@@ -244,10 +287,17 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "content": { "type": "string" }
+          "id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
         },
-        "required": ["id", "content"]
+        "required": [
+          "id",
+          "content"
+        ]
       }
     }
   },
@@ -258,8 +308,14 @@
       "description": "Delete a note by id.",
       "parameters": {
         "type": "object",
-        "properties": { "id": { "type": "string" } },
-        "required": ["id"]
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
       }
     }
   },
@@ -271,7 +327,10 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "timezone": { "type": "string", "description": "Optional IANA timezone" }
+          "timezone": {
+            "type": "string",
+            "description": "Optional IANA timezone"
+          }
         }
       }
     }

@@ -437,6 +437,16 @@ export function toolLabel(name: string): string {
     note_save: "Saved note",
     note_delete: "Deleted note",
     set_layout: "Updated layout",
+    ws_list_tree: "Listed project files",
+    ws_search: "Searched project",
+    ws_read: "Read file",
+    ws_edit: "Edit file",
+    ws_write: "Write file",
+    ws_delete: "Delete file",
+    run_command: "Run command",
+    git_status: "Git status",
+    git_diff: "Git diff",
+    git_checkout_branch: "Checkout branch",
   };
   return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }

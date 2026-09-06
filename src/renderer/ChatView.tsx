@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { OPENAI_CHAT_MODEL } from "../shared/openaiModels";
 import { DICTATION_POLISH_INSTRUCTION } from "../shared/dictationPolish";
 import {
-  formatHomeHeaderQuoteTooltip,
+  homeHeaderQuoteAttribution,
+  homeHeaderQuoteNote,
   nextHomeHeaderQuote,
   type HomeHeaderQuote,
 } from "../shared/headerQuote";
@@ -19,12 +20,14 @@ import { ChatSurface } from "./ChatSurface";
 import { ChatComposer } from "./ChatComposer";
 import { ChatModePicker } from "./ChatModePicker";
 import { DictationSuggestedPromptChips } from "./DictationSuggestedPromptChips";
+import type { CodingScopeMeta } from "../shared/desktopAPI";
 import { useChatComposer } from "./useChatComposer";
 import {
   type Message,
   type ToolCallDisplay,
   formatMessageNoteTitle,
   type LiveNoteStream,
+  isToolCallPending,
 } from "./chatHelpers";
 import { shouldFocusComposerAfterTurn } from "./composerFocusPolicy";
 import { shouldApplyTurnUpdate } from "./chatTurnFlow";
@@ -49,10 +52,15 @@ import { formatDictateDurationLabel } from "../shared/dictateDurationLabel";
 /** Mounts only on empty compose — draws once per visit from the shuffle bag. */
 function ComposeHeaderQuote() {
   const [quote] = useState<HomeHeaderQuote>(() => nextHomeHeaderQuote());
+  const attribution = homeHeaderQuoteAttribution(quote);
+  const note = homeHeaderQuoteNote(quote);
   return (
     <span className="tooltip new-chat-quote-tooltip">
       <p className="new-chat-quote">{balanceQuoteWrap(`“${quote.full}”`)}</p>
-      <span className="tooltip__label">{formatHomeHeaderQuoteTooltip(quote)}</span>
+      <span className="tooltip__label">
+        {attribution ? <span className="new-chat-quote-tooltip__attr">{attribution}</span> : null}
+        {note ? <span>{note}</span> : null}
+      </span>
     </span>
   );
 }
@@ -210,10 +218,13 @@ export function ChatView({
   /** Optimistic mode while persist catches up — avoids UI flicker. */
   const [optimisticChatMode, setOptimisticChatMode] = useState<ChatModeId | null>(null);
   const [modeSwitching, setModeSwitching] = useState(false);
+  const [codingScope, setCodingScope] = useState<CodingScopeMeta | null>(null);
+  const [selfScopeAvailable, setSelfScopeAvailable] = useState(false);
   const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<string | null>(null);
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const [isTurnPending, setIsTurnPending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savedToNotesId, setSavedToNotesId] = useState<string | null>(null);
   const [activeChatModel, setActiveChatModel] = useState(OPENAI_CHAT_MODEL);
@@ -250,7 +261,7 @@ export function ChatView({
   const streamAbortRef = useRef<AbortController | null>(null);
   const pendingStaleStreamEndsRef = useRef(0);
 
-  const sending = isTurnPending || isStreaming;
+  const sending = isTurnPending || isStreaming || isStopping;
 
   useEffect(() => {
     conversationIdRef.current = effectiveConversationId;
@@ -260,8 +271,44 @@ export function ChatView({
     if (conversationId === null && draftConversationId === null) {
       setComposeChatMode(DEFAULT_CHAT_MODE);
       setOptimisticChatMode(null);
+      setCodingScope(null);
     }
   }, [conversationId, draftConversationId]);
+
+  useEffect(() => {
+    void window.harness.coding
+      .selfScopeAvailable()
+      .then(setSelfScopeAvailable)
+      .catch(() => setSelfScopeAvailable(false));
+  }, []);
+
+  useEffect(() => {
+    if (!effectiveConversationId) {
+      // Compose home keeps local codingScope until first send.
+      return;
+    }
+    let cancelled = false;
+    void window.harness.coding
+      .getScope(effectiveConversationId)
+      .then((scope) => {
+        if (!cancelled) setCodingScope(scope);
+      })
+      .catch(() => {
+        if (!cancelled) setCodingScope(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveConversationId]);
+
+  const applyCodingScope = useCallback(
+    async (next: CodingScopeMeta | null) => {
+      setCodingScope(next);
+      if (!effectiveConversationId) return;
+      await window.harness.coding.setScope(effectiveConversationId, next);
+    },
+    [effectiveConversationId],
+  );
 
   useEffect(() => {
     if (
@@ -359,6 +406,7 @@ export function ChatView({
     firstSendInProgressRef.current = false;
     setIsTurnPending(false);
     setIsStreaming(false);
+    setIsStopping(false);
     setActiveAssistantMessageId(null);
     if (shouldFocusComposerAfterTurn(documentHasFocus)) {
       focusComposer();
@@ -426,14 +474,51 @@ export function ChatView({
       prev.map((message) => {
         if (message.id !== assistantId) return message;
         const existing = message.toolCalls ?? [];
+        const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+        const pendingId = typeof record?.pendingId === "string" ? record.pendingId : null;
+        const entry = { toolName, payload };
         if (toolName === "note_create" || toolName === "open_long_response") {
           const idx = existing.findIndex((tc) => tc.toolName === toolName);
-          const entry = { toolName, payload };
           const toolCalls =
             idx >= 0 ? existing.map((tc, i) => (i === idx ? entry : tc)) : [...existing, entry];
           return { ...message, toolCalls };
         }
-        return { ...message, toolCalls: [...existing, { toolName, payload }] };
+        if (pendingId) {
+          const idx = existing.findIndex(
+            (tc) =>
+              tc.payload &&
+              typeof tc.payload === "object" &&
+              (tc.payload as { pendingId?: string }).pendingId === pendingId,
+          );
+          if (idx >= 0) {
+            return {
+              ...message,
+              toolCalls: existing.map((tc, i) => (i === idx ? entry : tc)),
+            };
+          }
+        }
+        if (record && record.pending !== true) {
+          let idx = -1;
+          for (let i = existing.length - 1; i >= 0; i--) {
+            const tc = existing[i];
+            if (
+              tc.toolName === toolName &&
+              tc.payload &&
+              typeof tc.payload === "object" &&
+              (tc.payload as { pending?: boolean }).pending === true
+            ) {
+              idx = i;
+              break;
+            }
+          }
+          if (idx >= 0) {
+            return {
+              ...message,
+              toolCalls: existing.map((tc, i) => (i === idx ? entry : tc)),
+            };
+          }
+        }
+        return { ...message, toolCalls: [...existing, entry] };
       })
     );
   }, []);
@@ -508,6 +593,7 @@ export function ChatView({
         setActiveAssistantMessageId(null);
         setIsTurnPending(false);
         setIsStreaming(false);
+        setIsStopping(false);
         setCopiedId(null);
         setSavedToNotesId(null);
         setPolishHintAfterDictation(false);
@@ -538,6 +624,7 @@ export function ChatView({
     setActiveAssistantMessageId(null);
     setIsTurnPending(false);
     setIsStreaming(false);
+    setIsStopping(false);
     setCopiedId(null);
     setSavedToNotesId(null);
     setPolishHintAfterDictation(false);
@@ -703,30 +790,31 @@ export function ChatView({
     async (tc: ToolCallDisplay, action: "proceed" | "cancel") => {
       const payload = tc.payload as {
         pending?: boolean;
+        resolving?: boolean;
         tool?: string;
         args?: Record<string, unknown>;
         pendingId?: string;
       } | undefined;
-      if (!payload || payload.pending !== true) return;
+      if (!payload || payload.pending !== true || payload.resolving === true) return;
 
       const pendingId = payload.pendingId;
-      if (pendingId) {
-        try {
-          await window.harness.chat.resolveGatedTool(pendingId, action);
-        } catch {
-          // ignore; stream may have been stopped
+      const matchesCall = (call: ToolCallDisplay) => {
+        if (pendingId) {
+          const p = call.payload as { pendingId?: string } | undefined;
+          return p?.pendingId === pendingId;
         }
-      }
+        return call === tc;
+      };
 
       setMessages((prev) =>
         prev.map((m) => {
           if (!m.toolCalls || m.toolCalls.length === 0) return m;
           let changed = false;
           const updated = m.toolCalls.map((call) => {
-            if (call !== tc) return call;
+            if (!matchesCall(call)) return call;
             const base =
               call.payload && typeof call.payload === "object" ? { ...(call.payload as Record<string, unknown>) } : {};
-            base.pending = false;
+            base.resolving = true;
             if (action === "cancel") base.cancelled = true;
             changed = true;
             return { ...call, payload: base };
@@ -734,6 +822,14 @@ export function ChatView({
           return changed ? { ...m, toolCalls: updated } : m;
         })
       );
+
+      if (pendingId) {
+        try {
+          await window.harness.chat.resolveGatedTool(pendingId, action);
+        } catch {
+          // ignore; stream may have been stopped
+        }
+      }
     },
     []
   );
@@ -814,6 +910,9 @@ export function ChatView({
         setDraftConversationId(convId);
         conversationIdRef.current = convId;
         onAssignConversationId(convId);
+        if (codingScope) {
+          await window.harness.coding.setScope(convId, codingScope).catch(() => {});
+        }
       }
       await sendText(text, opts, convId);
       if (opts?.recordingPath) {
@@ -825,6 +924,7 @@ export function ChatView({
     },
     [
       blockLlmAction,
+      codingScope,
       composeChatMode,
       effectiveConversationId,
       onAssignConversationId,
@@ -1110,11 +1210,42 @@ export function ChatView({
     onSend: () => void composer.send(),
     onStop: () => {
       const turnId = activeTurnIdRef.current;
+      if (turnId == null || isStopping) return;
+      setIsStopping(true);
       streamAbortRef.current?.abort();
-      void window.harness.chat.stop().catch(() => {});
-      if (turnId != null) completeTurn(turnId);
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (!m.toolCalls?.some(isToolCallPending)) return m;
+          return {
+            ...m,
+            toolCalls: m.toolCalls.map((call) => {
+              if (!isToolCallPending(call)) return call;
+              const base =
+                call.payload && typeof call.payload === "object"
+                  ? { ...(call.payload as Record<string, unknown>) }
+                  : {};
+              base.pending = false;
+              base.resolving = false;
+              base.cancelled = true;
+              base.stopped = true;
+              return { ...call, payload: base };
+            }),
+          };
+        }),
+      );
+      void window.harness.chat
+        .stop()
+        .catch(() => {})
+        .finally(() => {
+          window.setTimeout(() => {
+            if (activeTurnIdRef.current === turnId) {
+              completeTurn(turnId);
+            }
+          }, 1500);
+        });
     },
     sending: sending || composer.composerBusy,
+    stopping: isStopping,
     voiceState: composer.voiceState,
     voiceError: composer.voiceError,
     recordingMs: composer.recordingMs,
@@ -1139,6 +1270,19 @@ export function ChatView({
     inputRef: composer.inputRef,
     placeholder: chatModePlaceholder(activeChatMode),
     modeControl: modePicker,
+    codingScope,
+    selfScopeAvailable,
+    onPickProjectFolder: async () => {
+      const next = await window.harness.coding.pickProjectFolder();
+      if (next) await applyCodingScope(next);
+    },
+    onUseSelfScope: async () => {
+      const next = await window.harness.coding.getSelfScope();
+      await applyCodingScope(next);
+    },
+    onClearCodingScope: async () => {
+      await applyCodingScope(null);
+    },
     onCycleMode: handleCycleMode,
   };
 

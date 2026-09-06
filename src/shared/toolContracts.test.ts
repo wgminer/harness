@@ -36,14 +36,9 @@ describe("resources/contracts/tools.json", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("contains the desktop-only tools (file, layout, notes)", () => {
+  it("contains the desktop-only tools (layout, notes)", () => {
     const names = new Set(readToolDefinitions().map((d) => d.function.name));
     for (const expected of [
-      "list_directory",
-      "read_file",
-      "write_file",
-      "delete_file",
-      "create_directory",
       "set_layout",
       "note_list",
       "note_create",
@@ -52,6 +47,15 @@ describe("resources/contracts/tools.json", () => {
       "note_delete",
     ]) {
       expect(names.has(expected), `missing desktop-only tool: ${expected}`).toBe(true);
+    }
+    for (const legacy of [
+      "list_directory",
+      "read_file",
+      "write_file",
+      "delete_file",
+      "create_directory",
+    ]) {
+      expect(names.has(legacy), `legacy unscoped file tool still present: ${legacy}`).toBe(false);
     }
   });
 
@@ -70,6 +74,29 @@ describe("resources/contracts/tools.json", () => {
       "get_datetime",
     ]) {
       expect(names.has(expected), `missing shared (also-iOS) tool: ${expected}`).toBe(true);
+    }
+  });
+});
+
+describe("resources/contracts/codingTools.json", () => {
+  it("parses as coding tool definitions", () => {
+    const raw = readFileSync(join(root, "resources/contracts/codingTools.json"), "utf8");
+    const defs = JSON.parse(raw) as ToolDefinition[];
+    expect(Array.isArray(defs)).toBe(true);
+    const names = new Set(defs.map((d) => d.function.name));
+    for (const expected of [
+      "ws_list_tree",
+      "ws_search",
+      "ws_read",
+      "ws_edit",
+      "ws_write",
+      "ws_delete",
+      "run_command",
+      "git_status",
+      "git_diff",
+      "git_checkout_branch",
+    ]) {
+      expect(names.has(expected), `missing coding tool: ${expected}`).toBe(true);
     }
   });
 });

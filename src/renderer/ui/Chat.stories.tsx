@@ -217,7 +217,11 @@ function ChatGallery() {
                   )}
                 </p>
                 <span className="tooltip__label">
-                  {`Marcus Aurelius, Meditations\nPrivate notes a Roman emperor wrote to himself while on campaign.\nTreat the obstacle as the path — resistance can become fuel.`}
+                  <span className="new-chat-quote-tooltip__attr">Marcus Aurelius, Meditations</span>
+                  <span>
+                    These are private notes a Roman emperor wrote to himself while on campaign. Treat
+                    the obstacle as the path — resistance can become fuel.
+                  </span>
                 </span>
               </span>
             </div>

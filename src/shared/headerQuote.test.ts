@@ -6,6 +6,7 @@ import {
   HOME_HEADER_QUOTE_BAG_KEY,
   HOME_HEADER_QUOTES,
   formatHomeHeaderQuoteTooltip,
+  homeHeaderQuoteNote,
   nextHomeHeaderQuote,
   shuffleIds,
   type HomeHeaderQuote,
@@ -95,9 +96,10 @@ describe("nextHomeHeaderQuote", () => {
     expect(storage.read()?.remaining).toEqual([]);
   });
 
-  it("formats tooltip with attribution, context, and moral", () => {
+  it("formats tooltip with attribution and one wrapping note", () => {
     const q = HOME_HEADER_QUOTES[0]!;
-    expect(formatHomeHeaderQuoteTooltip(q)).toBe(`${q.author}, ${q.source}\n${q.context}\n${q.moral}`);
+    expect(homeHeaderQuoteNote(q)).toBe(`${q.context} ${q.moral}`);
+    expect(formatHomeHeaderQuoteTooltip(q)).toBe(`${q.author}, ${q.source}\n${q.context} ${q.moral}`);
   });
 });
 

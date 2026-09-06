@@ -1,5 +1,24 @@
-import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
-import { Mic, Check, Loader2, X, FileAudio, ArrowUp, Plus } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import {
+  Mic,
+  Check,
+  Loader2,
+  X,
+  FileAudio,
+  ArrowUp,
+  Plus,
+  FolderCode,
+} from "lucide-react";
+import type { CodingScopeMeta } from "../shared/desktopAPI";
 import type { VoiceState } from "./chatHelpers";
 import {
   AUDIO_FILE_ACCEPT,
@@ -7,8 +26,20 @@ import {
   pickAudioAttachFile,
   pickAudioAttachPath,
 } from "./audioAttach";
+import {
+  CHAT_MODE_MENU_FALLBACK_HEIGHT_PX,
+  CHAT_MODE_MENU_FALLBACK_WIDTH_PX,
+  placeChatModeMenu,
+  type ChatModeMenuPosition,
+} from "./chatModeMenuPosition";
 import { useTypedPlaceholder } from "./useTypedPlaceholder";
 import { formatVoiceTimer } from "./useVoiceCapture";
+
+function codingScopeLabel(scope: CodingScopeMeta): string {
+  if (scope.kind === "self") return "Harness UI";
+  const parts = scope.root.replace(/\\/g, "/").split("/").filter(Boolean);
+  return parts[parts.length - 1] || scope.root;
+}
 
 interface ChatComposerProps {
   input: string;
@@ -16,6 +47,7 @@ interface ChatComposerProps {
   onSend: () => void;
   onStop: () => void;
   sending: boolean;
+  stopping?: boolean;
   voiceState: VoiceState;
   voiceError: string | null;
   recordingMs: number;
@@ -33,6 +65,11 @@ interface ChatComposerProps {
   inputRef?: MutableRefObject<HTMLTextAreaElement | null>;
   placeholder?: string;
   modeControl?: ReactNode;
+  codingScope?: CodingScopeMeta | null;
+  selfScopeAvailable?: boolean;
+  onPickProjectFolder?: () => Promise<void> | void;
+  onUseSelfScope?: () => Promise<void> | void;
+  onClearCodingScope?: () => Promise<void> | void;
   /** Shift+Tab in the composer cycles chat modes. */
   onCycleMode?: () => void;
 }
@@ -43,6 +80,7 @@ export function ChatComposer({
   onSend,
   onStop,
   sending,
+  stopping = false,
   voiceState,
   voiceError,
   recordingMs,
@@ -59,13 +97,23 @@ export function ChatComposer({
   inputRef: externalInputRef,
   placeholder = "Write a message…",
   modeControl,
+  codingScope = null,
+  selfScopeAvailable = false,
+  onPickProjectFolder,
+  onUseSelfScope,
+  onClearCodingScope,
   onCycleMode,
 }: ChatComposerProps) {
   const inputRef = useRef<HTMLTextAreaElement | null>(null) as MutableRefObject<HTMLTextAreaElement | null>;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const plusRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const dragDepthRef = useRef(0);
   const attachDisabledRef = useRef(false);
   const [dropTargetActive, setDropTargetActive] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [plusBusy, setPlusBusy] = useState(false);
+  const [menuPos, setMenuPos] = useState<ChatModeMenuPosition | null>(null);
   const typedPlaceholder = useTypedPlaceholder(placeholder);
 
   const attachDisabled =
@@ -88,6 +136,53 @@ export function ChatComposer({
     if (focusComposerNonce == null || focusComposerNonce < 1) return;
     inputRef.current?.focus();
   }, [focusComposerNonce]);
+
+  useLayoutEffect(() => {
+    if (!plusOpen) {
+      setMenuPos(null);
+      return;
+    }
+    const trigger = plusRef.current;
+    if (!trigger) return;
+    const update = () => {
+      const rect = trigger.getBoundingClientRect();
+      setMenuPos(
+        placeChatModeMenu(
+          rect,
+          {
+            width: menuRef.current?.offsetWidth || CHAT_MODE_MENU_FALLBACK_WIDTH_PX,
+            height: menuRef.current?.offsetHeight || CHAT_MODE_MENU_FALLBACK_HEIGHT_PX,
+          },
+          { width: window.innerWidth, height: window.innerHeight },
+        ),
+      );
+    };
+    update();
+    const frame = requestAnimationFrame(update);
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", update);
+    };
+  }, [plusOpen]);
+
+  useEffect(() => {
+    if (!plusOpen) return;
+    const onPointer = (event: MouseEvent) => {
+      const t = event.target as Node;
+      if (plusRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setPlusOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPlusOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [plusOpen]);
 
   const clearDropTarget = useCallback(() => {
     dragDepthRef.current = 0;
@@ -170,6 +265,19 @@ export function ChatComposer({
     };
   }, [clearDropTarget, tryAttachAudioPaths]);
 
+  const runPlusAction = async (fn: () => Promise<void> | void) => {
+    if (plusBusy || attachDisabled) return;
+    setPlusBusy(true);
+    try {
+      await fn();
+      setPlusOpen(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPlusBusy(false);
+    }
+  };
+
   return (
     <>
       {voiceError && (
@@ -228,22 +336,43 @@ export function ChatComposer({
             e.currentTarget.value = "";
           }}
         />
-        {attachedAudioName && (
+        {(attachedAudioName || codingScope) && (
           <div className="chat-attachment-strip">
-            <span className="chat-attachment-chip" title={attachedAudioName}>
-              <FileAudio size={11} strokeWidth={1.75} />
-              <span className="chat-attachment-name">{attachedAudioName}</span>
-              <button
-                type="button"
-                className="chat-attachment-remove"
-                onClick={onRemoveAttachedAudio}
-                disabled={attachmentTranscribing}
-                aria-label="Remove attached audio"
-                title="Remove attached audio"
+            {codingScope ? (
+              <span
+                className="chat-attachment-chip chat-attachment-chip--scope"
+                title={codingScope.root}
               >
-                <X size={11} strokeWidth={1.75} />
-              </button>
-            </span>
+                <FolderCode size={11} strokeWidth={1.75} />
+                <span className="chat-attachment-name">{codingScopeLabel(codingScope)}</span>
+                <button
+                  type="button"
+                  className="chat-attachment-remove"
+                  onClick={() => void onClearCodingScope?.()}
+                  disabled={sending}
+                  aria-label="Clear coding scope"
+                  title="Clear coding scope"
+                >
+                  <X size={11} strokeWidth={1.75} />
+                </button>
+              </span>
+            ) : null}
+            {attachedAudioName ? (
+              <span className="chat-attachment-chip" title={attachedAudioName}>
+                <FileAudio size={11} strokeWidth={1.75} />
+                <span className="chat-attachment-name">{attachedAudioName}</span>
+                <button
+                  type="button"
+                  className="chat-attachment-remove"
+                  onClick={onRemoveAttachedAudio}
+                  disabled={attachmentTranscribing}
+                  aria-label="Remove attached audio"
+                  title="Remove attached audio"
+                >
+                  <X size={11} strokeWidth={1.75} />
+                </button>
+              </span>
+            ) : null}
             {attachmentTranscribing && (
               <span className="voice-status">
                 <Loader2 size={13} className="voice-spinner" />
@@ -285,15 +414,73 @@ export function ChatComposer({
           )}
           <div className="input-actions-spacer" />
           <button
+            ref={plusRef}
             type="button"
-            className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={attachDisabled}
-            title="Attach audio file"
-            aria-label="Attach audio file"
+            className={`btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn${codingScope ? " coding-scope-plus--active" : ""}`}
+            onClick={() => setPlusOpen((v) => !v)}
+            disabled={attachDisabled || plusBusy}
+            title="Attach or set project folder"
+            aria-label="Attach or set project folder"
+            aria-haspopup="menu"
+            aria-expanded={plusOpen}
           >
             <Plus size={15} />
           </button>
+          {plusOpen && menuPos
+            ? createPortal(
+                <div
+                  ref={menuRef}
+                  className="chat-plus-menu chat-mode-picker__menu chat-mode-picker__menu--portal"
+                  role="menu"
+                  style={{ top: menuPos.top, left: menuPos.left }}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="chat-mode-picker__menu-item"
+                    onClick={() =>
+                      void runPlusAction(async () => {
+                        fileInputRef.current?.click();
+                      })
+                    }
+                  >
+                    Attach audio…
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="chat-mode-picker__menu-item"
+                    onClick={() => void runPlusAction(async () => onPickProjectFolder?.())}
+                  >
+                    Choose project folder…
+                  </button>
+                  {selfScopeAvailable ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="chat-mode-picker__menu-item"
+                      onClick={() => void runPlusAction(async () => onUseSelfScope?.())}
+                    >
+                      <span>Harness UI</span>
+                      {codingScope?.kind === "self" ? (
+                        <Check size={14} className="chat-mode-picker__menu-check" />
+                      ) : null}
+                    </button>
+                  ) : null}
+                  {codingScope ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="chat-mode-picker__menu-item"
+                      onClick={() => void runPlusAction(async () => onClearCodingScope?.())}
+                    >
+                      Clear project folder
+                    </button>
+                  ) : null}
+                </div>,
+                document.body,
+              )
+            : null}
           {voiceState !== "processing" && (
             <button
               type="button"
@@ -319,8 +506,16 @@ export function ChatComposer({
           )}
           {modeControl}
           {sending ? (
-            <button type="button" className="btn chat-pane-btn input-actions-stop" onClick={onStop}>
-              Stop
+            <button
+              type="button"
+              className={`btn chat-pane-btn input-actions-stop${stopping ? " input-actions-stop--stopping" : ""}`}
+              onClick={onStop}
+              disabled={stopping}
+              aria-busy={stopping}
+              title={stopping ? "Stopping the request…" : "Stop and kill this request"}
+              aria-label={stopping ? "Stopping the request" : "Stop and kill this request"}
+            >
+              {stopping ? "Stopping…" : "Stop"}
             </button>
           ) : voiceState === "idle" ? (
             <button

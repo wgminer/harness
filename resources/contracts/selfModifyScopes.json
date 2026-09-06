@@ -1,0 +1,13 @@
+{
+  "aspects": {
+    "ui": [
+      "src/renderer/*.tsx",
+      "src/renderer/**/*.tsx",
+      "src/renderer/index.html"
+    ],
+    "css": [
+      "src/renderer/*.css",
+      "src/renderer/**/*.css"
+    ]
+  }
+}

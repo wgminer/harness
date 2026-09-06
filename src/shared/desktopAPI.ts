@@ -31,6 +31,11 @@ export interface TaskItem {
   metadata?: Record<string, unknown>;
 }
 
+export interface CodingScopeMeta {
+  kind: "project" | "self";
+  root: string;
+}
+
 export interface TasksPayload {
   tasks: TaskItem[];
   lastAction?: string;
@@ -103,6 +108,7 @@ export interface HarnessAPI {
         hasAssistantReply?: boolean;
         hasMessages?: boolean;
         chatMode?: "chat" | "decide" | "write" | "refine";
+        codingScope?: CodingScopeMeta | null;
         dictationReplyAction?: string;
       }[]
     >;
@@ -172,6 +178,15 @@ export interface HarnessAPI {
     linkDictationRecording: (conversationId: string, path: string) => Promise<void>;
     getConversationRecordings: (conversationId: string) => Promise<{ recordings: RecordingLink[] }>;
   };
+  coding: {
+    getScope: (conversationId: string) => Promise<CodingScopeMeta | null>;
+    /** Folder picker only — does not persist. */
+    pickProjectFolder: () => Promise<CodingScopeMeta | null>;
+    /** Resolve Harness UI self-scope meta — does not persist. */
+    getSelfScope: () => Promise<CodingScopeMeta>;
+    setScope: (conversationId: string, scope: CodingScopeMeta | null) => Promise<void>;
+    selfScopeAvailable: () => Promise<boolean>;
+  };
   tasks: {
     list: () => Promise<TasksPayload>;
     create: (title: string, tags?: string[], status?: TaskStatus) => Promise<TasksPayload>;
@@ -219,9 +234,6 @@ export interface HarnessAPI {
     getLayoutOptions: () => Promise<LayoutOptions>;
     setLayout: (o: Partial<LayoutOptions>) => Promise<void>;
     onUpdated: (cb: (p: { type: string }) => void) => () => void;
-  };
-  fileTools: {
-    getAllowedRoots: () => Promise<string[]>;
   };
   /** Tavily-backed lookups used by the desktop UI (not assistant tools). */
   search: {

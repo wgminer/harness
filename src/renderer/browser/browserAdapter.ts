@@ -241,8 +241,16 @@ export function createBrowserAdapter(): HarnessAPI {
       },
       onUpdated: (cb) => onBrowserEvent<{ type: string }>("customization:updated", cb),
     },
-    fileTools: {
-      getAllowedRoots: async () => [],
+    coding: {
+      getScope: async () => null,
+      pickProjectFolder: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
+      getSelfScope: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
+      setScope: async () => {},
+      selfScopeAvailable: async () => false,
     },
     search: {
       lookupImage: async () => ({ query: "", error: WEB_UNSUPPORTED }),

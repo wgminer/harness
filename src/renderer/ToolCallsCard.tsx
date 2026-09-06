@@ -151,6 +151,9 @@ function ToolCallRow({
   onOpenImage?: (imageId: string) => void;
 }) {
   const isPending = isToolCallPending(call);
+  const isResolving =
+    isPending &&
+    !!(call.payload as { resolving?: boolean } | undefined)?.resolving;
   const noteId = !isPending ? noteIdFromCreateToolCall(call) : null;
   const canOpenNote = !!noteId && !!onOpenNote;
   const searchHits =
@@ -174,9 +177,14 @@ function ToolCallRow({
   }
 
   const label = toolCallLabel(call);
+  const pendingPayload = isPending
+    ? (call.payload as { preview?: string; path?: string } | undefined)
+    : undefined;
+  const preview =
+    typeof pendingPayload?.preview === "string" ? pendingPayload.preview : null;
 
   return (
-    <div className="tool-card-row">
+    <div className={`tool-card-row${preview ? " tool-card-row--preview" : ""}`}>
       <span className="tool-card-icon">{toolIcon()}</span>
       <div className="tool-card-row-text">
         {canOpenNote ? (
@@ -189,15 +197,29 @@ function ToolCallRow({
             {label}
           </button>
         ) : (
-          <span className="tool-card-label">{label}</span>
+          <span className="tool-card-label">
+            {label}
+            {pendingPayload?.path ? ` · ${pendingPayload.path}` : ""}
+          </span>
         )}
+        {preview ? <pre className="tool-card-preview">{preview}</pre> : null}
       </div>
       {isPending && (
         <span className="tool-card-actions">
-          <button type="button" className="btn btn-sm btn-primary" onClick={() => onToolConfirm(call, "proceed")}>
-            Proceed
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            onClick={() => onToolConfirm(call, "proceed")}
+            disabled={isResolving}
+          >
+            {isResolving ? "Working…" : "Proceed"}
           </button>
-          <button type="button" className="btn btn-sm" onClick={() => onToolConfirm(call, "cancel")}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => onToolConfirm(call, "cancel")}
+            disabled={isResolving}
+          >
             Cancel
           </button>
         </span>

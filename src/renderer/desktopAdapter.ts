@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { HarnessAPI } from "../shared/desktopAPI";
-import type { GlobalRecordingStatus } from "../shared/desktopAPI";
+import type { CodingScopeMeta, GlobalRecordingStatus } from "../shared/desktopAPI";
 import type {
   AppendMessageMeta,
   ContextPreview,
@@ -215,8 +215,14 @@ export function createHarnessAdapter(): HarnessAPI {
       onUpdated: (cb) =>
         subscribe<{ type: string }>("customization:updated", (p) => cb(p)),
     },
-    fileTools: {
-      getAllowedRoots: () => invoke<string[]>(cmd("fileTools:getAllowedRoots")),
+    coding: {
+      getScope: (conversationId: string) =>
+        invoke(cmd("coding:getScope"), { conversationId }),
+      pickProjectFolder: () => invoke(cmd("coding:pickProjectFolder")),
+      getSelfScope: () => invoke(cmd("coding:getSelfScope")),
+      setScope: (conversationId: string, scope: CodingScopeMeta | null) =>
+        invoke(cmd("coding:setScope"), { conversationId, scope }),
+      selfScopeAvailable: () => invoke(cmd("coding:selfScopeAvailable")),
     },
     search: {
       lookupImage: (query: string) =>

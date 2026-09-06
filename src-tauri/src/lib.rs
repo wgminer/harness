@@ -2,6 +2,7 @@ pub mod assistant_tools;
 pub mod canonical_json;
 pub mod chat;
 pub mod chat_modes;
+pub mod coding;
 pub mod commands;
 pub mod conversation_search;
 pub mod conversation_title;
@@ -10,7 +11,6 @@ pub mod customization;
 pub mod dictation_recording_index;
 pub mod dictation_suggested_prompts;
 pub mod env_util;
-pub mod file_tools;
 #[cfg(target_os = "macos")]
 pub mod fn_tap;
 pub mod global_recording;
@@ -156,7 +156,11 @@ pub fn run() {
             commands::ui_session_set,
             commands::customization_get_layout_options,
             commands::customization_set_layout,
-            commands::file_tools_get_allowed_roots,
+            commands::coding_get_scope,
+            commands::coding_pick_project_folder,
+            commands::coding_get_self_scope,
+            commands::coding_set_scope,
+            commands::coding_self_scope_available,
             commands::notes_list,
             commands::notes_create,
             commands::notes_read,

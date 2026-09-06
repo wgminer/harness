@@ -110,6 +110,7 @@ pub fn build_system_prompt(
         fields,
         platform,
         "",
+        "",
         memory_block,
         recent_conversations_block,
         temporal_context,
@@ -120,6 +121,7 @@ pub fn build_system_prompt_with_mode(
     fields: &SystemPromptFields,
     platform: &str,
     mode_overlay: &str,
+    coding_scope_block: &str,
     memory_block: &str,
     recent_conversations_block: &str,
     temporal_context: &str,
@@ -128,6 +130,10 @@ pub fn build_system_prompt_with_mode(
     if !mode_overlay.trim().is_empty() {
         out.push_str("\n\n");
         out.push_str(mode_overlay.trim());
+    }
+    if !coding_scope_block.trim().is_empty() {
+        out.push_str("\n\n");
+        out.push_str(coding_scope_block.trim());
     }
     if !memory_block.is_empty() {
         out.push_str("\n\n");
@@ -207,6 +213,7 @@ mod tests {
             &fields,
             "desktop",
             "[CHAT_MODE: decide]\noverlay",
+            "",
             "[USER_MEMORY_CONTEXT]\nmemory",
             "",
             "[TEMPORAL_CONTEXT]\nnow",

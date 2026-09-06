@@ -1,0 +1,200 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "ws_list_tree",
+      "description": "List files and directories under the coding scope root (depth-limited). Paths are relative to the scope root. Only allowed paths are returned.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Relative path under the scope root (default \".\")"
+          },
+          "depth": {
+            "type": "integer",
+            "description": "Max depth to recurse (default 2, max 4)"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ws_search",
+      "description": "Search file contents under the coding scope with a regex. Only allowed files are searched. Returns matching paths with line snippets.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Regex pattern to search for"
+          },
+          "path": {
+            "type": "string",
+            "description": "Optional relative subdirectory to search under (default \".\")"
+          },
+          "max_matches": {
+            "type": "integer",
+            "description": "Maximum matches to return (default 40, max 100)"
+          }
+        },
+        "required": ["pattern"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ws_read",
+      "description": "Read a text file under the coding scope. Paths are relative to the scope root. Optional line range (1-based, inclusive).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Relative path to the file"
+          },
+          "start_line": {
+            "type": "integer",
+            "description": "First line to include (1-based)"
+          },
+          "end_line": {
+            "type": "integer",
+            "description": "Last line to include (1-based, inclusive)"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ws_edit",
+      "description": "Replace an exact unique substring in a file under the coding scope. Fails if old_string is missing or appears more than once. Requires user approval.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Relative path to the file"
+          },
+          "old_string": {
+            "type": "string",
+            "description": "Exact text to find (must appear exactly once)"
+          },
+          "new_string": {
+            "type": "string",
+            "description": "Replacement text"
+          }
+        },
+        "required": ["path", "old_string", "new_string"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ws_write",
+      "description": "Create or overwrite a file under the coding scope. Requires user approval.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Relative path for the file"
+          },
+          "content": {
+            "type": "string",
+            "description": "Full file content to write"
+          }
+        },
+        "required": ["path", "content"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ws_delete",
+      "description": "Delete a file under the coding scope. Requires user approval.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Relative path to the file"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_command",
+      "description": "Run a shell command with the coding scope root as cwd. Allowlisted read/verify commands auto-run; others require user approval. Prefer git_status/git_diff for git reads.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Shell command to run"
+          }
+        },
+        "required": ["command"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "git_status",
+      "description": "Show git status for the coding scope root (read-only).",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "git_diff",
+      "description": "Show git diff for the coding scope root (read-only). Optional path relative to root.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Optional relative path to limit the diff"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "git_checkout_branch",
+      "description": "Create and/or switch to a git branch under the coding scope. Requires user approval. Prefer this before mutating files when on main/master.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string",
+            "description": "Branch name to create or switch to"
+          },
+          "create": {
+            "type": "boolean",
+            "description": "If true, create the branch (-b). Default true when the branch does not exist."
+          }
+        },
+        "required": ["branch"]
+      }
+    }
+  }
+]
