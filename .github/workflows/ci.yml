@@ -60,6 +60,14 @@ jobs:
             pkg-config \
             patchelf
 
+      # HarnessSpeech is a macOS-only Swift helper (gitignored). Tauri's build
+      # script still requires the listed resource path to exist on Linux CI.
+      - name: Stub HarnessSpeech resource for Linux CI
+        run: |
+          mkdir -p resources
+          : > resources/HarnessSpeech
+          chmod +x resources/HarnessSpeech
+
       - name: Run Rust tests
         working-directory: src-tauri
         run: cargo test --lib
