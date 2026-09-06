@@ -18,6 +18,8 @@ export {
   type MemorySettingsController,
 } from "./MemorySettingsTab";
 export { AccentColorField, type AccentColorFieldProps } from "./AccentColorField";
+export { VoiceSettingsTab, type VoiceSettingsTabProps } from "./VoiceSettingsTab";
+export { NotesTemplatesTab, type NotesTemplatesTabProps } from "./NotesTemplatesTab";
 export {
   getCachedSettings,
   loadSettingsForSystemPage,
