@@ -73,7 +73,7 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 | **Sync pairing / QR** | Desktop→iOS setup for shared R2 credentials. |
 | **Conflict review** | UI when sync pulls diverge from local. |
 | **Credentials** | Secrets in OS credential store (not plain settings JSON). |
-| **Setup gap / setup notice** | First-run or missing config (API key required; R2 / Accessibility recommended). |
+| **Setup gap / setup notice** | First-run or missing config (API key required on desktop; R2 / Accessibility recommended). |
 
 ## Principles & engineering
 

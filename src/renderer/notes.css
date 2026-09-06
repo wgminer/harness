@@ -88,7 +88,7 @@
 }
 
 .notes-surface__template-card:focus-visible:not(:disabled) {
-  outline: 2px solid var(--accent-tint);
+  outline: var(--focus-ring);
   outline-offset: 0;
   border-color: var(--border-input-focus);
 }
@@ -381,6 +381,11 @@
 .notes-surface__toolbar-menu-item:hover:not(:disabled),
 .notes-surface__toolbar-menu-item:focus-visible:not(:disabled) {
   background: var(--accent-tint);
+}
+
+.notes-surface__toolbar-menu-item:focus-visible:not(:disabled) {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
 }
 
 .notes-surface__toolbar-menu-item:disabled {

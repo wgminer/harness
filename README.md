@@ -42,7 +42,7 @@ To iterate on the **chat UI** in a regular browser (Vite + localStorage, no Taur
 npm run dev:browser
 ```
 
-Opens `http://localhost:5173`. Paste an OpenAI API key in System → Data, or set `VITE_OPENAI_API_KEY` in `.env`. Conversations stay in this browser's localStorage — not the desktop profile. Dictation, sync, tools, and images are stubbed.
+Opens `http://localhost:5173`. Chat works without a key (dummy streamed replies). Paste an OpenAI API key in System → Data, or set `VITE_OPENAI_API_KEY` in `.env`, for real completions. Conversations stay in this browser's localStorage — not the desktop profile. Dictation, sync, tools, and images are stubbed.
 
 ```bash
 npm run dist:mac          # signed DMG — see BUILD.md
@@ -56,7 +56,7 @@ npm run capture:hero      # refresh media/hero.png from a running Harness Dev wi
 | | |
 |---|---|
 | **Desktop** | Tauri (Rust + React) — chat modes (Chat/Decide/Write/Refine), tools, memory, notes, tasks, dictation, R2 sync |
-| **Browser** | Same React chat UI via `npm run dev:browser` — localStorage + OpenAI proxy; debug shell, not a product client |
+| **Browser** | Same React chat UI via `npm run dev:browser` — localStorage; dummy replies unless an API key is set; debug shell, not a product client |
 | **Mobile** | Native iOS companion — chat, capture, sync QR pairing ([ios/README.md](ios/README.md)) |
 | **Models** | OpenAI API or OpenAI-compatible locals (e.g. Ollama) |
 | **Speech** | Apple Speech on macOS and iOS |

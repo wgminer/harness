@@ -22,6 +22,10 @@ export const SETTINGS_NAV: Array<{
     icon: "SlidersHorizontal",
     keywords: [
       "theme",
+      "dark",
+      "time",
+      "tint",
+      "sky",
       "accent",
       "color",
       "hex",

@@ -905,7 +905,7 @@
 }
 
 .settings-template-card:focus-visible {
-  outline: 2px solid var(--accent-tint);
+  outline: var(--focus-ring);
   outline-offset: 0;
   border-color: var(--border-input-focus);
 }

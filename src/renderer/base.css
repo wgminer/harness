@@ -1,13 +1,116 @@
 /**
  * Global design tokens — fixed dark palette and 16px type scale.
  */
+@property --bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #111;
+}
+
+@property --bg-secondary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #222;
+}
+
+@property --bg-elevated {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #222;
+}
+
+@property --time-sky {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #1a237e;
+}
+
+@property --border-edge {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #222;
+}
+
+@property --border-input {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #333;
+}
+
+@property --border-light {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #777;
+}
+
+@property --btn-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2e3033;
+}
+
+@property --btn-bg-hover {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #3b3d40;
+}
+
+@property --overlay-subtle {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #1f2124;
+}
+
+@property --overlay {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2a2c2f;
+}
+
+@property --overlay-strong {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #393b3e;
+}
+
+@property --hover-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #26282b;
+}
+
+@property --hover-bg-strong {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #323437;
+}
+
+@property --scrollbar-track {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #26282b;
+}
+
+@property --scrollbar-thumb {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #6a6c6f;
+}
+
+@property --focus-ring-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #5b9cf5;
+}
+
 :root {
   color-scheme: dark;
 
   /* --- Surfaces (role, not brightness order) --- */
-  --bg: #111; /* page shell: sidebar, main, workspace canvas */
+  --bg: #111; /* page shell: sidebar, main, workspace canvas; JS tints via time-of-day */
   --bg-secondary: #222; /* fields, cards, panels */
   --bg-elevated: #222; /* modals, popovers, raised controls */
+  --time-sky: #1a237e; /* interpolated world-clock hour color (overwritten in JS) */
 
   /* --- Text --- */
   --fg: #ccc;
@@ -23,7 +126,7 @@
   --border-light: #777;
   --border-edge: #222;
   --border-input: #333;
-  --border-input-focus: var(--accent);
+  --border-input-focus: var(--focus-ring-color);
 
   /* --- Buttons --- */
   --btn-bg: #2e3033;
@@ -66,11 +169,12 @@
   --shadow-color: rgba(0, 0, 0, 0.3);
   --shadow-drop: rgba(0, 0, 0, 0.2);
   --shadow: 0 4px 12px var(--shadow-color);
-  --focus-ring: 2px solid var(--accent);
+  --focus-ring-color: color-mix(in oklab, var(--accent) 55%, var(--time-sky));
+  --focus-ring: 2px solid var(--focus-ring-color);
 
   /* --- Typography --- */
   --font-family: -apple-system, "system-ui", "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-family-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --font-family-serif: "New York", ui-serif, Georgia, "Times New Roman", serif;
   --font-family-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
   --font-size: var(--font-size-body);
   --font-size-caption: 12px;
@@ -149,6 +253,54 @@
   --motion-ease-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
   --motion-ease-emphasis: cubic-bezier(0.55, 0, 0.65, 0.4);
   --motion-ease-switch-thumb: cubic-bezier(0.34, 1.15, 0.64, 1);
+
+  transition:
+    --bg var(--motion-duration-expressive) var(--motion-ease-standard),
+    --bg-secondary var(--motion-duration-expressive) var(--motion-ease-standard),
+    --bg-elevated var(--motion-duration-expressive) var(--motion-ease-standard),
+    --time-sky var(--motion-duration-expressive) var(--motion-ease-standard),
+    --border-edge var(--motion-duration-expressive) var(--motion-ease-standard),
+    --border-input var(--motion-duration-expressive) var(--motion-ease-standard),
+    --border-light var(--motion-duration-expressive) var(--motion-ease-standard),
+    --btn-bg var(--motion-duration-expressive) var(--motion-ease-standard),
+    --btn-bg-hover var(--motion-duration-expressive) var(--motion-ease-standard),
+    --overlay-subtle var(--motion-duration-expressive) var(--motion-ease-standard),
+    --overlay var(--motion-duration-expressive) var(--motion-ease-standard),
+    --overlay-strong var(--motion-duration-expressive) var(--motion-ease-standard),
+    --hover-bg var(--motion-duration-expressive) var(--motion-ease-standard),
+    --hover-bg-strong var(--motion-duration-expressive) var(--motion-ease-standard),
+    --scrollbar-track var(--motion-duration-expressive) var(--motion-ease-standard),
+    --scrollbar-thumb var(--motion-duration-expressive) var(--motion-ease-standard),
+    --focus-ring-color var(--motion-duration-expressive) var(--motion-ease-standard);
+}
+
+/*
+ * Time theme remaps chrome through --tod-* (set in JS). Do not assign --bg
+ * inline on :root — WKWebView keeps the stylesheet @property value.
+ */
+html[data-appearance="time"] {
+  --bg: var(--tod-bg, #111);
+  --bg-secondary: var(--tod-bg-secondary, #222);
+  --bg-elevated: var(--tod-bg-elevated, #222);
+  --time-sky: var(--tod-time-sky, #1a237e);
+  --border-edge: var(--tod-border-edge, #222);
+  --border-input: var(--tod-border-input, #333);
+  --border-light: var(--tod-border-light, #777);
+  --btn-bg: var(--tod-btn-bg, #2e3033);
+  --btn-bg-hover: var(--tod-btn-bg-hover, #3b3d40);
+  --overlay-subtle: var(--tod-overlay-subtle, #1f2124);
+  --overlay: var(--tod-overlay, #2a2c2f);
+  --overlay-strong: var(--tod-overlay-strong, #393b3e);
+  --hover-bg: var(--tod-hover-bg, #26282b);
+  --hover-bg-strong: var(--tod-hover-bg-strong, #323437);
+  --scrollbar-track: var(--tod-scrollbar-track, #26282b);
+  --scrollbar-thumb: var(--tod-scrollbar-thumb, #6a6c6f);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    transition: none;
+  }
 }
 
 * {

@@ -84,6 +84,7 @@ export default function App() {
   const [setupNoticeOpen, setSetupNoticeOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTabId | undefined>();
   const [openAIConfigured, setOpenAIConfigured] = useState(false);
+  const [webClient, setWebClient] = useState(false);
   const [setupStateLoaded, setSetupStateLoaded] = useState(false);
   const [openNoteInStickyWindow, setOpenNoteInStickyWindow] = useState(
     DEFAULT_UI_SESSION.openNoteInStickyWindow ?? false,
@@ -153,6 +154,7 @@ export default function App() {
       webClient,
     });
     setSetupGaps(gaps);
+    setWebClient(webClient);
     setOpenAIConfigured(credentialStatus.hasOpenAIApiKey);
     setSetupStateLoaded(true);
     return gaps;
@@ -793,7 +795,7 @@ export default function App() {
                   onNotesChanged={() => {
                     void loadNotesList();
                   }}
-                  openAIConfigured={!setupStateLoaded || openAIConfigured}
+                  openAIConfigured={!setupStateLoaded || openAIConfigured || webClient}
                   mirrorGlobalFnRecording={view === "chat"}
                 />
               </ChatLayoutDebugHost>

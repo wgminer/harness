@@ -79,7 +79,7 @@ describe("settingsSessionCache", () => {
           bringToFrontOnBackgroundDictation: true,
         },
         chat: { openToComposeOnLaunch: false, selectionImageLookup: true },
-        appearance: { accent: "#112233" },
+        appearance: { accent: "#112233", theme: "time" },
       });
       expect(hydrated.autoSend).toBe(false);
       expect(hydrated.globalFnHotkey).toBe(false);
@@ -87,6 +87,7 @@ describe("settingsSessionCache", () => {
       expect(hydrated.openToComposeOnLaunch).toBe(false);
       expect(hydrated.selectionImageLookup).toBe(true);
       expect(hydrated.accent).toBe("#112233");
+      expect(hydrated.appearanceTheme).toBe("time");
       expect(hydrated.weatherZip).toBe(DEFAULT_SETTINGS.weather!.defaultZip);
     });
 

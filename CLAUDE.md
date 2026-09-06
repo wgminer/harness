@@ -38,7 +38,7 @@ Vitest includes version parity, ipcNames ↔ `generate_handler!` parity, sync-me
 
 ## Browser debug shell
 
-`npm run dev:browser` (or `npm run dev:web`) serves the same React renderer without Tauri. `main.tsx` picks `createBrowserAdapter()` when `__TAURI_INTERNALS__` is missing. Chat/settings/notes/tasks persist in `localStorage` (`harness.web.v1`). Completions go through the Vite `/openai` proxy. Tools, dictation, sync, and images are stubbed. Do not treat this as a third product client.
+`npm run dev:browser` (or `npm run dev:web`) serves the same React renderer without Tauri. `main.tsx` picks `createBrowserAdapter()` when `__TAURI_INTERNALS__` is missing. Chat/settings/notes/tasks persist in `localStorage` (`harness.web.v1`). Without an API key, chat streams dummy replies (think delay, then canned text). With a key (`VITE_OPENAI_API_KEY` or Data settings), completions go through the Vite `/openai` proxy. Tools, dictation, sync, and images are stubbed. Do not treat this as a third product client.
 
 ## Dev vs installed data dirs
 

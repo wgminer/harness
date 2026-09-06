@@ -5,6 +5,12 @@ import { SETTINGS_PAGE_TITLE, settingsSection } from "../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
 import { DEFAULT_ACCENT, applyAccent, normalizeAccentHex } from "../shared/accent";
+import { applyAppearanceTheme } from "../shared/timeOfDayBackground";
+import {
+  DEFAULT_APPEARANCE_THEME,
+  normalizeAppearanceTheme,
+  type AppearanceTheme,
+} from "../shared/types";
 import {
   DEFAULT_NOTE_TEMPLATE_ID,
   DEFAULT_NOTE_TEMPLATES,
@@ -30,6 +36,7 @@ import {
   SettingsTabPanel,
   DataSettingsTab,
   AccentColorField,
+  ThemeModeField,
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
@@ -84,6 +91,7 @@ type PersistedFormState = {
   r2Prefix: string;
   r2AccessKeyId: string;
   accent: string;
+  appearanceTheme: AppearanceTheme;
   weatherZip: string;
 };
 
@@ -269,6 +277,9 @@ export function SettingsView({
     initialSecrets?.r2SecretAccessKey ?? "",
   );
   const [accent, setAccent] = useState(initialNonSecret?.accent ?? D.appearance?.accent ?? DEFAULT_ACCENT);
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
+    initialNonSecret?.appearanceTheme ?? D.appearance?.theme ?? DEFAULT_APPEARANCE_THEME,
+  );
   const [weatherZip, setWeatherZip] = useState(
     initialNonSecret?.weatherZip ?? D.weather!.defaultZip,
   );
@@ -312,6 +323,7 @@ export function SettingsView({
           r2Prefix: initialNonSecret.r2Prefix,
           r2AccessKeyId: initialNonSecret.r2AccessKeyId,
           accent: initialNonSecret.accent,
+          appearanceTheme: initialNonSecret.appearanceTheme,
           weatherZip: initialNonSecret.weatherZip,
         })
       : "",
@@ -354,11 +366,13 @@ export function SettingsView({
       r2Prefix: prev.r2Prefix ?? r2Prefix,
       r2AccessKeyId: prev.r2AccessKeyId ?? r2AccessKeyId,
       accent: prev.accent ?? accent,
+      appearanceTheme: prev.appearanceTheme ?? appearanceTheme,
       weatherZip: prev.weatherZip ?? weatherZip,
     });
     secretsLoadedRef.current = true;
     setSecretsLoaded(true);
   }, [
+    appearanceTheme,
     accent,
     autoSend,
     cleanupEnabled,
@@ -409,6 +423,7 @@ export function SettingsView({
         r2Prefix: nonSecret.r2Prefix,
         r2AccessKeyId: nonSecret.r2AccessKeyId,
         accent: nonSecret.accent,
+        appearanceTheme: nonSecret.appearanceTheme,
         weatherZip: nonSecret.weatherZip,
       };
       if (secrets) {
@@ -432,8 +447,10 @@ export function SettingsView({
       setR2Prefix(hydrated.r2Prefix);
       setR2AccessKeyId(hydrated.r2AccessKeyId);
       setAccent(hydrated.accent);
+      setAppearanceTheme(hydrated.appearanceTheme);
       setWeatherZip(hydrated.weatherZip);
       applyAccent(hydrated.accent);
+      applyAppearanceTheme(hydrated.appearanceTheme);
       setNoteTemplates(nonSecret.noteTemplates);
       setDefaultNoteTemplateId(nonSecret.defaultNoteTemplateId);
       lastPersistedRef.current = serializeFormState(hydrated);
@@ -557,6 +574,7 @@ export function SettingsView({
       r2Prefix,
       r2AccessKeyId,
       accent,
+      appearanceTheme,
       weatherZip,
     });
     // No-op: stay silent. Toast only after a real write (avoids Strict Mode
@@ -603,7 +621,10 @@ export function SettingsView({
           prefix: next.r2Prefix.trim() || D.sync!.prefix,
           accessKeyId: next.r2AccessKeyId.trim(),
         },
-        appearance: { accent: normalizeAccentHex(next.accent) },
+        appearance: {
+          accent: normalizeAccentHex(next.accent),
+          theme: normalizeAppearanceTheme(next.appearanceTheme),
+        },
         weather: { defaultZip: next.weatherZip.trim() },
       });
       try {
@@ -660,6 +681,7 @@ export function SettingsView({
     r2AccessKeyId,
     r2SecretAccessKey,
     accent,
+    appearanceTheme,
     weatherZip,
     onSettingsChanged,
   ]);
@@ -698,6 +720,7 @@ export function SettingsView({
       r2Prefix,
       r2AccessKeyId,
       accent,
+      appearanceTheme,
       weatherZip,
     });
     if (current === lastPersistedRef.current) return;
@@ -737,6 +760,7 @@ export function SettingsView({
       r2Prefix,
       r2AccessKeyId,
       accent,
+      appearanceTheme,
       weatherZip,
     });
     if (current === lastPersistedRef.current) return;
@@ -763,6 +787,7 @@ export function SettingsView({
     r2Prefix,
     r2AccessKeyId,
     accent,
+    appearanceTheme,
     weatherZip,
     persistSettings,
   ]);
@@ -981,7 +1006,11 @@ export function SettingsView({
         <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
           {activeTab === "general" && <SettingsTabPanel id="general">
-            <SettingsGroup title="Theme" description="Accent only — chrome stays dark.">
+            <SettingsGroup
+              title="Theme"
+              description="Dark chrome, or a shell tinted by the local hour. Accent colors controls and focus."
+            >
+              <ThemeModeField value={appearanceTheme} onChange={setAppearanceTheme} />
               <AccentColorField value={accent} onChange={setAccent} />
             </SettingsGroup>
 

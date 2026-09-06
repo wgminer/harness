@@ -19,6 +19,9 @@ import "./dev.css";
 const USER_MESSAGE_ID = "dev-dictation-user";
 const ASSISTANT_MESSAGE_ID = "dev-dictation-assistant";
 
+/** Hold the empty assistant slot so the stream wait ticker can run. */
+const DEV_STREAM_WAIT_MS = 40000;
+
 function DevControlsDock({ children }: { children?: ReactNode }) {
   if (!children) return null;
   return (
@@ -204,7 +207,7 @@ function DevChatStreamTest({
       ]);
       setStreamingAssistantId(assistant1Id);
       setSending(true);
-      await waitMs(350, isCancelled);
+      await waitMs(DEV_STREAM_WAIT_MS, isCancelled);
 
       await streamText(
         DEV_CHAT_ASSISTANT_1,
@@ -238,7 +241,7 @@ function DevChatStreamTest({
       ]);
       setStreamingAssistantId(assistant2Id);
       setSending(true);
-      await waitMs(350, isCancelled);
+      await waitMs(DEV_STREAM_WAIT_MS, isCancelled);
 
       await streamText(
         DEV_CHAT_ASSISTANT_2,

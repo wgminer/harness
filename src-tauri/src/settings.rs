@@ -41,7 +41,8 @@ pub fn default_settings() -> Value {
             "selectionImageLookup": false
         },
         "appearance": {
-            "accent": DEFAULT_ACCENT
+            "accent": DEFAULT_ACCENT,
+            "theme": "dark"
         },
         "weather": {
             "defaultZip": "12528"
@@ -305,9 +306,17 @@ fn normalize_accent_hex(raw: Option<&Value>) -> String {
     format!("#{expanded}")
 }
 
+fn parse_appearance_theme(raw: Option<&Value>) -> &'static str {
+    match raw.and_then(|v| v.as_str()) {
+        Some("time") => "time",
+        _ => "dark",
+    }
+}
+
 fn parse_appearance(raw: Option<&Value>) -> Value {
     json!({
-        "accent": normalize_accent_hex(raw.and_then(|v| v.get("accent")))
+        "accent": normalize_accent_hex(raw.and_then(|v| v.get("accent"))),
+        "theme": parse_appearance_theme(raw.and_then(|v| v.get("theme"))),
     })
 }
 
@@ -620,7 +629,7 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
         next["appearance"] = merge_object_fields(
             current.get("appearance").unwrap_or(&json!({})),
             appearance,
-            &["accent"],
+            &["accent", "theme"],
         );
     }
 

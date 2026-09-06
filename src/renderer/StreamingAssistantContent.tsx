@@ -6,9 +6,10 @@ import {
   type StreamingMarkdownBlocks,
 } from "../shared/streamingMarkdownBlocks";
 import { MarkdownContent, type MemorySearchHit } from "./chatHelpers";
+import { STREAM_WAIT_LABEL } from "./streamWaitTicker";
+import { useStreamWaitTicker } from "./useStreamWaitTicker";
 
-/** First-line wait copy — same slot as the opening reply paragraph. Swap later for generated text. */
-export const STREAM_WAIT_LABEL = "THINKING";
+export { STREAM_WAIT_LABEL } from "./streamWaitTicker";
 
 interface StreamingAssistantContentProps {
   content: string;
@@ -27,10 +28,19 @@ interface StreamingAssistantContentProps {
 }
 
 function StreamWaitLabel() {
+  const ticker = useStreamWaitTicker();
   return (
     <div className="chat-streaming-assistant">
       <div className="chat-stream-block chat-stream-block--wait">
-        <p aria-busy="true">{STREAM_WAIT_LABEL}</p>
+        <p className="chat-stream-wait-ticker" aria-busy="true" aria-label={STREAM_WAIT_LABEL}>
+          <span aria-hidden="true">
+            {[...ticker].map((glyph, i) => (
+              <span key={`${i}:${glyph}`} className="chat-stream-wait-ticker__glyph">
+                {glyph}
+              </span>
+            ))}
+          </span>
+        </p>
       </div>
     </div>
   );

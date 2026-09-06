@@ -3,6 +3,14 @@ import { DEFAULT_ACCENT } from "./accent";
 
 export type MessageRole = "user" | "assistant" | "system";
 
+/** Fixed dark chrome + accents, or a shell tinted from the local hour. */
+export type AppearanceTheme = "dark" | "time";
+export const DEFAULT_APPEARANCE_THEME: AppearanceTheme = "dark";
+
+export function normalizeAppearanceTheme(raw: unknown): AppearanceTheme {
+  return raw === "time" ? "time" : "dark";
+}
+
 export interface ContextPreviewMemory {
   key: string;
   value: string;
@@ -160,6 +168,8 @@ export interface Settings {
   appearance?: {
     /** Accent hex (`#rrggbb`). */
     accent?: string;
+    /** `dark` is fixed chrome + accents; `time` tints the shell from the local hour. */
+    theme?: AppearanceTheme;
   };
   /** Defaults for compose ambient weather (US ZIP → Open-Meteo). */
   weather?: {
@@ -227,6 +237,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   appearance: {
     accent: DEFAULT_ACCENT,
+    theme: DEFAULT_APPEARANCE_THEME,
   },
   weather: {
     defaultZip: "12528",

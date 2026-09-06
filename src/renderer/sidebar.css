@@ -181,6 +181,11 @@
   opacity: 1;
 }
 
+.sidebar-list-expand-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .sidebar-item {
   display: flex;
   align-items: center;

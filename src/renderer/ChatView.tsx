@@ -6,6 +6,7 @@ import {
   nextHomeHeaderQuote,
   type HomeHeaderQuote,
 } from "../shared/headerQuote";
+import { balanceQuoteWrap } from "../shared/quoteWrap";
 import {
   chatModePlaceholder,
   DEFAULT_CHAT_MODE,
@@ -50,7 +51,7 @@ function ComposeHeaderQuote() {
   const [quote] = useState<HomeHeaderQuote>(() => nextHomeHeaderQuote());
   return (
     <span className="tooltip new-chat-quote-tooltip">
-      <p className="new-chat-quote">“{quote.full}”</p>
+      <p className="new-chat-quote">{balanceQuoteWrap(`“${quote.full}”`)}</p>
       <span className="tooltip__label">{formatHomeHeaderQuoteTooltip(quote)}</span>
     </span>
   );

@@ -1,5 +1,12 @@
 import { DEFAULT_ACCENT, normalizeAccentHex } from "../../shared/accent";
-import { DEFAULT_SETTINGS, type Settings, type TranscriptDictionaryEntry } from "../../shared/types";
+import {
+  DEFAULT_APPEARANCE_THEME,
+  DEFAULT_SETTINGS,
+  normalizeAppearanceTheme,
+  type AppearanceTheme,
+  type Settings,
+  type TranscriptDictionaryEntry,
+} from "../../shared/types";
 import {
   DEFAULT_NOTE_TEMPLATE_ID,
   normalizeDefaultNoteTemplateId,
@@ -28,6 +35,7 @@ export type NonSecretSettingsHydration = {
   r2Prefix: string;
   r2AccessKeyId: string;
   accent: string;
+  appearanceTheme: AppearanceTheme;
   noteTemplates: NoteTemplateConfig[];
   defaultNoteTemplateId: string;
   weatherZip: string;
@@ -129,6 +137,9 @@ export function nonSecretHydrationFromSettings(S: Settings): NonSecretSettingsHy
     r2Prefix: S.sync?.prefix ?? D.sync!.prefix,
     r2AccessKeyId: S.sync?.accessKeyId ?? D.sync!.accessKeyId,
     accent: normalizeAccentHex(S.appearance?.accent ?? D.appearance?.accent ?? DEFAULT_ACCENT),
+    appearanceTheme: normalizeAppearanceTheme(
+      S.appearance?.theme ?? D.appearance?.theme ?? DEFAULT_APPEARANCE_THEME,
+    ),
     noteTemplates: templates,
     defaultNoteTemplateId: normalizeDefaultNoteTemplateId(S.notes?.defaultTemplateId, templates),
     weatherZip: S.weather?.defaultZip ?? D.weather!.defaultZip,

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import App from "./App";
 import { WindowedNoteView } from "./WindowedNoteView";
 import { getCurrentWindowLabel, noteIdFromStickyWindowLabel } from "./stickyWindow";
+import { useTimeOfDayBackground } from "./useTimeOfDayBackground";
 
 type RootRoute =
   | { kind: "loading" }
@@ -9,6 +10,7 @@ type RootRoute =
   | { kind: "sticky"; noteId: string };
 
 export function RootApp() {
+  useTimeOfDayBackground();
   const [route, setRoute] = useState<RootRoute>({ kind: "loading" });
 
   useEffect(() => {

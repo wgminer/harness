@@ -24,18 +24,18 @@ export function collectSetupGaps(input: {
   syncConfigured: boolean;
   platform: NodeJS.Platform;
   accessibilityTrusted?: boolean | null;
-  /** Browser debug shell — skip desktop-only recommended gaps (R2, Accessibility). */
+  /** Browser debug shell — skip desktop-only recommended gaps (R2, Accessibility)
+   *  and the required API-key gap (chat streams dummy replies without a key). */
   webClient?: boolean;
 }): SetupGap[] {
   const gaps: SetupGap[] = [];
 
-  if (!input.hasOpenAIApiKey) {
+  if (!input.webClient && !input.hasOpenAIApiKey) {
     gaps.push({
       kind: "openai_api_key",
       title: "OpenAI API key",
-      detail: input.webClient
-        ? "Chat needs an API key. Paste it in Data, or set VITE_OPENAI_API_KEY in .env."
-        : "Chat, polish, and optional transcript cleanup need an API key. Voice transcription runs locally on your Mac without one.",
+      detail:
+        "Chat, polish, and optional transcript cleanup need an API key. Voice transcription runs locally on your Mac without one.",
       settingsTab: "data",
       severity: "required",
     });

@@ -13,7 +13,8 @@ import { useState } from "react";
 import { ChatComposer } from "../ChatComposer";
 import { ChatModePicker } from "../ChatModePicker";
 import type { ChatModeId } from "../../shared/chatModes";
-import { STREAM_WAIT_LABEL } from "../StreamingAssistantContent";
+import { balanceQuoteWrap } from "../../shared/quoteWrap";
+import { StreamingAssistantContent } from "../StreamingAssistantContent";
 import { MessageContent, Section } from "./storyHelpers";
 
 function ComposerIdle() {
@@ -138,11 +139,15 @@ function ChatGallery() {
 
       <Section title="Stream wait label" stack>
         <MessageContent>
-          <div className="chat-streaming-assistant">
-            <div className="chat-stream-block chat-stream-block--wait">
-              <p aria-busy="true">{STREAM_WAIT_LABEL}</p>
-            </div>
-          </div>
+          <StreamingAssistantContent
+            content=""
+            isStreaming
+            messageId="story-wait"
+            copiedId={null}
+            savedToNotesId={null}
+            onCopied={() => {}}
+            onSaveToNotes={() => {}}
+          />
         </MessageContent>
       </Section>
 
@@ -207,7 +212,9 @@ function ChatGallery() {
             <div className="new-chat-center-stack">
               <span className="tooltip new-chat-quote-tooltip">
                 <p className="new-chat-quote">
-                  “The impediment to action advances action. What stands in the way becomes the way.”
+                  {balanceQuoteWrap(
+                    "“The impediment to action advances action. What stands in the way becomes the way.”",
+                  )}
                 </p>
                 <span className="tooltip__label">
                   {`Marcus Aurelius, Meditations\nPrivate notes a Roman emperor wrote to himself while on campaign.\nTreat the obstacle as the path — resistance can become fuel.`}

@@ -1,7 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { applyAccent } from "../shared/accent";
-import type { Settings } from "../shared/types";
+import { applyAppearanceTheme } from "../shared/timeOfDayBackground";
+import { normalizeAppearanceTheme, type Settings } from "../shared/types";
 import { createBrowserAdapter } from "./browser/browserAdapter";
 import { isTauriRuntime } from "./browser/isTauriRuntime";
 import { createHarnessAdapter } from "./desktopAdapter";
@@ -33,8 +34,9 @@ void (async () => {
     const settings = (await window.harness.settings.get()) as Settings;
     setCachedSettings(settings);
     applyAccent(settings.appearance?.accent);
+    applyAppearanceTheme(normalizeAppearanceTheme(settings.appearance?.theme));
   } catch {
-    // Keep CSS default accent if settings fail to load.
+    // Keep CSS default accent and dark chrome if settings fail to load.
   }
   const sticky = await isCurrentStickyWindow();
   if (!sticky) {

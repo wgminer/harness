@@ -1,5 +1,10 @@
 import { DICTATION_POLISH_INSTRUCTION } from "../../shared/dictationPolish";
 import { shouldRefineConversationTitle } from "../../shared/conversationTitlePolicy";
+import {
+  BROWSER_DUMMY_MODEL,
+  dummyAssistantReply,
+  streamDummyChat,
+} from "./browserDummyChat";
 import { emitBrowserEvent } from "./browserEvents";
 import { buildChatRequestMessages } from "./browserPrompt";
 import type { BrowserStore } from "./browserStore";
@@ -161,14 +166,23 @@ async function completeTitle(apiKey: string, messages: Array<{ role: string; con
   return cleaned || null;
 }
 
+function lastStoredUserContent(
+  store: BrowserStore,
+  conversationId: string,
+  extraUser?: string[],
+): string {
+  if (extraUser && extraUser.length > 0) {
+    return extraUser[extraUser.length - 1] ?? "";
+  }
+  const history = store.conversation(conversationId)?.messages ?? [];
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    if (history[i]?.role === "user") return history[i].content;
+  }
+  return "";
+}
+
 export function createBrowserChat(store: BrowserStore) {
   let abort: AbortController | null = null;
-
-  const requireKey = () => {
-    const key = store.secrets().openaiApiKey.trim();
-    if (!key) throw new Error("OpenAI API key required.");
-    return key;
-  };
 
   const refineTitle = async (conversationId: string) => {
     const conv = store.conversation(conversationId);
@@ -194,23 +208,32 @@ export function createBrowserChat(store: BrowserStore) {
   };
 
   const streamAssistant = async (conversationId: string, extraUser?: string[]) => {
-    const apiKey = requireKey();
     abort?.abort();
     abort = new AbortController();
     const signal = abort.signal;
     const { messages } = buildChatRequestMessages(store, conversationId, extraUser);
-    const model = browserChatModel();
+    const apiKey = store.secrets().openaiApiKey.trim();
+    const model = apiKey ? browserChatModel() : BROWSER_DUMMY_MODEL;
     let content = "";
+    const onChunk = (chunk: string) => {
+      emitBrowserEvent("chat:streamChunk", { conversationId, chunk });
+    };
     try {
-      content = await streamOpenAiChat({
-        apiKey,
-        model,
-        messages,
-        signal,
-        onChunk: (chunk) => {
-          emitBrowserEvent("chat:streamChunk", { conversationId, chunk });
-        },
-      });
+      if (apiKey) {
+        content = await streamOpenAiChat({
+          apiKey,
+          model,
+          messages,
+          signal,
+          onChunk,
+        });
+      } else {
+        content = await streamDummyChat({
+          text: dummyAssistantReply(lastStoredUserContent(store, conversationId, extraUser)),
+          signal,
+          onChunk,
+        });
+      }
       if (content.trim()) {
         store.appendMessage(conversationId, "assistant", content, {
           timestamp: Date.now(),

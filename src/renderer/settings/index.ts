@@ -18,6 +18,7 @@ export {
   type MemorySettingsController,
 } from "./MemorySettingsTab";
 export { AccentColorField, type AccentColorFieldProps } from "./AccentColorField";
+export { ThemeModeField, type ThemeModeFieldProps } from "./ThemeModeField";
 export {
   getCachedSettings,
   loadSettingsForSystemPage,
