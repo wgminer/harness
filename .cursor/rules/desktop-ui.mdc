@@ -1,0 +1,14 @@
+---
+description: Desktop UI tokens and screenshot inspection for renderer changes
+globs: src/renderer/**/*.{css,tsx}
+alwaysApply: false
+---
+
+# Desktop UI
+
+Follow the **harness-ui** skill (`.cursor/skills/harness-ui/SKILL.md`).
+
+- Tokens: `src/renderer/base.css` — no new hardcoded colors/radii/type sizes.
+- Component work: `npm run capture:storybook` → Read `tmp/ui-shots/storybook/*.png`.
+- Surface work: `npm run capture:window` or `npm run capture:surfaces -- --launch`.
+- Recapture and Read PNGs after edits before saying the UI looks correct.

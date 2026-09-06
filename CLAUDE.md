@@ -55,3 +55,11 @@ Desktop radius lives in [`src/renderer/base.css`](src/renderer/base.css): `--rad
 `.btn` radius scales with `--control-size` (`min(lg, size/4)`). Size variants and height overrides must set `--control-size` so corners stay soft without going pill-shaped.
 
 **iOS is out of this scale** — keep platform-native shapes (`Capsule`, `Circle`, continuous rounded rects, liquid-glass bar metrics). Do not port desktop `--radius-*` values to Swift or chase pixel parity with the desktop app.
+
+## Desktop UI inspection
+
+For visual work, use the **harness-ui** skill (`.cursor/skills/harness-ui/SKILL.md`). Tokens live in [`src/renderer/base.css`](src/renderer/base.css); galleries in [`src/renderer/ui/*.stories.tsx`](src/renderer/ui/Foundations.stories.tsx).
+
+- Component changes: `npm run capture:storybook` → Read PNGs under `tmp/ui-shots/storybook/`.
+- Surface/layout changes: `npm run capture:window` if Harness Dev is open; else `npm run capture:surfaces -- --launch`.
+- Recapture and Read again after edits before claiming the UI looks correct.
