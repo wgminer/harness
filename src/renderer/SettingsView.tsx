@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { ExternalLink, Plus, Settings2 as SettingsIcon, Square, SquareCheck } from "lucide-react";
-import { SETTINGS_PAGE_TITLE, settingsSection } from "../shared/settingsPage";
+import { ExternalLink, Settings2 as SettingsIcon } from "lucide-react";
+import { SETTINGS_PAGE_TITLE } from "../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
 import { DEFAULT_ACCENT, applyAccent, normalizeAccentHex } from "../shared/accent";
@@ -14,29 +14,23 @@ import {
 import {
   DEFAULT_NOTE_TEMPLATE_ID,
   DEFAULT_NOTE_TEMPLATES,
-  NOTE_TEMPLATE_CURSOR_TOKEN,
-  NOTE_TEMPLATE_TODAY_TOKEN,
-  isBuiltInNoteTemplateId,
-  normalizeDefaultNoteTemplateId,
-  normalizeNoteTemplates,
   type NoteTemplateConfig,
 } from "../shared/writing";
 import type { GlobalRecordingStatus } from "../shared/desktopAPI";
-import { Modal } from "./Modal";
 import { SyncQrModal } from "./SyncQrModal";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
   SettingsActions,
-  SettingsEntryRow,
   SettingsField,
   SettingsGroup,
-  SettingsHint,
   SettingsSwitch,
   SettingsSwitchProvider,
   SettingsTabPanel,
   DataSettingsTab,
   AccentColorField,
   ThemeModeField,
+  NotesTemplatesTab,
+  VoiceSettingsTab,
 } from "./settings";
 import type { SettingsTabId } from "./settings/settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settings/settingsNavConfig";
@@ -228,28 +222,15 @@ export function SettingsView({
   const [cleanupPrompt, setCleanupPrompt] = useState(
     initialNonSecret?.cleanupPrompt ?? D.transcription?.cleanup?.prompt ?? "",
   );
-  const [cleanupPromptDraft, setCleanupPromptDraft] = useState(
-    initialNonSecret?.cleanupPrompt ?? D.transcription?.cleanup?.prompt ?? "",
-  );
   const [transcriptDictionary, setTranscriptDictionary] = useState<TranscriptDictionaryEntry[]>(
     initialNonSecret?.transcriptDictionary ?? D.transcription?.dictionary ?? [],
   );
-  const [dictionaryModalOpen, setDictionaryModalOpen] = useState(false);
-  const [editingDictionaryFrom, setEditingDictionaryFrom] = useState<string | null>(null);
-  const [dictionaryFromDraft, setDictionaryFromDraft] = useState("");
-  const [dictionaryToDraft, setDictionaryToDraft] = useState("");
-  const [cleanupPromptModalOpen, setCleanupPromptModalOpen] = useState(false);
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
     initialNonSecret?.noteTemplates ?? DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
   );
   const [defaultNoteTemplateId, setDefaultNoteTemplateId] = useState(
     initialNonSecret?.defaultNoteTemplateId ?? DEFAULT_NOTE_TEMPLATE_ID,
   );
-  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
-  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
-  const [templateTitleDraft, setTemplateTitleDraft] = useState("");
-  const [templateContentDraft, setTemplateContentDraft] = useState("");
-  const [templateIsDefaultDraft, setTemplateIsDefaultDraft] = useState(false);
 
   const [autoSend, setAutoSend] = useState(initialNonSecret?.autoSend ?? true);
   const [globalFnHotkey, setGlobalFnHotkey] = useState(
@@ -304,29 +285,55 @@ export function SettingsView({
   const settingsHydratedRef = useRef(!!initialCached);
   const secretsLoadedRef = useRef(initialSecrets != null);
   const skipAutosaveRef = useRef(false);
+
+  const getFormSnapshot = useCallback(
+    (overrides?: Partial<PersistedFormState>): PersistedFormState => ({
+      apiKey,
+      tavilyApiKey,
+      r2SecretAccessKey,
+      autoSend,
+      globalFnHotkey,
+      bringToFrontOnBackgroundDictation,
+      openToComposeOnLaunch,
+      selectionImageLookup,
+      cleanupEnabled,
+      cleanupPrompt,
+      transcriptDictionary,
+      r2AccountId,
+      r2Bucket,
+      r2Prefix,
+      r2AccessKeyId,
+      accent,
+      appearanceTheme,
+      weatherZip,
+      ...overrides,
+    }),
+    [
+      apiKey,
+      tavilyApiKey,
+      r2SecretAccessKey,
+      autoSend,
+      globalFnHotkey,
+      bringToFrontOnBackgroundDictation,
+      openToComposeOnLaunch,
+      selectionImageLookup,
+      cleanupEnabled,
+      cleanupPrompt,
+      transcriptDictionary,
+      r2AccountId,
+      r2Bucket,
+      r2Prefix,
+      r2AccessKeyId,
+      accent,
+      appearanceTheme,
+      weatherZip,
+    ],
+  );
+  const getFormSnapshotRef = useRef(getFormSnapshot);
+  getFormSnapshotRef.current = getFormSnapshot;
+
   const lastPersistedRef = useRef(
-    initialNonSecret
-      ? serializeFormState({
-          apiKey: initialSecrets?.openaiApiKey ?? "",
-          tavilyApiKey: initialSecrets?.tavilyApiKey ?? "",
-          r2SecretAccessKey: initialSecrets?.r2SecretAccessKey ?? "",
-          autoSend: initialNonSecret.autoSend,
-          globalFnHotkey: initialNonSecret.globalFnHotkey,
-          bringToFrontOnBackgroundDictation: initialNonSecret.bringToFrontOnBackgroundDictation,
-          openToComposeOnLaunch: initialNonSecret.openToComposeOnLaunch,
-          selectionImageLookup: initialNonSecret.selectionImageLookup,
-          cleanupEnabled: initialNonSecret.cleanupEnabled,
-          cleanupPrompt: initialNonSecret.cleanupPrompt,
-          transcriptDictionary: initialNonSecret.transcriptDictionary,
-          r2AccountId: initialNonSecret.r2AccountId,
-          r2Bucket: initialNonSecret.r2Bucket,
-          r2Prefix: initialNonSecret.r2Prefix,
-          r2AccessKeyId: initialNonSecret.r2AccessKeyId,
-          accent: initialNonSecret.accent,
-          appearanceTheme: initialNonSecret.appearanceTheme,
-          weatherZip: initialNonSecret.weatherZip,
-        })
-      : "",
+    initialNonSecret ? serializeFormState(getFormSnapshot()) : "",
   );
   const hideToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistSettingsRef = useRef<() => Promise<boolean>>(async () => true);
@@ -347,47 +354,16 @@ export function SettingsView({
     setTavilyApiKey(secrets.tavilyApiKey);
     setR2SecretAccessKey(secrets.r2SecretAccessKey);
     setCachedHasOpenAIApiKey(secrets.openaiApiKey.trim().length > 0);
-    const prev = JSON.parse(lastPersistedRef.current || "{}") as Partial<PersistedFormState>;
-    lastPersistedRef.current = serializeFormState({
-      apiKey: secrets.openaiApiKey,
-      tavilyApiKey: secrets.tavilyApiKey,
-      r2SecretAccessKey: secrets.r2SecretAccessKey,
-      autoSend: prev.autoSend ?? autoSend,
-      globalFnHotkey: prev.globalFnHotkey ?? globalFnHotkey,
-      bringToFrontOnBackgroundDictation:
-        prev.bringToFrontOnBackgroundDictation ?? bringToFrontOnBackgroundDictation,
-      openToComposeOnLaunch: prev.openToComposeOnLaunch ?? openToComposeOnLaunch,
-      selectionImageLookup: prev.selectionImageLookup ?? selectionImageLookup,
-      cleanupEnabled: prev.cleanupEnabled ?? cleanupEnabled,
-      cleanupPrompt: prev.cleanupPrompt ?? cleanupPrompt,
-      transcriptDictionary: prev.transcriptDictionary ?? transcriptDictionary,
-      r2AccountId: prev.r2AccountId ?? r2AccountId,
-      r2Bucket: prev.r2Bucket ?? r2Bucket,
-      r2Prefix: prev.r2Prefix ?? r2Prefix,
-      r2AccessKeyId: prev.r2AccessKeyId ?? r2AccessKeyId,
-      accent: prev.accent ?? accent,
-      appearanceTheme: prev.appearanceTheme ?? appearanceTheme,
-      weatherZip: prev.weatherZip ?? weatherZip,
-    });
+    lastPersistedRef.current = serializeFormState(
+      getFormSnapshotRef.current({
+        apiKey: secrets.openaiApiKey,
+        tavilyApiKey: secrets.tavilyApiKey,
+        r2SecretAccessKey: secrets.r2SecretAccessKey,
+      }),
+    );
     secretsLoadedRef.current = true;
     setSecretsLoaded(true);
-  }, [
-    appearanceTheme,
-    accent,
-    autoSend,
-    cleanupEnabled,
-    cleanupPrompt,
-    globalFnHotkey,
-    bringToFrontOnBackgroundDictation,
-    openToComposeOnLaunch,
-    selectionImageLookup,
-    r2AccessKeyId,
-    r2AccountId,
-    r2Bucket,
-    r2Prefix,
-    transcriptDictionary,
-    weatherZip,
-  ]);
+  }, []);
 
   useEffect(() => {
     setActiveTab(normalizeSettingsTab(initialTab));
@@ -440,7 +416,6 @@ export function SettingsView({
       setSelectionImageLookup(hydrated.selectionImageLookup);
       setCleanupEnabled(hydrated.cleanupEnabled);
       setCleanupPrompt(hydrated.cleanupPrompt);
-      setCleanupPromptDraft(hydrated.cleanupPrompt);
       setTranscriptDictionary(hydrated.transcriptDictionary);
       setR2AccountId(hydrated.r2AccountId);
       setR2Bucket(hydrated.r2Bucket);
@@ -557,32 +532,14 @@ export function SettingsView({
   }, []);
 
   const persistSettings = useCallback(async (): Promise<boolean> => {
-    const latest = serializeFormState({
-      apiKey,
-      tavilyApiKey,
-      r2SecretAccessKey,
-      autoSend,
-      globalFnHotkey,
-      bringToFrontOnBackgroundDictation,
-      openToComposeOnLaunch,
-      selectionImageLookup,
-      cleanupEnabled,
-      cleanupPrompt,
-      transcriptDictionary,
-      r2AccountId,
-      r2Bucket,
-      r2Prefix,
-      r2AccessKeyId,
-      accent,
-      appearanceTheme,
-      weatherZip,
-    });
+    const latestState = getFormSnapshotRef.current();
+    const latest = serializeFormState(latestState);
     // No-op: stay silent. Toast only after a real write (avoids Strict Mode
     // remount / blur / unmount flush flashing "Saved" on an unchanged form).
     if (latest === lastPersistedRef.current) return true;
 
     const prev = JSON.parse(lastPersistedRef.current || "{}") as Partial<PersistedFormState>;
-    const next = JSON.parse(latest) as PersistedFormState;
+    const next = latestState;
 
     if (hideToastRef.current) clearTimeout(hideToastRef.current);
     setSaveStatus("saving");
@@ -664,27 +621,7 @@ export function SettingsView({
       }, SAVED_TOAST_VISIBLE_MS);
       return false;
     }
-  }, [
-    apiKey,
-    autoSend,
-    globalFnHotkey,
-    bringToFrontOnBackgroundDictation,
-    openToComposeOnLaunch,
-    selectionImageLookup,
-    cleanupEnabled,
-    cleanupPrompt,
-    transcriptDictionary,
-    tavilyApiKey,
-    r2AccountId,
-    r2Bucket,
-    r2Prefix,
-    r2AccessKeyId,
-    r2SecretAccessKey,
-    accent,
-    appearanceTheme,
-    weatherZip,
-    onSettingsChanged,
-  ]);
+  }, [onSettingsChanged]);
 
   persistSettingsRef.current = persistSettings;
 
@@ -703,26 +640,7 @@ export function SettingsView({
       return;
     }
 
-    const current = serializeFormState({
-      apiKey,
-      tavilyApiKey,
-      r2SecretAccessKey,
-      autoSend,
-      globalFnHotkey,
-      bringToFrontOnBackgroundDictation,
-      openToComposeOnLaunch,
-      selectionImageLookup,
-      cleanupEnabled,
-      cleanupPrompt,
-      transcriptDictionary,
-      r2AccountId,
-      r2Bucket,
-      r2Prefix,
-      r2AccessKeyId,
-      accent,
-      appearanceTheme,
-      weatherZip,
-    });
+    const current = serializeFormState(getFormSnapshotRef.current());
     if (current === lastPersistedRef.current) return;
 
     // Arm unmount flush only when there is a pending dirty write.
@@ -732,8 +650,6 @@ export function SettingsView({
     }, SECRETS_SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  // Secrets autosave: only debounce credential fields (non-secrets use the effect below).
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional split debounce buckets
   }, [apiKey, tavilyApiKey, r2SecretAccessKey, persistSettings]);
 
   useEffect(() => {
@@ -743,26 +659,7 @@ export function SettingsView({
       return;
     }
 
-    const current = serializeFormState({
-      apiKey,
-      tavilyApiKey,
-      r2SecretAccessKey,
-      autoSend,
-      globalFnHotkey,
-      bringToFrontOnBackgroundDictation,
-      openToComposeOnLaunch,
-      selectionImageLookup,
-      cleanupEnabled,
-      cleanupPrompt,
-      transcriptDictionary,
-      r2AccountId,
-      r2Bucket,
-      r2Prefix,
-      r2AccessKeyId,
-      accent,
-      appearanceTheme,
-      weatherZip,
-    });
+    const current = serializeFormState(getFormSnapshotRef.current());
     if (current === lastPersistedRef.current) return;
 
     flushSettingsOnUnmountRef.current = true;
@@ -771,8 +668,6 @@ export function SettingsView({
     }, SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  // Non-secret settings autosave (secrets debounced separately above).
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional split debounce buckets
   }, [
     autoSend,
     globalFnHotkey,
@@ -792,140 +687,17 @@ export function SettingsView({
     persistSettings,
   ]);
 
-  const openCleanupPromptModal = () => {
-    setCleanupPromptDraft(cleanupPrompt);
-    setCleanupPromptModalOpen(true);
-  };
-
-  const closeCleanupPromptModal = () => {
-    setCleanupPromptDraft(cleanupPrompt);
-    setCleanupPromptModalOpen(false);
-  };
-
-  const saveCleanupPrompt = () => {
-    const trimmed = cleanupPromptDraft.trim();
-    if (!trimmed) return;
-    setCleanupPrompt(trimmed);
-    setCleanupPromptModalOpen(false);
-  };
-
-  const resetCleanupPromptDraft = () => {
-    setCleanupPromptDraft(D.transcription?.cleanup?.prompt ?? "");
-  };
-
-  const closeDictionaryModal = () => {
-    setDictionaryModalOpen(false);
-    setEditingDictionaryFrom(null);
-    setDictionaryFromDraft("");
-    setDictionaryToDraft("");
-  };
-
-  const openAddDictionaryModal = () => {
-    setEditingDictionaryFrom(null);
-    setDictionaryFromDraft("");
-    setDictionaryToDraft("");
-    setDictionaryModalOpen(true);
-  };
-
-  const openEditDictionaryModal = (entry: TranscriptDictionaryEntry) => {
-    setEditingDictionaryFrom(entry.from);
-    setDictionaryFromDraft(entry.from);
-    setDictionaryToDraft(entry.to);
-    setDictionaryModalOpen(true);
-  };
-
-  const saveDictionaryEntry = () => {
-    const from = dictionaryFromDraft.trim();
-    if (!from) return;
-    const to = dictionaryToDraft.trim();
-    const filtered = transcriptDictionary.filter((entry) => {
-      if (editingDictionaryFrom && entry.from === editingDictionaryFrom) return false;
-      return entry.from.toLowerCase() !== from.toLowerCase();
-    });
-    setTranscriptDictionary([...filtered, { from, to }]);
-    closeDictionaryModal();
-  };
-
-  const deleteDictionaryEntry = (from: string) => {
-    setTranscriptDictionary((prev) => prev.filter((entry) => entry.from !== from));
-  };
-
-  const closeTemplatesModal = () => {
-    setTemplatesModalOpen(false);
-    setEditingTemplateId(null);
-    setTemplateTitleDraft("");
-    setTemplateContentDraft("");
-    setTemplateIsDefaultDraft(false);
-  };
-
-  const openCreateTemplateModal = () => {
-    setEditingTemplateId(null);
-    setTemplateTitleDraft("");
-    setTemplateContentDraft("");
-    setTemplateIsDefaultDraft(false);
-    setTemplatesModalOpen(true);
-  };
-
-  const openTemplateModal = (template: NoteTemplateConfig) => {
-    setEditingTemplateId(template.id);
-    setTemplateTitleDraft(template.title);
-    setTemplateContentDraft(template.content);
-    setTemplateIsDefaultDraft(template.id === defaultNoteTemplateId);
-    setTemplatesModalOpen(true);
-  };
-
-  const persistTemplates = async (
-    nextTemplates: NoteTemplateConfig[],
-    nextDefaultId: string,
-  ) => {
-    const normalized = normalizeNoteTemplates(nextTemplates);
-    const resolvedDefaultId = normalizeDefaultNoteTemplateId(nextDefaultId, normalized);
-    setNoteTemplates(normalized);
-    setDefaultNoteTemplateId(resolvedDefaultId);
-    await window.harness.settings.set({
-      notes: { templates: normalized, defaultTemplateId: resolvedDefaultId },
-    });
-    window.dispatchEvent(new CustomEvent("notes:templatesUpdated", { detail: normalized }));
-  };
-
-  const saveTemplate = async () => {
-    const nextTitle = templateTitleDraft.trim();
-    if (!nextTitle) return;
-
-    if (editingTemplateId) {
-      const nextTemplates = noteTemplates.map((template) =>
-        template.id === editingTemplateId
-          ? {
-              ...template,
-              title: nextTitle,
-              content: templateContentDraft,
-            }
-          : template,
-      );
-      const nextDefaultId = templateIsDefaultDraft ? editingTemplateId : defaultNoteTemplateId;
-      await persistTemplates(nextTemplates, nextDefaultId);
-    } else {
-      const newId = crypto.randomUUID();
-      const nextTemplates = [
-        ...noteTemplates,
-        { id: newId, title: nextTitle, content: templateContentDraft },
-      ];
-      const nextDefaultId = templateIsDefaultDraft ? newId : defaultNoteTemplateId;
-      await persistTemplates(nextTemplates, nextDefaultId);
-    }
-    closeTemplatesModal();
-  };
-
-  const deleteTemplate = async () => {
-    if (!editingTemplateId || isBuiltInNoteTemplateId(editingTemplateId)) return;
-    const nextTemplates = noteTemplates.filter((template) => template.id !== editingTemplateId);
-    const nextDefaultId =
-      defaultNoteTemplateId === editingTemplateId
-        ? DEFAULT_NOTE_TEMPLATE_ID
-        : defaultNoteTemplateId;
-    await persistTemplates(nextTemplates, nextDefaultId);
-    closeTemplatesModal();
-  };
+  const handleTemplatesChange = useCallback(
+    async (nextTemplates: NoteTemplateConfig[], nextDefaultId: string) => {
+      setNoteTemplates(nextTemplates);
+      setDefaultNoteTemplateId(nextDefaultId);
+      await window.harness.settings.set({
+        notes: { templates: nextTemplates, defaultTemplateId: nextDefaultId },
+      });
+      window.dispatchEvent(new CustomEvent("notes:templatesUpdated", { detail: nextTemplates }));
+    },
+    [],
+  );
 
   const switchTab = (id: SettingsTabId) => {
     setActiveTab(id);
@@ -1104,263 +876,27 @@ export function SettingsView({
             </SettingsGroup>
           </SettingsTabPanel>}
 
-          {activeTab === "notes" && <SettingsTabPanel id="notes">
-            <SettingsGroup title="Editor templates">
-              <div className="settings-template-grid">
-                {noteTemplates.map((template) => {
-                  const isDefault = template.id === defaultNoteTemplateId;
-                  const preview = template.content.replace(/\s+$/, "");
-                  return (
-                    <button
-                      key={template.id}
-                      type="button"
-                      className="settings-template-card"
-                      onClick={() => openTemplateModal(template)}
-                      aria-label={`Edit ${template.title} template`}
-                      data-testid={`settings-notes-template-card-${template.id}`}
-                    >
-                      <div className="settings-template-card__header">
-                        <span className="settings-template-card__title">{template.title}</span>
-                        {isDefault ? (
-                          <span className="settings-template-card__badge">Default</span>
-                        ) : null}
-                      </div>
-                      <div className="settings-template-card__preview" aria-hidden>
-                        {preview.length > 0 ? preview : "Empty"}
-                      </div>
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  className="settings-template-card settings-template-card--add"
-                  onClick={openCreateTemplateModal}
-                  aria-label="Add template"
-                  data-testid="settings-notes-template-add"
-                >
-                  <Plus size={24} strokeWidth={2} aria-hidden />
-                  <span className="settings-template-card__add-label">Add template</span>
-                </button>
-              </div>
-            </SettingsGroup>
-          </SettingsTabPanel>}
+          {activeTab === "notes" && (
+            <NotesTemplatesTab
+              noteTemplates={noteTemplates}
+              defaultNoteTemplateId={defaultNoteTemplateId}
+              onTemplatesChange={handleTemplatesChange}
+            />
+          )}
 
-          {activeTab === "voice" && <SettingsTabPanel id="voice">
-            <SettingsGroup title="Cleanup">
-              <SettingsSwitch
-                id="transcriptCleanupToggle"
-                label="Clean up transcripts"
-                checked={cleanupEnabled}
-                onChange={(e) => {
-                  const enabled = e.target.checked;
-                  setCleanupEnabled(enabled);
-                  if (!enabled) setCleanupPromptModalOpen(false);
-                }}
-              />
-              {cleanupEnabled ? (
-                <SettingsActions>
-                  <button type="button" className="btn" onClick={openCleanupPromptModal}>
-                    Edit Prompt
-                  </button>
-                </SettingsActions>
-              ) : null}
-              {cleanupEnabled &&
-              !(secretsLoaded ? apiKey.trim().length > 0 : openAIConfigured) ? (
-                <SettingsHint>
-                  Cleanup needs an OpenAI API key in {settingsSection("Data")}.
-                </SettingsHint>
-              ) : null}
-            </SettingsGroup>
-
-            <SettingsGroup title="Transcript corrections">
-              {transcriptDictionary.length === 0 ? (
-                <SettingsHint flush>No corrections yet.</SettingsHint>
-              ) : (
-                <div className="settings-entry-list">
-                  {transcriptDictionary.map((entry) => (
-                    <SettingsEntryRow
-                      key={entry.from}
-                      title={entry.from}
-                      detail={entry.to}
-                      onEdit={() => openEditDictionaryModal(entry)}
-                      onDelete={() => deleteDictionaryEntry(entry.from)}
-                      editAriaLabel={`Edit transcript correction ${entry.from}`}
-                      deleteAriaLabel={`Remove transcript correction ${entry.from}`}
-                    />
-                  ))}
-                </div>
-              )}
-              <SettingsActions>
-                <button type="button" className="btn" onClick={openAddDictionaryModal}>
-                  Add Correction
-                </button>
-              </SettingsActions>
-            </SettingsGroup>
-          </SettingsTabPanel>}
-
-          <Modal
-            open={cleanupPromptModalOpen}
-            onClose={closeCleanupPromptModal}
-            title="Automatic text cleanup prompt"
-            data-testid="settings-cleanup-prompt-modal"
-            footer={
-              <>
-                <button type="button" className="btn" onClick={closeCleanupPromptModal}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-outline" onClick={resetCleanupPromptDraft}>
-                  Reset to Default
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={saveCleanupPrompt}
-                  disabled={!cleanupPromptDraft.trim()}
-                >
-                  Save
-                </button>
-              </>
-            }
-          >
-            <div className="app-modal-stack">
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Prompt text</span>
-                <textarea
-                  value={cleanupPromptDraft}
-                  onChange={(e) => setCleanupPromptDraft(e.target.value)}
-                  className="app-modal-input app-modal-input--multiline"
-                  rows={6}
-                />
-              </label>
-            </div>
-          </Modal>
-
-          <Modal
-            open={dictionaryModalOpen}
-            onClose={closeDictionaryModal}
-            title={editingDictionaryFrom ? "Edit transcript correction" : "Add transcript correction"}
-            footer={
-              <>
-                <button type="button" className="btn" onClick={closeDictionaryModal}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={saveDictionaryEntry}
-                  disabled={!dictionaryFromDraft.trim()}
-                >
-                  {editingDictionaryFrom ? "Update" : "Save"}
-                </button>
-              </>
-            }
-          >
-            <div className="app-modal-stack">
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Heard as</span>
-                <input
-                  type="text"
-                  value={dictionaryFromDraft}
-                  onChange={(e) => setDictionaryFromDraft(e.target.value)}
-                  className="app-modal-input"
-                  autoComplete="off"
-                />
-              </label>
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Replace with</span>
-                <input
-                  type="text"
-                  value={dictionaryToDraft}
-                  onChange={(e) => setDictionaryToDraft(e.target.value)}
-                  className="app-modal-input"
-                  autoComplete="off"
-                />
-              </label>
-            </div>
-          </Modal>
-
-          <Modal
-            open={templatesModalOpen}
-            onClose={closeTemplatesModal}
-            title={editingTemplateId ? "Edit notes template" : "Add notes template"}
-            data-testid="settings-notes-template-modal"
-            footerClassName={
-              editingTemplateId && !isBuiltInNoteTemplateId(editingTemplateId)
-                ? "app-modal-footer--spread"
-                : undefined
-            }
-            footer={
-              <>
-                {editingTemplateId && !isBuiltInNoteTemplateId(editingTemplateId) ? (
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() => void deleteTemplate()}
-                    data-testid="settings-notes-template-delete"
-                  >
-                    Delete
-                  </button>
-                ) : null}
-                <div className="app-modal-footer-actions">
-                  <button type="button" className="btn" onClick={closeTemplatesModal}>
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => void saveTemplate()}
-                    disabled={!templateTitleDraft.trim()}
-                  >
-                    Save
-                  </button>
-                </div>
-              </>
-            }
-          >
-            <div className="app-modal-stack">
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Title</span>
-                <input
-                  type="text"
-                  value={templateTitleDraft}
-                  onChange={(e) => setTemplateTitleDraft(e.target.value)}
-                  className="app-modal-input"
-                  autoComplete="off"
-                />
-              </label>
-              <label className="app-modal-field">
-                <span className="app-modal-field__label">Template body</span>
-                <textarea
-                  value={templateContentDraft}
-                  onChange={(e) => setTemplateContentDraft(e.target.value)}
-                  className="app-modal-input app-modal-input--multiline settings-template-content-input"
-                  rows={10}
-                />
-                <p className="app-modal-field__hint">
-                  Use <code>{NOTE_TEMPLATE_TODAY_TOKEN}</code> for today&apos;s date and{" "}
-                  <code>{NOTE_TEMPLATE_CURSOR_TOKEN}</code> to place the cursor when the note opens.
-                </p>
-              </label>
-              <label className="app-modal-check">
-                <input
-                  type="checkbox"
-                  className="app-modal-check__input"
-                  checked={templateIsDefaultDraft}
-                  disabled={templateIsDefaultDraft && editingTemplateId === defaultNoteTemplateId}
-                  onChange={(e) => setTemplateIsDefaultDraft(e.target.checked)}
-                  data-testid="settings-notes-template-default"
-                />
-                <span className="app-modal-check__icon" aria-hidden>
-                  {templateIsDefaultDraft ? (
-                    <SquareCheck size={18} strokeWidth={2} />
-                  ) : (
-                    <Square size={18} strokeWidth={2} />
-                  )}
-                </span>
-                <span className="app-modal-check__text">Default for new notes</span>
-              </label>
-            </div>
-          </Modal>
+          {activeTab === "voice" && (
+            <VoiceSettingsTab
+              cleanupEnabled={cleanupEnabled}
+              setCleanupEnabled={setCleanupEnabled}
+              cleanupPrompt={cleanupPrompt}
+              setCleanupPrompt={setCleanupPrompt}
+              transcriptDictionary={transcriptDictionary}
+              setTranscriptDictionary={setTranscriptDictionary}
+              openAIConfigured={openAIConfigured}
+              secretsLoaded={secretsLoaded}
+              apiKey={apiKey}
+            />
+          )}
 
           {activeTab === "data" && (
             <DataSettingsTab

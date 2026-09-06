@@ -19,6 +19,8 @@ export {
 } from "./MemorySettingsTab";
 export { AccentColorField, type AccentColorFieldProps } from "./AccentColorField";
 export { ThemeModeField, type ThemeModeFieldProps } from "./ThemeModeField";
+export { VoiceSettingsTab, type VoiceSettingsTabProps } from "./VoiceSettingsTab";
+export { NotesTemplatesTab, type NotesTemplatesTabProps } from "./NotesTemplatesTab";
 export {
   getCachedSettings,
   loadSettingsForSystemPage,
