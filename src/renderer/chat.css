@@ -1665,13 +1665,7 @@
   text-align: center;
 }
 
-@keyframes chat-selection-image-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .chat-selection-image__spin {
-  animation: chat-selection-image-spin 0.8s linear infinite;
+  animation: motion-spin 0.8s linear infinite;
 }
 

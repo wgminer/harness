@@ -20,6 +20,7 @@ import {
   conversationSidebarIconKind,
   isConversationTitlePending,
 } from "../shared/conversationSession";
+import { useDismissible } from "./useDismissible";
 import { getDisplayNoteTitle, type NoteSummary } from "../shared/writing";
 import { getDisplayImageTitle, type GeneratedImage } from "../shared/images";
 import { SETTINGS_PAGE_TITLE } from "../shared/settingsPage";
@@ -179,22 +180,12 @@ export function Sidebar({
     void runSidebarSync();
   }, [syncConfigured, syncHasError, onOpenDataSettings, runSidebarSync]);
 
-  useEffect(() => {
-    if (!newMenuOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setNewMenuOpen(false);
-    };
-    const onPointerDown = (e: MouseEvent) => {
-      const el = newMenuRef.current;
-      if (el && !el.contains(e.target as Node)) setNewMenuOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onPointerDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onPointerDown);
-    };
-  }, [newMenuOpen]);
+  useDismissible({
+    open: newMenuOpen,
+    onDismiss: () => setNewMenuOpen(false),
+    refs: [newMenuRef],
+    pointerEvent: "mousedown",
+  });
 
   const libraryRows = useMemo<LibraryRow[]>(
     () => [

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
+import { countWords, formatWordCount } from "../shared/wordCount";
 import type { InlineWriteupPayload, LiveNoteStream } from "./chatHelpers";
 
 interface DocumentCardProps {
@@ -11,16 +12,6 @@ interface DocumentCardProps {
   error?: string | null;
   streaming?: boolean;
   onOpenInEditor?: (noteId: string) => void;
-}
-
-function countWords(text: string): number {
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).length;
-}
-
-function formatWordCount(count: number): string {
-  return `${count.toLocaleString()} ${count === 1 ? "word" : "words"}`;
 }
 
 function documentPillMeta({
