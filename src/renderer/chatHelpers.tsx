@@ -2,7 +2,6 @@ import {
   isValidElement,
   useMemo,
   useRef,
-  useState,
   type ReactNode,
 } from "react";
 import { Check, Copy, Loader2, SquarePen } from "lucide-react";
@@ -10,11 +9,13 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkDirective from "remark-directive";
 import rehypeHighlight from "rehype-highlight";
+import { formatMediumTimestamp } from "../shared/formatMediumTimestamp";
 import {
   MarkdownInteractionContext,
   directiveComponents,
   remarkDirectiveToHast,
 } from "./markdownDirectives";
+import { scheduleCopyFeedbackClear, useCopyFeedback } from "./useCopyFeedback";
 export interface ToolCallDisplay {
   toolName: string;
   payload?: unknown;
@@ -139,10 +140,7 @@ export function formatMessageTime(ts: number): string {
 
 /** Default note title when saving a chat message to the editor. */
 export function formatMessageNoteTitle(ts: number): string {
-  return new Date(ts).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  return formatMediumTimestamp(ts);
 }
 
 /** Inline “waiting for first token” state for the assistant bubble. */
@@ -199,23 +197,22 @@ function CodeBlock({
   messageTimestamp?: number;
   children?: ReactNode;
 }) {
-  const [localCopied, setLocalCopied] = useState(false);
+  const { copied: localCopied, copyText } = useCopyFeedback();
   const justCopied = onCopied ? copiedId === blockKey : localCopied;
   const justSaved = savedToNotesId === blockKey;
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(codeText);
-      if (onCopied) {
+    if (onCopied) {
+      try {
+        await navigator.clipboard.writeText(codeText);
         onCopied(blockKey);
-        setTimeout(() => onCopied(null), 2000);
-      } else {
-        setLocalCopied(true);
-        setTimeout(() => setLocalCopied(false), 2000);
+        scheduleCopyFeedbackClear(() => onCopied(null));
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
+      return;
     }
+    await copyText(codeText);
   };
 
   return (
@@ -394,7 +391,7 @@ export function CopyButton({
     try {
       await navigator.clipboard.writeText(content);
       onCopied(messageId);
-      setTimeout(() => onCopied(null), 2000);
+      scheduleCopyFeedbackClear(() => onCopied(null));
     } catch {
       /* ignore */
     }

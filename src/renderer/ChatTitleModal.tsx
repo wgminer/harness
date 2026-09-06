@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Play, Square } from "lucide-react";
 import { getChatMode } from "../shared/chatModes";
 import type { ConversationSessionKind } from "../shared/conversationSession";
+import { formatMediumTimestamp } from "../shared/formatMediumTimestamp";
 import type { RecordingLink } from "../shared/types";
 import { Modal } from "./Modal";
 
@@ -20,17 +21,6 @@ interface ChatTitleModalProps {
   recordings?: RecordingLink[];
   recordingsLoading?: boolean;
   onShowRecordingInFinder?: (path: string) => void;
-}
-
-function formatDetailsTimestamp(ms: number): string {
-  try {
-    return new Date(ms).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return "";
-  }
 }
 
 function formatRecordingSize(bytes: number | null | undefined): string {
@@ -115,7 +105,7 @@ export function ChatTitleModal({
   // Only show for known dictations, or after a recording is confirmed — never while
   // a speculative load would mount then unmount the section (layout flicker).
   const showRecordingSection = sessionKind === "dictation" || recordings.length > 0;
-  const createdLabel = createdAt != null ? formatDetailsTimestamp(createdAt) : null;
+  const createdLabel = createdAt != null ? formatMediumTimestamp(createdAt) : null;
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingPath, setPlayingPath] = useState<string | null>(null);

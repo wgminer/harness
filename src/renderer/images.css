@@ -126,13 +126,7 @@
 }
 
 .image-canvas__spinner {
-  animation: image-canvas-spin 0.9s linear infinite;
-}
-
-@keyframes image-canvas-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: motion-spin 0.9s linear infinite;
 }
 
 .image-canvas__panel {

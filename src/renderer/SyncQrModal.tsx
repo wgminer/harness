@@ -7,6 +7,7 @@ import {
   pairingSecondsRemaining,
   type PairingPayloadV1,
 } from "../shared/pairingPayload";
+import { useCopyFeedback } from "./useCopyFeedback";
 
 export interface SyncQrModalProps {
   open: boolean;
@@ -40,11 +41,11 @@ export function SyncQrModal({
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(0);
-  const [copied, setCopied] = useState(false);
+  const { copied, copyText, clear: clearCopied } = useCopyFeedback();
 
   const rebuild = useCallback(async () => {
     setError(null);
-    setCopied(false);
+    clearCopied();
     try {
       const code = encodePairingPayload({
         accountId,
@@ -71,7 +72,7 @@ export function SyncQrModal({
       setDataUrl(null);
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [accountId, bucket, prefix, accessKeyId, secretAccessKey, openaiApiKey]);
+  }, [accountId, bucket, prefix, accessKeyId, secretAccessKey, openaiApiKey, clearCopied]);
 
   useEffect(() => {
     if (!open) {
@@ -98,13 +99,8 @@ export function SyncQrModal({
 
   const copyCode = async () => {
     if (!encoded) return;
-    try {
-      await navigator.clipboard.writeText(encoded);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError("Could not copy to clipboard.");
-    }
+    const ok = await copyText(encoded);
+    if (!ok) setError("Could not copy to clipboard.");
   };
 
   return (

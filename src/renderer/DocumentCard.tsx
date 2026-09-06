@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Copy, FileText, Loader2, Printer, SquarePen, X } from "lucide-react";
 import { buildNotePrintHtml } from "../shared/notePrint";
+import { countWords, formatWordCount } from "../shared/wordCount";
 import { MarkdownContent } from "./chatHelpers";
 import type { InlineWriteupPayload, LiveNoteStream } from "./chatHelpers";
+import { useCopyFeedback } from "./useCopyFeedback";
+import { useDismissible } from "./useDismissible";
 
 const SCROLL_PIN_THRESHOLD_PX = 24;
 
@@ -16,16 +19,6 @@ interface DocumentCardProps {
   error?: string | null;
   streaming?: boolean;
   onOpenInEditor?: (noteId: string) => void;
-}
-
-function countWords(text: string): number {
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).length;
-}
-
-function formatWordCount(count: number): string {
-  return `${count.toLocaleString()} ${count === 1 ? "word" : "words"}`;
 }
 
 function documentPillMeta({
@@ -100,7 +93,7 @@ export function DocumentCard({
   onOpenInEditor,
 }: DocumentCardProps) {
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copyText } = useCopyFeedback();
   const [printing, setPrinting] = useState(false);
   const sheetScrollRef = useRef<HTMLDivElement>(null);
   const wasStreamingRef = useRef(false);
@@ -115,28 +108,18 @@ export function DocumentCard({
     wasStreamingRef.current = streaming;
   }, [streaming]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setOpen(false);
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
+  const closeOverlay = useCallback(() => setOpen(false), []);
+  useDismissible({
+    open,
+    onDismiss: closeOverlay,
+    escape: true,
+    preventEscapeDefault: true,
+  });
 
   const handleCopy = useCallback(async () => {
     if (!body.trim()) return;
-    try {
-      await navigator.clipboard.writeText(body);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
-    }
-  }, [body]);
+    await copyText(body);
+  }, [body, copyText]);
 
   const handlePrint = useCallback(async () => {
     if (!body.trim() || printing) return;

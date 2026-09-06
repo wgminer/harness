@@ -30,8 +30,11 @@ import {
 } from "../shared/writing";
 import { buildNotePrintHtml } from "../shared/notePrint";
 import { transcriptCleanupSkippedMessage } from "../shared/setupState";
+import { countWords, formatWordCount } from "../shared/wordCount";
+import { formatMediumTimestamp } from "../shared/formatMediumTimestamp";
 import { NotesCodeEditor, type NotesCodeEditorHandle } from "./NotesCodeEditor";
 import { getNotesEditorCaretCoordinates } from "./notesEditorExtensions";
+import { useDismissible } from "./useDismissible";
 import { useScrolledHeader } from "./useScrolledHeader";
 import { formatVoiceTimer, useVoiceCapture, type VoiceTranscriptResult } from "./useVoiceCapture";
 
@@ -213,7 +216,7 @@ export function NotesView({
   const noteTitle = activeNote
     ? getDisplayNoteTitle(titleFromMarkdownContent(draft, activeNote.title))
     : "Note";
-  const noteWordCount = countNoteWords(draft);
+  const noteWordCount = countWords(draft);
   const notesApi = window.harness.notes;
   const hasSelection = selection != null;
   const showSelectionMenu = hasSelection && !asideExpanded;
@@ -440,22 +443,13 @@ export function NotesView({
     });
   }, [selectedNoteId, status.kind]);
 
-  useEffect(() => {
-    if (!noteToolbarMenuOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setNoteToolbarMenuOpen(false);
-    };
-    const onPointerDown = (e: PointerEvent) => {
-      const el = noteToolbarMenuRef.current;
-      if (el && !el.contains(e.target as Node)) setNoteToolbarMenuOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("pointerdown", onPointerDown, true);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("pointerdown", onPointerDown, true);
-    };
-  }, [noteToolbarMenuOpen]);
+  useDismissible({
+    open: noteToolbarMenuOpen,
+    onDismiss: () => setNoteToolbarMenuOpen(false),
+    refs: [noteToolbarMenuRef],
+    pointerEvent: "pointerdown",
+    capture: true,
+  });
 
   useEffect(() => {
     if (dirty) setIsFreshNote(false);
@@ -840,7 +834,7 @@ export function NotesView({
                           <div className="notes-surface__toolbar-menu-meta-row">
                             <span className="notes-surface__toolbar-menu-meta-label">Words</span>
                             <span className="notes-surface__toolbar-menu-meta-value">
-                              {formatNoteWordCount(noteWordCount)}
+                              {formatWordCount(noteWordCount)}
                             </span>
                           </div>
                           {activeNote ? (
@@ -848,13 +842,13 @@ export function NotesView({
                               <div className="notes-surface__toolbar-menu-meta-row">
                                 <span className="notes-surface__toolbar-menu-meta-label">Updated</span>
                                 <span className="notes-surface__toolbar-menu-meta-value">
-                                  {formatNoteTimestamp(activeNote.updatedAt)}
+                                  {formatMediumTimestamp(activeNote.updatedAt)}
                                 </span>
                               </div>
                               <div className="notes-surface__toolbar-menu-meta-row">
                                 <span className="notes-surface__toolbar-menu-meta-label">Created</span>
                                 <span className="notes-surface__toolbar-menu-meta-value">
-                                  {formatNoteTimestamp(activeNote.createdAt)}
+                                  {formatMediumTimestamp(activeNote.createdAt)}
                                 </span>
                               </div>
                             </>
@@ -1204,25 +1198,4 @@ export function NotesView({
       </div>
     </div>
   );
-}
-
-function countNoteWords(text: string): number {
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).length;
-}
-
-function formatNoteWordCount(count: number): string {
-  return `${count.toLocaleString()} ${count === 1 ? "word" : "words"}`;
-}
-
-function formatNoteTimestamp(ms: number): string {
-  try {
-    return new Date(ms).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return "";
-  }
 }
