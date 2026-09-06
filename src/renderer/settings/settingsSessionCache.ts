@@ -8,7 +8,6 @@ import {
   type TranscriptDictionaryEntry,
 } from "../../shared/types";
 import {
-  DEFAULT_NOTE_TEMPLATE_ID,
   normalizeDefaultNoteTemplateId,
   normalizeNoteTemplates,
   type NoteTemplateConfig,

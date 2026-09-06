@@ -21,6 +21,8 @@ export default tseslint.config({
     'ios',
     'site',
     'e2e',
+    // Tooling config; storybook plugin still lints `*.stories.*` under src/.
+    '.storybook',
     '**/*.css',
     '**/*.html',
   ],
