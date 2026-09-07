@@ -536,6 +536,26 @@ fn merge_image_record(local: &Value, remote: &Value) -> Value {
 
     let mut merged = newer.clone();
     if let Some(obj) = merged.as_object_mut() {
+        let mut deleted: HashSet<String> = HashSet::new();
+        for source in [older, newer] {
+            if let Some(ids) = source.get("deletedVersionIds").and_then(|v| v.as_array()) {
+                for id in ids {
+                    if let Some(s) = id.as_str() {
+                        deleted.insert(s.to_string());
+                    }
+                }
+            }
+        }
+        if !deleted.is_empty() {
+            let mut ids: Vec<Value> = deleted.into_iter().map(Value::String).collect();
+            ids.sort_by(|a, b| {
+                let sa = a.as_str().unwrap_or("");
+                let sb = b.as_str().unwrap_or("");
+                sa.cmp(sb)
+            });
+            obj.insert("deletedVersionIds".into(), Value::Array(ids));
+        }
+
         let active = obj
             .get("activeVersionId")
             .and_then(|v| v.as_str())

@@ -103,6 +103,9 @@ pub fn run() {
             sync::start_sync_background(sync_runtime, handle.clone());
             updater::start_update_check(&handle, updater_runtime);
 
+            let image_generation_runtime = images::init_image_generation_runtime();
+            app.manage(image_generation_runtime);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -152,6 +155,7 @@ pub fn run() {
             commands::chat_get_context_preview,
             commands::chat_stop,
             commands::chat_resolve_gated_tool,
+            commands::chat_get_active_turn,
             commands::ui_session_get,
             commands::ui_session_set,
             commands::customization_get_layout_options,
@@ -171,16 +175,22 @@ pub fn run() {
             commands::notes_spell_check,
             commands::search_lookup_image,
             commands::images_list,
+            commands::images_create,
             commands::images_read,
             commands::images_delete,
             commands::images_generate,
+            commands::images_cancel,
             commands::images_set_active_version,
+            commands::images_delete_version,
+            commands::images_copy_to_clipboard,
+            commands::images_reveal_in_finder,
             system::system_get_platform,
             system::system_macos_accessibility_trusted,
             system::system_request_accessibility_prompt,
             system::system_open_accessibility_settings,
             system::system_open_microphone_settings,
             system::system_open_speech_recognition_settings,
+            system::system_show_in_folder,
             sync::sync_get_status,
             sync::sync_run_now,
             sync::sync_test_connection,

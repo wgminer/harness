@@ -70,6 +70,8 @@ interface SidebarProps {
   onNewNote: () => void;
   onNewImage: () => void;
   activeChatProcessing: boolean;
+  /** Image ids currently generating/adjusting — show sidebar spinner. */
+  processingImageIds?: Record<string, true>;
   titleGenInFlight: Record<string, number>;
   titleAwaitingIds: Record<string, true>;
   appVersion: string | null;
@@ -102,6 +104,7 @@ export function Sidebar({
   onNewNote,
   onNewImage,
   activeChatProcessing,
+  processingImageIds = {},
   titleGenInFlight,
   titleAwaitingIds,
   appVersion,
@@ -300,6 +303,7 @@ export function Sidebar({
       }
       if (row.itemKind === "image") {
         const isActive = view === "images" && activeImageId === row.id;
+        const imageGenerating = Boolean(processingImageIds[row.id]);
         return (
           <li
             key={row.id}
@@ -313,10 +317,17 @@ export function Sidebar({
             data-testid="sidebar-image"
             data-image-id={row.id}
             onClick={() => onSelectImage(row.id)}
+            aria-busy={imageGenerating ? true : undefined}
           >
-            <span className="sidebar-item-icon" aria-hidden title="Image">
-              <ImageIcon size={12} className="sidebar-item-icon__svg" />
-            </span>
+            {imageGenerating ? (
+              <span className="sidebar-item-spinner" aria-hidden>
+                <Loader2 size={12} className="voice-spinner" />
+              </span>
+            ) : (
+              <span className="sidebar-item-icon" aria-hidden title="Image">
+                <ImageIcon size={12} className="sidebar-item-icon__svg" />
+              </span>
+            )}
             <span className="sidebar-item-title">{getDisplayImageTitle(row.title)}</span>
             <button
               type="button"
@@ -399,6 +410,7 @@ export function Sidebar({
       activeImageId,
       activeNoteId,
       conversationId,
+      processingImageIds,
       onConversationDelete,
       onConversationSelect,
       onImageDelete,

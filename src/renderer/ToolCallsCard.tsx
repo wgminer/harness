@@ -12,6 +12,9 @@ import {
   type MemorySearchHit,
 } from "./chatHelpers";
 
+/** Soft cap for approval previews — overflow is clipped, not scrolled. */
+const PREVIEW_MAX_LINES = 24;
+
 interface ToolCallsCardProps {
   toolCalls: ToolCallDisplay[];
   expanded: boolean;
@@ -20,6 +23,12 @@ interface ToolCallsCardProps {
   onOpenNote?: (noteId: string) => void;
   onOpenConversation?: (conversationId: string) => void;
   onOpenImage?: (imageId: string) => void;
+}
+
+function isAwaitingToolConfirmation(call: ToolCallDisplay): boolean {
+  if (!isToolCallPending(call)) return false;
+  const payload = call.payload as { resolving?: boolean } | undefined;
+  return payload?.resolving !== true;
 }
 
 function ToolCardSummaryRow({
@@ -37,7 +46,6 @@ function ToolCardSummaryRow({
 }) {
   return (
     <div className="tool-card-row">
-      <span className="tool-card-icon">{toolIcon()}</span>
       <button
         type="button"
         className="tool-card-summary-toggle"
@@ -45,7 +53,10 @@ function ToolCardSummaryRow({
         aria-expanded={ariaExpanded}
         aria-label={ariaLabel}
       >
-        <span className="tool-card-label">{label}</span>
+        <span className="tool-card-heading">
+          <span className="tool-card-icon">{toolIcon()}</span>
+          <span className="tool-card-label">{label}</span>
+        </span>
         {chevron}
       </button>
     </div>
@@ -137,6 +148,47 @@ function MemorySearchHitsList({
   );
 }
 
+function diffLineClass(line: string): string {
+  if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@")) {
+    return "tool-card-preview__line tool-card-preview__line--meta";
+  }
+  if (line.startsWith("+")) {
+    return "tool-card-preview__line tool-card-preview__line--add";
+  }
+  if (line.startsWith("-")) {
+    return "tool-card-preview__line tool-card-preview__line--del";
+  }
+  return "tool-card-preview__line";
+}
+
+function ToolPreview({
+  preview,
+  kind,
+}: {
+  preview: string;
+  kind?: string;
+}) {
+  const rawLines = preview.replace(/\n$/, "").split("\n");
+  const truncated = rawLines.length > PREVIEW_MAX_LINES;
+  const lines = truncated ? rawLines.slice(0, PREVIEW_MAX_LINES) : rawLines;
+  const asDiff = kind === "diff" || lines.some((l) => l.startsWith("+++ ") || l.startsWith("--- "));
+
+  return (
+    <div className={`tool-card-preview${truncated ? " tool-card-preview--truncated" : ""}`}>
+      <pre className="tool-card-preview__code" aria-label={asDiff ? "Diff preview" : "Preview"}>
+        {asDiff
+          ? lines.map((line, i) => (
+              <span key={i} className={diffLineClass(line)}>
+                {line || " "}
+              </span>
+            ))
+          : lines.join("\n")}
+      </pre>
+      {truncated ? <div className="tool-card-preview__fade" aria-hidden /> : null}
+    </div>
+  );
+}
+
 function ToolCallRow({
   call,
   onToolConfirm,
@@ -162,7 +214,7 @@ function ToolCallRow({
   if (searchHits.length > 0) {
     return (
       <div className="tool-card-row tool-card-row--search">
-        <div className="tool-card-search-header">
+        <div className="tool-card-heading">
           <span className="tool-card-icon">{toolIcon()}</span>
           <span className="tool-card-label">{toolCallLabel(call)}</span>
         </div>
@@ -178,15 +230,19 @@ function ToolCallRow({
 
   const label = toolCallLabel(call);
   const pendingPayload = isPending
-    ? (call.payload as { preview?: string; path?: string } | undefined)
+    ? (call.payload as { preview?: string; path?: string; previewKind?: string } | undefined)
     : undefined;
   const preview =
     typeof pendingPayload?.preview === "string" ? pendingPayload.preview : null;
 
   return (
-    <div className={`tool-card-row${preview ? " tool-card-row--preview" : ""}`}>
-      <span className="tool-card-icon">{toolIcon()}</span>
-      <div className="tool-card-row-text">
+    <div
+      className={`tool-card-row${preview ? " tool-card-row--preview" : ""}${
+        isPending ? " tool-card-row--pending" : ""
+      }`}
+    >
+      <div className="tool-card-heading">
+        <span className="tool-card-icon">{toolIcon()}</span>
         {canOpenNote ? (
           <button
             type="button"
@@ -202,8 +258,8 @@ function ToolCallRow({
             {pendingPayload?.path ? ` · ${pendingPayload.path}` : ""}
           </span>
         )}
-        {preview ? <pre className="tool-card-preview">{preview}</pre> : null}
       </div>
+      {preview ? <ToolPreview preview={preview} kind={pendingPayload?.previewKind} /> : null}
       {isPending && (
         <span className="tool-card-actions">
           <button
@@ -238,6 +294,7 @@ export function ToolCallsCard({
   onOpenImage,
 }: ToolCallsCardProps) {
   const hasPending = toolCalls.some(isToolCallPending);
+  const awaitingApproval = toolCalls.some(isAwaitingToolConfirmation);
   const canCompress = toolCalls.length >= TOOL_CALLS_COMPRESS_THRESHOLD;
   const compressed = canCompress && !expanded && !hasPending;
   const hasSearchHits = toolCalls.some(
@@ -265,7 +322,7 @@ export function ToolCallsCard({
     <div
       className={`tool-card${canCompress ? " tool-card--expandable" : ""}${
         hasSearchHits ? " tool-card--search" : ""
-      }`}
+      }${awaitingApproval ? " tool-card--approval" : ""}`}
     >
       {canCompress && (
         <ToolCardSummaryRow

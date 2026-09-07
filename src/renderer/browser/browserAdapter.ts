@@ -64,6 +64,9 @@ export function createBrowserAdapter(): HarnessAPI {
       openAccessibilitySettings: async () => {},
       openMicrophoneSettings: async () => {},
       openSpeechRecognitionSettings: async () => {},
+      showInFolder: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
     },
     settings: {
       get: async () => store.settings(),
@@ -204,6 +207,12 @@ export function createBrowserAdapter(): HarnessAPI {
       ensureDictationReplyAction: async () => "run",
       stop: () => chat.stop(),
       resolveGatedTool: async () => {},
+      getActiveTurn: async () => ({
+        conversationId: null,
+        hasActiveStream: false,
+        content: "",
+        pendingTools: [],
+      }),
       getContextPreview: async (conversationId) => browserContextPreview(store, conversationId),
       onStreamChunk: (cb) =>
         onBrowserEvent<{ conversationId: string; chunk: string }>("chat:streamChunk", (p) =>
@@ -279,6 +288,9 @@ export function createBrowserAdapter(): HarnessAPI {
     },
     images: {
       list: async () => [],
+      create: async () => {
+        throw new Error("Image generation is not available in the browser debug shell.");
+      },
       read: async () => null,
       delete: async () => [],
       generate: async () => {
@@ -287,6 +299,12 @@ export function createBrowserAdapter(): HarnessAPI {
       setActiveVersion: async () => {
         throw new Error("Image generation is not available in the browser debug shell.");
       },
+      cancel: async () => {},
+      deleteVersion: async () => {
+        throw new Error("Image generation is not available in the browser debug shell.");
+      },
+      copyToClipboard: async () => {},
+      revealInFinder: async () => {},
     },
     recording: {
       signalFrontendReady: async () => {},

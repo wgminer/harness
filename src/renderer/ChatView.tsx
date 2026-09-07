@@ -613,18 +613,15 @@ export function ChatView({
       return;
     }
 
+    const switchingConversations = prev != null && prev !== effectiveConversationId;
+    if (switchingConversations) {
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+      activeTurnIdRef.current = null;
+      void window.harness.chat.stop().catch(() => {});
+    }
+
     resetComposerInputRef.current();
-    streamAbortRef.current?.abort();
-    streamAbortRef.current = null;
-    activeTurnIdRef.current = null;
-    void window.harness.chat.stop().catch(() => {});
-    setMessages([]);
-    activeAssistantMessageIdRef.current = null;
-    isStreamingRef.current = false;
-    setActiveAssistantMessageId(null);
-    setIsTurnPending(false);
-    setIsStreaming(false);
-    setIsStopping(false);
     setCopiedId(null);
     setSavedToNotesId(null);
     setPolishHintAfterDictation(false);
@@ -638,26 +635,90 @@ export function ChatView({
     setTitleModalOpen(false);
     setLiveNoteStream(null);
     setOptimisticChatMode(null);
+    if (switchingConversations) {
+      setIsStopping(false);
+      setIsTurnPending(false);
+      setIsStreaming(false);
+      isStreamingRef.current = false;
+      activeAssistantMessageIdRef.current = null;
+      setActiveAssistantMessageId(null);
+      setMessages([]);
+    }
     focusComposer();
 
+    const conversationId = effectiveConversationId;
     let cancelled = false;
-    window.harness.memory.getMessages(effectiveConversationId).then((list) => {
+    void (async () => {
+      const [list, activeTurn] = await Promise.all([
+        window.harness.memory.getMessages(conversationId),
+        window.harness.chat.getActiveTurn().catch(() => null),
+      ]);
       if (cancelled) return;
-      setMessages(
-        list.map((m, i) => ({
-          id: `history-${(m as Message).timestamp ?? Date.now()}-${i}`,
-          role: m.role,
-          content: m.content,
-          toolCalls: (m as Message).toolCalls,
-          timestamp: (m as Message).timestamp,
-          model: (m as Message).model,
-        }))
-      );
-    });
+
+      const history: Message[] = list.map((m, i) => ({
+        id: `history-${(m as Message).timestamp ?? Date.now()}-${i}`,
+        role: m.role,
+        content: m.content,
+        toolCalls: (m as Message).toolCalls,
+        timestamp: (m as Message).timestamp,
+        model: (m as Message).model,
+      }));
+
+      const pendingForThis =
+        activeTurn &&
+        activeTurn.conversationId === conversationId &&
+        (activeTurn.hasActiveStream || activeTurn.pendingTools.length > 0);
+
+      if (pendingForThis) {
+        const nextTurnId = turnIdRef.current + 1;
+        turnIdRef.current = nextTurnId;
+        activeTurnIdRef.current = nextTurnId;
+        streamAbortRef.current = new AbortController();
+        setIsTurnPending(true);
+        // Live backend stream (incl. parked on approval) must accept later chunks.
+        setIsStreaming(activeTurn.hasActiveStream);
+        isStreamingRef.current = activeTurn.hasActiveStream;
+
+        const assistantId = makeMessageId("assistant");
+        activeAssistantMessageIdRef.current = assistantId;
+        setActiveAssistantMessageId(assistantId);
+        setMessages([
+          ...history,
+          {
+            id: assistantId,
+            role: "assistant",
+            content: activeTurn.content || "",
+            toolCalls: activeTurn.pendingTools.map((t) => ({
+              toolName: t.toolName,
+              payload: t.payload,
+            })),
+            model: activeChatModelRef.current,
+            timestamp: Date.now(),
+          },
+        ]);
+        return;
+      }
+
+      if (!switchingConversations && activeTurnIdRef.current != null) {
+        // Remount while a local turn is in flight but backend has nothing pending —
+        // keep whatever messages React still has only if we wiped them; we didn't.
+        return;
+      }
+
+      setIsTurnPending(false);
+      setIsStreaming(false);
+      isStreamingRef.current = false;
+      activeTurnIdRef.current = null;
+      streamAbortRef.current = null;
+      activeAssistantMessageIdRef.current = null;
+      setActiveAssistantMessageId(null);
+      setMessages(history);
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [effectiveConversationId, focusComposer]);
+  }, [effectiveConversationId, focusComposer, makeMessageId]);
 
   useEffect(() => {
     const unsub = window.harness.chat.onToolPanelUpdate((cid, toolName, payload) => {
@@ -823,6 +884,12 @@ export function ChatView({
         })
       );
 
+      if (action === "proceed") {
+        // Resume may stream more assistant text (esp. after restart checkpoint).
+        isStreamingRef.current = true;
+        setIsStreaming(true);
+      }
+
       if (pendingId) {
         try {
           await window.harness.chat.resolveGatedTool(pendingId, action);
@@ -906,13 +973,15 @@ export function ChatView({
       let convId = effectiveConversationId;
       if (!convId) {
         convId = await window.harness.memory.createConversation(composeChatMode);
+        // Persist scope before promoting the draft id so the getScope load
+        // cannot briefly clear the composer chip.
+        if (codingScope) {
+          await window.harness.coding.setScope(convId, codingScope).catch(() => {});
+        }
         firstSendInProgressRef.current = true;
         setDraftConversationId(convId);
         conversationIdRef.current = convId;
         onAssignConversationId(convId);
-        if (codingScope) {
-          await window.harness.coding.setScope(convId, codingScope).catch(() => {});
-        }
       }
       await sendText(text, opts, convId);
       if (opts?.recordingPath) {
@@ -1075,11 +1144,20 @@ export function ChatView({
 
   const openTitleModalRef = useRef(openTitleModal);
   openTitleModalRef.current = openTitleModal;
+  /** Seed to the current nonce so remounting ChatView does not reopen from a stale parent click. */
+  const lastTitleModalNonceRef = useRef(openTitleModalNonce);
 
   useEffect(() => {
     if (openTitleModalNonce == null || openTitleModalNonce < 1) return;
+    if (lastTitleModalNonceRef.current === openTitleModalNonce) return;
+    lastTitleModalNonceRef.current = openTitleModalNonce;
     openTitleModalRef.current();
   }, [openTitleModalNonce]);
+
+  useEffect(() => {
+    if (mirrorGlobalFnRecording) return;
+    setTitleModalOpen(false);
+  }, [mirrorGlobalFnRecording]);
 
   useEffect(() => {
     if (!titleModalOpen || !effectiveConversationId) {

@@ -27,8 +27,9 @@ use crate::memory::{
 };
 use crate::memory_import::run_llm_context_import_now;
 use crate::images::{
-    delete_image, generate_image, list_images, read_image, set_active_image_version,
-    ImageGenerateInput,
+    cancel_image_generation, copy_image_to_clipboard, create_image, delete_image,
+    delete_image_version, generate_image, list_images, read_image, reveal_image_in_finder,
+    set_active_image_version, ImageCreateInput, ImageGenerateInput, ImageGenerationRuntime,
 };
 use crate::notes::{
     create_note, delete_note, list_notes, propose_note_edit, propose_note_spell_check, read_note,
@@ -440,6 +441,11 @@ pub async fn chat_resolve_gated_tool(
 }
 
 #[command(rename_all = "camelCase")]
+pub async fn chat_get_active_turn(chat: State<'_, ChatController>) -> Result<Value, String> {
+    Ok(chat.get_active_turn().await)
+}
+
+#[command(rename_all = "camelCase")]
 pub fn ui_session_get() -> Value {
     serde_json::to_value(get_ui_session()).unwrap_or_default()
 }
@@ -595,6 +601,13 @@ pub async fn images_list(state: State<'_, AppState>) -> Result<Value, String> {
 }
 
 #[command(rename_all = "camelCase")]
+pub async fn images_create(state: State<'_, AppState>, input: Value) -> Result<Value, String> {
+    let parsed: ImageCreateInput = serde_json::from_value(input).map_err(map_err)?;
+    let image = create_image(&state, parsed).await.map_err(map_err)?;
+    serde_json::to_value(image).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
 pub async fn images_read(state: State<'_, AppState>, id: String) -> Result<Value, String> {
     let image = read_image(&state, &id).await.map_err(map_err)?;
     serde_json::to_value(image).map_err(map_err)
@@ -609,11 +622,50 @@ pub async fn images_delete(state: State<'_, AppState>, id: String) -> Result<Val
 #[command(rename_all = "camelCase")]
 pub async fn images_generate(
     state: State<'_, AppState>,
+    runtime: State<'_, ImageGenerationRuntime>,
     input: Value,
 ) -> Result<Value, String> {
     let parsed: ImageGenerateInput = serde_json::from_value(input).map_err(map_err)?;
-    let result = generate_image(&state, parsed).await.map_err(map_err)?;
+    let result = generate_image(&state, &runtime, parsed)
+        .await
+        .map_err(map_err)?;
     serde_json::to_value(result).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_cancel(
+    runtime: State<'_, ImageGenerationRuntime>,
+    id: String,
+) -> Result<(), String> {
+    cancel_image_generation(&runtime, &id).await.map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_delete_version(
+    state: State<'_, AppState>,
+    id: String,
+    version_id: String,
+) -> Result<Value, String> {
+    let result = delete_image_version(&state, &id, &version_id)
+        .await
+        .map_err(map_err)?;
+    serde_json::to_value(result).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_copy_to_clipboard(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    copy_image_to_clipboard(&state, &id).await.map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn images_reveal_in_finder(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    reveal_image_in_finder(&state, &id).await.map_err(map_err)
 }
 
 #[command(rename_all = "camelCase")]

@@ -336,27 +336,28 @@ export function ChatComposer({
             e.currentTarget.value = "";
           }}
         />
-        {(attachedAudioName || codingScope) && (
+        {codingScope ? (
+          <div
+            className="chat-scope-banner"
+            title={codingScope.root}
+            data-testid="chat-coding-scope"
+          >
+            <FolderCode size={13} strokeWidth={1.75} aria-hidden />
+            <span className="chat-scope-banner__label">{codingScopeLabel(codingScope)}</span>
+            <button
+              type="button"
+              className="chat-scope-banner__dismiss"
+              onClick={() => void onClearCodingScope?.()}
+              disabled={sending}
+              aria-label="Remove workspace scope"
+              title="Remove workspace scope"
+            >
+              <X size={13} strokeWidth={1.75} />
+            </button>
+          </div>
+        ) : null}
+        {(attachedAudioName || attachmentTranscribing) && (
           <div className="chat-attachment-strip">
-            {codingScope ? (
-              <span
-                className="chat-attachment-chip chat-attachment-chip--scope"
-                title={codingScope.root}
-              >
-                <FolderCode size={11} strokeWidth={1.75} />
-                <span className="chat-attachment-name">{codingScopeLabel(codingScope)}</span>
-                <button
-                  type="button"
-                  className="chat-attachment-remove"
-                  onClick={() => void onClearCodingScope?.()}
-                  disabled={sending}
-                  aria-label="Clear coding scope"
-                  title="Clear coding scope"
-                >
-                  <X size={11} strokeWidth={1.75} />
-                </button>
-              </span>
-            ) : null}
             {attachedAudioName ? (
               <span className="chat-attachment-chip" title={attachedAudioName}>
                 <FileAudio size={11} strokeWidth={1.75} />
@@ -474,7 +475,7 @@ export function ChatComposer({
                       className="chat-mode-picker__menu-item"
                       onClick={() => void runPlusAction(async () => onClearCodingScope?.())}
                     >
-                      Clear project folder
+                      Remove workspace scope
                     </button>
                   ) : null}
                 </div>,

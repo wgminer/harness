@@ -1,5 +1,9 @@
+use std::path::{Path, PathBuf};
+
 use tauri::{command, AppHandle};
 use tauri_plugin_opener::OpenerExt;
+
+use crate::memory::show_item_in_folder;
 
 const PRIVACY_ACCESSIBILITY: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
@@ -96,4 +100,27 @@ pub async fn system_open_microphone_settings(app: AppHandle) -> Result<(), Strin
 #[command(rename_all = "camelCase")]
 pub async fn system_open_speech_recognition_settings(app: AppHandle) -> Result<(), String> {
     open_privacy_pane(&app, PRIVACY_SPEECH_RECOGNITION).await
+}
+
+fn expand_user_path(path: &str) -> PathBuf {
+    let trimmed = path.trim();
+    if trimmed == "~" {
+        return dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
+    }
+    if let Some(rest) = trimmed.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest);
+        }
+    }
+    PathBuf::from(trimmed)
+}
+
+/// Reveal a local file or folder in the system file manager (Finder on macOS).
+#[command(rename_all = "camelCase")]
+pub async fn system_show_in_folder(path: String) -> Result<(), String> {
+    let expanded = expand_user_path(&path);
+    if !Path::new(&expanded).exists() {
+        return Err(format!("Path not found: {}", expanded.display()));
+    }
+    show_item_in_folder(&expanded).map_err(|e| e.to_string())
 }

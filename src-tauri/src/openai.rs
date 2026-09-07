@@ -34,7 +34,7 @@ pub fn openai_transcript_cleanup_model() -> String {
     std::env::var("OPENAI_TRANSCRIPT_CLEANUP_MODEL").unwrap_or_else(|_| "gpt-5.4-mini".into())
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessageParam {
     pub role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -245,20 +245,39 @@ fn decode_image_b64_response(parsed: &Value) -> Result<Vec<u8>, OpenAIError> {
         .map_err(|e| OpenAIError::Api(format!("Failed to decode image data: {e}")))
 }
 
+async fn send_cancellable(
+    cancel: Option<&CancellationToken>,
+    future: impl std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
+) -> Result<reqwest::Response, OpenAIError> {
+    match cancel {
+        Some(token) => {
+            tokio::select! {
+                res = future => res.map_err(OpenAIError::from),
+                _ = token.cancelled() => Err(OpenAIError::Cancelled),
+            }
+        }
+        None => future.await.map_err(OpenAIError::from),
+    }
+}
+
 pub async fn generate_image(
     api_key: &str,
     prompt: &str,
     options: &ImageGenerateOptions,
+    cancel: Option<&CancellationToken>,
 ) -> Result<Vec<u8>, OpenAIError> {
     let client = Client::builder().timeout(Duration::from_secs(120)).build()?;
     let body = build_image_request_body(&openai_image_model(), prompt, options);
 
-    let response = client
-        .post(OPENAI_IMAGES_GENERATIONS_URL)
-        .bearer_auth(api_key)
-        .json(&body)
-        .send()
-        .await?;
+    let response = send_cancellable(
+        cancel,
+        client
+            .post(OPENAI_IMAGES_GENERATIONS_URL)
+            .bearer_auth(api_key)
+            .json(&body)
+            .send(),
+    )
+    .await?;
 
     if !response.status().is_success() {
         let detail = response.text().await.unwrap_or_default();
@@ -269,36 +288,54 @@ pub async fn generate_image(
     decode_image_b64_response(&parsed)
 }
 
-/// Edit an existing image via `/v1/images/edits` (multipart).
+/// One image part for `/v1/images/edits` (multipart `image` field).
+pub struct ImageEditPart {
+    pub bytes: Vec<u8>,
+    pub file_name: String,
+    pub mime_type: String,
+}
+
+/// Edit via `/v1/images/edits` with one or more `image` multipart parts.
 pub async fn edit_image(
     api_key: &str,
     prompt: &str,
-    image_bytes: &[u8],
-    file_name: &str,
-    mime_type: &str,
+    images: &[ImageEditPart],
     options: &ImageGenerateOptions,
+    cancel: Option<&CancellationToken>,
 ) -> Result<Vec<u8>, OpenAIError> {
+    if images.is_empty() {
+        return Err(OpenAIError::Api(
+            "At least one image is required for edit.".into(),
+        ));
+    }
     let client = Client::builder().timeout(Duration::from_secs(120)).build()?;
-    let part = reqwest::multipart::Part::bytes(image_bytes.to_vec())
-        .file_name(file_name.to_string())
-        .mime_str(mime_type)
-        .map_err(|e| OpenAIError::Api(format!("Invalid image mime type: {e}")))?;
-    let form = reqwest::multipart::Form::new()
+    let mut form = reqwest::multipart::Form::new()
         .text("model", openai_image_model())
         .text("prompt", prompt.to_string())
         .text("size", options.size.clone())
         .text("quality", options.quality.clone())
         .text("background", options.background.clone())
         .text("output_format", options.output_format.clone())
-        .text("n", "1")
-        .part("image", part);
+        .text("n", "1");
+    // Multiple images must use `image[]` (OpenAI rejects duplicate `image` parts).
+    let field_name = if images.len() > 1 { "image[]" } else { "image" };
+    for image in images {
+        let part = reqwest::multipart::Part::bytes(image.bytes.clone())
+            .file_name(image.file_name.clone())
+            .mime_str(&image.mime_type)
+            .map_err(|e| OpenAIError::Api(format!("Invalid image mime type: {e}")))?;
+        form = form.part(field_name, part);
+    }
 
-    let response = client
-        .post(OPENAI_IMAGES_EDITS_URL)
-        .bearer_auth(api_key)
-        .multipart(form)
-        .send()
-        .await?;
+    let response = send_cancellable(
+        cancel,
+        client
+            .post(OPENAI_IMAGES_EDITS_URL)
+            .bearer_auth(api_key)
+            .multipart(form)
+            .send(),
+    )
+    .await?;
 
     if !response.status().is_success() {
         let detail = response.text().await.unwrap_or_default();
@@ -644,6 +681,16 @@ pub struct OpenAIChatClient {
     api_key: String,
 }
 
+/// Context for one tool invocation inside an OpenAI tool round — used to
+/// checkpoint gated (approval) tools so the turn can resume after restart.
+#[derive(Debug, Clone)]
+pub struct ToolCallExecContext {
+    pub tool_call_id: String,
+    pub messages_before_result: Vec<ChatMessageParam>,
+    pub remaining_tool_calls: Vec<ToolCallParam>,
+    pub content_so_far: String,
+}
+
 impl OpenAIChatClient {
     pub fn new(api_key: impl Into<String>) -> Result<Self, OpenAIError> {
         Ok(Self {
@@ -654,18 +701,38 @@ impl OpenAIChatClient {
 
     pub async fn send_message_with_tools<F, G, Fut>(
         &self,
+        messages: Vec<ChatMessageParam>,
+        tools: Value,
+        on_content: F,
+        execute_tool: G,
+        cancel: &CancellationToken,
+    ) -> Result<String, OpenAIError>
+    where
+        F: FnMut(&str),
+        G: Fn(String, Value, ToolCallExecContext) -> Fut,
+        Fut: std::future::Future<Output = String>,
+    {
+        self.send_message_with_tools_from(messages, tools, String::new(), on_content, execute_tool, cancel)
+            .await
+    }
+
+    /// Continue a tool loop from an existing message list and content prefix
+    /// (used when resuming a gated approval after app restart).
+    pub async fn send_message_with_tools_from<F, G, Fut>(
+        &self,
         mut messages: Vec<ChatMessageParam>,
         tools: Value,
+        initial_content: String,
         mut on_content: F,
         execute_tool: G,
         cancel: &CancellationToken,
     ) -> Result<String, OpenAIError>
     where
         F: FnMut(&str),
-        G: Fn(String, Value) -> Fut,
+        G: Fn(String, Value, ToolCallExecContext) -> Fut,
         Fut: std::future::Future<Output = String>,
     {
-        let mut full_content = String::new();
+        let mut full_content = initial_content;
         let mut iteration = 0usize;
 
         loop {
@@ -753,12 +820,19 @@ impl OpenAIChatClient {
                 tool_call_id: None,
             });
 
-            for tc in &tool_calls {
+            for (index, tc) in tool_calls.iter().enumerate() {
                 if cancel.is_cancelled() {
                     return Err(OpenAIError::Cancelled);
                 }
-                let args: Value = serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| json!({}));
-                let result = execute_tool(tc.function.name.clone(), args).await;
+                let args: Value =
+                    serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| json!({}));
+                let ctx = ToolCallExecContext {
+                    tool_call_id: tc.id.clone(),
+                    messages_before_result: messages.clone(),
+                    remaining_tool_calls: tool_calls[index + 1..].to_vec(),
+                    content_so_far: full_content.clone(),
+                };
+                let result = execute_tool(tc.function.name.clone(), args, ctx).await;
                 messages.push(ChatMessageParam {
                     role: "tool".into(),
                     content: Some(result),

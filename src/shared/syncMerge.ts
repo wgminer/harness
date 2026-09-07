@@ -345,6 +345,16 @@ function noteTsById(indexBytes: Buffer | undefined): Map<string, number> {
   return out;
 }
 
+function deletedVersionIdsFromRecord(record: Record<string, unknown>): Set<string> {
+  const out = new Set<string>();
+  const raw = record.deletedVersionIds;
+  if (!Array.isArray(raw)) return out;
+  for (const id of raw) {
+    if (typeof id === "string" && id) out.add(id);
+  }
+  return out;
+}
+
 function mergeImageRecord(
   local: Record<string, unknown>,
   remote: Record<string, unknown>,
@@ -352,6 +362,10 @@ function mergeImageRecord(
   const localIsNewer = tsFromValue(local) >= tsFromValue(remote);
   const newer = localIsNewer ? local : remote;
   const older = localIsNewer ? remote : local;
+  const deletedVersionIds = new Set<string>([
+    ...deletedVersionIdsFromRecord(local),
+    ...deletedVersionIdsFromRecord(remote),
+  ]);
   const versionsById = new Map<string, Record<string, unknown>>();
   for (const source of [older, newer]) {
     const versions = Array.isArray(source.versions) ? source.versions : [];
@@ -361,10 +375,9 @@ function mergeImageRecord(
         typeof version === "object" &&
         typeof (version as Record<string, unknown>).id === "string"
       ) {
-        versionsById.set(
-          (version as Record<string, unknown>).id as string,
-          version as Record<string, unknown>,
-        );
+        const id = (version as Record<string, unknown>).id as string;
+        if (deletedVersionIds.has(id)) continue;
+        versionsById.set(id, version as Record<string, unknown>);
       }
     }
   }
@@ -375,8 +388,16 @@ function mergeImageRecord(
     return String(a.id ?? "").localeCompare(String(b.id ?? ""));
   });
   const merged: Record<string, unknown> = { ...newer, versions };
+  if (deletedVersionIds.size > 0) {
+    merged.deletedVersionIds = [...deletedVersionIds].sort();
+  } else {
+    delete merged.deletedVersionIds;
+  }
   const active = typeof merged.activeVersionId === "string" ? merged.activeVersionId : undefined;
-  const activeOk = active ? versions.some((v) => v.id === active) : false;
+  const activeOk =
+    active && !deletedVersionIds.has(active)
+      ? versions.some((v) => v.id === active)
+      : false;
   if (!activeOk && versions.length > 0) {
     merged.activeVersionId = versions[versions.length - 1]?.id;
   }

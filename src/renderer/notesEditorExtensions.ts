@@ -4,6 +4,7 @@ import {
   Decoration,
   EditorView,
   ViewPlugin,
+  drawSelection,
   highlightActiveLine,
   keymap,
   lineNumbers,
@@ -323,6 +324,11 @@ export function createNotesCodeEditorTheme(): Extension {
       ".cm-cursor, .cm-dropCursor": {
         borderLeftColor: "var(--fg)",
       },
+      // Selection highlight comes from the `notes-cm-text-selection` mark (glyph-tight);
+      // drawSelection is only here for its cursor layer.
+      ".cm-selectionLayer": {
+        display: "none",
+      },
       ".cm-line ::selection, .cm-line::selection": {
         backgroundColor: "transparent !important",
       },
@@ -372,6 +378,9 @@ export function createNotesCodeEditorExtensions(options: NotesCodeEditorOptions)
   const extensions: Extension[] = [
     history(),
     Prec.high(notesTextSelectionPlugin),
+    // WebKit's native caret grows to the full line-height box on soft-wrapped lines;
+    // CodeMirror's drawn cursor measures the glyph rect, so it stays consistent.
+    drawSelection({ drawRangeCursor: false }),
     highlightActiveLine(),
     EditorView.lineWrapping,
     Prec.high(markdownListKeymap),

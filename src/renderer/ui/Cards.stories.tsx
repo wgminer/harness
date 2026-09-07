@@ -85,13 +85,29 @@ function CardsGallery() {
       </Section>
 
       <Section title="Tool calls card" stack>
-        <div className="tool-card">
-          <div className="tool-card-row">
-            <span className="tool-card-icon">
-              <Wrench size={14} aria-hidden />
-            </span>
-            <div className="tool-card-row-text">
-              <span className="tool-card-label">ws_read · src/renderer/base.css</span>
+        <div className="tool-card tool-card--approval">
+          <div className="tool-card-row tool-card-row--preview tool-card-row--pending">
+            <div className="tool-card-heading">
+              <span className="tool-card-icon">
+                <Wrench size={14} aria-hidden />
+              </span>
+              <span className="tool-card-label">ws_edit · src/renderer/base.css</span>
+            </div>
+            <div className="tool-card-preview">
+              <pre className="tool-card-preview__code" aria-label="Diff preview">
+                <span className="tool-card-preview__line tool-card-preview__line--meta">
+                  --- a/src/renderer/base.css
+                </span>
+                <span className="tool-card-preview__line tool-card-preview__line--meta">
+                  +++ b/src/renderer/base.css
+                </span>
+                <span className="tool-card-preview__line tool-card-preview__line--del">
+                  -  --radius-md: 6px;
+                </span>
+                <span className="tool-card-preview__line tool-card-preview__line--add">
+                  +  --radius-md: 8px;
+                </span>
+              </pre>
             </div>
             <span className="tool-card-actions">
               <button type="button" className="btn btn-sm btn-primary">
@@ -105,11 +121,13 @@ function CardsGallery() {
         </div>
         <div className="tool-card tool-card--compressed">
           <div className="tool-card-row">
-            <span className="tool-card-icon">
-              <Wrench size={14} aria-hidden />
-            </span>
             <button type="button" className="tool-card-summary-toggle" aria-expanded={false}>
-              <span className="tool-card-label">3 tool actions</span>
+              <span className="tool-card-heading">
+                <span className="tool-card-icon">
+                  <Wrench size={14} aria-hidden />
+                </span>
+                <span className="tool-card-label">3 tool actions</span>
+              </span>
               <ChevronDown strokeWidth={2} size={16} aria-hidden />
             </button>
           </div>

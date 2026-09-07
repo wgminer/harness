@@ -5,7 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import { Check, Copy, SquarePen } from "lucide-react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkDirective from "remark-directive";
 import rehypeHighlight from "rehype-highlight";
@@ -22,6 +22,7 @@ import {
   type LibraryRef,
   type MemorySearchHit,
 } from "../shared/conversationSearch";
+import { parseLocalFilePath } from "../shared/localFilePath";
 import { scheduleCopyFeedbackClear, useCopyFeedback } from "./useCopyFeedback";
 
 export type { MemorySearchHit };
@@ -209,6 +210,27 @@ function LibraryRefLink({
   );
 }
 
+function FilePathLink({ path, children }: { path: string; children?: ReactNode }) {
+  const label = children ?? path;
+  const open = () => {
+    const api = window.harness?.system?.showInFolder;
+    if (!api) return;
+    void api(path).catch(() => {
+      /* ignore missing paths / browser shell */
+    });
+  };
+  return (
+    <button
+      type="button"
+      className="library-ref"
+      onClick={open}
+      title={`Show in Finder: ${path}`}
+    >
+      {label}
+    </button>
+  );
+}
+
 function CodeBlock({
   blockKey,
   codeText,
@@ -353,23 +375,34 @@ export function MarkdownContent({
     pre: preComponent,
     a: ({ href, children, ...props }: { href?: string; children?: ReactNode }) => {
       const ref = href ? parseLibraryHref(href) : null;
-      return ref ? (
-        <LibraryRefLink libraryRef={ref} titles={libraryTitles} onOpen={openLibrary}>
-          {children}
-        </LibraryRefLink>
-      ) : (
-        <a href={href} {...props}>{children}</a>
-      );
+      if (ref) {
+        return (
+          <LibraryRefLink libraryRef={ref} titles={libraryTitles} onOpen={openLibrary}>
+            {children}
+          </LibraryRefLink>
+        );
+      }
+      const filePath = href ? parseLocalFilePath(href) : null;
+      if (filePath) {
+        return <FilePathLink path={filePath}>{children}</FilePathLink>;
+      }
+      return <a href={href} {...props}>{children}</a>;
     },
     code: ({ className, children, ...props }: { className?: string; children?: ReactNode }) => {
-      const ref = className ? null : parseLibraryHref(extractCodeText(children).trim());
-      return ref ? (
-        <LibraryRefLink libraryRef={ref} titles={libraryTitles} onOpen={openLibrary}>
-          {children}
-        </LibraryRefLink>
-      ) : (
-        <code className={className} {...props}>{children}</code>
-      );
+      const text = extractCodeText(children).trim();
+      const ref = className ? null : parseLibraryHref(text);
+      if (ref) {
+        return (
+          <LibraryRefLink libraryRef={ref} titles={libraryTitles} onOpen={openLibrary}>
+            {children}
+          </LibraryRefLink>
+        );
+      }
+      const filePath = className ? null : parseLocalFilePath(text);
+      if (filePath) {
+        return <FilePathLink path={filePath}>{children}</FilePathLink>;
+      }
+      return <code className={className} {...props}>{children}</code>;
     },
     ...directiveComponents,
   } as unknown as Components;
@@ -379,6 +412,7 @@ export function MarkdownContent({
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
         rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+        urlTransform={(url) => (/^file:/i.test(url.trim()) ? url : defaultUrlTransform(url))}
         components={components}
       >
         {content}

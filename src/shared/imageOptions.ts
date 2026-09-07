@@ -64,10 +64,9 @@ export const IMAGE_ASPECT_VALUES = new Set(IMAGE_ASPECT_OPTIONS.map((p) => p.val
 export const IMAGE_RENDER_MODE_OPTIONS: {
   value: ImageRenderMode;
   label: string;
-  hint: string;
 }[] = [
-  { value: "draft", label: "Draft", hint: "" },
-  { value: "final", label: "Final", hint: "Higher quality" },
+  { value: "draft", label: "Draft" },
+  { value: "final", label: "Final" },
 ];
 
 export const IMAGE_OUTPUT_FORMAT_OPTIONS: { value: ImageOutputFormat; label: string }[] = [

@@ -14,6 +14,7 @@ export { STREAM_WAIT_LABEL } from "./streamWaitTicker";
 interface StreamingAssistantContentProps {
   content: string;
   isStreaming: boolean;
+  waitingForHumanInput?: boolean;
   messageId: string;
   messageTimestamp?: number;
   copiedId: string | null;
@@ -49,6 +50,7 @@ function StreamWaitLabel() {
 export function StreamingAssistantContent({
   content,
   isStreaming,
+  waitingForHumanInput = false,
   messageId,
   messageTimestamp,
   copiedId,
@@ -80,6 +82,7 @@ export function StreamingAssistantContent({
   }, [isStreaming, split]);
 
   if (isStreaming && blocks.length === 0) {
+    if (waitingForHumanInput) return null;
     return <StreamWaitLabel />;
   }
 

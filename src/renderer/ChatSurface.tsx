@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import type { MutableRefObject, ReactNode, RefObject } from "react";
+import type { CodingScopeMeta } from "../shared/desktopAPI";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatSelectionImagePopover } from "./ChatSelectionImagePopover";
@@ -57,6 +58,11 @@ interface ChatSurfaceProps {
   placeholder?: string;
   modeControl?: ReactNode;
   onCycleMode?: () => void;
+  codingScope?: CodingScopeMeta | null;
+  selfScopeAvailable?: boolean;
+  onPickProjectFolder?: () => Promise<void> | void;
+  onUseSelfScope?: () => Promise<void> | void;
+  onClearCodingScope?: () => Promise<void> | void;
   /** Hide the dock while dictation reply actions (Run / vocab) own the continue path. */
   hideComposer?: boolean;
 }
@@ -104,6 +110,11 @@ export function ChatSurface({
   placeholder,
   modeControl,
   onCycleMode,
+  codingScope = null,
+  selfScopeAvailable = false,
+  onPickProjectFolder,
+  onUseSelfScope,
+  onClearCodingScope,
   hideComposer = false,
 }: ChatSurfaceProps) {
   const chatPaneRef = useRef<HTMLDivElement>(null);
@@ -217,6 +228,11 @@ export function ChatSurface({
             placeholder={placeholder}
             modeControl={modeControl}
             onCycleMode={onCycleMode}
+            codingScope={codingScope}
+            selfScopeAvailable={selfScopeAvailable}
+            onPickProjectFolder={onPickProjectFolder}
+            onUseSelfScope={onUseSelfScope}
+            onClearCodingScope={onClearCodingScope}
           />
         )}
       </div>

@@ -11,7 +11,7 @@ import type {
   NoteEditProposalInput,
   NoteSpellCheckInput,
 } from "../shared/writing";
-import type { ImageGenerateInput } from "../shared/images";
+import type { ImageCreateInput, ImageGenerateInput } from "../shared/images";
 import type { SyncResult, SyncStatus } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
 import { tauriCommandName, tauriEventName } from "../shared/ipcNames";
@@ -50,6 +50,8 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke<void>(cmd("system:openMicrophoneSettings")),
       openSpeechRecognitionSettings: () =>
         invoke<void>(cmd("system:openSpeechRecognitionSettings")),
+      showInFolder: (path: string) =>
+        invoke<void>(cmd("system:showInFolder"), { path }),
     },
     settings: {
       get: () => invoke(cmd("settings:get")),
@@ -151,6 +153,13 @@ export function createHarnessAdapter(): HarnessAPI {
       stop: () => invoke(cmd("chat:stop")),
       resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") =>
         invoke(cmd("chat:resolveGatedTool"), { pendingId, action }),
+      getActiveTurn: () =>
+        invoke<{
+          conversationId: string | null;
+          hasActiveStream: boolean;
+          content: string;
+          pendingTools: Array<{ toolName: string; payload: unknown }>;
+        }>(cmd("chat:getActiveTurn")),
       getContextPreview: (conversationId?: string | null) =>
         invoke<ContextPreview>(cmd("chat:getContextPreview"), {
           conversationId: conversationId ?? null,
@@ -256,12 +265,18 @@ export function createHarnessAdapter(): HarnessAPI {
     },
     images: {
       list: () => invoke(cmd("images:list")),
+      create: (input: ImageCreateInput) => invoke(cmd("images:create"), { input }),
       read: (id: string) => invoke(cmd("images:read"), { id }),
       delete: (id: string) => invoke(cmd("images:delete"), { id }),
       generate: (input: ImageGenerateInput) =>
         invoke(cmd("images:generate"), { input }),
       setActiveVersion: (id: string, versionId: string) =>
         invoke(cmd("images:setActiveVersion"), { id, versionId }),
+      cancel: (id: string) => invoke(cmd("images:cancel"), { id }),
+      deleteVersion: (id: string, versionId: string) =>
+        invoke(cmd("images:deleteVersion"), { id, versionId }),
+      copyToClipboard: (id: string) => invoke(cmd("images:copyToClipboard"), { id }),
+      revealInFinder: (id: string) => invoke(cmd("images:revealInFinder"), { id }),
     },
     recording: {
       signalFrontendReady: () => invoke(cmd("recording:signalFrontendReady")),

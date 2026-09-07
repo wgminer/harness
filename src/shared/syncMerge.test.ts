@@ -199,6 +199,105 @@ describe("buildMergedFileMap", () => {
     expect(merged["app-state/tasks.json"]?.toString("utf-8")).toBe('{"tasks":[]}');
   });
 
+  it("merges image records without resurrecting tombstoned versions", () => {
+    const local = Buffer.from(
+      JSON.stringify({
+        images: [
+          {
+            id: "img",
+            title: "Local",
+            prompt: "",
+            createdAt: 1,
+            updatedAt: 200,
+            size: "auto",
+            quality: "auto",
+            background: "auto",
+            outputFormat: "png",
+            hasFile: true,
+            absolutePath: "/tmp/a2.png",
+            activeVersionId: "v2",
+            deletedVersionIds: ["v1"],
+            versions: [
+              {
+                id: "v2",
+                parentId: null,
+                branch: "A",
+                indexInBranch: 1,
+                fileName: "a2.png",
+                prompt: "",
+                kind: "generate",
+                size: "auto",
+                quality: "auto",
+                background: "auto",
+                outputFormat: "png",
+                createdAt: 20,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const remote = Buffer.from(
+      JSON.stringify({
+        images: [
+          {
+            id: "img",
+            title: "Remote",
+            prompt: "",
+            createdAt: 1,
+            updatedAt: 100,
+            size: "auto",
+            quality: "auto",
+            background: "auto",
+            outputFormat: "png",
+            hasFile: true,
+            absolutePath: "/tmp/a1.png",
+            activeVersionId: "v1",
+            versions: [
+              {
+                id: "v1",
+                parentId: null,
+                branch: "A",
+                indexInBranch: 1,
+                fileName: "a1.png",
+                prompt: "",
+                kind: "generate",
+                size: "auto",
+                quality: "auto",
+                background: "auto",
+                outputFormat: "png",
+                createdAt: 10,
+              },
+              {
+                id: "v2",
+                parentId: "v1",
+                branch: "A",
+                indexInBranch: 2,
+                fileName: "a2.png",
+                prompt: "",
+                kind: "generate",
+                size: "auto",
+                quality: "auto",
+                background: "auto",
+                outputFormat: "png",
+                createdAt: 20,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const merged = mergeFileBytes("app-state/images.json", local, remote);
+    const image = (JSON.parse(merged.toString("utf-8")).images as { id: string }[])[0] as {
+      versions: { id: string }[];
+      deletedVersionIds: string[];
+      activeVersionId: string;
+    };
+    expect(image.versions.map((v) => v.id)).toEqual(["v2"]);
+    expect(image.deletedVersionIds).toEqual(["v1"]);
+    expect(image.activeVersionId).toBe("v2");
+  });
+
   it("merges images per record and keeps referenced blobs from both sides", () => {
     const localIndex = Buffer.from(
       JSON.stringify({

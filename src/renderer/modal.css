@@ -19,13 +19,13 @@
 
 .app-modal {
   --app-modal-pad-x: var(--space-3);
-  --app-modal-pad-y: var(--space-2);
+  --app-modal-pad-y: var(--space-3);
   width: 100%;
   max-width: 440px;
   display: flex;
   flex-direction: column;
   background: var(--bg-elevated);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-edge);
   box-shadow: var(--shadow);
 }
@@ -44,7 +44,7 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding: var(--app-modal-pad-y) var(--app-modal-pad-x);
-  border-bottom: 1px solid var(--border-edge);
+  border-bottom: 1px solid var(--border-input);
 }
 
 .app-modal-heading {
@@ -215,7 +215,6 @@
   gap: var(--space-2);
   flex-wrap: wrap;
   padding: var(--app-modal-pad-y) var(--app-modal-pad-x);
-  border-top: 1px solid var(--border-edge);
 }
 
 .app-modal-footer--spread {

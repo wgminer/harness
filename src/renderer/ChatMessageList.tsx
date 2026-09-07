@@ -10,6 +10,7 @@ import {
   formatMessageTime,
   getInlineWriteup,
   isAttachedNoteCreate,
+  isToolCallPending,
   type LiveNoteStream,
   memorySearchHitsFromToolCall,
 } from "./chatHelpers";
@@ -20,6 +21,12 @@ import {
   shouldUseStreamingAssistantRenderer,
   useStreamedAssistantIds,
 } from "./streamRevealHold";
+
+function isAwaitingToolConfirmation(call: ToolCallDisplay): boolean {
+  if (!isToolCallPending(call)) return false;
+  const payload = call.payload as { resolving?: boolean } | undefined;
+  return payload?.resolving !== true;
+}
 
 interface ChatMessageListProps {
   displayMessages: Message[];
@@ -133,7 +140,9 @@ export function ChatMessageList({
               m.id,
               streamedAssistantIds,
             ) || (isLatestAssistant && sending);
-          const showStreamFooterSpinner = isStreamingAssistantText;
+          const waitingForHumanInput =
+            isStreamingAssistantText && hasToolCalls && m.toolCalls!.some(isAwaitingToolConfirmation);
+          const showStreamFooterSpinner = isStreamingAssistantText && !waitingForHumanInput;
 
           const optionsInteractive =
             optionSelectEnabled && isAssistant && lastMessage?.id === m.id;
@@ -166,6 +175,7 @@ export function ChatMessageList({
                 <StreamingAssistantContent
                   content={m.content}
                   isStreaming={isStreamingAssistantText}
+                  waitingForHumanInput={waitingForHumanInput}
                   messageId={m.id}
                   messageTimestamp={m.timestamp}
                   copiedId={copiedId}

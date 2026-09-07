@@ -79,6 +79,9 @@ export default function App() {
   } | null>(null);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [activeImageId, setActiveImageId] = useState<string | null>(null);
+  /** Image ids with generate/adjust in flight — sidebar spinner + keep canvas mounted. */
+  const [processingImageIds, setProcessingImageIds] = useState<Record<string, true>>({});
+  const activeImageProcessing = Object.keys(processingImageIds).length > 0;
   const [uiSessionReady, setUiSessionReady] = useState(false);
   const [setupGaps, setSetupGaps] = useState<SetupGap[]>([]);
   const [setupNoticeOpen, setSetupNoticeOpen] = useState(false);
@@ -591,6 +594,25 @@ export default function App() {
   const handleImageDelete = useCallback(async (id: string) => {
     const remaining = await window.harness.images.delete(id);
     setImages(remaining);
+    setProcessingImageIds((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    if (activeImageId === id) {
+      setActiveImageId(null);
+    }
+  }, [activeImageId]);
+
+  const handleImageRemoved = useCallback((id: string) => {
+    setImages((prev) => prev.filter((item) => item.id !== id));
+    setProcessingImageIds((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     if (activeImageId === id) {
       setActiveImageId(null);
     }
@@ -602,8 +624,20 @@ export default function App() {
         (a, b) => b.updatedAt - a.updatedAt,
       ),
     );
-    // First successful generate from the compose canvas selects the new entry.
+    // Create-on-submit (and first generate) selects the new library entry.
     setActiveImageId((prev) => prev ?? image.id);
+  }, []);
+
+  const handleImageActivityChange = useCallback((imageId: string, active: boolean) => {
+    setProcessingImageIds((prev) => {
+      if (active) {
+        return prev[imageId] ? prev : { ...prev, [imageId]: true };
+      }
+      if (!prev[imageId]) return prev;
+      const next = { ...prev };
+      delete next[imageId];
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -741,6 +775,7 @@ export default function App() {
             void createNewImage();
           }}
           activeChatProcessing={activeChatProcessing}
+          processingImageIds={processingImageIds}
           titleGenInFlight={titleGenInFlight}
           titleAwaitingIds={titleAwaitingIds}
           appVersion={appVersion}
@@ -841,8 +876,15 @@ export default function App() {
               mirrorGlobalFnRecording={view === "notes"}
             />
           )}
-          {view === "images" && (
-            <ImageCanvasView imageId={activeImageId} onImageUpdated={handleImageUpdated} />
+          {(view === "images" || activeImageProcessing || activeImageId != null) && (
+            <div className="main-image-host" hidden={view !== "images"}>
+              <ImageCanvasView
+                imageId={activeImageId}
+                onImageUpdated={handleImageUpdated}
+                onImageRemoved={handleImageRemoved}
+                onImageActivityChange={handleImageActivityChange}
+              />
+            </div>
           )}
           {view === "dev-chat" && <DevChatView />}
           {view === "dev-dictation" && <DevDictationView />}

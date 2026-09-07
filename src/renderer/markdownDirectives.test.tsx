@@ -121,6 +121,17 @@ describe("markdown directives", () => {
     expect(html).not.toContain("`/n/note_1`");
   });
 
+  it("turns file:// links and absolute path code into Finder buttons", () => {
+    const html = render(
+      "Open [the build](file:///Users/wgm/Projects/harness/dist) or `/Users/wgm/Projects/harness/src/foo.ts`.",
+    );
+    expect(html).toContain("library-ref");
+    expect(html).toContain("Show in Finder: /Users/wgm/Projects/harness/dist");
+    expect(html).toContain("Show in Finder: /Users/wgm/Projects/harness/src/foo.ts");
+    expect(html).toContain("the build");
+    expect(html).not.toContain('href="file:');
+  });
+
   it("renders standard markdown (table, bold) alongside directives", () => {
     const html = render("Hello **world**\n\n| a | b |\n|---|---|\n| 1 | 2 |\n");
     expect(html).toContain("<strong>world</strong>");

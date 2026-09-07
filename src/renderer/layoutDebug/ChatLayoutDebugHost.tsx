@@ -4,6 +4,9 @@ import { LayoutDebugPanel } from "./LayoutDebugPanel";
 import { useLayoutDebug } from "./useLayoutDebug";
 import "./layoutDebug.css";
 
+/** Flip to true when iterating on chat layout metrics. */
+const LAYOUT_DEBUG_UI_ENABLED = false;
+
 export function ChatLayoutDebugHost({
   children,
   active,
@@ -11,7 +14,11 @@ export function ChatLayoutDebugHost({
   children: ReactNode;
   active: boolean;
 }) {
-  const debug = useLayoutDebug(active);
+  const debug = useLayoutDebug(active && LAYOUT_DEBUG_UI_ENABLED);
+
+  if (!LAYOUT_DEBUG_UI_ENABLED) {
+    return children;
+  }
 
   return (
     <div className="layout-debug-shell">

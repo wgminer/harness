@@ -15,7 +15,7 @@ import type {
   NoteSpellCheckInput,
   NoteSummary,
 } from "./writing";
-import type { GeneratedImage, ImageGenerateInput } from "./images";
+import type { GeneratedImage, ImageCreateInput, ImageGenerateInput } from "./images";
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
@@ -71,6 +71,8 @@ export interface HarnessAPI {
     openAccessibilitySettings: () => Promise<void>;
     openMicrophoneSettings: () => Promise<void>;
     openSpeechRecognitionSettings: () => Promise<void>;
+    /** Reveal a local path in Finder (or the OS file manager). */
+    showInFolder: (path: string) => Promise<void>;
   };
   settings: {
     get: () => Promise<Settings>;
@@ -210,6 +212,13 @@ export interface HarnessAPI {
     ensureDictationReplyAction: (conversationId: string) => Promise<string>;
     stop: () => Promise<void>;
     resolveGatedTool: (pendingId: string, action: "proceed" | "cancel") => Promise<void>;
+    /** Live or checkpointed turn waiting on tool approval (for remount / restart rehydrate). */
+    getActiveTurn: () => Promise<{
+      conversationId: string | null;
+      hasActiveStream: boolean;
+      content: string;
+      pendingTools: Array<{ toolName: string; payload: unknown }>;
+    }>;
     getContextPreview: (conversationId?: string | null) => Promise<ContextPreview>;
     onStreamChunk: (cb: (conversationId: string, chunk: string) => void) => () => void;
     onStreamEnd: (cb: (conversationId: string) => void) => () => void;
@@ -271,10 +280,15 @@ export interface HarnessAPI {
   /** Generated image library objects (peer to notes/chats). */
   images: {
     list: () => Promise<GeneratedImage[]>;
+    create: (input: ImageCreateInput) => Promise<GeneratedImage>;
     read: (id: string) => Promise<GeneratedImage | null>;
     delete: (id: string) => Promise<GeneratedImage[]>;
     generate: (input: ImageGenerateInput) => Promise<GeneratedImage>;
     setActiveVersion: (id: string, versionId: string) => Promise<GeneratedImage>;
+    cancel: (id: string) => Promise<void>;
+    deleteVersion: (id: string, versionId: string) => Promise<GeneratedImage>;
+    copyToClipboard: (id: string) => Promise<void>;
+    revealInFinder: (id: string) => Promise<void>;
   };
   recording: {
     /** Call once after IPC listeners are registered so Fn monitor can start. */

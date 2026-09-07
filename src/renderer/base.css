@@ -499,6 +499,19 @@ hr {
   color: var(--fg);
 }
 
+/* Quiet borderless control (toolbars, inline secondary actions) */
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--fg-muted);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--overlay-subtle);
+  border-color: transparent;
+  color: var(--fg);
+}
+
 /* Compact quiet control (chat secondary row, setup notice) */
 .btn-compact {
   --control-size: calc(var(--grid) * 8 - var(--space-1));
@@ -778,6 +791,19 @@ hr {
 }
 
 .main-chat-host[hidden] {
+  display: none !important;
+}
+
+/** Keeps image canvas mounted while generating or when an image is selected. */
+.main-image-host {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.main-image-host[hidden] {
   display: none !important;
 }
 

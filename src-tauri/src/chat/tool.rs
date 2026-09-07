@@ -8,16 +8,31 @@ use crate::coding::{
     scope_from_meta,
 };
 use crate::customization::{execute_customization_tool, is_customization_tool_name};
-use crate::memory::get_conversation_coding_scope;
+use crate::memory::{get_conversation_coding_scope, ToolCallRecord};
+use crate::openai::{ChatMessageParam, ToolCallParam};
 
+use super::gated_checkpoint::{
+    clear_all_checkpoints, clear_checkpoint, load_checkpoint, save_checkpoint, GatedCheckpoint,
+};
 use super::stream::{activate_note_stream_from_payload, NoteStreamState};
 use super::ChatController;
 
 pub(crate) struct PendingGatedTool {
-    tool: String,
+    pub(crate) tool: String,
     args: Value,
-    conversation_id: String,
+    pub(crate) conversation_id: String,
+    /// Payload last shown in the tool panel (includes pendingId / preview).
+    pub(crate) preview_payload: Value,
     respond_to: oneshot::Sender<String>,
+}
+
+/// Snapshot of the OpenAI tool round, captured when a gated tool starts waiting.
+pub(crate) struct GatedTurnSnapshot {
+    pub tool_call_id: String,
+    pub messages: Vec<ChatMessageParam>,
+    pub remaining_tool_calls: Vec<ToolCallParam>,
+    pub content_so_far: String,
+    pub tool_records_so_far: Vec<ToolCallRecord>,
 }
 
 impl ChatController {
@@ -35,6 +50,19 @@ impl ChatController {
         for pending in pending {
             let _ = pending.respond_to.send(result.clone());
         }
+        // Orphaned disk checkpoints (e.g. after restart) — clear and notify UI.
+        for cp in super::gated_checkpoint::load_all_checkpoints() {
+            let mut payload = cp.preview_payload.clone();
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert("pending".into(), json!(false));
+                obj.insert("cancelled".into(), json!(true));
+                obj.insert("stopped".into(), json!(true));
+                obj.insert("message".into(), json!(message));
+            }
+            self.emit_tool_panel_update(&cp.conversation_id, &cp.tool, payload);
+            clear_checkpoint(&cp.pending_id);
+        }
+        clear_all_checkpoints();
     }
 
     pub async fn resolve_gated_tool(&self, pending_id: &str, action: &str) {
@@ -42,24 +70,35 @@ impl ChatController {
             let mut map = self.pending_gated.lock().await;
             map.remove(pending_id)
         };
-        let Some(pending) = pending else {
+        if let Some(pending) = pending {
+            let result = run_gated_action(
+                &self.state,
+                &pending.conversation_id,
+                &pending.tool,
+                pending.args,
+                action,
+            )
+            .await;
+            let _ = pending
+                .respond_to
+                .send(with_pending_id(&result, pending_id));
+            return;
+        }
+
+        // Process restarted — resume from durable checkpoint.
+        let Some(checkpoint) = load_checkpoint(pending_id) else {
             return;
         };
-        let result = if action == "proceed" {
-            if coding_tool_name_is(&pending.tool) {
-                match load_scope_for_conversation(&self.state, &pending.conversation_id).await {
-                    Ok(scope) => execute_coding_tool(&scope, &pending.tool, pending.args).await,
-                    Err(e) => json!({ "error": e }).to_string(),
-                }
-            } else {
-                execute_assistant_tool(&self.state, &pending.tool, pending.args, None)
-                    .await
-                    .unwrap_or_else(|e| json!({ "error": e.to_string() }).to_string())
+        let controller = self.clone();
+        let action = action.to_string();
+        tauri::async_runtime::spawn(async move {
+            if let Err(err) = controller
+                .resume_from_gated_checkpoint(checkpoint, &action)
+                .await
+            {
+                eprintln!("[harness] gated tool resume failed: {err}");
             }
-        } else {
-            json!({ "cancelled": true, "message": "User cancelled the action." }).to_string()
-        };
-        let _ = pending.respond_to.send(with_pending_id(&result, pending_id));
+        });
     }
 
     pub(crate) async fn execute_tool(
@@ -67,6 +106,7 @@ impl ChatController {
         name: &str,
         args: Value,
         conversation_id: &str,
+        snapshot: Option<GatedTurnSnapshot>,
     ) -> Result<String, String> {
         let gated_task = matches!(name, "task_delete" | "task_clear_completed" | "task_update");
         let skip_tool_panel_update = should_skip_note_stream_tool_panel(name, &args);
@@ -83,24 +123,15 @@ impl ChatController {
                     obj.insert("pending".into(), json!(true));
                     obj.insert("tool".into(), json!(name));
                 }
-                self.emit_tool_panel_update(conversation_id, name, pending_payload);
-
-                let (tx, rx) = oneshot::channel();
-                self.pending_gated.lock().await.insert(
-                    pending_id.clone(),
-                    PendingGatedTool {
-                        tool: name.to_string(),
-                        args,
-                        conversation_id: conversation_id.to_string(),
-                        respond_to: tx,
-                    },
-                );
-                with_pending_id(
-                    &rx.await.unwrap_or_else(|_| {
-                        json!({ "error": "Gated tool request was cancelled." }).to_string()
-                    }),
+                self.await_gated_approval(
+                    conversation_id,
+                    name,
+                    args,
+                    pending_payload,
                     &pending_id,
+                    snapshot,
                 )
+                .await
             } else {
                 execute_coding_tool(&scope, name, args).await
             }
@@ -113,24 +144,15 @@ impl ChatController {
                     "args": args,
                     "pendingId": pending_id
                 });
-                self.emit_tool_panel_update(conversation_id, name, pending_payload);
-
-                let (tx, rx) = oneshot::channel();
-                self.pending_gated.lock().await.insert(
-                    pending_id.clone(),
-                    PendingGatedTool {
-                        tool: name.to_string(),
-                        args,
-                        conversation_id: conversation_id.to_string(),
-                        respond_to: tx,
-                    },
-                );
-                with_pending_id(
-                    &rx.await.unwrap_or_else(|_| {
-                        json!({ "error": "Gated tool request was cancelled." }).to_string()
-                    }),
+                self.await_gated_approval(
+                    conversation_id,
+                    name,
+                    args,
+                    pending_payload,
                     &pending_id,
+                    snapshot,
                 )
+                .await
             } else {
                 execute_assistant_tool(&self.state, name, args, Some(conversation_id))
                     .await
@@ -156,6 +178,85 @@ impl ChatController {
         }
 
         Ok(result)
+    }
+
+    async fn await_gated_approval(
+        &self,
+        conversation_id: &str,
+        name: &str,
+        args: Value,
+        pending_payload: Value,
+        pending_id: &str,
+        snapshot: Option<GatedTurnSnapshot>,
+    ) -> String {
+        self.emit_tool_panel_update(conversation_id, name, pending_payload.clone());
+
+        if let Some(snap) = snapshot {
+            let checkpoint = GatedCheckpoint {
+                conversation_id: conversation_id.to_string(),
+                pending_id: pending_id.to_string(),
+                tool: name.to_string(),
+                args: args.clone(),
+                preview_payload: pending_payload.clone(),
+                tool_call_id: snap.tool_call_id,
+                messages: snap.messages,
+                remaining_tool_calls: snap.remaining_tool_calls,
+                content_so_far: snap.content_so_far,
+                tool_records_so_far: snap.tool_records_so_far,
+            };
+            if let Err(err) = save_checkpoint(&checkpoint) {
+                eprintln!("[harness] failed to save gated checkpoint: {err}");
+            }
+        }
+
+        let (tx, rx) = oneshot::channel();
+        self.pending_gated.lock().await.insert(
+            pending_id.to_string(),
+            PendingGatedTool {
+                tool: name.to_string(),
+                args,
+                conversation_id: conversation_id.to_string(),
+                preview_payload: pending_payload,
+                respond_to: tx,
+            },
+        );
+
+        let result = with_pending_id(
+            &rx.await.unwrap_or_else(|_| {
+                json!({
+                    "cancelled": true,
+                    "stopped": true,
+                    "message": "Stopped while waiting for approval — the pending action was not run."
+                })
+                .to_string()
+            }),
+            pending_id,
+        );
+        clear_checkpoint(pending_id);
+        result
+    }
+}
+
+async fn run_gated_action(
+    state: &crate::memory::AppState,
+    conversation_id: &str,
+    tool: &str,
+    args: Value,
+    action: &str,
+) -> String {
+    if action == "proceed" {
+        if coding_tool_name_is(tool) {
+            match load_scope_for_conversation(state, conversation_id).await {
+                Ok(scope) => execute_coding_tool(&scope, tool, args).await,
+                Err(e) => json!({ "error": e }).to_string(),
+            }
+        } else {
+            execute_assistant_tool(state, tool, args, None)
+                .await
+                .unwrap_or_else(|e| json!({ "error": e.to_string() }).to_string())
+        }
+    } else {
+        json!({ "cancelled": true, "message": "User cancelled the action." }).to_string()
     }
 }
 
