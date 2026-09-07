@@ -4,11 +4,16 @@ import { X } from "lucide-react";
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
-  title: string;
+  /** Visible heading; may be animated. Prefer a stable accessible name via ariaLabel when non-text. */
+  title: ReactNode;
+  /** Accessible name when `title` is not plain text (e.g. scramble reveal). */
+  ariaLabel?: string;
   children: ReactNode;
   footer?: ReactNode;
   /** When true, backdrop, Escape, and close button do not dismiss. */
   closeDisabled?: boolean;
+  /** Hide the header close control (e.g. while an entrance animation runs). */
+  hideClose?: boolean;
   /** Scrollable body with max-height (e.g. task editor). */
   variant?: "default" | "scrollable";
   /** Panel max-width: default 440px, lg ~720px. */
@@ -21,9 +26,11 @@ export function Modal({
   open,
   onClose,
   title,
+  ariaLabel,
   children,
   footer,
   closeDisabled = false,
+  hideClose = false,
   variant = "default",
   size = "default",
   footerClassName,
@@ -71,14 +78,21 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="app-modal-header">
-          <h3 id={titleId} className="app-modal-heading">
+          <h3 id={titleId} className="app-modal-heading" aria-label={ariaLabel}>
             {title}
           </h3>
           <button
             type="button"
-            className="btn btn-icon-sm app-modal-close"
+            className={[
+              "btn btn-icon-sm app-modal-close",
+              hideClose ? "app-modal-close--hidden" : null,
+            ]
+              .filter(Boolean)
+              .join(" ")}
             onClick={onClose}
-            disabled={closeDisabled}
+            disabled={closeDisabled || hideClose}
+            tabIndex={hideClose ? -1 : undefined}
+            aria-hidden={hideClose || undefined}
             aria-label="Close"
           >
             <X size={16} />

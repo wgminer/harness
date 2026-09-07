@@ -349,7 +349,17 @@ export function NotesView({
           createdAt: note.createdAt,
           wordCount: note.wordCount,
         };
-        const next = prev.some((item) => item.id === note.id)
+        const existing = prev.find((item) => item.id === note.id);
+        if (
+          existing &&
+          existing.title === summary.title &&
+          existing.updatedAt === summary.updatedAt &&
+          existing.createdAt === summary.createdAt &&
+          existing.wordCount === summary.wordCount
+        ) {
+          return prev;
+        }
+        const next = existing
           ? prev.map((item) => (item.id === note.id ? summary : item))
           : [summary, ...prev];
         return next.sort((a, b) => b.updatedAt - a.updatedAt);

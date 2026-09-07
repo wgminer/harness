@@ -24,13 +24,10 @@ export function collectSetupGaps(input: {
   syncConfigured: boolean;
   platform: NodeJS.Platform;
   accessibilityTrusted?: boolean | null;
-  /** Browser debug shell — skip desktop-only recommended gaps (R2, Accessibility)
-   *  and the required API-key gap (chat streams dummy replies without a key). */
-  webClient?: boolean;
 }): SetupGap[] {
   const gaps: SetupGap[] = [];
 
-  if (!input.webClient && !input.hasOpenAIApiKey) {
+  if (!input.hasOpenAIApiKey) {
     gaps.push({
       kind: "openai_api_key",
       title: "OpenAI API key",
@@ -41,7 +38,7 @@ export function collectSetupGaps(input: {
     });
   }
 
-  if (!input.webClient && !input.syncConfigured) {
+  if (!input.syncConfigured) {
     gaps.push({
       kind: "sync_r2",
       title: "Cloud sync (R2)",
@@ -52,7 +49,7 @@ export function collectSetupGaps(input: {
     });
   }
 
-  if (!input.webClient && input.platform === "darwin" && input.accessibilityTrusted === false) {
+  if (input.platform === "darwin" && input.accessibilityTrusted === false) {
     gaps.push({
       kind: "macos_accessibility",
       title: "Accessibility permission",
@@ -66,9 +63,7 @@ export function collectSetupGaps(input: {
   return gaps;
 }
 
-/** Show the welcome setup notice when gaps remain and dismiss has not stuck for optional-only setups. */
-export function shouldShowSetupNotice(gaps: SetupGap[], setupNoticeDismissed: boolean): boolean {
-  if (gaps.length === 0) return false;
-  if (gaps.some((gap) => gap.severity === "required")) return true;
-  return !setupNoticeDismissed;
+/** Show the welcome setup notice only while chat still needs an API key. */
+export function shouldShowSetupNotice(gaps: SetupGap[], _setupNoticeDismissed: boolean): boolean {
+  return gaps.some((gap) => gap.severity === "required");
 }

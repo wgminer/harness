@@ -1,69 +1,137 @@
+import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { Modal } from "./Modal";
-import type { SetupGap } from "../shared/setupState";
+import { SecretField } from "./settings/SecretField";
+import { useHexScrambleReveal } from "./useHexScrambleReveal";
+
+const SETUP_NOTICE_TITLE = "Welcome to Harness";
 
 interface SetupNoticeModalProps {
   open: boolean;
-  gaps: SetupGap[];
-  onConfigure: (gap: SetupGap) => void;
+  onSaveApiKey: (apiKey: string) => void | Promise<void>;
   onDismiss: () => void;
 }
 
-export function SetupNoticeModal({ open, gaps, onConfigure, onDismiss }: SetupNoticeModalProps) {
-  const required = gaps.filter((g) => g.severity === "required");
-  const recommended = gaps.filter((g) => g.severity === "recommended");
+function enterStyle(index: number): CSSProperties {
+  return { "--setup-notice-enter-i": index } as CSSProperties;
+}
+
+function enterClass(revealed: boolean): string {
+  return ["setup-notice-enter", revealed ? "setup-notice-enter--in" : null].filter(Boolean).join(" ");
+}
+
+export function SetupNoticeModal({ open, onSaveApiKey, onDismiss }: SetupNoticeModalProps) {
+  const { display, settled } = useHexScrambleReveal(SETUP_NOTICE_TITLE, open);
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setApiKey("");
+      setSaving(false);
+      setError(null);
+    }
+  }, [open]);
+
+  const canContinue = apiKey.trim().length > 0 && !saving;
+
+  const submit = async () => {
+    const trimmed = apiKey.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSaveApiKey(trimmed);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save API key.");
+      setSaving(false);
+    }
+  };
+
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    void submit();
+  };
 
   return (
     <Modal
       open={open}
       onClose={onDismiss}
-      title="Welcome to Harness"
+      closeDisabled={saving || !settled}
+      hideClose={!settled}
+      title={
+        <span className="setup-notice-title">
+          <span
+            className={settled ? "setup-notice-title__settled" : "chat-stream-wait-ticker"}
+            aria-hidden="true"
+          >
+            {[...display].map((glyph, i) => (
+              <span
+                key={`${i}:${glyph}`}
+                className={settled ? undefined : "chat-stream-wait-ticker__glyph"}
+              >
+                {glyph === " " ? "\u00a0" : glyph}
+              </span>
+            ))}
+          </span>
+        </span>
+      }
+      ariaLabel={SETUP_NOTICE_TITLE}
       data-testid="setup-notice-modal"
       footer={
-        <button type="button" className="btn" onClick={onDismiss}>
-          Got It
-        </button>
+        <>
+          <button
+            type="button"
+            className={`btn ${enterClass(settled)}`}
+            style={enterStyle(2)}
+            onClick={onDismiss}
+            disabled={saving}
+            tabIndex={settled ? undefined : -1}
+            aria-hidden={settled ? undefined : true}
+          >
+            Skip for now
+          </button>
+          <button
+            type="submit"
+            form="setup-notice-api-key-form"
+            className={`btn btn-primary ${enterClass(settled)}`}
+            style={enterStyle(2)}
+            disabled={!canContinue}
+            tabIndex={settled ? undefined : -1}
+            aria-hidden={settled ? undefined : true}
+          >
+            {saving ? "Saving…" : "Continue"}
+          </button>
+        </>
       }
     >
-      <p className="setup-notice-lead">
-        Harness works locally on your Mac. Chat needs an OpenAI API key. Cloud sync is optional — set
-        up R2 when you want to pull data from another device.
-      </p>
-      {required.length > 0 && (
-        <section className="setup-notice-section">
-          <h4 className="setup-notice-heading">Required for chat</h4>
-          <ul className="setup-notice-list">
-            {required.map((gap) => (
-              <li key={gap.kind} className="setup-notice-item">
-                <div className="setup-notice-item__body">
-                  <strong>{gap.title}</strong>
-                  <p>{gap.detail}</p>
-                </div>
-                <button type="button" className="btn btn-compact" onClick={() => onConfigure(gap)}>
-                  Set Up
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {recommended.length > 0 && (
-        <section className="setup-notice-section">
-          <h4 className="setup-notice-heading">Recommended</h4>
-          <ul className="setup-notice-list">
-            {recommended.map((gap) => (
-              <li key={gap.kind} className="setup-notice-item">
-                <div className="setup-notice-item__body">
-                  <strong>{gap.title}</strong>
-                  <p>{gap.detail}</p>
-                </div>
-                <button type="button" className="btn btn-compact" onClick={() => onConfigure(gap)}>
-                  Set Up
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <form id="setup-notice-api-key-form" className="setup-notice-form" onSubmit={onSubmit}>
+        <p className={`setup-notice-lead ${enterClass(settled)}`} style={enterStyle(0)}>
+          Harness works locally on your Mac. Paste an OpenAI API key to start chatting — sync and
+          other options stay in Settings.
+        </p>
+        <label
+          className={`app-modal-field ${enterClass(settled)}`}
+          style={enterStyle(1)}
+          htmlFor="setup-notice-api-key"
+        >
+          <span className="app-modal-field__label">OpenAI API key</span>
+          <div className="setup-notice-key">
+            <SecretField
+              id="setup-notice-api-key"
+              testId="setup-notice-api-key"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              ariaLabel="OpenAI API key"
+            />
+          </div>
+        </label>
+        {error ? (
+          <p className="setup-notice-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </form>
     </Modal>
   );
 }

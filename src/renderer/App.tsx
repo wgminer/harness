@@ -154,7 +154,6 @@ export default function App() {
       syncConfigured: syncStatus.configured,
       platform,
       accessibilityTrusted,
-      webClient,
     });
     setSetupGaps(gaps);
     setWebClient(webClient);
@@ -187,12 +186,6 @@ export default function App() {
     setView("chat");
   }, []);
 
-  const openSettingsForGap = useCallback((gap: SetupGap) => {
-    setSettingsInitialTab(gap.settingsTab);
-    setView("settings");
-    setSetupNoticeOpen(false);
-  }, []);
-
   const openDataSettings = useCallback(() => {
     setSettingsInitialTab("data");
     setView("settings");
@@ -200,11 +193,18 @@ export default function App() {
 
   const dismissSetupNotice = useCallback(() => {
     setSetupNoticeOpen(false);
-    if (!setupGaps.some((gap) => gap.severity === "required")) {
-      void window.harness.uiSession.set({ setupNoticeDismissed: true });
-    }
-  }, [setupGaps]);
+  }, []);
 
+  const saveSetupApiKey = useCallback(
+    async (apiKey: string) => {
+      await window.harness.credentials.setOpenAIApiKey(apiKey);
+      setCachedHasOpenAIApiKey(true);
+      await refreshSetupState();
+      setSetupNoticeOpen(false);
+      void window.harness.uiSession.set({ setupNoticeDismissed: true });
+    },
+    [refreshSetupState],
+  );
   const resolveConversationId = useCallback(
     (list: Conversation[], preferredId: string | null): string | null => {
       if (list.length === 0) return null;
@@ -350,6 +350,14 @@ export default function App() {
     setArrivedLibraryIds((prev) => consumeArrivalId(prev, id));
     openImageInMain(id);
   }, [openImageInMain]);
+
+  const handleInitialOpenNoteHandled = useCallback(() => {
+    setPendingOpenNoteRequest(null);
+  }, []);
+
+  const handlePendingNoteHotkeyTextConsumed = useCallback(() => {
+    setPendingNoteHotkeyText(null);
+  }, []);
 
   useEffect(() => {
     void loadConversations();
@@ -554,17 +562,25 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== "n") return;
-      e.preventDefault();
-      if (e.shiftKey) {
-        void createNewNote();
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key === "n") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          void createNewNote();
+          return;
+        }
+        void createNew();
         return;
       }
-      void createNew();
+      if (key === "i" && e.shiftKey) {
+        e.preventDefault();
+        createNewImage();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [createNew, createNewNote]);
+  }, [createNew, createNewNote, createNewImage]);
 
   const handleConversationDelete = useCallback(async (id: string) => {
     await window.harness.memory.deleteConversation(id);
@@ -869,10 +885,10 @@ export default function App() {
               initialOpenNoteId={pendingOpenNoteRequest?.id ?? null}
               initialOpenNoteRequestNonce={pendingOpenNoteRequest?.nonce}
               initialOpenNoteIsNew={pendingOpenNoteRequest?.isNew}
-              onInitialOpenNoteHandled={() => setPendingOpenNoteRequest(null)}
+              onInitialOpenNoteHandled={handleInitialOpenNoteHandled}
               onActiveNoteChange={setActiveNoteId}
               pendingHotkeyText={pendingNoteHotkeyText}
-              onPendingHotkeyTextConsumed={() => setPendingNoteHotkeyText(null)}
+              onPendingHotkeyTextConsumed={handlePendingNoteHotkeyTextConsumed}
               mirrorGlobalFnRecording={view === "notes"}
             />
           )}
@@ -893,9 +909,8 @@ export default function App() {
         </main>
       </div>
       <SetupNoticeModal
-        open={setupNoticeOpen && setupGaps.length > 0}
-        gaps={setupGaps}
-        onConfigure={openSettingsForGap}
+        open={setupNoticeOpen && setupGaps.some((gap) => gap.severity === "required")}
+        onSaveApiKey={saveSetupApiKey}
         onDismiss={dismissSetupNotice}
       />
       <HotkeyRecordingOverlay

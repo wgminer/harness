@@ -59,6 +59,11 @@
   flex-shrink: 0;
 }
 
+.app-modal-close--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .app-modal-close svg {
   width: var(--icon-size-md);
   height: var(--icon-size-md);

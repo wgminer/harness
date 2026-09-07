@@ -430,26 +430,40 @@ export function Sidebar({
       <aside className="sidebar" id="app-sidebar">
         <div className="sidebar-buttons">
           <div className="sidebar-new-menu-wrap" ref={newMenuRef}>
-            <button
-              type="button"
-              className="btn sidebar-new-chat-btn"
-              data-testid="sidebar-new-menu"
-              aria-label="New"
-              aria-haspopup="menu"
-              aria-expanded={newMenuOpen}
-              onClick={() => setNewMenuOpen((open) => !open)}
-            >
-              <Plus size={16} className="sidebar-new-chat-icon" aria-hidden />
-              <span className="sidebar-new-chat-label">New</span>
-              <ChevronDown size={14} className="sidebar-new-menu-chevron" aria-hidden />
-            </button>
+            <div className="sidebar-new-split" role="group" aria-label="New">
+              <button
+                type="button"
+                className="btn sidebar-new-chat-btn"
+                data-testid="sidebar-new-chat"
+                aria-label="New chat"
+                title="New chat"
+                onClick={() => {
+                  setNewMenuOpen(false);
+                  onNewChat();
+                }}
+              >
+                <Plus size={16} className="sidebar-new-chat-icon" aria-hidden />
+                <span className="sidebar-new-chat-label">New</span>
+              </button>
+              <button
+                type="button"
+                className="btn sidebar-new-menu-trigger"
+                data-testid="sidebar-new-menu"
+                aria-label="More create options"
+                aria-haspopup="menu"
+                aria-expanded={newMenuOpen}
+                title="More create options"
+                onClick={() => setNewMenuOpen((open) => !open)}
+              >
+                <ChevronDown size={14} className="sidebar-new-menu-chevron" aria-hidden />
+              </button>
+            </div>
             {newMenuOpen ? (
               <div className="sidebar-new-menu" role="menu" aria-label="Create new">
                 <button
                   type="button"
                   className="sidebar-new-menu-item"
                   role="menuitem"
-                  data-testid="sidebar-new-chat"
                   onClick={() => {
                     setNewMenuOpen(false);
                     onNewChat();
@@ -494,6 +508,9 @@ export function Sidebar({
                   <span className="sidebar-new-menu-item__main">
                     <ImageIcon size={16} className="sidebar-new-menu-item__icon" aria-hidden />
                     <span>New image</span>
+                  </span>
+                  <span className="sidebar-new-menu-item__shortcut" aria-hidden>
+                    ⇧{modKey}I
                   </span>
                 </button>
               </div>

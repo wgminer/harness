@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
 import { Modal } from "../Modal";
+import { SetupNoticeModal } from "../SetupNoticeModal";
 import { Section } from "./storyHelpers";
 
 function ModalChromeDemo() {
@@ -75,42 +76,14 @@ function SetupNoticeDemo() {
       <button type="button" className="btn" onClick={() => setOpen(true)}>
         Open Setup Notice
       </button>
-      <Modal
+      <SetupNoticeModal
         open={open}
-        onClose={() => setOpen(false)}
-        title="Finish Setup"
-        size="lg"
-        footer={
-          <button type="button" className="btn" onClick={() => setOpen(false)}>
-            Dismiss
-          </button>
-        }
-      >
-        <p className="setup-notice-lead">A few things still need configuring.</p>
-        <div className="setup-notice-section">
-          <h4 className="setup-notice-heading">Required</h4>
-          <ul className="setup-notice-list">
-            <li className="setup-notice-item">
-              <div className="setup-notice-item__body">
-                <strong>API key</strong>
-                <p>Add at least one model provider key.</p>
-              </div>
-              <button type="button" className="btn btn-compact">
-                Configure
-              </button>
-            </li>
-            <li className="setup-notice-item">
-              <div className="setup-notice-item__body">
-                <strong>Microphone</strong>
-                <p>Needed for dictation.</p>
-              </div>
-              <button type="button" className="btn btn-compact">
-                Configure
-              </button>
-            </li>
-          </ul>
-        </div>
-      </Modal>
+        onSaveApiKey={async () => {
+          await new Promise((r) => setTimeout(r, 400));
+          setOpen(false);
+        }}
+        onDismiss={() => setOpen(false)}
+      />
     </div>
   );
 }

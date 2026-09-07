@@ -1,5 +1,21 @@
 /* Setup notice modal content — used with SetupNoticeModal + Modal shell */
 
+.setup-notice-title {
+  display: block;
+  min-height: var(--line-height-snug);
+}
+
+.setup-notice-title__settled {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+.setup-notice-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 .setup-notice-lead {
   margin: 0;
   color: var(--fg-muted);
@@ -7,57 +23,62 @@
   line-height: var(--line-height-normal);
 }
 
-.setup-notice-section + .setup-notice-section {
-  margin-top: var(--space-3);
+.setup-notice-key .settings-api-key-row {
+  max-width: none;
 }
 
-.setup-notice-heading {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size-caption);
-  font-weight: 600;
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.setup-notice-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.setup-notice-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-edge);
-}
-
-.setup-notice-item__body {
+.setup-notice-key .settings-api-key-row input {
+  flex: 1;
   min-width: 0;
-}
-
-.setup-notice-item__body strong {
-  display: block;
-  margin-bottom: var(--space-1);
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
   font-size: var(--font-size-caption);
+  line-height: var(--control-size);
+  height: var(--control-size);
 }
 
-.setup-notice-item__body p {
+.setup-notice-key .settings-api-key-row input:focus {
+  outline: none;
+  border-color: var(--border-input-focus);
+  box-shadow: 0 0 0 1px var(--focus-ring-color);
+}
+
+.setup-notice-error {
   margin: 0;
-  color: var(--fg-muted);
+  color: var(--danger-fg);
   font-size: var(--font-size-caption);
   line-height: var(--line-height-snug);
 }
 
-.setup-notice-item > .btn {
-  flex-shrink: 0;
-  white-space: nowrap;
+/* Staggered fade — same vocabulary as chat stream blocks.
+ * Use visibility (not only opacity) so .btn:disabled opacity cannot leak through. */
+.setup-notice-enter {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.setup-notice-enter--in {
+  visibility: visible;
+  animation: chat-block-in var(--motion-duration-stream-in) var(--motion-ease-out) both;
+  animation-delay: calc(var(--setup-notice-enter-i, 0) * 70ms);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-notice-enter {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .setup-notice-enter--in {
+    animation: none;
+  }
 }

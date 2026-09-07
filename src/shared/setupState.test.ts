@@ -23,14 +23,13 @@ describe("collectSetupGaps", () => {
     expect(gaps).toEqual([]);
   });
 
-  it("skips API-key and desktop-only gaps on the browser client", () => {
+  it("still reports API key and sync gaps on the browser client", () => {
     const gaps = collectSetupGaps({
       hasOpenAIApiKey: false,
       syncConfigured: false,
       platform: "linux",
-      webClient: true,
     });
-    expect(gaps).toEqual([]);
+    expect(gaps.map((g) => g.kind)).toEqual(["openai_api_key", "sync_r2"]);
   });
 });
 
@@ -48,13 +47,14 @@ describe("shouldShowSetupNotice", () => {
     accessibilityTrusted: true,
   });
 
-  it("shows again after dismiss when a required gap remains", () => {
+  it("shows while a required gap remains", () => {
     expect(shouldShowSetupNotice(requiredGap, true)).toBe(true);
+    expect(shouldShowSetupNotice(requiredGap, false)).toBe(true);
   });
 
-  it("respects dismiss when only recommended gaps remain", () => {
+  it("does not interrupt for recommended-only gaps", () => {
     expect(shouldShowSetupNotice(recommendedOnlyGaps, true)).toBe(false);
-    expect(shouldShowSetupNotice(recommendedOnlyGaps, false)).toBe(true);
+    expect(shouldShowSetupNotice(recommendedOnlyGaps, false)).toBe(false);
   });
 });
 

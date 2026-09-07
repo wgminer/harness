@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import {
   CheckLine,
+  ChevronDown,
   Image as ImageIcon,
   MessageCircle,
   Pin,
@@ -50,9 +51,14 @@ function ShellGallery() {
       <Section title="Sidebar button cluster" stack>
         <div className="sidebar" style={{ width: 280, background: "var(--bg)" }}>
           <div className="sidebar-buttons">
-            <button type="button" className="btn sidebar-new-chat-btn">
-              New
-            </button>
+            <div className="sidebar-new-split" role="group" aria-label="New">
+              <button type="button" className="btn sidebar-new-chat-btn">
+                New
+              </button>
+              <button type="button" className="btn sidebar-new-menu-trigger" aria-label="More create options">
+                <ChevronDown size={14} className="sidebar-new-menu-chevron" aria-hidden />
+              </button>
+            </div>
             <div className="sidebar-nav">
               <button type="button" className="btn btn-icon" aria-label="Search">
                 <Search size={16} />
@@ -85,6 +91,7 @@ function ShellGallery() {
               <ImageIcon size={14} className="sidebar-new-menu-item__icon" aria-hidden />
               New Image
             </span>
+            <span className="sidebar-new-menu-item__shortcut">⇧⌘I</span>
           </button>
         </div>
       </Section>
