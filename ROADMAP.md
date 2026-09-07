@@ -5,7 +5,7 @@ Two layers:
 1. **Outcomes** — what the project is *for* (steer ideas here first).
 2. **Execution** — what shipped, what’s active, what’s frozen.
 
-**Current phase:** v0.9 (desktop **0.9.0**) — chat modes, shared prompt/stream contracts, shell polish. Next: paper cuts and ship hygiene.
+**Current phase:** v0.10 (desktop **0.10.0**) — scoped coding tools, image region edits, first-run setup. Next: paper cuts and ship hygiene.
 
 When considering work: *does it serve craft, trust, or ship friction — or does it belong in Frozen?*
 
@@ -107,6 +107,13 @@ Short list only — refresh when something ships.
 - Compose quote unchanged: **“You are here”**.
 - Left alone on purpose: `com.harness.*`, Application Support `Harness` / `Harness Dev`, Keychain services, `harness-pair:1:`, R2 prefix `harness/`, `window.harness` / `HARNESS_*` env vars, helper binary (`HarnessSpeech`).
 
+### 2026-09 — v0.10 coding tools + image regions `[O1][O2][O4]`
+
+- **Coding tools** — Per-conversation CodingScope (project folder or Harness UI aspects), gated edit/shell/git tools, Plus-menu attach/scope UX.
+- **Images** — Region markers drive edits; pending gated-tool approvals survive restart; chat opens local `file://` paths.
+- **Shell** — Time-of-day theme, stream wait ticker, Settings Voice/Notes tabs, inline first-run API key with hex-scramble welcome.
+- **Version** — Desktop **0.10.0** (iOS marketing version stays on its own line).
+
 ### 2026-08 — v0.9 chat modes + contracts `[O1][O2]`
 
 - **Chat modes** — Decide / Write / Refine overlays (`chatModes.json`) with desktop picker.
@@ -173,4 +180,4 @@ Nothing below starts until Active now is calm. Not a commitment sequence.
 
 ---
 
-*Last updated: 2026-08-19*
+*Last updated: 2026-09-07*
