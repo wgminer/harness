@@ -27,6 +27,30 @@ function getGithubRepo() {
   return match ? match[1] : "wgminer/harness";
 }
 
+/** Markdown for the GitHub Release body. Keep this the one source of install instructions. */
+function releaseNotes(version) {
+  const dmg = `harness-v${version}-mac.dmg`;
+  const zip = `harness-v${version}-mac.zip`;
+  const updater = `harness-v${version}-mac.app.tar.gz`;
+  return `## Download
+
+**Download \`${dmg}\`.** That is the macOS installer.
+
+Open the disk image and drag **Harness** into Applications. Apple silicon, macOS 12 or later.
+
+Already have Harness installed? Use **Update** in the sidebar instead of downloading again.
+
+## Other files — skip these
+
+| File | What it is |
+| --- | --- |
+| \`${zip}\` | Same app as a zip. Prefer the DMG. |
+| \`${updater}\` | In-app updater payload. Not an installer. |
+| \`${updater}.sig\` | Updater signature. |
+| \`latest.json\` | Auto-update manifest. |
+`;
+}
+
 function findDmg(bundleRoot) {
   const dmgDir = path.join(bundleRoot, "dmg");
   if (!fs.existsSync(dmgDir)) return null;
@@ -129,11 +153,17 @@ function releaseExists(repo, tag) {
   return result.status === 0;
 }
 
+function writeNotesFile(version) {
+  const notesPath = path.join(require("node:os").tmpdir(), `harness-release-notes-v${version}.md`);
+  fs.writeFileSync(notesPath, releaseNotes(version));
+  return notesPath;
+}
+
 function publishGithubRelease(version) {
   const repo = getGithubRepo();
   const tag = `v${version}`;
   const title = version;
-  const notes = `Harness v${version} for macOS.`;
+  const notesPath = writeNotesFile(version);
 
   console.log(`Collecting release assets for ${tag}...`);
   const assets = collectReleaseAssets(version);
@@ -144,6 +174,17 @@ function publishGithubRelease(version) {
   console.log(`Publishing GitHub Release ${tag} to ${repo}...`);
   if (releaseExists(repo, tag)) {
     run("gh", ["release", "upload", tag, ...assets, "--repo", repo, "--clobber"]);
+    run("gh", [
+      "release",
+      "edit",
+      tag,
+      "--repo",
+      repo,
+      "--title",
+      title,
+      "--notes-file",
+      notesPath,
+    ]);
   } else {
     run("gh", [
       "release",
@@ -154,8 +195,8 @@ function publishGithubRelease(version) {
       repo,
       "--title",
       title,
-      "--notes",
-      notes,
+      "--notes-file",
+      notesPath,
     ]);
   }
 
@@ -169,4 +210,4 @@ if (require.main === module) {
   publishGithubRelease(version);
 }
 
-module.exports = { collectReleaseAssets, publishGithubRelease, getGithubRepo };
+module.exports = { collectReleaseAssets, publishGithubRelease, getGithubRepo, releaseNotes };

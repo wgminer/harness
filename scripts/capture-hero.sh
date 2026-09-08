@@ -130,6 +130,11 @@ session = {
 }
 (state / "ui-session.json").write_text(json.dumps(session, indent=2) + "\n")
 
+# Dummy key so first-run setup does not cover the compose splash when
+# HARNESS_DEV=1 (file-backed credentials). Production captures use Keychain.
+creds_path = state.parent.parent / "credentials.json"
+creds_path.write_text(json.dumps({"openaiApiKey": "sk-hero-demo"}, indent=2) + "\n")
+
 # Open the centered new-chat / compose splash (not a restored thread).
 settings = {
     "version": 1,
@@ -142,8 +147,11 @@ PY
 
 window_id_via_cg() {
   # Prefer CGWindowList — System Events often cannot read Tauri window ids.
+  # HARNESS_HERO_PID, when set, captures only that process (so a demo app can
+  # sit beside a running Harness Dev window).
   swift -e '
 import Cocoa
+let pidFilter = Int(ProcessInfo.processInfo.environment["HARNESS_HERO_PID"] ?? "") ?? 0
 let owners = ["harness", "Harness", "Harness Dev", "here", "Here", "Here Dev"]
 let opts = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
 guard let info = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] else { exit(1) }
@@ -154,6 +162,8 @@ for w in info {
   guard owners.contains(where: { owner.caseInsensitiveCompare($0) == .orderedSame }) else { continue }
   let layer = w[kCGWindowLayer as String] as? Int ?? 0
   guard layer == 0 else { continue }
+  let ownerPid = w[kCGWindowOwnerPID as String] as? Int ?? 0
+  if pidFilter != 0 && ownerPid != pidFilter { continue }
   let bounds = w[kCGWindowBounds as String] as? [String: Any] ?? [:]
   let width = Int((bounds["Width"] as? CGFloat) ?? CGFloat((bounds["Width"] as? Double) ?? 0))
   let height = Int((bounds["Height"] as? CGFloat) ?? CGFloat((bounds["Height"] as? Double) ?? 0))
@@ -192,25 +202,25 @@ end tell
 EOF
 }
 
-# Move + resize the Harness window to fill the built-in MBP display
-# (visible frame: below the menu bar). Returns "WxH" in backing pixels.
+# Move + resize the Harness window to fill the main display
+# (visible frame: below the menu bar). Prints SIZE / CROP_Y / DISPLAY lines.
 fill_builtin_screen() {
   swift -e '
 import AppKit
 import ApplicationServices
 
-func builtinScreen() -> NSScreen? {
-  NSScreen.screens.first { $0.localizedName.localizedCaseInsensitiveContains("built-in") }
-    ?? NSScreen.main
+func targetScreen() -> NSScreen? {
+  NSScreen.main ?? NSScreen.screens.first
 }
 
-guard let screen = builtinScreen() else {
-  fputs("error: no built-in screen\n", stderr)
+guard let screen = targetScreen() else {
+  fputs("error: no screen\n", stderr)
   exit(1)
 }
 let visible = screen.visibleFrame // bottom-left origin, AppKit points
 let scale = screen.backingScaleFactor
 
+let pidFilter = Int(ProcessInfo.processInfo.environment["HARNESS_HERO_PID"] ?? "") ?? 0
 let owners: Set<String> = ["harness", "Harness", "Harness Dev", "here", "Here", "Here Dev"]
 let opts = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
 guard let info = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] else {
@@ -230,6 +240,7 @@ for w in info {
   let height = Int((bounds["Height"] as? CGFloat) ?? CGFloat((bounds["Height"] as? Double) ?? 0))
   let area = width * height
   let ownerPid = w[kCGWindowOwnerPID as String] as? pid_t ?? 0
+  if pidFilter != 0 && Int(ownerPid) != pidFilter { continue }
   if area > bestArea && ownerPid != 0 {
     bestArea = area
     pid = ownerPid
@@ -267,7 +278,16 @@ if let sz = AXValueCreate(.cgSize, &sizeVal) {
 
 let backingW = Int((visible.width * scale).rounded())
 let backingH = Int((visible.height * scale).rounded())
-print("\(backingW)x\(backingH)")
+let topLeftY = screen.frame.maxY - visible.maxY
+let rectX = Int(visible.origin.x.rounded())
+let rectY = Int(topLeftY.rounded())
+let rectW = Int(visible.width.rounded())
+let rectH = Int(visible.height.rounded())
+let displayId = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue ?? 1
+print("SIZE \(backingW)x\(backingH)")
+print("RECT \(rectX),\(rectY),\(rectW),\(rectH)")
+print("DISPLAY \(displayId)")
+print("CROP_Y \(Int((topLeftY * scale).rounded()))")
 ' 2>/dev/null
 }
 
@@ -298,25 +318,29 @@ EOF
 
 LAUNCH=0
 KEEP=0
+KEEP_EXISTING=0
 for arg in "$@"; do
   case "$arg" in
     --launch) LAUNCH=1 ;;
     --keep) KEEP=1 ;;
+    --keep-existing) KEEP_EXISTING=1 ;;
     -h|--help)
       cat <<EOF
-Usage: $(basename "$0") [--launch] [--keep]
+Usage: $(basename "$0") [--launch] [--keep] [--keep-existing]
 
 Captures a seeded Harness window to:
   $OUT
 
-  --launch   Quit any running Harness, seed a demo profile, start the app, capture
-  --keep     Leave the demo app running after capture
+  --launch         Quit any running Harness, seed a demo profile, start the app, capture
+  --keep           Leave the demo app running after capture
+  --keep-existing  With --launch: do not quit other Harness windows; capture the demo PID only
 
 Env:
   HARNESS_HERO_OUT      Output path (default: media/hero.png)
   HARNESS_HERO_PROFILE  Throwaway profile dir (default: media/.hero-profile)
   HARNESS_HERO_WAIT     Seconds to wait for window (default: 180)
   HARNESS_HERO_BIN      Optional path to app binary (else npm run tauri dev)
+  HARNESS_HERO_PID      Optional process id to capture (set automatically with --keep-existing)
 EOF
       exit 0
       ;;
@@ -328,13 +352,17 @@ cleanup() {
   if [[ "$KEEP" -eq 0 && -n "$APP_PID" ]] && kill -0 "$APP_PID" 2>/dev/null; then
     kill "$APP_PID" 2>/dev/null || true
     sleep 0.5
-    quit_harness
+    if [[ "$KEEP_EXISTING" -eq 0 ]]; then
+      quit_harness
+    fi
   fi
 }
 trap cleanup EXIT
 
 if [[ "$LAUNCH" -eq 1 ]]; then
-  quit_harness
+  if [[ "$KEEP_EXISTING" -eq 0 ]]; then
+    quit_harness
+  fi
   seed_demo_profile
 
   echo "Starting Harness with demo profile…"
@@ -342,6 +370,7 @@ if [[ "$LAUNCH" -eq 1 ]]; then
     HARNESS_DATA_DIR="$PROFILE" HARNESS_DISABLE_GLOBAL_HOTKEY=1 "$APP_BIN" \
       >/tmp/harness-capture-hero.log 2>&1 &
     APP_PID=$!
+    export HARNESS_HERO_PID="$APP_PID"
   else
     (
       cd "$ROOT"
@@ -359,8 +388,8 @@ if [[ "$LAUNCH" -eq 1 ]]; then
   while (( SECONDS < deadline )); do
     WID="$(resolve_window_id || true)"
     if [[ -n "$WID" ]]; then
-      # Let Vite + React paint past the boot wordmark / blank webview.
-      sleep 4
+      # Let the webview paint past the boot wordmark / blank frame.
+      sleep 8
       bring_to_front
       sleep 1
       WID="$(resolve_window_id || true)"
@@ -380,14 +409,17 @@ if [[ -z "${WID:-}" ]]; then
 fi
 
 bring_to_front
-echo "Resizing window to fill built-in display…"
-FILL_SIZE="$(fill_builtin_screen || true)"
+echo "Resizing window to fill the main display…"
+FILL_OUT="$(fill_builtin_screen || true)"
+FILL_SIZE="$(printf '%s\n' "$FILL_OUT" | awk '/^SIZE / { print $2 }')"
+FILL_CROP_Y="$(printf '%s\n' "$FILL_OUT" | awk '/^CROP_Y / { print $2 }')"
+FILL_DISPLAY="$(printf '%s\n' "$FILL_OUT" | awk '/^DISPLAY / { print $2 }')"
 if [[ -n "$FILL_SIZE" ]]; then
   echo "Target size (backing pixels): $FILL_SIZE"
 else
   echo "warning: could not resize window (Accessibility permission may be required)." >&2
 fi
-sleep 1
+sleep 2
 bring_to_front
 WID="$(resolve_window_id || true)"
 if [[ -z "${WID:-}" ]]; then
@@ -395,14 +427,103 @@ if [[ -z "${WID:-}" ]]; then
   exit 1
 fi
 
-# -l: CGWindowID; -o: no shadow; -x: quiet
-if ! screencapture -l "$WID" -o -x "$OUT" 2>/tmp/harness-capture-hero-screencapture.err; then
+# Crop the top `cropY` pixels off a PNG (menu bar), keep `cropH` of height.
+crop_png_top() {
+  local src="$1" dest="$2" cropY="$3" cropH="$4"
+  HARNESS_CROP_SRC="$src" HARNESS_CROP_DST="$dest" HARNESS_CROP_Y="$cropY" HARNESS_CROP_H="$cropH" swift -e '
+import CoreGraphics
+import Foundation
+import ImageIO
+import UniformTypeIdentifiers
+
+let env = ProcessInfo.processInfo.environment
+guard let srcPath = env["HARNESS_CROP_SRC"], let dstPath = env["HARNESS_CROP_DST"] else { exit(1) }
+let cropY = Int(env["HARNESS_CROP_Y"] ?? "0") ?? 0
+let cropH = Int(env["HARNESS_CROP_H"] ?? "0") ?? 0
+let srcURL = URL(fileURLWithPath: srcPath)
+let dstURL = URL(fileURLWithPath: dstPath)
+guard let src = CGImageSourceCreateWithURL(srcURL as CFURL, nil),
+      let image = CGImageSourceCreateImageAtIndex(src, 0, nil) else { exit(1) }
+let width = image.width
+let height = min(cropH, max(0, image.height - cropY))
+guard height > 0, cropY >= 0, cropY < image.height,
+      let cropped = image.cropping(to: CGRect(x: 0, y: cropY, width: width, height: height)),
+      let dest = CGImageDestinationCreateWithURL(dstURL as CFURL, UTType.png.identifier as CFString, 1, nil)
+else { exit(1) }
+CGImageDestinationAddImage(dest, cropped, nil)
+if !CGImageDestinationFinalize(dest) { exit(1) }
+'
+}
+
+image_has_visible_content() {
+  local src="$1"
+  HARNESS_CROP_SRC="$src" swift -e '
+import CoreGraphics
+import Foundation
+import ImageIO
+
+guard let srcPath = ProcessInfo.processInfo.environment["HARNESS_CROP_SRC"],
+      let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: srcPath) as CFURL, nil),
+      let image = CGImageSourceCreateImageAtIndex(src, 0, nil),
+      let data = image.dataProvider?.data,
+      let ptr = CFDataGetBytePtr(data)
+else { exit(1) }
+let n = CFDataGetLength(data)
+if n < 16 { exit(1) }
+var lit = 0
+var samples = 0
+let stride = max(1, n / 4000)
+var i = 0
+while i + 2 < n {
+  let r = Int(ptr[i]), g = Int(ptr[i+1]), b = Int(ptr[i+2])
+  if r + g + b > 40 { lit += 1 }
+  samples += 1
+  i += stride
+}
+if samples == 0 || (Double(lit) / Double(samples)) < 0.02 { exit(1) }
+'
+}
+
+# -l: CGWindowID (needs window Screen Recording). Fall back to a full-display
+# capture cropped to the visible frame — often allowed when -l / -R are not.
+capture_ok=0
+if screencapture -l "$WID" -o -x "$OUT" 2>/tmp/harness-capture-hero-screencapture.err; then
+  capture_ok=1
+else
+  echo "Window capture unavailable; capturing the main display and cropping the menu bar." >&2
+  cat /tmp/harness-capture-hero-screencapture.err >&2 || true
+  FULL_PNG="$(mktemp /tmp/harness-hero-full.XXXXXX.png)"
+  extra=()
+  if [[ -n "$FILL_DISPLAY" ]]; then
+    extra+=(-D "$FILL_DISPLAY")
+  fi
+  if screencapture "${extra[@]}" -x "$FULL_PNG" 2>/tmp/harness-capture-hero-screencapture.err; then
+    CROP_H="${FILL_SIZE##*x}"
+    CROP_Y="${FILL_CROP_Y:-0}"
+    if [[ -n "$CROP_H" ]] && crop_png_top "$FULL_PNG" "$OUT" "$CROP_Y" "$CROP_H"; then
+      capture_ok=1
+    else
+      cp "$FULL_PNG" "$OUT"
+      capture_ok=1
+      echo "warning: could not crop menu bar; kept full-display capture." >&2
+    fi
+  fi
+  rm -f "$FULL_PNG"
+fi
+if [[ "$capture_ok" -ne 1 ]]; then
   echo "error: screencapture failed (Screen Recording permission required)." >&2
   cat /tmp/harness-capture-hero-screencapture.err >&2 || true
   exit 1
 fi
 
 echo "Wrote $OUT ($(file -b "$OUT"); sips -g pixelWidth -g pixelHeight "$OUT" 2>/dev/null | paste - - | sed 's/  */ /g')"
+
+if ! image_has_visible_content "$OUT"; then
+  echo "error: captured image is blank (almost all black). Is the display asleep or off-screen?" >&2
+  echo "Open: file://$OUT" >&2
+  git -C "$ROOT" checkout -- media/hero.png 2>/dev/null || true
+  exit 1
+fi
 
 SITE_HERO="$ROOT/site/assets/hero.png"
 mkdir -p "$(dirname "$SITE_HERO")"

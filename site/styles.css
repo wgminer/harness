@@ -200,6 +200,18 @@ a:focus-visible {
   color: var(--fg-faint);
 }
 
+.download-hint {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--fg-muted);
+}
+
+.download-hint code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
+
 .site-credit {
   margin: var(--space-md) 0 0;
   width: 100%;

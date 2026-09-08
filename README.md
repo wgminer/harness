@@ -46,10 +46,10 @@ Opens `http://localhost:5173`. Chat works without a key (dummy streamed replies)
 
 ```bash
 npm run dist:mac          # signed DMG — see BUILD.md
-npm run capture:hero      # refresh media/hero.png from a running Harness Dev window
+npm run capture:hero      # refresh media/hero.png and site/assets/hero.png
 ```
 
-`capture:hero` uses macOS `screencapture`. Pass `--launch` to start `npm run dev` if the window isn’t open yet.
+`capture:hero` uses macOS `screencapture` against a throwaway demo profile (real chats are never in the frame). Pass `--launch` to start the app if it isn’t open. `npm run release` runs this against the signed build so the download site screenshot matches the shipping UI.
 
 ## Surfaces
 
