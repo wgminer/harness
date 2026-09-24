@@ -4,15 +4,20 @@
  *   streaming reply owns the readable area between the turn and the composer dock.
  * - No auto-follow during streaming — the thread stays where it was parked until the user scrolls
  *   or explicitly jumps to the bottom.
- * - User scroll of the thread is never overridden programmatically except explicit scrollToBottom.
+ * - User scroll of the thread is never overridden programmatically except explicit scrollToBottom
+ *   and a one-shot live-edge land when an existing thread is opened.
+ * - Dock-height changes only shift scrollTop when the reader is already at the live edge.
  */
 import { snapToGrid } from "../../shared/grid";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent, RefObject, UIEvent } from "react";
 import {
   didTurnJustStart,
+  isNearLiveEdge,
   parkContentHeight,
   scrollToLiveEdge,
+  scrollTopDeltaForPaddingChange,
+  shouldLandOpenedThread,
   trailingSpacerForOffset,
   turnParkPlan,
 } from "./chatScrollLogic";
@@ -28,6 +33,11 @@ function readTurnSpacer(scroll: HTMLDivElement): number {
 
 function writeTurnSpacer(scroll: HTMLDivElement, px: number): void {
   scroll.style.setProperty(TURN_SPACER_VAR, `${Math.max(0, Math.round(px))}px`);
+}
+
+function readPaddingBottom(el: HTMLElement): number {
+  const px = parseFloat(getComputedStyle(el).paddingBottom);
+  return Number.isFinite(px) ? px : 0;
 }
 
 /** Top of the newest user message in scroll-content coordinates. */
@@ -77,10 +87,15 @@ export function useChatScrollController(args: {
   /** False when single-message centered landing disables follow behavior. */
   scrollEnabled: boolean;
   sending: boolean;
+  /** Conversation id — landing the live edge once when history is ready. */
+  threadKey?: string;
+  /** Bumps when transcript content is replaced (history load). */
+  transcriptRevision?: number;
 }) {
   const prevSendingRef = useRef(false);
   const programmaticScrollRef = useRef(false);
   const lastScrollTopRef = useRef(0);
+  const landedThreadRef = useRef<string | null>(null);
 
   const runProgrammaticScroll = useCallback(
     (fn: () => void) => {
@@ -116,11 +131,19 @@ export function useChatScrollController(args: {
     const scroll = args.scrollRef.current;
     if (!pane || !dock || !scroll) return;
 
+    let prevPadding = readPaddingBottom(scroll);
+
     const sync = () => {
       const h = Math.ceil(dock.getBoundingClientRect().height);
       const snapped = snapToGrid(h);
+      const wasNearEdge = isNearLiveEdge(scroll);
       pane.style.setProperty("--chat-composer-dock-height", `${snapped}px`);
       scroll.style.setProperty("--chat-composer-dock-height", `${snapped}px`);
+      const nextPadding = readPaddingBottom(scroll);
+      const delta = scrollTopDeltaForPaddingChange(prevPadding, nextPadding);
+      prevPadding = nextPadding;
+      if (!args.scrollEnabled || delta === 0 || !wasNearEdge) return;
+      scroll.scrollTop = Math.max(0, scroll.scrollTop + delta);
     };
 
     sync();
@@ -134,7 +157,36 @@ export function useChatScrollController(args: {
       ro?.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [args.chatPaneRef, args.composerDockRef, args.scrollRef]);
+  }, [args.chatPaneRef, args.composerDockRef, args.scrollRef, args.scrollEnabled]);
+
+  /** Opened thread: once history overflows, sit on the live edge (latest Q&A question). */
+  useLayoutEffect(() => {
+    if (!args.scrollEnabled) {
+      landedThreadRef.current = null;
+      return;
+    }
+    const scroll = args.scrollRef.current;
+    const threadKey = args.threadKey ?? "";
+    const action = shouldLandOpenedThread({
+      threadKey,
+      landedKey: landedThreadRef.current,
+      scrollEnabled: args.scrollEnabled,
+      sending: args.sending,
+      hasOverflow: !!scroll && scroll.scrollHeight > scroll.clientHeight + 1,
+    });
+    if (action === "skip") return;
+    landedThreadRef.current = threadKey;
+    if (action === "land" && scroll) {
+      runProgrammaticScroll(() => scrollToLiveEdge(scroll));
+    }
+  }, [
+    args.scrollEnabled,
+    args.sending,
+    args.scrollRef,
+    args.threadKey,
+    args.transcriptRevision,
+    runProgrammaticScroll,
+  ]);
 
   const onScroll = useCallback(
     (_e: UIEvent<HTMLDivElement>) => {

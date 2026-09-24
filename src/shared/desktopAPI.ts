@@ -109,7 +109,7 @@ export interface HarnessAPI {
         sessionKind?: "dictation" | "chat";
         hasAssistantReply?: boolean;
         hasMessages?: boolean;
-        chatMode?: "chat" | "decide" | "write" | "refine";
+        chatMode?: "chat" | "qa";
         codingScope?: CodingScopeMeta | null;
         dictationReplyAction?: string;
       }[]

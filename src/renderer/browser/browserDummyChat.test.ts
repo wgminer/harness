@@ -25,6 +25,13 @@ describe("dummyAssistantReply", () => {
     expect(reply).toContain("You wrote: hello playground");
   });
 
+  it("asks one question and ends with choice titles in Q&A", () => {
+    const reply = dummyAssistantReply("scope", "qa");
+    expect(reply).toContain("What's the real constraint");
+    expect(reply).toContain(':::option{title="Ship it this week"}');
+    expect(reply).toContain("::::options");
+  });
+
   it("uses the matching fixture for each trigger", () => {
     expect(dummyAssistantReply("short")).not.toContain("A few things worth watching");
     expect(dummyAssistantReply("list")).toContain("- Opening line replaces");

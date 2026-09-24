@@ -57,9 +57,11 @@ describe("markdown directives", () => {
     expect(bad).not.toContain("md-link-card");
   });
 
-  it("renders option labels as static buttons without body text", () => {
+  it("strips option fences instead of rendering chips", () => {
     const html = render(
       [
+        "What's the constraint?",
+        "",
         "::::options",
         ':::option{title="Redis"}',
         "Ignored body.",
@@ -69,12 +71,11 @@ describe("markdown directives", () => {
         "::::",
       ].join("\n"),
     );
-    expect(html).toContain("md-options");
-    expect(html).toContain('class="btn"');
-    expect(html).toContain("Redis");
-    expect(html).toContain("Memory");
-    expect(html).not.toContain("Ignored body");
-    expect(html).not.toContain("Recommended");
+    expect(html).toContain("constraint?");
+    expect(html).not.toContain("md-options");
+    expect(html).not.toContain("Redis");
+    expect(html).not.toContain("Memory");
+    expect(html).not.toContain("::::options");
   });
 
   it("renders fenced code blocks", () => {

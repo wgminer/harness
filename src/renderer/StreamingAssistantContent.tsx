@@ -21,7 +21,6 @@ interface StreamingAssistantContentProps {
   savedToNotesId: string | null;
   onCopied: (id: string | null) => void;
   onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
-  onOptionSelect?: (label: string) => void | Promise<void>;
   libraryHits?: MemorySearchHit[];
   onOpenConversation?: (conversationId: string) => void;
   onOpenNote?: (noteId: string) => void;
@@ -57,7 +56,6 @@ export function StreamingAssistantContent({
   savedToNotesId,
   onCopied,
   onSaveToNotes,
-  onOptionSelect,
   libraryHits,
   onOpenConversation,
   onOpenNote,
@@ -98,7 +96,6 @@ export function StreamingAssistantContent({
             savedToNotesId={savedToNotesId}
             onCopied={onCopied}
             onSaveToNotes={onSaveToNotes}
-            onOptionSelect={onOptionSelect}
             libraryHits={libraryHits}
             onOpenConversation={onOpenConversation}
             onOpenNote={onOpenNote}

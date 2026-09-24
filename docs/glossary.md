@@ -38,7 +38,7 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 
 | Term | Meaning |
 |---|---|
-| **Chat mode** | Desktop-only stance on an open conversation: **Chat**, **Decide**, **Write**, **Refine**. Same thread; mode changes the system overlay + composer placeholder. Not Agent mode (frozen). |
+| **Chat mode** | Desktop-only stance on an open conversation: **Chat** or **Q&A**. Same thread; mode changes the system overlay + composer placeholder (and Q&A’s multiple-choice dock). Not Agent mode (frozen). |
 | **System prompt** | Assembled instructions for a request: shared contract + platform overlay + mode overlay + memory/recent/temporal blocks. |
 | **Context / context preview** | What actually goes to the model for a turn (prompt layers, selected memories, messages, tools) — the legible surface of a request. |
 | **Tools** | Model-callable functions from the tools contract. Schemas sit beside the prompt, not inside it. |
@@ -52,7 +52,7 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 | **Dictation** | Speech → text via Apple Speech (local). Often enters through the **dictation screen**, then may continue in the **chat UI**. |
 | **Fn dictation / global hotkey** | Background Fn shortcut (needs Accessibility); optional bring-to-front. |
 | **Transcript cleanup** | Optional post-pass via OpenAI to polish dictation. |
-| **Dictionary** | Deterministic find/replace for repeated mishears. |
+| **Preferred spellings** | Canonical names/terms injected into cleanup (close variants included). Applied only when cleanup runs. |
 | **Recording** | Captured audio; local-only under shared `~/Library/Application Support/Harness/audio-recordings/` (Dev + Dist; not synced). |
 
 ## Notes & writing

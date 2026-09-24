@@ -86,3 +86,22 @@ export function trailingSpacerForOffset(args: {
 export function scrollTopDeltaForPaddingChange(prevPaddingPx: number, nextPaddingPx: number): number {
   return nextPaddingPx - prevPaddingPx;
 }
+
+/**
+ * Opening an existing thread: jump to the live edge once history is tall enough.
+ * In-flight turns are marked landed so parkTurn keeps ownership.
+ * Short / not-yet-loaded transcripts stay "skip" until they overflow.
+ */
+export function shouldLandOpenedThread(args: {
+  threadKey: string;
+  landedKey: string | null;
+  scrollEnabled: boolean;
+  sending: boolean;
+  hasOverflow: boolean;
+}): "land" | "mark" | "skip" {
+  if (!args.scrollEnabled) return "skip";
+  if (args.sending) return "mark";
+  if (!args.threadKey || args.landedKey === args.threadKey) return "skip";
+  if (!args.hasOverflow) return "skip";
+  return "land";
+}

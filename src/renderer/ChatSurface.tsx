@@ -30,7 +30,6 @@ interface ChatSurfaceProps {
   onPolish: () => void;
   /** Reply-strip controls while awaiting a reply (suggested prompts or mode picker). */
   replyModeControl?: ReactNode;
-  onOptionSelect?: (label: string) => void | Promise<void>;
   liveNoteStream?: LiveNoteStream | null;
   onOpenNoteInEditor?: (noteId: string) => void;
   onOpenConversation?: (conversationId: string) => void;
@@ -58,6 +57,9 @@ interface ChatSurfaceProps {
   placeholder?: string;
   modeControl?: ReactNode;
   onCycleMode?: () => void;
+  qaChoices?: string[];
+  qaChoicesArrive?: boolean;
+  onQaChoiceSelect?: (label: string) => void;
   codingScope?: CodingScopeMeta | null;
   selfScopeAvailable?: boolean;
   onPickProjectFolder?: () => Promise<void> | void;
@@ -65,6 +67,8 @@ interface ChatSurfaceProps {
   onClearCodingScope?: () => Promise<void> | void;
   /** Hide the dock while dictation reply actions (Run / vocab) own the continue path. */
   hideComposer?: boolean;
+  /** Conversation id so the scroll controller can land on the live edge once. */
+  threadKey?: string;
 }
 
 export function ChatSurface({
@@ -82,7 +86,6 @@ export function ChatSurface({
   onToolConfirm,
   onPolish,
   replyModeControl,
-  onOptionSelect,
   liveNoteStream,
   onOpenNoteInEditor,
   onOpenConversation,
@@ -110,12 +113,16 @@ export function ChatSurface({
   placeholder,
   modeControl,
   onCycleMode,
+  qaChoices,
+  qaChoicesArrive,
+  onQaChoiceSelect,
   codingScope = null,
   selfScopeAvailable = false,
   onPickProjectFolder,
   onUseSelfScope,
   onClearCodingScope,
   hideComposer = false,
+  threadKey,
 }: ChatSurfaceProps) {
   const chatPaneRef = useRef<HTMLDivElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -130,6 +137,8 @@ export function ChatSurface({
     composerDockRef: composerRef,
     scrollEnabled: !centerSingleMessage,
     sending,
+    threadKey,
+    transcriptRevision: displayMessages.length,
   });
 
   useLayoutEffect(() => {
@@ -166,7 +175,6 @@ export function ChatSurface({
             onToolConfirm={onToolConfirm}
             onPolish={onPolish}
             replyModeControl={replyModeControl}
-            onOptionSelect={onOptionSelect}
             liveNoteStream={liveNoteStream}
             onOpenNoteInEditor={onOpenNoteInEditor}
             onOpenConversation={onOpenConversation}
@@ -228,6 +236,9 @@ export function ChatSurface({
             placeholder={placeholder}
             modeControl={modeControl}
             onCycleMode={onCycleMode}
+            qaChoices={qaChoices}
+            qaChoicesArrive={qaChoicesArrive}
+            onQaChoiceSelect={onQaChoiceSelect}
             codingScope={codingScope}
             selfScopeAvailable={selfScopeAvailable}
             onPickProjectFolder={onPickProjectFolder}

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { CodingScopeMeta } from "../shared/desktopAPI";
 import type { VoiceState } from "./chatHelpers";
+import { QaChoicePanel } from "./QaChoicePanel";
 import {
   AUDIO_FILE_ACCEPT,
   fileFromAudioPath,
@@ -65,6 +66,11 @@ interface ChatComposerProps {
   inputRef?: MutableRefObject<HTMLTextAreaElement | null>;
   placeholder?: string;
   modeControl?: ReactNode;
+  /** Q&A stacked choices shown above the textarea when present. */
+  qaChoices?: string[];
+  /** Animate the chooser open. Used after a turn, not when opening a thread. */
+  qaChoicesArrive?: boolean;
+  onQaChoiceSelect?: (label: string) => void;
   codingScope?: CodingScopeMeta | null;
   selfScopeAvailable?: boolean;
   onPickProjectFolder?: () => Promise<void> | void;
@@ -97,6 +103,9 @@ export function ChatComposer({
   inputRef: externalInputRef,
   placeholder = "Write a message…",
   modeControl,
+  qaChoices,
+  qaChoicesArrive,
+  onQaChoiceSelect,
   codingScope = null,
   selfScopeAvailable = false,
   onPickProjectFolder,
@@ -382,6 +391,14 @@ export function ChatComposer({
             )}
           </div>
         )}
+        {qaChoices && qaChoices.length >= 2 && onQaChoiceSelect ? (
+          <QaChoicePanel
+            options={qaChoices}
+            onSelect={onQaChoiceSelect}
+            disabled={sending}
+            arrive={qaChoicesArrive}
+          />
+        ) : null}
         <textarea
           ref={(el) => {
             inputRef.current = el;

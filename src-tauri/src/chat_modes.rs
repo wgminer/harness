@@ -9,26 +9,21 @@ const CHAT_MODES_JSON: &str = include_str!("../../resources/contracts/chatModes.
 #[serde(rename_all = "camelCase")]
 pub enum ChatMode {
     Chat,
-    Decide,
-    Write,
-    Refine,
+    Qa,
 }
 
 impl ChatMode {
     pub fn as_str(self) -> &'static str {
         match self {
             ChatMode::Chat => "chat",
-            ChatMode::Decide => "decide",
-            ChatMode::Write => "write",
-            ChatMode::Refine => "refine",
+            ChatMode::Qa => "qa",
         }
     }
 
     pub fn parse(raw: Option<&str>) -> ChatMode {
         match raw.map(str::trim).unwrap_or("") {
-            "decide" => ChatMode::Decide,
-            "write" => ChatMode::Write,
-            "refine" => ChatMode::Refine,
+            // Legacy Decide / Write / Refine → Q&A
+            "qa" | "decide" | "write" | "refine" => ChatMode::Qa,
             _ => ChatMode::Chat,
         }
     }
@@ -78,18 +73,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn contract_has_four_modes() {
+    fn contract_has_two_modes() {
         let file = modes_file();
-        assert_eq!(file.modes.len(), 4);
+        assert_eq!(file.modes.len(), 2);
         let ids: Vec<_> = file.modes.iter().map(|m| m.id.as_str()).collect();
-        assert_eq!(ids, ["chat", "decide", "write", "refine"]);
+        assert_eq!(ids, ["chat", "qa"]);
     }
 
     #[test]
     fn chat_has_no_overlay() {
         assert!(mode_overlay(ChatMode::Chat).is_empty());
-        assert!(!mode_overlay(ChatMode::Decide).is_empty());
-        assert!(!mode_overlay(ChatMode::Write).is_empty());
-        assert!(!mode_overlay(ChatMode::Refine).is_empty());
+        assert!(!mode_overlay(ChatMode::Qa).is_empty());
+    }
+
+    #[test]
+    fn legacy_modes_map_to_qa() {
+        assert_eq!(ChatMode::parse(Some("decide")), ChatMode::Qa);
+        assert_eq!(ChatMode::parse(Some("write")), ChatMode::Qa);
+        assert_eq!(ChatMode::parse(Some("refine")), ChatMode::Qa);
+        assert_eq!(ChatMode::parse(Some("qa")), ChatMode::Qa);
+        assert_eq!(ChatMode::parse(Some("chat")), ChatMode::Chat);
+        assert_eq!(ChatMode::parse(None), ChatMode::Chat);
     }
 }

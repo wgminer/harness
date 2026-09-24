@@ -1,7 +1,8 @@
 import { DEFAULT_LAYOUT, DEFAULT_SETTINGS, type LayoutOptions, type Settings } from "../../shared/types";
+import { mergeGlossary, migrateCleanupPrompt } from "../../shared/transcriptCleanup";
 import { DEFAULT_UI_SESSION, normalizeUiSession, type UiSession } from "../../shared/uiSession";
+import { normalizeChatMode } from "../../shared/chatModes";
 import type { ChatModeId } from "../../shared/chatModes";
-import { isChatModeId } from "../../shared/chatModes";
 import type { ChatMessage, MessageAttachment } from "../../shared/types";
 import type { Note, NoteSummary } from "../../shared/writing";
 import { titleFromMarkdownContent, UNTITLED_NOTE_TITLE } from "../../shared/writing";
@@ -92,6 +93,11 @@ export function mergeSettings(current: Settings, partial: Partial<Settings>): Se
     ...DEFAULT_SETTINGS.transcription!.cleanup!,
     ...current.transcription?.cleanup,
     ...partial.transcription?.cleanup,
+    prompt: migrateCleanupPrompt(
+      partial.transcription?.cleanup?.prompt ??
+        current.transcription?.cleanup?.prompt ??
+        DEFAULT_SETTINGS.transcription!.cleanup!.prompt,
+    ),
   };
   return {
     ...current,
@@ -100,7 +106,7 @@ export function mergeSettings(current: Settings, partial: Partial<Settings>): Se
     recording,
     transcription: {
       cleanup,
-      dictionary: partial.transcription?.dictionary ?? current.transcription?.dictionary ?? [],
+      glossary: mergeGlossary(partial.transcription, current.transcription),
     },
     search: { ...DEFAULT_SETTINGS.search, ...current.search, ...partial.search },
     notes: {
@@ -129,7 +135,10 @@ function normalizeConversation(raw: unknown): BrowserConversation | null {
   if (typeof data.id !== "string" || !data.id) return null;
   const createdAt = typeof data.createdAt === "number" ? data.createdAt : Date.now();
   const messages = Array.isArray(data.messages) ? (data.messages as ChatMessage[]) : [];
-  const chatMode = isChatModeId(data.chatMode) ? data.chatMode : undefined;
+  const chatMode = (() => {
+    const normalized = normalizeChatMode(data.chatMode);
+    return normalized === "chat" ? undefined : normalized;
+  })();
   return {
     id: data.id,
     title: typeof data.title === "string" ? data.title : null,
@@ -255,7 +264,8 @@ export function createBrowserStore(storage: KeyValueStore = defaultStorage()) {
     },
     createConversation(chatMode?: string): string {
       const id = generateBrowserId("conv");
-      const mode = isChatModeId(chatMode) && chatMode !== "chat" ? chatMode : undefined;
+      const normalized = normalizeChatMode(chatMode);
+      const mode = normalized !== "chat" ? normalized : undefined;
       const row: BrowserConversation = {
         id,
         title: null,
@@ -275,7 +285,7 @@ export function createBrowserStore(storage: KeyValueStore = defaultStorage()) {
       persist();
     },
     setConversationChatMode(id: string, chatMode: string): void {
-      const mode = isChatModeId(chatMode) ? chatMode : "chat";
+      const mode = normalizeChatMode(chatMode);
       state = {
         ...state,
         conversations: state.conversations.map((c) =>

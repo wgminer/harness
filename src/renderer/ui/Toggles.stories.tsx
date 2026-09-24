@@ -16,7 +16,7 @@ function TogglesGallery() {
 
   return (
     <div>
-      <Section title="Chat mode picker (dropdown)" stack>
+      <Section title="Chat mode picker (segment)" stack>
         <ChatModePicker value={mode} onChange={setMode} />
       </Section>
 

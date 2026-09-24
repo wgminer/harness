@@ -11,7 +11,6 @@ import remarkDirective from "remark-directive";
 import rehypeHighlight from "rehype-highlight";
 import { formatMediumTimestamp } from "../shared/formatMediumTimestamp";
 import {
-  MarkdownInteractionContext,
   directiveComponents,
   remarkDirectiveToHast,
 } from "./markdownDirectives";
@@ -23,6 +22,7 @@ import {
   type MemorySearchHit,
 } from "../shared/conversationSearch";
 import { parseLocalFilePath } from "../shared/localFilePath";
+import { stripQaOptions } from "../shared/qaOptions";
 import { scheduleCopyFeedbackClear, useCopyFeedback } from "./useCopyFeedback";
 
 export type { MemorySearchHit };
@@ -179,8 +179,6 @@ export interface MarkdownContentProps {
   savedToNotesId?: string | null;
   onCopied?: (id: string | null) => void;
   onSaveToNotes?: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
-  /** When set, `:::option` directives render as clickable buttons that call this handler. */
-  onOptionSelect?: (label: string) => void | Promise<void>;
   libraryHits?: MemorySearchHit[];
   onOpenConversation?: (conversationId: string) => void;
   onOpenNote?: (noteId: string) => void;
@@ -315,7 +313,6 @@ export function MarkdownContent({
   savedToNotesId,
   onCopied,
   onSaveToNotes,
-  onOptionSelect,
   libraryHits,
   onOpenConversation,
   onOpenNote,
@@ -323,10 +320,7 @@ export function MarkdownContent({
 }: MarkdownContentProps) {
   const codeBlockIndexRef = useRef(0);
   codeBlockIndexRef.current = 0;
-  const markdownInteraction = useMemo(
-    () => (onOptionSelect ? { onOptionSelect } : {}),
-    [onOptionSelect],
-  );
+  const displayContent = useMemo(() => stripQaOptions(content), [content]);
   const libraryTitles = useMemo(() => {
     const map = new Map<string, string>();
     for (const hit of libraryHits ?? []) map.set(hit.id, hit.title);
@@ -408,16 +402,14 @@ export function MarkdownContent({
   } as unknown as Components;
 
   return (
-    <MarkdownInteractionContext.Provider value={markdownInteraction}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
-        rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
-        urlTransform={(url) => (/^file:/i.test(url.trim()) ? url : defaultUrlTransform(url))}
-        components={components}
-      >
-        {content}
-      </ReactMarkdown>
-    </MarkdownInteractionContext.Provider>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
+      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+      urlTransform={(url) => (/^file:/i.test(url.trim()) ? url : defaultUrlTransform(url))}
+      components={components}
+    >
+      {displayContent}
+    </ReactMarkdown>
   );
 }
 

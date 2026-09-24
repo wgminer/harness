@@ -92,18 +92,6 @@ function MarkdownGallery() {
         </a>
       </Section>
 
-      <Section title="Options" stack>
-        <div className="md-options">
-          <button type="button" className="btn">
-            Ship it
-          </button>
-          <button type="button" className="btn">
-            Iterate
-          </button>
-          <span className="btn">Already chosen</span>
-        </div>
-      </Section>
-
       <Section title="Code block" stack>
         <div className="md-code-block">
           <div className="md-code-block__toolbar">

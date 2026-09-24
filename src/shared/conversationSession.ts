@@ -21,8 +21,8 @@ export type ConversationListRow = {
   hasAssistantReply?: boolean;
   /** True once the conversation has at least one persisted message. */
   hasMessages?: boolean;
-  /** Desktop cognitive mode; omitted means chat. */
-  chatMode?: "chat" | "decide" | "write" | "refine";
+  /** Desktop cognitive mode; omitted means chat. Legacy decide/write/refine normalize to qa. */
+  chatMode?: "chat" | "qa";
   /** Cached dictation strip action (`run` or a vocab word). */
   dictationReplyAction?: string;
 };

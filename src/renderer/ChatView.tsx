@@ -15,6 +15,11 @@ import {
   nextChatMode,
   type ChatModeId,
 } from "../shared/chatModes";
+import {
+  parseQaOptions,
+  QA_CHOICE_REVEAL_DELAY_MS,
+  qaChoiceRevealPlan,
+} from "../shared/qaOptions";
 import { ChatTitleModal } from "./ChatTitleModal";
 import { ChatSurface } from "./ChatSurface";
 import { ChatComposer } from "./ChatComposer";
@@ -1221,6 +1226,82 @@ export function ChatView({
     />
   );
 
+  const lastAssistantForQa =
+    activeChatMode === "qa" &&
+    !sending &&
+    !streamingContent &&
+    messages.length > 0 &&
+    messages[messages.length - 1]?.role === "assistant"
+      ? messages[messages.length - 1]
+      : null;
+  const qaChoices = lastAssistantForQa ? parseQaOptions(lastAssistantForQa.content) : [];
+  const sendingSnapshotRef = useRef(sending);
+  const qaTurnEpochRef = useRef(0);
+  const qaHandledEpochRef = useRef(0);
+  const qaRevealTimerRef = useRef<number | null>(null);
+  const qaConversationRef = useRef(effectiveConversationId);
+  const [qaHoldEpoch, setQaHoldEpoch] = useState(0);
+  const [qaArriveEpoch, setQaArriveEpoch] = useState(0);
+  const qaPrefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const qaConversationChanged = qaConversationRef.current !== effectiveConversationId;
+  if (qaConversationChanged) {
+    qaConversationRef.current = effectiveConversationId;
+    qaHandledEpochRef.current = qaTurnEpochRef.current;
+  }
+  if (
+    !qaConversationChanged &&
+    sendingSnapshotRef.current &&
+    !sending &&
+    activeChatMode === "qa" &&
+    !qaPrefersReducedMotion
+  ) {
+    qaTurnEpochRef.current += 1;
+  }
+  sendingSnapshotRef.current = sending;
+  const qaTurnEpoch = qaTurnEpochRef.current;
+  const qaShouldHold =
+    qaChoiceRevealPlan({
+      justFinishedTurn: qaTurnEpoch > 0 && qaHandledEpochRef.current !== qaTurnEpoch,
+      modeIsQa: activeChatMode === "qa" && !sending && !qaConversationChanged,
+      prefersReducedMotion: qaPrefersReducedMotion,
+    }) === "hold";
+  if (qaShouldHold && qaHoldEpoch !== qaTurnEpoch) {
+    setQaHoldEpoch(qaTurnEpoch);
+    setQaArriveEpoch(0);
+  } else if (!qaShouldHold && (sending || qaConversationChanged || activeChatMode !== "qa")) {
+    if (qaHoldEpoch !== 0) setQaHoldEpoch(0);
+    if (qaArriveEpoch !== 0) setQaArriveEpoch(0);
+  }
+
+  useEffect(() => {
+    const epoch = qaTurnEpochRef.current;
+    const clearTimer = () => {
+      if (qaRevealTimerRef.current != null) {
+        window.clearTimeout(qaRevealTimerRef.current);
+        qaRevealTimerRef.current = null;
+      }
+    };
+    if (qaHoldEpoch === 0 || qaHoldEpoch !== epoch || qaArriveEpoch === epoch) {
+      clearTimer();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (qaRevealTimerRef.current === timer) qaRevealTimerRef.current = null;
+      qaHandledEpochRef.current = epoch;
+      setQaHoldEpoch(0);
+      setQaArriveEpoch(epoch);
+    }, QA_CHOICE_REVEAL_DELAY_MS);
+    qaRevealTimerRef.current = timer;
+    return clearTimer;
+  }, [qaHoldEpoch, qaArriveEpoch]);
+
+  const qaChoicesHeld = qaHoldEpoch !== 0 && qaHoldEpoch === qaTurnEpoch;
+  const qaChoicesReady = qaChoices.length >= 2 && !qaChoicesHeld;
+  const composerPlaceholder =
+    qaChoices.length >= 2
+      ? "Or answer in your own words…"
+      : chatModePlaceholder(activeChatMode);
+
   useEffect(() => {
     if (conversationDictationReplyAction) {
       setDictationReplyAction(clampDictationReplyAction(conversationDictationReplyAction));
@@ -1346,8 +1427,11 @@ export function ChatView({
     },
     focusComposerNonce,
     inputRef: composer.inputRef,
-    placeholder: chatModePlaceholder(activeChatMode),
+    placeholder: composerPlaceholder,
     modeControl: modePicker,
+    qaChoices: qaChoicesReady ? qaChoices : undefined,
+    qaChoicesArrive: qaChoicesReady && qaArriveEpoch !== 0 && qaArriveEpoch === qaTurnEpoch,
+    onQaChoiceSelect: handleOptionSelect,
     codingScope,
     selfScopeAvailable,
     onPickProjectFolder: async () => {
@@ -1404,7 +1488,6 @@ export function ChatView({
         onToolConfirm={handleToolConfirm}
         onPolish={polishLastUserFromStrip}
         replyModeControl={replyModeControl}
-        onOptionSelect={handleOptionSelect}
         liveNoteStream={liveNoteStream}
         onOpenNoteInEditor={onOpenNotesView}
         onOpenConversation={onOpenConversation}
@@ -1413,6 +1496,7 @@ export function ChatView({
         messagesTestId="chat-messages"
         composerTestId="chat-composer"
         hideComposer={isDictationReplyStrip}
+        threadKey={effectiveConversationId ?? ""}
       />
       <ChatTitleModal
         open={titleModalOpen}

@@ -48,7 +48,7 @@ pub struct SystemPromptPreview {
     pub shared: String,
     pub platform_overlay: String,
     pub static_prompt: String,
-    /// Desktop chat-mode overlay (`decide` / `write` / `refine`); empty for chat / iOS.
+    /// Desktop chat-mode overlay (`qa`); empty for chat / iOS.
     pub mode_overlay: String,
     pub chat_mode: String,
     pub memory_block: String,
@@ -212,13 +212,13 @@ mod tests {
         let prompt = build_system_prompt_with_mode(
             &fields,
             "desktop",
-            "[CHAT_MODE: decide]\noverlay",
+            "[CHAT_MODE: qa]\noverlay",
             "",
             "[USER_MEMORY_CONTEXT]\nmemory",
             "",
             "[TEMPORAL_CONTEXT]\nnow",
         );
-        let mode_at = prompt.find("[CHAT_MODE: decide]").unwrap();
+        let mode_at = prompt.find("[CHAT_MODE: qa]").unwrap();
         let memory_at = prompt.find("[USER_MEMORY_CONTEXT]").unwrap();
         assert!(mode_at < memory_at);
         assert!(prompt.contains("SHARED"));

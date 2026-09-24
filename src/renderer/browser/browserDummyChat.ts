@@ -93,9 +93,32 @@ const DUMMY_BODIES: Record<DummyReplyKind, string> = {
   ].join("\n"),
 };
 
-export function dummyAssistantReply(userContent: string): string {
+const DUMMY_QA_CHOICES = [
+  "::::options",
+  ':::option{title="Ship it this week"}',
+  ":::",
+  ':::option{title="Wait for one more pass"}',
+  ":::",
+  ':::option{title="Cut scope instead"}',
+  ":::",
+  "::::",
+].join("\n");
+
+export function dummyAssistantReply(userContent: string, chatMode?: string): string {
+  const echo = dummyEcho(userContent);
+  if (chatMode === "qa") {
+    return [
+      "Dummy Q&A turn from the browser shell.",
+      "",
+      echo,
+      "",
+      "What's the real constraint on the next step?",
+      "",
+      DUMMY_QA_CHOICES,
+    ].join("\n");
+  }
   const kind = dummyReplyKind(userContent);
-  return DUMMY_BODIES[kind].replace("{echo}", dummyEcho(userContent));
+  return DUMMY_BODIES[kind].replace("{echo}", echo);
 }
 
 export function waitForAbortable(ms: number, signal: AbortSignal): Promise<void> {

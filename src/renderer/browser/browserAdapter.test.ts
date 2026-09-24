@@ -24,7 +24,7 @@ describe("createBrowserAdapter", () => {
     const list = await api.memory.listConversations();
     expect(list).toHaveLength(1);
     expect(list[0].id).toBe(id);
-    expect(list[0].chatMode).toBe("write");
+    expect(list[0].chatMode).toBe("qa");
     expect(list[0].hasMessages).toBe(true);
     const messages = await api.memory.getMessages(id);
     expect(messages[0]?.content).toBe("Hello from the browser shell");

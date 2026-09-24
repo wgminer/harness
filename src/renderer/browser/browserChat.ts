@@ -229,7 +229,10 @@ export function createBrowserChat(store: BrowserStore) {
         });
       } else {
         content = await streamDummyChat({
-          text: dummyAssistantReply(lastStoredUserContent(store, conversationId, extraUser)),
+          text: dummyAssistantReply(
+            lastStoredUserContent(store, conversationId, extraUser),
+            store.conversation(conversationId)?.chatMode,
+          ),
           signal,
           onChunk,
         });

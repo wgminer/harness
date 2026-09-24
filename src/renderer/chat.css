@@ -2,7 +2,10 @@
  * Chat column: `--chat-composer-dock-height` is measured from the overlay composer dock.
  * `.chat-scroll` is the only scrollport (block, not flex — overflow must include padding)
  * and uses bottom inset padding to keep the latest transcript clear of the composer.
- * Inset is 2× (dock height + gap) so the live edge sits well above the dock.
+ * Inset clears the measured overlay dock plus one extra base-composer of air
+ * (`--space-35`) so the live edge sits above the dock. Extra air does not scale
+ * with a tall Q&A chooser — 2× the current dock would park the last question
+ * near the top of the viewport.
  * Single-message mode (`.chat-scroll--single-message`) opts out so centered landing
  * is not skewed by that inset.
  *
@@ -12,7 +15,7 @@
  */
 .chat-pane {
   --chat-composer-dock-height: var(--space-35);
-  --chat-composer-scroll-inset: calc((var(--chat-composer-dock-height) + var(--space-2)) * 2);
+  --chat-composer-scroll-inset: calc(var(--chat-composer-dock-height) + var(--space-35) + var(--space-4));
   position: relative;
   flex: 1;
   display: flex;
@@ -148,7 +151,7 @@
 
 .chat-scroll {
   --chat-composer-dock-height: var(--space-35);
-  --chat-composer-scroll-inset: calc((var(--chat-composer-dock-height) + var(--space-2)) * 2);
+  --chat-composer-scroll-inset: calc(var(--chat-composer-dock-height) + var(--space-35) + var(--space-4));
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1031,47 +1034,76 @@
   overflow: hidden;
 }
 
+/* Chat | Q&A — one joined segmented control, same height as the action-row buttons. */
 .chat-mode-picker {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
+  display: inline-flex;
+  flex-wrap: nowrap;
   align-items: center;
+}
+
+.chat-mode-picker--segment.chat-mode-picker--quiet {
+  --seg-inset: 2px;
+  box-sizing: border-box;
+  height: var(--input-height);
+  padding: var(--seg-inset);
+  gap: var(--seg-inset);
+  border: 1px solid var(--border-input);
+  border-radius: min(var(--radius-lg), calc(var(--input-height) / 4));
+  background: var(--overlay-subtle);
+}
+
+.chat-mode-picker__seg {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-width: var(--space-12);
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: calc(min(var(--radius-lg), calc(var(--input-height) / 4)) - var(--seg-inset));
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-family);
+  font-size: var(--font-size-ui);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.chat-mode-picker__seg:hover:not(:disabled):not(.chat-mode-picker__seg--active) {
+  color: var(--fg);
+}
+
+.chat-mode-picker__seg--active {
+  color: var(--fg);
+  font-weight: 600;
+  background: var(--btn-bg);
+}
+
+.chat-mode-picker__seg:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.chat-mode-picker__seg:disabled {
+  cursor: not-allowed;
+}
+
+.chat-mode-picker--segment.chat-mode-picker--quiet:has(.chat-mode-picker__seg:disabled) {
+  opacity: 0.5;
+}
+
+.chat-mode-picker--outline {
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-.chat-mode-picker--dropdown {
-  position: relative;
-  flex-wrap: nowrap;
-}
-
-.chat-mode-picker__trigger {
-  flex-shrink: 0;
-  width: auto;
-  min-width: var(--control-size);
-  height: var(--control-size);
-  padding: 0 var(--space-3);
-  gap: var(--space-1);
-  font-size: 14px;
-  color: var(--fg-muted);
-  background: transparent;
-  border-color: transparent;
-}
-
-.chat-mode-picker__trigger-label {
-  font-weight: 500;
-  line-height: var(--line-height-tight);
-  white-space: nowrap;
-}
-
-.chat-mode-picker__trigger-chevron {
-  flex-shrink: 0;
-  opacity: 0.9;
-}
-
-.chat-mode-picker__trigger-chevron--up {
-  transform: rotate(180deg);
-}
-
+/* Portal menus anchored to composer buttons (Plus menu). */
 .chat-mode-picker__menu {
   display: flex;
   flex-direction: column;
@@ -1129,8 +1161,133 @@
   color: var(--fg-muted);
 }
 
-.chat-mode-picker--outline {
-  flex-wrap: wrap;
+/*
+ * Q&A answers — stacked rows inside the composer card, above the textarea.
+ * Key column sits at the textarea's text inset (--space-5) so the two read as one form.
+ * After a fresh turn the panel grows open (`--arrive`) once the question fade has landed.
+ */
+.qa-choice-panel {
+  display: grid;
+  grid-template-rows: 1fr;
+  width: 100%;
+}
+
+.qa-choice-panel__clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.qa-choice-panel__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  box-sizing: border-box;
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--border-edge);
+}
+
+.qa-choice-panel--arrive {
+  grid-template-rows: 0fr;
+  animation: qa-choice-reveal var(--motion-duration-switch) var(--motion-ease-out) forwards;
+}
+
+@keyframes qa-choice-reveal {
+  to {
+    grid-template-rows: 1fr;
+  }
+}
+
+.qa-choice-panel--arrive .qa-choice-panel__row {
+  animation: qa-choice-row-in var(--motion-duration-ui) var(--motion-ease-out) both;
+  animation-delay: calc(var(--qa-row, 0) * 40ms);
+}
+
+@keyframes qa-choice-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-1));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qa-choice-panel--arrive {
+    animation: none;
+    grid-template-rows: 1fr;
+  }
+
+  .qa-choice-panel--arrive .qa-choice-panel__row {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.qa-choice-panel__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-control-sm);
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height-snug);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.qa-choice-panel__row:hover:not(:disabled) {
+  background: var(--overlay-subtle);
+}
+
+.qa-choice-panel__row:active:not(:disabled) {
+  background: var(--overlay-strong);
+}
+
+.qa-choice-panel__row:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.qa-choice-panel__row:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qa-choice-panel__letter {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-caption);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--fg-muted);
+  transition:
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    border-color var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.qa-choice-panel__row:hover:not(:disabled) .qa-choice-panel__letter {
+  color: var(--fg);
+  border-color: var(--fg-muted);
+}
+
+.qa-choice-panel__label {
+  min-width: 0;
+  flex: 1;
 }
 
 .chat-composer-inner:focus-within {
@@ -1670,21 +1827,6 @@
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
   color: var(--fg-muted);
-}
-
-/* Options: ::::options containing :::option buttons */
-.message-block .content .md-options {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  width: 100%;
-  margin-top: var(--space-3);
-}
-
-.message-block .content .md-options span.btn {
-  pointer-events: none;
-  opacity: 0.6;
 }
 
 .document-card {

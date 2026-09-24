@@ -3,16 +3,16 @@
  *
  * The grammar is `:::name{attr="val"}` for blocks and `:name[label]{attr=val}` inline,
  * powered by `remark-directive`. A small remark transform (`remarkDirectiveToHast`) maps
- * each known directive name onto a custom-element hast node (`md-tip`, `md-option`, …)
+ * each known directive name onto a custom-element hast node (`md-tip`, `md-link`, …)
  * which `react-markdown` then dispatches to the component map exported here.
  *
  * Nesting rule (the only foot-gun): a container's outer fence must use MORE colons
- * than any container it wraps. So `:::options` needs to wrap `:::option` with
- * `::::options` … `::::`. The system prompt teaches this.
+ * than any container it wraps.
+ *
+ * Q&A multiple-choice answers are NOT rendered here — `::::options` fences are stripped
+ * in MarkdownContent and shown in the Q&A composer dock instead.
  */
 import {
-  createContext,
-  useContext,
   type ComponentType,
   type ReactNode,
 } from "react";
@@ -39,8 +39,6 @@ const KNOWN_DIRECTIVES = new Set([
   "details",
   "chip",
   "link",
-  "options",
-  "option",
 ]);
 
 /**
@@ -82,12 +80,6 @@ export const remarkDirectiveToHast: Plugin<[], Root> = () => (tree) => {
 interface CommonProps {
   children?: ReactNode;
 }
-
-export interface MarkdownInteractionContextValue {
-  onOptionSelect?: (label: string) => void | Promise<void>;
-}
-
-export const MarkdownInteractionContext = createContext<MarkdownInteractionContextValue>({});
 
 function joinClass(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -188,24 +180,6 @@ function MdLink({
   );
 }
 
-function MdOptions({ children }: CommonProps) {
-  return <div className="md-options">{children}</div>;
-}
-
-function MdOption({ title }: { title?: string }) {
-  const { onOptionSelect } = useContext(MarkdownInteractionContext);
-  const label = title?.trim() || "Option";
-  if (onOptionSelect) {
-    return (
-      <button type="button" className="btn" onClick={() => void onOptionSelect(label)}>
-        {label}
-      </button>
-    );
-  }
-  return <span className="btn">{label}</span>;
-}
-(MdOption as ComponentType & { displayName?: string }).displayName = "MdOption";
-
 /**
  * Mapping consumed by `react-markdown`'s `components` prop. Cast through
  * `unknown` because TS only models standard HTML tags here, not our `md-*`
@@ -219,6 +193,4 @@ export const directiveComponents: Record<string, ComponentType<Record<string, un
   "md-details": MdDetails as ComponentType<Record<string, unknown>>,
   "md-chip": MdChip as ComponentType<Record<string, unknown>>,
   "md-link": MdLink as ComponentType<Record<string, unknown>>,
-  "md-options": MdOptions as ComponentType<Record<string, unknown>>,
-  "md-option": MdOption as ComponentType<Record<string, unknown>>,
 };

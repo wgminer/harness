@@ -24,7 +24,7 @@ describe("createBrowserStore", () => {
   it("persists conversations, messages, and sidebar visibility flags", () => {
     const store = createBrowserStore(memoryStorage());
     const id = store.createConversation("decide");
-    expect(store.conversation(id)?.chatMode).toBe("decide");
+    expect(store.conversation(id)?.chatMode).toBe("qa");
     expect(store.conversation(id)?.hasMessages).toBe(false);
 
     store.appendMessage(id, "user", "Hello there", { timestamp: 1 });

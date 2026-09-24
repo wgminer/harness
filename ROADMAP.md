@@ -156,8 +156,6 @@ Nothing below starts until Active now is calm. Not a commitment sequence.
 |------|----------|
 | Chat providers — Anthropic, Gemini APIs | O2, O4 |
 | Agent mode with human-in-the-loop | O2, O4 |
-| Decide / Refine as Q&A — Chat stays back-and-forth; Decide and Refine become interview-style (agent asks, user answers mostly via multiple choice — `::::options` or a dedicated control) | O1, O2 |
-| Chat mode picker — dropdown — Replace the horizontal mode strip with a compact dropdown, right-aligned in the composer action row beside attach / voice / send (not a centered chip strip) | O1 |
 | Cardinal directions UI — Experiment with anchoring surfaces and controls to N/E/S/W layout polarity (not only centered chat); design exploration | O1 |
 | Semantic memory | O2, O4 |
 | Backlog / inbox pipeline | O2, O3 |

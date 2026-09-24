@@ -6,6 +6,7 @@ import {
   isNearLiveEdge,
   scrollToLiveEdge,
   scrollTopDeltaForPaddingChange,
+  shouldLandOpenedThread,
   shouldFollowTranscriptResize,
   shouldRepinFromUserScroll,
   shouldUnlockFromScrollDelta,
@@ -158,5 +159,67 @@ describe("composer padding compensation", () => {
 
   it("returns negative delta when dock shrinks", () => {
     expect(scrollTopDeltaForPaddingChange(180, 140)).toBe(-40);
+  });
+});
+
+describe("opened-thread landing", () => {
+  it("lands once history overflows", () => {
+    expect(
+      shouldLandOpenedThread({
+        threadKey: "c1",
+        landedKey: null,
+        scrollEnabled: true,
+        sending: false,
+        hasOverflow: true,
+      })
+    ).toBe("land");
+  });
+
+  it("waits when history has not overflowed yet", () => {
+    expect(
+      shouldLandOpenedThread({
+        threadKey: "c1",
+        landedKey: null,
+        scrollEnabled: true,
+        sending: false,
+        hasOverflow: false,
+      })
+    ).toBe("skip");
+  });
+
+  it("marks in-flight turns so park owns the thread", () => {
+    expect(
+      shouldLandOpenedThread({
+        threadKey: "c1",
+        landedKey: null,
+        scrollEnabled: true,
+        sending: true,
+        hasOverflow: true,
+      })
+    ).toBe("mark");
+  });
+
+  it("does not land the same thread twice", () => {
+    expect(
+      shouldLandOpenedThread({
+        threadKey: "c1",
+        landedKey: "c1",
+        scrollEnabled: true,
+        sending: false,
+        hasOverflow: true,
+      })
+    ).toBe("skip");
+  });
+
+  it("skips single-message centered landing", () => {
+    expect(
+      shouldLandOpenedThread({
+        threadKey: "c1",
+        landedKey: null,
+        scrollEnabled: false,
+        sending: false,
+        hasOverflow: true,
+      })
+    ).toBe("skip");
   });
 });

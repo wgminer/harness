@@ -42,7 +42,6 @@ interface ChatMessageListProps {
   onPolish: () => void;
   /** Reply-strip controls while awaiting a reply (suggested prompts or mode picker). */
   replyModeControl?: ReactNode;
-  onOptionSelect?: (label: string) => void | Promise<void>;
   liveNoteStream?: LiveNoteStream | null;
   onOpenNoteInEditor?: (noteId: string) => void;
   onOpenConversation?: (conversationId: string) => void;
@@ -64,7 +63,6 @@ export function ChatMessageList({
   onToolConfirm,
   onPolish,
   replyModeControl,
-  onOptionSelect,
   liveNoteStream,
   onOpenNoteInEditor,
   onOpenConversation,
@@ -117,8 +115,6 @@ export function ChatMessageList({
   const streamedAssistantIds = useStreamedAssistantIds(sending, liveAssistantId);
   const showReplyActions =
     displayMessages.length > 0 && lastMessage?.role === "user" && !streamingContent;
-  const optionSelectEnabled =
-    !!onOptionSelect && llmActionsEnabled && !sending && !streamingContent;
   const showPolishInStrip = showReplyActions && polishHintAfterDictation;
   const showStripModes = showReplyActions && !!replyModeControl;
   const showSecondaryActions =
@@ -143,9 +139,6 @@ export function ChatMessageList({
           const waitingForHumanInput =
             isStreamingAssistantText && hasToolCalls && m.toolCalls!.some(isAwaitingToolConfirmation);
           const showStreamFooterSpinner = isStreamingAssistantText && !waitingForHumanInput;
-
-          const optionsInteractive =
-            optionSelectEnabled && isAssistant && lastMessage?.id === m.id;
 
           const cachedNoteBody =
             inlineWriteup?.noteId != null ? noteBodyCache[inlineWriteup.noteId] : undefined;
@@ -182,7 +175,6 @@ export function ChatMessageList({
                   savedToNotesId={savedToNotesId}
                   onCopied={onCopied}
                   onSaveToNotes={onSaveToNotes}
-                  onOptionSelect={optionsInteractive ? onOptionSelect : undefined}
                   {...libraryLinkActions}
                 />
               );
@@ -196,7 +188,6 @@ export function ChatMessageList({
                   savedToNotesId={savedToNotesId}
                   onCopied={onCopied}
                   onSaveToNotes={onSaveToNotes}
-                  onOptionSelect={optionsInteractive ? onOptionSelect : undefined}
                   {...libraryLinkActions}
                 />
               );
