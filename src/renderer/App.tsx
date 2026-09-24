@@ -402,9 +402,10 @@ export default function App() {
   useEffect(() => {
     const unsub = window.harness.sync.onChanged(() => {
       void refreshLibraryAfterSync();
+      void refreshSetupState();
     });
     return unsub;
-  }, [refreshLibraryAfterSync]);
+  }, [refreshLibraryAfterSync, refreshSetupState]);
 
   useEffect(() => {
     const unsub = window.harness.notes.onOpenInMain((noteId) => {
