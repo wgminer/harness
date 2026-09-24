@@ -24,13 +24,13 @@ Use product terms from the glossary. Highlights:
 - A **surface** is a UI screen / focused area, not a client platform.
 - **Chat UI** and **dictation screen** are distinct — don’t conflate voice chrome with the conversation thread.
 - Core objects: **conversation**, **message**, **note**, **task**, **memory**, **image**.
-- Desktop **chat modes**: Chat / Decide / Write / Refine (not “Agent mode”).
+- Desktop **chat modes**: Chat / Q&A (not “Agent mode”).
 
 ## Single source of truth
 
 **Do not hand-copy cross-language contracts.** Shared values live under [`resources/contracts/`](resources/contracts/); wire TS / Rust / Swift to the same file.
 
-- **Today:** `tools.json`, `systemPrompt.json`, `chatModes.json`, `chatStreamBatch.json`, `homeHeaderQuotes.json`.
+- **Today:** `tools.json`, `systemPrompt.json`, `chatModes.json`, `chatStreamBatch.json`, `homeHeaderQuotes.json`, `transcriptCleanup.json`.
 - **Planned:** model names, sync scopes, gated tool names, and other shared value contracts.
 
 If code cannot share a file (logic mirrors), add a **parity test** that reads the real sources and fails on drift — same pattern as `src/shared/versionParity.test.ts` and `src/shared/ipcNames.test.ts`.

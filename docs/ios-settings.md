@@ -87,7 +87,7 @@ Drop the long “Mac Settings → General → Show Sync QR” path from the intr
 **Not on phone**
 
 - Cleanup prompt editor
-- Transcript corrections list
+- Preferred spellings list
 
 Those stay on Mac and sync down. Phone only flips the two switches (writes `recording.autoSend` and `transcription.cleanup.enabled`).
 

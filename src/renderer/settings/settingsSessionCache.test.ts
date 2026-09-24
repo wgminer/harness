@@ -32,10 +32,14 @@ describe("settingsSessionCache", () => {
   });
 
   describe("loadSettingsForSystemPage", () => {
-    it("skips settings.get when the session cache is warm", async () => {
+    it("always refetches so a warm cache cannot hide synced settings", async () => {
       const cached = { ...DEFAULT_SETTINGS, recording: { autoSend: false, globalFnHotkey: true } };
       setCachedSettings(cached);
-      const fetchSettings = vi.fn(async () => DEFAULT_SETTINGS);
+      const fetched = {
+        ...DEFAULT_SETTINGS,
+        recording: { autoSend: true, globalFnHotkey: true, bringToFrontOnBackgroundDictation: false },
+      } satisfies Settings;
+      const fetchSettings = vi.fn(async () => fetched);
 
       const result = await loadSettingsForSystemPage({
         getCached: () => cached,
@@ -43,9 +47,9 @@ describe("settingsSessionCache", () => {
         setCache: setCachedSettings,
       });
 
-      expect(result.fetched).toBe(false);
-      expect(result.settings).toBe(cached);
-      expect(fetchSettings).not.toHaveBeenCalled();
+      expect(result.fetched).toBe(true);
+      expect(result.settings).toBe(fetched);
+      expect(fetchSettings).toHaveBeenCalledTimes(1);
     });
 
     it("fetches and seeds the cache on a cold open", async () => {
@@ -89,6 +93,17 @@ describe("settingsSessionCache", () => {
       expect(hydrated.accent).toBe("#112233");
       expect(hydrated.appearanceTheme).toBe("time");
       expect(hydrated.weatherZip).toBe(DEFAULT_SETTINGS.weather!.defaultZip);
+    });
+
+    it("migrates legacy dictionary entries into preferred spellings", () => {
+      const hydrated = nonSecretHydrationFromSettings({
+        ...DEFAULT_SETTINGS,
+        transcription: {
+          cleanup: DEFAULT_SETTINGS.transcription!.cleanup!,
+          dictionary: [{ from: "cursor", to: "Cursor" }],
+        } as Settings["transcription"],
+      });
+      expect(hydrated.transcriptGlossary).toEqual(["Cursor"]);
     });
 
     it("maps weather ZIP when present", () => {

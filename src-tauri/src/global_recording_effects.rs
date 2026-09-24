@@ -148,8 +148,9 @@ async fn deliver_unfocused(
     app_state: &crate::memory::AppState,
     text: &str,
     recording_path: Option<&Path>,
+    paste_target_pid: Option<i32>,
 ) -> Result<String, String> {
-    paste_text_impl(text).await?;
+    paste_text_impl(app, text, paste_target_pid).await?;
     let conversation_id = create_conversation(app_state)
         .await
         .map_err(|e| e.to_string())?;
@@ -182,6 +183,7 @@ pub async fn run_stop_pipeline_from_path(
     was_focused: bool,
     wav: Vec<u8>,
     existing_path: Option<PathBuf>,
+    paste_target_pid: Option<i32>,
 ) {
     *runtime.transcribing.lock().await = true;
     register_escape_cancel(&app, &runtime);
@@ -245,7 +247,14 @@ pub async fn run_stop_pipeline_from_path(
     if was_focused {
         let _ = app.emit("global-transcript-ready", serde_json::json!({ "text": text }));
     } else {
-        match deliver_unfocused(&app, &app_state, &text, recording_path.as_deref()).await {
+        match deliver_unfocused(
+            &app,
+            &app_state,
+            &text,
+            recording_path.as_deref(),
+            paste_target_pid,
+        )
+        .await {
             Ok(conversation_id) => {
                 let _ = app.emit(
                     "global-transcript-delivered",
@@ -295,7 +304,26 @@ pub async fn run_recording_effects(
 
                 match capture_result {
                     Ok(()) => {
+                        // Snapshot now — bring-to-front / tray clicks must not flip the paste path.
                         let focused = is_main_window_focused(app);
+                        *runtime.started_focused.lock().await = focused;
+                        #[cfg(target_os = "macos")]
+                        {
+                            *runtime.paste_target_pid.lock().await = if focused {
+                                None
+                            } else {
+                                crate::macos_paste::frontmost_foreign_pid(app)
+                            };
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            *runtime.paste_target_pid.lock().await = None;
+                        }
+                        eprintln!(
+                            "[Harness:recording] start focused={} paste_pid={:?}",
+                            focused,
+                            *runtime.paste_target_pid.lock().await
+                        );
                         if !focused && bring_to_front_setting(runtime).await {
                             show_and_focus_main(app);
                         }
@@ -318,7 +346,12 @@ pub async fn run_recording_effects(
             }
             GlobalRecordingEffect::StopRecording => {
                 // Keep Escape registered through transcription.
-                let was_focused = is_main_window_focused(app);
+                let was_focused = *runtime.started_focused.lock().await;
+                let paste_target_pid = *runtime.paste_target_pid.lock().await;
+                eprintln!(
+                    "[Harness:recording] stop started_focused={} paste_pid={:?}",
+                    was_focused, paste_target_pid
+                );
                 let _ = app.emit("global-recording-stopped", serde_json::json!({}));
                 set_tray_state(app, runtime, TrayIconState::Processing).await;
                 if was_focused {
@@ -345,6 +378,7 @@ pub async fn run_recording_effects(
                                 was_focused,
                                 wav,
                                 None,
+                                paste_target_pid,
                             )
                             .await;
                         });

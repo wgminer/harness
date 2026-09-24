@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tokio::process::Command as TokioCommand;
@@ -16,6 +15,7 @@ use crate::env_util::is_harness_e2e;
 use crate::memory::show_item_in_folder;
 use crate::paths::{get_recordings_dir, resolve_bundled_resource};
 use crate::settings::{default_settings, get_settings};
+use crate::transcript_cleanup::{append_preferred_spellings, resolve_glossary};
 
 const OPENAI_TRANSCRIPT_CLEANUP_MODEL: &str = "gpt-5.4-mini";
 const HARNESS_E2E_TRANSCRIBE_TEXT: &str = "E2E transcribed text.";
@@ -44,38 +44,6 @@ impl RecordingRuntime {
 pub fn get_harness_speech_path() -> PathBuf {
     resolve_bundled_resource(HARNESS_SPEECH_BINARY)
         .unwrap_or_else(|| PathBuf::from("resources").join(HARNESS_SPEECH_BINARY))
-}
-
-fn escape_regex(value: &str) -> String {
-    regex::escape(value)
-}
-
-pub fn apply_transcript_dictionary(
-    text: &str,
-    dictionary: &[DictionaryEntry],
-) -> String {
-    if text.is_empty() || dictionary.is_empty() {
-        return text.to_string();
-    }
-    let mut next = text.to_string();
-    for entry in dictionary {
-        let from = entry.from.trim();
-        if from.is_empty() {
-            continue;
-        }
-        let pattern = format!(r"\b{}\b", escape_regex(from));
-        if let Ok(re) = Regex::new(&pattern) {
-            next = re.replace_all(&next, entry.to.as_str()).to_string();
-        }
-    }
-    next
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DictionaryEntry {
-    pub from: String,
-    pub to: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -291,6 +259,69 @@ async fn run_transcript_cleanup(
         .unwrap_or("")
         .to_string();
     Ok(resolve_cleanup_output(text, &cleaned))
+}
+
+struct TranscriptPolish {
+    text: String,
+    cleanup_skipped: Option<String>,
+}
+
+async fn polish_transcript(
+    settings: &serde_json::Value,
+    text: String,
+) -> TranscriptPolish {
+    let cleanup_enabled = settings
+        .get("transcription")
+        .and_then(|v| v.get("cleanup"))
+        .and_then(|v| v.get("enabled"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if !cleanup_enabled || text.trim().is_empty() {
+        return TranscriptPolish {
+            text,
+            cleanup_skipped: None,
+        };
+    }
+
+    let key = resolve_openai_api_key().await.trim().to_string();
+    if key.is_empty() {
+        return TranscriptPolish {
+            text,
+            cleanup_skipped: Some("no_api_key".into()),
+        };
+    }
+
+    let cleanup_prompt = settings
+        .get("transcription")
+        .and_then(|v| v.get("cleanup"))
+        .and_then(|v| v.get("prompt"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            default_settings()["transcription"]["cleanup"]["prompt"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        });
+    let glossary = resolve_glossary(settings.get("transcription"));
+    let instructions = append_preferred_spellings(&cleanup_prompt, &glossary);
+
+    match run_transcript_cleanup(&text, &key, &instructions).await {
+        Ok(cleaned) => TranscriptPolish {
+            text: cleaned,
+            cleanup_skipped: None,
+        },
+        Err(err) => {
+            eprintln!("Transcript cleanup failed; returning original transcript. {err}");
+            TranscriptPolish {
+                text,
+                cleanup_skipped: None,
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -523,67 +554,26 @@ pub async fn transcribe_wav_bytes(
 
     let settings = get_settings(&app_state.write_chains).await;
     let text = transcribe_with_apple_speech(data, cancel).await?;
-    let dictionary: Vec<DictionaryEntry> = settings
-        .get("transcription")
-        .and_then(|v| v.get("dictionary"))
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
-
-    let cleanup_enabled = settings
-        .get("transcription")
-        .and_then(|v| v.get("cleanup"))
-        .and_then(|v| v.get("enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    if !cleanup_enabled || text.trim().is_empty() {
-        return Ok(apply_transcript_dictionary(&text, &dictionary));
-    }
-
-    let key = resolve_openai_api_key().await.trim().to_string();
-    if key.is_empty() {
-        return Ok(apply_transcript_dictionary(&text, &dictionary));
-    }
-
-    let cleanup_prompt = settings
-        .get("transcription")
-        .and_then(|v| v.get("cleanup"))
-        .and_then(|v| v.get("prompt"))
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| {
-            default_settings()["transcription"]["cleanup"]["prompt"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string()
-        });
-
-    match run_transcript_cleanup(&text, &key, &cleanup_prompt).await {
-        Ok(cleaned) => Ok(apply_transcript_dictionary(&cleaned, &dictionary)),
-        Err(err) => {
-            eprintln!("Transcript cleanup failed; returning original transcript. {err}");
-            Ok(apply_transcript_dictionary(&text, &dictionary))
-        }
-    }
+    Ok(polish_transcript(&settings, text).await.text)
 }
 
-pub async fn paste_text_impl(text: &str) -> Result<(), String> {
-    arboard::Clipboard::new()
-        .map_err(|e| e.to_string())?
-        .set_text(text.to_string())
-        .map_err(|e| e.to_string())?;
-
+pub async fn paste_text_impl(
+    app: &AppHandle,
+    text: &str,
+    target_pid: Option<i32>,
+) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let _ = TokioCommand::new("osascript")
-            .arg("-e")
-            .arg(r#"tell application "System Events" to keystroke "v" using command down"#)
-            .status()
-            .await;
+        return crate::macos_paste::paste_text(app, text, target_pid).await;
     }
-    Ok(())
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, target_pid);
+        arboard::Clipboard::new()
+            .map_err(|e| e.to_string())?
+            .set_text(text.to_string())
+            .map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -612,66 +602,12 @@ pub async fn recording_transcribe(
     let result = async {
         let settings = get_settings(&runtime.app_state.write_chains).await;
         let text = transcribe_with_apple_speech(&data, &mut cancel_rx).await?;
-        let dictionary: Vec<DictionaryEntry> = settings
-            .get("transcription")
-            .and_then(|v| v.get("dictionary"))
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .unwrap_or_default();
-
-        let cleanup_enabled = settings
-            .get("transcription")
-            .and_then(|v| v.get("cleanup"))
-            .and_then(|v| v.get("enabled"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
-        if !cleanup_enabled || text.trim().is_empty() {
-            return Ok(TranscribeResult {
-                text: Some(apply_transcript_dictionary(&text, &dictionary)),
-                error: None,
-                cleanup_skipped: None,
-            });
-        }
-
-        let key = resolve_openai_api_key().await.trim().to_string();
-        if key.is_empty() {
-            return Ok(TranscribeResult {
-                text: Some(apply_transcript_dictionary(&text, &dictionary)),
-                error: None,
-                cleanup_skipped: Some("no_api_key".into()),
-            });
-        }
-
-        let cleanup_prompt = settings
-            .get("transcription")
-            .and_then(|v| v.get("cleanup"))
-            .and_then(|v| v.get("prompt"))
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| {
-                default_settings()["transcription"]["cleanup"]["prompt"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string()
-            });
-
-        match run_transcript_cleanup(&text, &key, &cleanup_prompt).await {
-            Ok(cleaned) => Ok(TranscribeResult {
-                text: Some(apply_transcript_dictionary(&cleaned, &dictionary)),
-                error: None,
-                cleanup_skipped: None,
-            }),
-            Err(err) => {
-                eprintln!("Transcript cleanup failed; returning original transcript. {err}");
-                Ok(TranscribeResult {
-                    text: Some(apply_transcript_dictionary(&text, &dictionary)),
-                    error: None,
-                    cleanup_skipped: None,
-                })
-            }
-        }
+        let polished = polish_transcript(&settings, text).await;
+        Ok(TranscribeResult {
+            text: Some(polished.text),
+            error: None,
+            cleanup_skipped: polished.cleanup_skipped,
+        })
     }
     .await;
 
@@ -690,8 +626,8 @@ pub async fn recording_transcribe(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn recording_paste_text(text: String) -> Result<(), String> {
-    paste_text_impl(&text).await
+pub async fn recording_paste_text(app: AppHandle, text: String) -> Result<(), String> {
+    paste_text_impl(&app, &text, None).await
 }
 
 pub fn init_recording_runtime(app_state: crate::memory::AppState) -> Arc<RecordingRuntime> {

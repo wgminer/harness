@@ -120,18 +120,21 @@ final class DictationService: ObservableObject {
             var processed = trimmed
             if settings.cleanup.enabled, let apiKey = KeychainStore.loadAPIKey(), !apiKey.isEmpty {
                 let client = OpenAIClient(apiKey: apiKey)
+                let instructions = TranscriptGlossary.appendPreferredSpellings(
+                    prompt: settings.cleanup.prompt,
+                    terms: settings.glossary
+                )
                 do {
                     processed = try await client.cleanupTranscript(
                         text: trimmed,
-                        userInstructions: settings.cleanup.prompt
+                        userInstructions: instructions
                     )
                 } catch {
                     processed = trimmed
                 }
             }
 
-            let final = TranscriptDictionary.apply(processed, dictionary: settings.dictionary)
-            return TranscriptionResult(text: final, source: rawResult.source)
+            return TranscriptionResult(text: processed, source: rawResult.source)
         }
 
         transcribeTask = task

@@ -1,12 +1,12 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { settingsSection } from "../../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../../shared/types";
-import type { TranscriptDictionaryEntry } from "../../shared/types";
 import { Modal } from "../Modal";
 import { SettingsActions } from "./SettingsActions";
 import { SettingsEntryRow } from "./SettingsEntryRow";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";
+import { SettingsSubsection } from "./SettingsSubsection";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { SettingsTabPanel } from "./SettingsTabPanel";
 
@@ -17,8 +17,8 @@ export interface VoiceSettingsTabProps {
   setCleanupEnabled: (value: boolean) => void;
   cleanupPrompt: string;
   setCleanupPrompt: (value: string) => void;
-  transcriptDictionary: TranscriptDictionaryEntry[];
-  setTranscriptDictionary: Dispatch<SetStateAction<TranscriptDictionaryEntry[]>>;
+  transcriptGlossary: string[];
+  setTranscriptGlossary: Dispatch<SetStateAction<string[]>>;
   /** True when OpenAI key is known configured (before secrets hydrate). */
   openAIConfigured: boolean;
   secretsLoaded: boolean;
@@ -30,18 +30,17 @@ export function VoiceSettingsTab({
   setCleanupEnabled,
   cleanupPrompt,
   setCleanupPrompt,
-  transcriptDictionary,
-  setTranscriptDictionary,
+  transcriptGlossary,
+  setTranscriptGlossary,
   openAIConfigured,
   secretsLoaded,
   apiKey,
 }: VoiceSettingsTabProps) {
   const [cleanupPromptDraft, setCleanupPromptDraft] = useState(cleanupPrompt);
   const [cleanupPromptModalOpen, setCleanupPromptModalOpen] = useState(false);
-  const [dictionaryModalOpen, setDictionaryModalOpen] = useState(false);
-  const [editingDictionaryFrom, setEditingDictionaryFrom] = useState<string | null>(null);
-  const [dictionaryFromDraft, setDictionaryFromDraft] = useState("");
-  const [dictionaryToDraft, setDictionaryToDraft] = useState("");
+  const [glossaryModalOpen, setGlossaryModalOpen] = useState(false);
+  const [editingGlossaryTerm, setEditingGlossaryTerm] = useState<string | null>(null);
+  const [glossaryDraft, setGlossaryDraft] = useState("");
 
   const openCleanupPromptModal = () => {
     setCleanupPromptDraft(cleanupPrompt);
@@ -64,41 +63,37 @@ export function VoiceSettingsTab({
     setCleanupPromptDraft(D.transcription?.cleanup?.prompt ?? "");
   };
 
-  const closeDictionaryModal = () => {
-    setDictionaryModalOpen(false);
-    setEditingDictionaryFrom(null);
-    setDictionaryFromDraft("");
-    setDictionaryToDraft("");
+  const closeGlossaryModal = () => {
+    setGlossaryModalOpen(false);
+    setEditingGlossaryTerm(null);
+    setGlossaryDraft("");
   };
 
-  const openAddDictionaryModal = () => {
-    setEditingDictionaryFrom(null);
-    setDictionaryFromDraft("");
-    setDictionaryToDraft("");
-    setDictionaryModalOpen(true);
+  const openAddGlossaryModal = () => {
+    setEditingGlossaryTerm(null);
+    setGlossaryDraft("");
+    setGlossaryModalOpen(true);
   };
 
-  const openEditDictionaryModal = (entry: TranscriptDictionaryEntry) => {
-    setEditingDictionaryFrom(entry.from);
-    setDictionaryFromDraft(entry.from);
-    setDictionaryToDraft(entry.to);
-    setDictionaryModalOpen(true);
+  const openEditGlossaryModal = (term: string) => {
+    setEditingGlossaryTerm(term);
+    setGlossaryDraft(term);
+    setGlossaryModalOpen(true);
   };
 
-  const saveDictionaryEntry = () => {
-    const from = dictionaryFromDraft.trim();
-    if (!from) return;
-    const to = dictionaryToDraft.trim();
-    const filtered = transcriptDictionary.filter((entry) => {
-      if (editingDictionaryFrom && entry.from === editingDictionaryFrom) return false;
-      return entry.from.toLowerCase() !== from.toLowerCase();
+  const saveGlossaryTerm = () => {
+    const term = glossaryDraft.trim();
+    if (!term) return;
+    const filtered = transcriptGlossary.filter((entry) => {
+      if (editingGlossaryTerm && entry === editingGlossaryTerm) return false;
+      return entry.toLowerCase() !== term.toLowerCase();
     });
-    setTranscriptDictionary([...filtered, { from, to }]);
-    closeDictionaryModal();
+    setTranscriptGlossary([...filtered, term]);
+    closeGlossaryModal();
   };
 
-  const deleteDictionaryEntry = (from: string) => {
-    setTranscriptDictionary((prev) => prev.filter((entry) => entry.from !== from));
+  const deleteGlossaryTerm = (term: string) => {
+    setTranscriptGlossary((prev) => prev.filter((entry) => entry !== term));
   };
 
   return (
@@ -128,31 +123,37 @@ export function VoiceSettingsTab({
               Cleanup needs an OpenAI API key in {settingsSection("Data")}.
             </SettingsHint>
           ) : null}
-        </SettingsGroup>
 
-        <SettingsGroup title="Transcript corrections">
-          {transcriptDictionary.length === 0 ? (
-            <SettingsHint flush>No corrections yet.</SettingsHint>
-          ) : (
-            <div className="settings-entry-list">
-              {transcriptDictionary.map((entry) => (
-                <SettingsEntryRow
-                  key={entry.from}
-                  title={entry.from}
-                  detail={entry.to}
-                  onEdit={() => openEditDictionaryModal(entry)}
-                  onDelete={() => deleteDictionaryEntry(entry.from)}
-                  editAriaLabel={`Edit transcript correction ${entry.from}`}
-                  deleteAriaLabel={`Remove transcript correction ${entry.from}`}
-                />
-              ))}
-            </div>
-          )}
-          <SettingsActions>
-            <button type="button" className="btn" onClick={openAddDictionaryModal}>
-              Add Correction
-            </button>
-          </SettingsActions>
+          <SettingsSubsection
+            title="Preferred spellings"
+            description={
+              cleanupEnabled
+                ? "Names and terms cleanup should prefer, including close variants."
+                : "Turn on cleanup to apply these names and terms, including close variants."
+            }
+          >
+            {transcriptGlossary.length === 0 ? (
+              <SettingsHint flush>No preferred spellings yet.</SettingsHint>
+            ) : (
+              <div className="settings-entry-list">
+                {transcriptGlossary.map((term) => (
+                  <SettingsEntryRow
+                    key={term}
+                    title={term}
+                    onEdit={() => openEditGlossaryModal(term)}
+                    onDelete={() => deleteGlossaryTerm(term)}
+                    editAriaLabel={`Edit preferred spelling ${term}`}
+                    deleteAriaLabel={`Remove preferred spelling ${term}`}
+                  />
+                ))}
+              </div>
+            )}
+            <SettingsActions>
+              <button type="button" className="btn" onClick={openAddGlossaryModal}>
+                Add spelling
+              </button>
+            </SettingsActions>
+          </SettingsSubsection>
         </SettingsGroup>
       </SettingsTabPanel>
 
@@ -194,47 +195,35 @@ export function VoiceSettingsTab({
       </Modal>
 
       <Modal
-        open={dictionaryModalOpen}
-        onClose={closeDictionaryModal}
-        title={editingDictionaryFrom ? "Edit transcript correction" : "Add transcript correction"}
+        open={glossaryModalOpen}
+        onClose={closeGlossaryModal}
+        title={editingGlossaryTerm ? "Edit preferred spelling" : "Add preferred spelling"}
         footer={
           <>
-            <button type="button" className="btn" onClick={closeDictionaryModal}>
+            <button type="button" className="btn" onClick={closeGlossaryModal}>
               Cancel
             </button>
             <button
               type="button"
               className="btn btn-primary"
-              onClick={saveDictionaryEntry}
-              disabled={!dictionaryFromDraft.trim()}
+              onClick={saveGlossaryTerm}
+              disabled={!glossaryDraft.trim()}
             >
-              {editingDictionaryFrom ? "Update" : "Save"}
+              {editingGlossaryTerm ? "Update" : "Save"}
             </button>
           </>
         }
       >
-        <div className="app-modal-stack">
-          <label className="app-modal-field">
-            <span className="app-modal-field__label">Heard as</span>
-            <input
-              type="text"
-              value={dictionaryFromDraft}
-              onChange={(e) => setDictionaryFromDraft(e.target.value)}
-              className="app-modal-input"
-              autoComplete="off"
-            />
-          </label>
-          <label className="app-modal-field">
-            <span className="app-modal-field__label">Replace with</span>
-            <input
-              type="text"
-              value={dictionaryToDraft}
-              onChange={(e) => setDictionaryToDraft(e.target.value)}
-              className="app-modal-input"
-              autoComplete="off"
-            />
-          </label>
-        </div>
+        <label className="app-modal-field">
+          <span className="app-modal-field__label">Name or term</span>
+          <input
+            type="text"
+            value={glossaryDraft}
+            onChange={(e) => setGlossaryDraft(e.target.value)}
+            className="app-modal-input"
+            autoComplete="off"
+          />
+        </label>
       </Modal>
     </>
   );

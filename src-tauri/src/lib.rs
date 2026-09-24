@@ -13,6 +13,8 @@ pub mod dictation_suggested_prompts;
 pub mod env_util;
 #[cfg(target_os = "macos")]
 pub mod fn_tap;
+#[cfg(target_os = "macos")]
+pub mod macos_paste;
 pub mod global_recording;
 pub mod global_recording_capture;
 pub mod global_recording_effects;
@@ -39,6 +41,7 @@ pub mod sync_bundle;
 pub mod sync_merge;
 pub mod system;
 pub mod tasks;
+pub mod transcript_cleanup;
 pub mod ui_session;
 pub mod updater;
 pub mod weather;

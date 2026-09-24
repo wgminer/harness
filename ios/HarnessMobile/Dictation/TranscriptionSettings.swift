@@ -8,17 +8,15 @@ struct TranscriptionCleanupSettings: Equatable {
 struct TranscriptionSettings: Equatable {
     var autoSend: Bool
     var cleanup: TranscriptionCleanupSettings
-    var dictionary: [TranscriptionDictionaryEntry]
+    var glossary: [String]
 
     static let defaults = TranscriptionSettings(
         autoSend: true,
         cleanup: TranscriptionCleanupSettings(
             enabled: false,
-            prompt: """
-            Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Keep proper nouns and technical terms unchanged. Do not add new information.
-            """
+            prompt: TranscriptCleanupContract.defaults.defaultPrompt
         ),
-        dictionary: []
+        glossary: []
     )
 
     static func load(from localDataDir: URL) -> TranscriptionSettings {
@@ -45,18 +43,12 @@ struct TranscriptionSettings: Equatable {
                 if let enabled = cleanup["enabled"] as? Bool {
                     settings.cleanup.enabled = enabled
                 }
-                if let prompt = cleanup["prompt"] as? String, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    settings.cleanup.prompt = prompt
+                if let prompt = cleanup["prompt"] as? String {
+                    settings.cleanup.prompt = TranscriptGlossary.migratePrompt(prompt)
                 }
             }
 
-            if let dictionary = transcription["dictionary"] as? [[String: Any]] {
-                settings.dictionary = dictionary.compactMap { entry in
-                    guard let from = entry["from"] as? String else { return nil }
-                    let to = entry["to"] as? String ?? ""
-                    return TranscriptionDictionaryEntry(from: from, to: to)
-                }
-            }
+            settings.glossary = TranscriptGlossary.resolve(from: transcription)
         }
 
         return settings

@@ -5,8 +5,8 @@ import {
   normalizeAppearanceTheme,
   type AppearanceTheme,
   type Settings,
-  type TranscriptDictionaryEntry,
 } from "../../shared/types";
+import { migrateCleanupPrompt, resolveGlossary } from "../../shared/transcriptCleanup";
 import {
   normalizeDefaultNoteTemplateId,
   normalizeNoteTemplates,
@@ -28,7 +28,7 @@ export type NonSecretSettingsHydration = {
   selectionImageLookup: boolean;
   cleanupEnabled: boolean;
   cleanupPrompt: string;
-  transcriptDictionary: TranscriptDictionaryEntry[];
+  transcriptGlossary: string[];
   r2AccountId: string;
   r2Bucket: string;
   r2Prefix: string;
@@ -97,21 +97,18 @@ export function shouldLoadSettingsSecrets(
 }
 
 /**
- * Prefer the warm session cache so System → General paints without waiting on IPC.
- * Cold open fetches once and seeds the cache.
+ * Seed first paint from the session cache, then always refetch so Settings
+ * does not keep a stale snapshot after sync.
  */
 export async function loadSettingsForSystemPage(deps: {
   getCached: () => Settings | null;
   fetchSettings: () => Promise<Settings>;
   setCache: (settings: Settings) => void;
-}): Promise<{ settings: Settings; fetched: boolean }> {
+}): Promise<{ settings: Settings; fetched: boolean; cached: Settings | null }> {
   const cached = deps.getCached();
-  if (cached) {
-    return { settings: cached, fetched: false };
-  }
   const settings = await deps.fetchSettings();
   deps.setCache(settings);
-  return { settings, fetched: true };
+  return { settings, fetched: true, cached };
 }
 
 export function nonSecretHydrationFromSettings(S: Settings): NonSecretSettingsHydration {
@@ -129,8 +126,8 @@ export function nonSecretHydrationFromSettings(S: Settings): NonSecretSettingsHy
     selectionImageLookup:
       S.chat?.selectionImageLookup ?? D.chat!.selectionImageLookup,
     cleanupEnabled: S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false,
-    cleanupPrompt: S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? "",
-    transcriptDictionary: S.transcription?.dictionary ?? D.transcription?.dictionary ?? [],
+    cleanupPrompt: migrateCleanupPrompt(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? ""),
+    transcriptGlossary: resolveGlossary(S.transcription),
     r2AccountId: S.sync?.accountId ?? D.sync!.accountId,
     r2Bucket: S.sync?.bucket ?? D.sync!.bucket,
     r2Prefix: S.sync?.prefix ?? D.sync!.prefix,

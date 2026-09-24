@@ -3,8 +3,9 @@ use serde_json::{json, Value};
 use crate::credentials::{migrate_secrets_from_settings_raw, set_credential, CredentialKey};
 use crate::paths::{ensure_local_data_migration, get_local_data_settings_path};
 use crate::storage::{atomic_write_utf8, file_exists, read_json_object_file, WriteChains};
-
-const DEFAULT_TRANSCRIPTION_PROMPT: &str = "Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Keep proper nouns and technical terms unchanged. Do not add new information.";
+use crate::transcript_cleanup::{
+    default_prompt as default_transcription_prompt, glossary_value, migrate_cleanup_prompt,
+};
 
 /// Must match `DEFAULT_ACCENT` in `src/shared/accent.ts` and `--accent` in `base.css`.
 const DEFAULT_ACCENT: &str = "#5b9cf5";
@@ -21,9 +22,9 @@ pub fn default_settings() -> Value {
         "transcription": {
             "cleanup": {
                 "enabled": false,
-                "prompt": DEFAULT_TRANSCRIPTION_PROMPT
+                "prompt": default_transcription_prompt()
             },
-            "dictionary": []
+            "glossary": []
         },
         "search": { "tavilyApiKey": "" },
         "notes": {
@@ -152,7 +153,7 @@ fn parse_transcription(raw: Option<&Value>, defaults: &Value) -> Value {
         .get("transcription")
         .and_then(|v| v.get("cleanup"))
         .cloned()
-        .unwrap_or_else(|| json!({ "enabled": false, "prompt": DEFAULT_TRANSCRIPTION_PROMPT }));
+        .unwrap_or_else(|| json!({ "enabled": false, "prompt": default_transcription_prompt() }));
 
     let cleanup_raw = raw.and_then(|v| v.get("cleanup"));
     let enabled = cleanup_raw
@@ -164,56 +165,16 @@ fn parse_transcription(raw: Option<&Value>, defaults: &Value) -> Value {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false)
         });
-    let prompt = cleanup_raw
-        .and_then(|v| v.get("prompt"))
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| {
-            default_cleanup
-                .get("prompt")
-                .and_then(|v| v.as_str())
-                .unwrap_or(DEFAULT_TRANSCRIPTION_PROMPT)
-        });
-
-    let dictionary_raw = raw
-        .and_then(|v| v.get("dictionary"))
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-
-    let mut dedupe = std::collections::HashSet::new();
-    let mut dictionary = Vec::new();
-    for entry in dictionary_raw {
-        let Some(obj) = entry.as_object() else {
-            continue;
-        };
-        let from = obj
-            .get("from")
+    let prompt = migrate_cleanup_prompt(
+        cleanup_raw
+            .and_then(|v| v.get("prompt"))
             .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        let to = obj
-            .get("to")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if from.is_empty() {
-            continue;
-        }
-        let key = from.to_lowercase();
-        if dedupe.contains(&key) {
-            continue;
-        }
-        dedupe.insert(key);
-        dictionary.push(json!({ "from": from, "to": to }));
-    }
+            .unwrap_or(""),
+    );
 
     json!({
         "cleanup": { "enabled": enabled, "prompt": prompt },
-        "dictionary": dictionary
+        "glossary": glossary_value(raw)
     })
 }
 
@@ -480,7 +441,13 @@ async fn migrate_settings_file_at_path(chains: &WriteChains, path: &std::path::P
         .as_object_mut()
         .map(|obj| obj.remove("systemPrompt").is_some())
         .unwrap_or(false);
-    if !migrated_secrets && !removed_system_prompt && raw == stripped_before {
+    let defaults = default_settings();
+    let next_transcription = parse_transcription(raw.get("transcription"), &defaults);
+    let transcription_migrated = raw.get("transcription") != Some(&next_transcription);
+    if transcription_migrated {
+        raw["transcription"] = next_transcription;
+    }
+    if !migrated_secrets && !removed_system_prompt && !transcription_migrated && raw == stripped_before {
         return Ok(());
     }
     let pretty = serde_json::to_string_pretty(&raw).unwrap_or_default();
@@ -570,21 +537,21 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
         let current_transcription = current.get("transcription").cloned().unwrap_or_else(|| {
             defaults.get("transcription").cloned().unwrap_or(json!({}))
         });
-        let mut merged = current_transcription.clone();
-        if let Some(dict) = transcription.get("dictionary") {
-            merged["dictionary"] = parse_transcription(Some(&json!({ "dictionary": dict })), &defaults)
-                .get("dictionary")
-                .cloned()
-                .unwrap_or_else(|| json!([]));
-        }
+        let mut overlay = current_transcription.clone();
         if let Some(cleanup) = transcription.get("cleanup") {
-            merged["cleanup"] = merge_object_fields(
-                merged.get("cleanup").unwrap_or(&json!({})),
+            overlay["cleanup"] = merge_object_fields(
+                overlay.get("cleanup").unwrap_or(&json!({})),
                 cleanup,
                 &["enabled", "prompt"],
             );
         }
-        next["transcription"] = merged;
+        if transcription.get("glossary").is_some() || transcription.get("dictionary").is_some() {
+            overlay["glossary"] = json!(crate::transcript_cleanup::resolve_glossary(Some(transcription)));
+        }
+        if let Some(obj) = overlay.as_object_mut() {
+            obj.remove("dictionary");
+        }
+        next["transcription"] = parse_transcription(Some(&overlay), &defaults);
     }
 
     if let Some(notes) = partial.get("notes") {

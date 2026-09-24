@@ -1,0 +1,5 @@
+{
+  "defaultPrompt": "Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Prefer the listed spellings when the transcript has those terms or close variants. Do not add new information.",
+  "legacyDefaultPrompt": "Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Keep proper nouns and technical terms unchanged. Do not add new information.",
+  "preferredSpellingsHeader": "Preferred spellings — use these exact forms when the transcript has these terms or close variants:"
+}

@@ -65,9 +65,9 @@ export const SETTINGS_NAV: Array<{
   {
     id: "voice",
     label: "Voice",
-    subtitle: "Cleanup & corrections",
+    subtitle: "Cleanup & spellings",
     icon: "Mic",
-    keywords: ["transcription", "dictation", "cleanup"],
+    keywords: ["transcription", "dictation", "cleanup", "spelling", "glossary", "names"],
   },
   {
     id: "data",

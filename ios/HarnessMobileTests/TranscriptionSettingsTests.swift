@@ -6,10 +6,11 @@ final class TranscriptionSettingsTests: XCTestCase {
         let settings = TranscriptionSettings.parse([:])
         XCTAssertTrue(settings.autoSend)
         XCTAssertFalse(settings.cleanup.enabled)
-        XCTAssertTrue(settings.dictionary.isEmpty)
+        XCTAssertTrue(settings.glossary.isEmpty)
+        XCTAssertEqual(settings.cleanup.prompt, TranscriptCleanupContract.defaults.defaultPrompt)
     }
 
-    func testParseReadsNestedSettings() throws {
+    func testParseReadsGlossary() throws {
         let json: [String: Any] = [
             "recording": ["autoSend": false],
             "transcription": [
@@ -17,18 +18,26 @@ final class TranscriptionSettingsTests: XCTestCase {
                     "enabled": true,
                     "prompt": "Keep it terse.",
                 ],
-                "dictionary": [
-                    ["from": "Cursor", "to": "cursor"],
-                ],
+                "glossary": ["Cursor", "Harness"],
             ],
         ]
         let settings = TranscriptionSettings.parse(json)
         XCTAssertFalse(settings.autoSend)
         XCTAssertTrue(settings.cleanup.enabled)
         XCTAssertEqual(settings.cleanup.prompt, "Keep it terse.")
-        XCTAssertEqual(settings.dictionary.count, 1)
-        XCTAssertEqual(settings.dictionary.first?.from, "Cursor")
-        XCTAssertEqual(settings.dictionary.first?.to, "cursor")
+        XCTAssertEqual(settings.glossary, ["Cursor", "Harness"])
+    }
+
+    func testParseMigratesLegacyDictionary() {
+        let json: [String: Any] = [
+            "transcription": [
+                "dictionary": [
+                    ["from": "cursor", "to": "Cursor"],
+                ],
+            ],
+        ]
+        let settings = TranscriptionSettings.parse(json)
+        XCTAssertEqual(settings.glossary, ["Cursor"])
     }
 
     func testUpdatePhoneTogglesPreservesOtherKeys() throws {
@@ -45,6 +54,7 @@ final class TranscriptionSettingsTests: XCTestCase {
                     "enabled": false,
                     "prompt": "Keep it terse.",
                 ],
+                "glossary": ["Harness"],
             ],
             "search": ["tavilyApiKey": "tvly-keep"],
         ]
@@ -59,13 +69,16 @@ final class TranscriptionSettingsTests: XCTestCase {
         XCTAssertEqual((json["search"] as? [String: Any])?["tavilyApiKey"] as? String, "tvly-keep")
         XCTAssertEqual((json["recording"] as? [String: Any])?["autoSend"] as? Bool, false)
         XCTAssertEqual((json["recording"] as? [String: Any])?["extra"] as? String, "stay")
-        let cleanup = try XCTUnwrap((json["transcription"] as? [String: Any])?["cleanup"] as? [String: Any])
+        let transcription = try XCTUnwrap(json["transcription"] as? [String: Any])
+        let cleanup = try XCTUnwrap(transcription["cleanup"] as? [String: Any])
         XCTAssertEqual(cleanup["enabled"] as? Bool, true)
         XCTAssertEqual(cleanup["prompt"] as? String, "Keep it terse.")
+        XCTAssertEqual(transcription["glossary"] as? [String], ["Harness"])
 
         let loaded = TranscriptionSettings.load(from: dir)
         XCTAssertFalse(loaded.autoSend)
         XCTAssertTrue(loaded.cleanup.enabled)
         XCTAssertEqual(loaded.cleanup.prompt, "Keep it terse.")
+        XCTAssertEqual(loaded.glossary, ["Harness"])
     }
 }

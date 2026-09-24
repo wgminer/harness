@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ExternalLink, Settings2 as SettingsIcon } from "lucide-react";
 import { SETTINGS_PAGE_TITLE } from "../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../shared/types";
-import type { Settings, TranscriptDictionaryEntry } from "../shared/types";
+import type { Settings } from "../shared/types";
 import { DEFAULT_ACCENT, applyAccent, normalizeAccentHex } from "../shared/accent";
 import { applyAppearanceTheme } from "../shared/timeOfDayBackground";
 import {
@@ -79,7 +79,7 @@ type PersistedFormState = {
   selectionImageLookup: boolean;
   cleanupEnabled: boolean;
   cleanupPrompt: string;
-  transcriptDictionary: TranscriptDictionaryEntry[];
+  transcriptGlossary: string[];
   r2AccountId: string;
   r2Bucket: string;
   r2Prefix: string;
@@ -222,8 +222,8 @@ export function SettingsView({
   const [cleanupPrompt, setCleanupPrompt] = useState(
     initialNonSecret?.cleanupPrompt ?? D.transcription?.cleanup?.prompt ?? "",
   );
-  const [transcriptDictionary, setTranscriptDictionary] = useState<TranscriptDictionaryEntry[]>(
-    initialNonSecret?.transcriptDictionary ?? D.transcription?.dictionary ?? [],
+  const [transcriptGlossary, setTranscriptGlossary] = useState<string[]>(
+    initialNonSecret?.transcriptGlossary ?? D.transcription?.glossary ?? [],
   );
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
     initialNonSecret?.noteTemplates ?? DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
@@ -298,7 +298,7 @@ export function SettingsView({
       selectionImageLookup,
       cleanupEnabled,
       cleanupPrompt,
-      transcriptDictionary,
+      transcriptGlossary,
       r2AccountId,
       r2Bucket,
       r2Prefix,
@@ -319,7 +319,7 @@ export function SettingsView({
       selectionImageLookup,
       cleanupEnabled,
       cleanupPrompt,
-      transcriptDictionary,
+      transcriptGlossary,
       r2AccountId,
       r2Bucket,
       r2Prefix,
@@ -393,7 +393,7 @@ export function SettingsView({
         selectionImageLookup: nonSecret.selectionImageLookup,
         cleanupEnabled: nonSecret.cleanupEnabled,
         cleanupPrompt: nonSecret.cleanupPrompt,
-        transcriptDictionary: nonSecret.transcriptDictionary,
+        transcriptGlossary: nonSecret.transcriptGlossary,
         r2AccountId: nonSecret.r2AccountId,
         r2Bucket: nonSecret.r2Bucket,
         r2Prefix: nonSecret.r2Prefix,
@@ -416,7 +416,7 @@ export function SettingsView({
       setSelectionImageLookup(hydrated.selectionImageLookup);
       setCleanupEnabled(hydrated.cleanupEnabled);
       setCleanupPrompt(hydrated.cleanupPrompt);
-      setTranscriptDictionary(hydrated.transcriptDictionary);
+      setTranscriptGlossary(hydrated.transcriptGlossary);
       setR2AccountId(hydrated.r2AccountId);
       setR2Bucket(hydrated.r2Bucket);
       setR2Prefix(hydrated.r2Prefix);
@@ -433,16 +433,13 @@ export function SettingsView({
 
     void (async () => {
       try {
-        const { settings, fetched } = await loadSettingsForSystemPage({
+        const { settings } = await loadSettingsForSystemPage({
           getCached: getCachedSettings,
           fetchSettings: () => window.harness.settings.get() as Promise<Settings>,
           setCache: setCachedSettings,
         });
         if (cancelled) return;
-        // Warm cache already seeded React state on mount; only apply after a cold fetch.
-        if (fetched) {
-          applyNonSecrets(settings, getCachedSecrets());
-        }
+        applyNonSecrets(settings, getCachedSecrets());
       } finally {
         if (!cancelled) {
           settingsHydratedRef.current = true;
@@ -451,8 +448,24 @@ export function SettingsView({
       }
     })();
 
+    const unsubSync = window.harness.sync.onChanged(() => {
+      void (async () => {
+        try {
+          const settings = (await window.harness.settings.get()) as Settings;
+          if (cancelled) return;
+          setCachedSettings(settings);
+          const current = serializeFormState(getFormSnapshotRef.current());
+          if (current !== lastPersistedRef.current) return;
+          applyNonSecrets(settings, getCachedSecrets());
+        } catch {
+          // Keep the open form if a background refresh fails.
+        }
+      })();
+    });
+
     return () => {
       cancelled = true;
+      unsubSync();
     };
   }, []);
 
@@ -570,7 +583,7 @@ export function SettingsView({
             enabled: next.cleanupEnabled,
             prompt: next.cleanupPrompt,
           },
-          dictionary: next.transcriptDictionary,
+          glossary: next.transcriptGlossary,
         },
         sync: {
           accountId: next.r2AccountId.trim(),
@@ -676,7 +689,7 @@ export function SettingsView({
     selectionImageLookup,
     cleanupEnabled,
     cleanupPrompt,
-    transcriptDictionary,
+    transcriptGlossary,
     r2AccountId,
     r2Bucket,
     r2Prefix,
@@ -890,8 +903,8 @@ export function SettingsView({
               setCleanupEnabled={setCleanupEnabled}
               cleanupPrompt={cleanupPrompt}
               setCleanupPrompt={setCleanupPrompt}
-              transcriptDictionary={transcriptDictionary}
-              setTranscriptDictionary={setTranscriptDictionary}
+              transcriptGlossary={transcriptGlossary}
+              setTranscriptGlossary={setTranscriptGlossary}
               openAIConfigured={openAIConfigured}
               secretsLoaded={secretsLoaded}
               apiKey={apiKey}

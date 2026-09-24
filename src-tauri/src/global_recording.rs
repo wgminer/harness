@@ -49,6 +49,10 @@ pub struct GlobalRecordingRuntime {
     pub(crate) transcribing: Mutex<bool>,
     pub(crate) transcription_cancel: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
     pub(crate) capture: StdMutex<Option<NativeCapture>>,
+    /// Focus at *start* (not stop). Stop-time focus is wrong after bring-to-front.
+    pub(crate) started_focused: Mutex<bool>,
+    /// Frontmost foreign app when an unfocused take began — paste target after transcribe.
+    pub(crate) paste_target_pid: Mutex<Option<i32>>,
 }
 
 impl GlobalRecordingRuntime {
@@ -67,6 +71,8 @@ impl GlobalRecordingRuntime {
             transcribing: Mutex::new(false),
             transcription_cancel: Mutex::new(None),
             capture: StdMutex::new(None),
+            started_focused: Mutex::new(true),
+            paste_target_pid: Mutex::new(None),
         }
     }
 
@@ -366,7 +372,9 @@ pub async fn recording_retry_global_transcription(
     let path_buf = std::path::PathBuf::from(path);
     let runtime = runtime.inner().clone();
     tauri::async_runtime::spawn(async move {
-        run_stop_pipeline_from_path(app, runtime, false, wav, Some(path_buf)).await;
+        let paste_target_pid = *runtime.paste_target_pid.lock().await;
+        run_stop_pipeline_from_path(app, runtime, false, wav, Some(path_buf), paste_target_pid)
+            .await;
     });
     Ok(())
 }

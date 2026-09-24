@@ -1,5 +1,6 @@
 import { DEFAULT_NOTE_TEMPLATES, DEFAULT_NOTE_TEMPLATE_ID } from "./writing";
 import { DEFAULT_ACCENT } from "./accent";
+import { DEFAULT_TRANSCRIPT_CLEANUP_PROMPT } from "./transcriptCleanup";
 
 export type MessageRole = "user" | "assistant" | "system";
 
@@ -113,11 +114,6 @@ export interface Conversation {
   createdAt: number;
 }
 
-export interface TranscriptDictionaryEntry {
-  from: string;
-  to: string;
-}
-
 export interface Settings {
   version: number;
   /** Legacy shape — secrets are stored in the OS credential store, not on disk. */
@@ -138,8 +134,8 @@ export interface Settings {
       /** User-editable prompt that guides transcript cleanup behavior. */
       prompt: string;
     };
-    /** Deterministic replacements applied to transcript output (for repeated mishears). */
-    dictionary: TranscriptDictionaryEntry[];
+    /** Canonical names/terms injected into transcript cleanup (not a mechanical replace). */
+    glossary: string[];
   };
   /** Optional Tavily API key for the `web_search` assistant tool. */
   search?: {
@@ -213,10 +209,9 @@ export const DEFAULT_SETTINGS: Settings = {
   transcription: {
     cleanup: {
       enabled: false,
-      prompt:
-        "Clean up this transcript for dictation output. Remove filler words (like um/uh), false starts, and repeated fragments. Keep the original meaning and tone. Fix punctuation and capitalization. Keep proper nouns and technical terms unchanged. Do not add new information.",
+      prompt: DEFAULT_TRANSCRIPT_CLEANUP_PROMPT,
     },
-    dictionary: [],
+    glossary: [],
   },
   search: {
     tavilyApiKey: "",
