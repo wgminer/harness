@@ -17,7 +17,6 @@
 
   --font-body: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
-  --font-display: "IBM Plex Sans", sans-serif;
 
   --space-sm: 0.5rem;
   --space-md: 1rem;
@@ -73,14 +72,14 @@ a:focus-visible {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: var(--space-2xl) var(--space-md);
+  padding: var(--space-2xl) var(--space-md) 4rem;
 }
 
 .stack {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  width: min(100%, 720px);
+  width: min(100%, 64rem);
   text-align: left;
 }
 
@@ -89,7 +88,7 @@ a:focus-visible {
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-sm);
-  width: 100%;
+  width: min(100%, 40rem);
   text-align: left;
 }
 
@@ -99,13 +98,45 @@ a:focus-visible {
   border-radius: var(--radius-xs);
 }
 
+.lede,
 .tagline {
-  margin: var(--space-md) 0 0;
+  margin: 0;
   line-height: 1.65;
   color: var(--fg);
 }
 
-/* --- Download + system requirements --- */
+.lede {
+  margin-top: var(--space-md);
+}
+
+.tagline {
+  margin-top: var(--space-md);
+  color: var(--fg-muted);
+}
+
+/* --- Screenshots --- */
+
+.shot {
+  margin: var(--space-2xl) 0 0;
+  width: 100%;
+}
+
+.shot__img {
+  width: 100%;
+  height: auto;
+  border: 1px solid color-mix(in oklab, var(--border-edge) 70%, #555);
+  border-radius: var(--radius-sm);
+  background: #111;
+}
+
+.shot figcaption {
+  margin: var(--space-md) 0 0;
+  max-width: 40rem;
+  line-height: 1.65;
+  color: var(--fg-muted);
+}
+
+/* --- Download --- */
 
 .download {
   display: flex;
@@ -114,90 +145,6 @@ a:focus-visible {
   gap: var(--space-md);
   width: 100%;
   margin-top: var(--space-2xl);
-}
-
-/* --- Hero screenshot (floating faux window) --- */
-
-.hero {
-  margin: var(--space-2xl) 0 0;
-  width: 100%;
-  perspective: 1100px;
-  perspective-origin: 50% 40%;
-}
-
-.window {
-  position: relative;
-  width: 100%;
-  border-radius: 10px;
-  border: 1px solid color-mix(in oklab, var(--border-edge) 70%, #555);
-  background: #1a1a1a;
-  overflow: hidden;
-  transform-style: preserve-3d;
-  will-change: transform;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 18px 40px -18px rgba(0, 0, 0, 0.75),
-    0 40px 80px -30px rgba(0, 0, 0, 0.55);
-  transition: box-shadow 200ms ease;
-}
-
-.window__chrome {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  height: 36px;
-  padding: 0 12px;
-  background: linear-gradient(180deg, #2a2a2a 0%, #222 100%);
-  border-bottom: 1px solid #111;
-}
-
-.window__dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35) inset;
-}
-
-.window__dot--close {
-  background: #ff5f57;
-}
-
-.window__dot--minimize {
-  background: #febc2e;
-}
-
-.window__dot--zoom {
-  background: #28c840;
-}
-
-.window__body {
-  line-height: 0;
-  background: #111;
-}
-
-.hero__img {
-  width: 100%;
-  height: auto;
-  border: 0;
-  border-radius: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .window {
-    will-change: auto;
-    transform: none !important;
-  }
-}
-
-/* --- Colophon --- */
-
-.colophon {
-  margin: var(--space-md) 0 0;
-  width: 100%;
-  font-size: 1rem;
-  line-height: 1.65;
-  color: var(--fg-faint);
 }
 
 .download-hint {
@@ -212,9 +159,31 @@ a:focus-visible {
   font-size: 0.95em;
 }
 
+.download-hint a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.download-hint a:hover {
+  color: var(--fg);
+}
+
+/* --- Colophon --- */
+
+.colophon {
+  margin: var(--space-xl) 0 0;
+  width: 100%;
+  max-width: 40rem;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--fg-faint);
+}
+
 .site-credit {
   margin: var(--space-md) 0 0;
   width: 100%;
+  max-width: 40rem;
   font-size: 1rem;
   line-height: 1.65;
   color: var(--fg-faint);

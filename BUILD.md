@@ -242,7 +242,7 @@ This command:
 2. Bumps the patch version in `package.json` (and syncs Cargo / tauri.conf).
 3. Builds `dist:mac` with `REQUIRE_NOTARIZE=1` (signed + notarized).
 4. Runs `verify:mac-trust`.
-5. Captures a demo screenshot from the signed app into `media/hero.png` and `site/assets/hero.png`, then commits if it changed (so GitHub Pages picks it up).
+5. Captures demo screenshots from the signed app into `media/hero.png`, `media/thread.png`, and `site/assets/`, then commits if they changed (so GitHub Pages picks them up).
 6. Collects DMG, ZIP, updater bundle, and `latest.json`, then publishes them to GitHub Releases with install notes (**download the `.dmg`**).
 7. Creates git tag `vX.Y.Z` and pushes tag + `main`.
 

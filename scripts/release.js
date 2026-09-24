@@ -92,11 +92,16 @@ function captureAndCommitHero(version) {
   }
 
   console.log("Capturing landing-page screenshot from the signed build...");
-  run("bash", [path.join(root, "scripts", "capture-hero.sh"), "--launch"], {
+  run("bash", [path.join(root, "scripts", "capture-hero.sh"), "--launch", "--shot", "both"], {
     env: { ...process.env, HARNESS_HERO_BIN: bin },
   });
 
-  const heroPaths = ["media/hero.png", "site/assets/hero.png"];
+  const heroPaths = [
+    "media/hero.png",
+    "site/assets/hero.png",
+    "media/thread.png",
+    "site/assets/thread.png",
+  ];
   run("git", ["add", "--", ...heroPaths]);
   const staged = capture("git", ["diff", "--cached", "--name-only", "--", ...heroPaths], {
     stdio: ["ignore", "pipe", "pipe"],

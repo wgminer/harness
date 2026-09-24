@@ -25,6 +25,7 @@
     "dist:mac:replace": "node scripts/dist-runner.js --mac --replace",
     "verify:mac-trust": "node scripts/verify-mac-trust.js",
     "capture:hero": "bash scripts/capture-hero.sh",
+    "capture:site": "bash scripts/capture-hero.sh --launch --shot both",
     "icons": "node scripts/generate-app-icons.js",
     "icons:trace": "python3 scripts/trace-horse-head-mark.py",
     "icon:icns": "npm run icons",

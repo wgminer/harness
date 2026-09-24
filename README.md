@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="media/hero.png" alt="Harness desktop app — sidebar library and chat" width="920" />
+  <img src="media/hero.png" alt="Harness desktop app — compose home" width="920" />
 </p>
 
 ---
@@ -47,6 +47,7 @@ Opens `http://localhost:5173`. Chat works without a key (dummy streamed replies)
 ```bash
 npm run dist:mac          # signed DMG — see BUILD.md
 npm run capture:hero      # refresh media/hero.png and site/assets/hero.png
+npm run capture:site      # home + Q&A screenshots for the download site
 ```
 
 `capture:hero` uses macOS `screencapture` against a throwaway demo profile (real chats are never in the frame). Pass `--launch` to start the app if it isn’t open. `npm run release` runs this against the signed build so the download site screenshot matches the shipping UI.

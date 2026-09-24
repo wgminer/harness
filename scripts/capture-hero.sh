@@ -69,6 +69,14 @@ conversations = {
         "title": "Weekend task triage",
         "titleSource": "user",
     },
+    "conv_hero_qa": {
+        "createdAt": now - 1800_000,
+        "hasMessages": True,
+        "hasAssistantReply": True,
+        "title": "Stay here or use the browser",
+        "titleSource": "user",
+        "chatMode": "qa",
+    },
 }
 (state / "conversations.json").write_text(json.dumps(conversations, indent=2) + "\n")
 
@@ -120,28 +128,69 @@ write_messages(
         ("assistant", "Added both to Tasks."),
     ],
 )
-
-session = {
-    "view": "chat",
-    "conversationId": None,
-    "notesOpenNoteId": None,
-    "openNoteInStickyWindow": False,
-    "setupNoticeDismissed": True,
-}
-(state / "ui-session.json").write_text(json.dumps(session, indent=2) + "\n")
+write_messages(
+    state / "messages_conv_hero_qa.json",
+    [
+        (
+            "user",
+            "I keep bouncing between ChatGPT in the browser and this. When should I stay here?",
+        ),
+        (
+            "assistant",
+            (
+                "Stay here when you want the reply to be yours to inspect — "
+                "context, tools, and the transcript on disk. Use the browser "
+                "when you just need a quick answer you won't keep.\n\n"
+                "What do you want this next hour to produce?\n\n"
+                "::::options\n"
+                ":::option{title=\"A decision I can stand behind\"}\n"
+                ":::\n"
+                ":::option{title=\"Notes I can edit later\"}\n"
+                ":::\n"
+                ":::option{title=\"A short answer, then done\"}\n"
+                ":::\n"
+                "::::"
+            ),
+        ),
+    ],
+)
 
 # Dummy key so first-run setup does not cover the compose splash when
 # HARNESS_DEV=1 (file-backed credentials). Production captures use Keychain.
 creds_path = state.parent.parent / "credentials.json"
 creds_path.write_text(json.dumps({"openaiApiKey": "sk-hero-demo"}, indent=2) + "\n")
 
-# Open the centered new-chat / compose splash (not a restored thread).
+print(f"Seeded demo profile at {state}")
+PY
+}
+
+write_hero_session() {
+  local shot="$1"
+  local state="$PROFILE/local-data/app-state"
+  local settings_dir="$PROFILE/local-data/settings"
+  mkdir -p "$state" "$settings_dir"
+  python3 - "$state" "$settings_dir" "$shot" <<'PY'
+import json, sys
+from pathlib import Path
+
+state = Path(sys.argv[1])
+settings_dir = Path(sys.argv[2])
+shot = sys.argv[3]
+compose = shot != "thread"
+session = {
+    "view": "chat",
+    "conversationId": None if compose else "conv_hero_qa",
+    "notesOpenNoteId": None,
+    "openNoteInStickyWindow": False,
+    "setupNoticeDismissed": True,
+}
+(state / "ui-session.json").write_text(json.dumps(session, indent=2) + "\n")
 settings = {
     "version": 1,
-    "chat": {"openToComposeOnLaunch": True},
+    "chat": {"openToComposeOnLaunch": compose},
 }
 (settings_dir / "settings.json").write_text(json.dumps(settings, indent=2) + "\n")
-print(f"Seeded demo profile at {state}")
+print(f"Wrote {shot} session")
 PY
 }
 
@@ -319,24 +368,37 @@ EOF
 LAUNCH=0
 KEEP=0
 KEEP_EXISTING=0
+SHOT="${HARNESS_HERO_SHOT:-compose}"
+THREAD_OUT="${HARNESS_THREAD_OUT:-$ROOT/media/thread.png}"
 for arg in "$@"; do
   case "$arg" in
     --launch) LAUNCH=1 ;;
     --keep) KEEP=1 ;;
     --keep-existing) KEEP_EXISTING=1 ;;
+    --shot)
+      ;;
+    --shot=*)
+      SHOT="${arg#--shot=}"
+      ;;
+    compose|thread|both)
+      SHOT="$arg"
+      ;;
     -h|--help)
       cat <<EOF
-Usage: $(basename "$0") [--launch] [--keep] [--keep-existing]
+Usage: $(basename "$0") [--launch] [--keep] [--keep-existing] [--shot compose|thread|both]
 
 Captures a seeded Harness window to:
   $OUT
+  $THREAD_OUT  (with --shot thread or both)
 
   --launch         Quit any running Harness, seed a demo profile, start the app, capture
   --keep           Leave the demo app running after capture
   --keep-existing  With --launch: do not quit other Harness windows; capture the demo PID only
+  --shot           compose (home), thread (Q&A conversation), or both
 
 Env:
   HARNESS_HERO_OUT      Output path (default: media/hero.png)
+  HARNESS_THREAD_OUT    Thread shot path (default: media/thread.png)
   HARNESS_HERO_PROFILE  Throwaway profile dir (default: media/.hero-profile)
   HARNESS_HERO_WAIT     Seconds to wait for window (default: 180)
   HARNESS_HERO_BIN      Optional path to app binary (else npm run tauri dev)
@@ -346,6 +408,28 @@ EOF
       ;;
   esac
 done
+
+# Allow `--shot compose` as two args.
+prev=""
+for arg in "$@"; do
+  if [[ "$prev" == "--shot" ]]; then
+    SHOT="$arg"
+  fi
+  prev="$arg"
+done
+
+case "$SHOT" in
+  compose|thread|both) ;;
+  *)
+    echo "error: unknown --shot $SHOT (use compose, thread, or both)" >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$SHOT" == "both" && "$LAUNCH" -ne 1 ]]; then
+  echo "error: --shot both requires --launch" >&2
+  exit 1
+fi
 
 APP_PID=""
 cleanup() {
@@ -359,12 +443,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [[ "$LAUNCH" -eq 1 ]]; then
-  if [[ "$KEEP_EXISTING" -eq 0 ]]; then
-    quit_harness
-  fi
-  seed_demo_profile
-
+start_demo_app() {
   echo "Starting Harness with demo profile…"
   if [[ -n "$APP_BIN" && -x "$APP_BIN" ]]; then
     HARNESS_DATA_DIR="$PROFILE" HARNESS_DISABLE_GLOBAL_HOTKEY=1 "$APP_BIN" \
@@ -382,8 +461,10 @@ if [[ "$LAUNCH" -eq 1 ]]; then
     ) >/tmp/harness-capture-hero.log 2>&1 &
     APP_PID=$!
   fi
+}
 
-  deadline=$((SECONDS + MAX_WAIT_SEC))
+wait_for_window() {
+  local deadline=$((SECONDS + MAX_WAIT_SEC))
   WID=""
   while (( SECONDS < deadline )); do
     WID="$(resolve_window_id || true)"
@@ -393,39 +474,23 @@ if [[ "$LAUNCH" -eq 1 ]]; then
       bring_to_front
       sleep 1
       WID="$(resolve_window_id || true)"
-      break
+      return 0
     fi
     sleep 1
   done
-else
-  WID="$(resolve_window_id || true)"
-fi
+  return 1
+}
 
-if [[ -z "${WID:-}" ]]; then
-  echo "error: no Harness window found." >&2
-  echo "Re-run with --launch (builds/starts the app), or open Harness first." >&2
-  echo "Log: /tmp/harness-capture-hero.log" >&2
-  exit 1
-fi
-
-bring_to_front
-echo "Resizing window to fill the main display…"
-FILL_OUT="$(fill_builtin_screen || true)"
-FILL_SIZE="$(printf '%s\n' "$FILL_OUT" | awk '/^SIZE / { print $2 }')"
-FILL_CROP_Y="$(printf '%s\n' "$FILL_OUT" | awk '/^CROP_Y / { print $2 }')"
-FILL_DISPLAY="$(printf '%s\n' "$FILL_OUT" | awk '/^DISPLAY / { print $2 }')"
-if [[ -n "$FILL_SIZE" ]]; then
-  echo "Target size (backing pixels): $FILL_SIZE"
-else
-  echo "warning: could not resize window (Accessibility permission may be required)." >&2
-fi
-sleep 2
-bring_to_front
-WID="$(resolve_window_id || true)"
-if [[ -z "${WID:-}" ]]; then
-  echo "error: lost Harness window after resize." >&2
-  exit 1
-fi
+stop_demo_app() {
+  if [[ -n "$APP_PID" ]] && kill -0 "$APP_PID" 2>/dev/null; then
+    kill "$APP_PID" 2>/dev/null || true
+    sleep 0.5
+  fi
+  APP_PID=""
+  if [[ "$KEEP_EXISTING" -eq 0 ]]; then
+    quit_harness
+  fi
+}
 
 # Crop the top `cropY` pixels off a PNG (menu bar), keep `cropH` of height.
 crop_png_top() {
@@ -484,50 +549,125 @@ if samples == 0 || (Double(lit) / Double(samples)) < 0.02 { exit(1) }
 '
 }
 
-# -l: CGWindowID (needs window Screen Recording). Fall back to a full-display
-# capture cropped to the visible frame — often allowed when -l / -R are not.
-capture_ok=0
-if screencapture -l "$WID" -o -x "$OUT" 2>/tmp/harness-capture-hero-screencapture.err; then
-  capture_ok=1
-else
-  echo "Window capture unavailable; capturing the main display and cropping the menu bar." >&2
-  cat /tmp/harness-capture-hero-screencapture.err >&2 || true
-  FULL_PNG="$(mktemp /tmp/harness-hero-full.XXXXXX.png)"
-  extra=()
-  if [[ -n "$FILL_DISPLAY" ]]; then
-    extra+=(-D "$FILL_DISPLAY")
+capture_window_to() {
+  local dest="$1"
+  mkdir -p "$(dirname "$dest")"
+  bring_to_front
+  echo "Resizing window to fill the main display…"
+  FILL_OUT="$(fill_builtin_screen || true)"
+  FILL_SIZE="$(printf '%s\n' "$FILL_OUT" | awk '/^SIZE / { print $2 }')"
+  FILL_CROP_Y="$(printf '%s\n' "$FILL_OUT" | awk '/^CROP_Y / { print $2 }')"
+  FILL_DISPLAY="$(printf '%s\n' "$FILL_OUT" | awk '/^DISPLAY / { print $2 }')"
+  if [[ -n "$FILL_SIZE" ]]; then
+    echo "Target size (backing pixels): $FILL_SIZE"
+  else
+    echo "warning: could not resize window (Accessibility permission may be required)." >&2
   fi
-  if screencapture "${extra[@]}" -x "$FULL_PNG" 2>/tmp/harness-capture-hero-screencapture.err; then
-    CROP_H="${FILL_SIZE##*x}"
-    CROP_Y="${FILL_CROP_Y:-0}"
-    if [[ -n "$CROP_H" ]] && crop_png_top "$FULL_PNG" "$OUT" "$CROP_Y" "$CROP_H"; then
-      capture_ok=1
-    else
-      cp "$FULL_PNG" "$OUT"
-      capture_ok=1
-      echo "warning: could not crop menu bar; kept full-display capture." >&2
+  sleep 2
+  bring_to_front
+  WID="$(resolve_window_id || true)"
+  if [[ -z "${WID:-}" ]]; then
+    echo "error: lost Harness window after resize." >&2
+    return 1
+  fi
+
+  local capture_ok=0
+  if screencapture -l "$WID" -o -x "$dest" 2>/tmp/harness-capture-hero-screencapture.err; then
+    capture_ok=1
+  else
+    echo "Window capture unavailable; capturing the main display and cropping the menu bar." >&2
+    cat /tmp/harness-capture-hero-screencapture.err >&2 || true
+    local full_png
+    full_png="$(mktemp /tmp/harness-hero-full.XXXXXX.png)"
+    extra=()
+    if [[ -n "$FILL_DISPLAY" ]]; then
+      extra+=(-D "$FILL_DISPLAY")
+    fi
+    if screencapture "${extra[@]}" -x "$full_png" 2>/tmp/harness-capture-hero-screencapture.err; then
+      CROP_H="${FILL_SIZE##*x}"
+      CROP_Y="${FILL_CROP_Y:-0}"
+      if [[ -n "$CROP_H" ]] && crop_png_top "$full_png" "$dest" "$CROP_Y" "$CROP_H"; then
+        capture_ok=1
+      else
+        cp "$full_png" "$dest"
+        capture_ok=1
+        echo "warning: could not crop menu bar; kept full-display capture." >&2
+      fi
+    fi
+    rm -f "$full_png"
+  fi
+  if [[ "$capture_ok" -ne 1 ]]; then
+    echo "error: screencapture failed (Screen Recording permission required)." >&2
+    cat /tmp/harness-capture-hero-screencapture.err >&2 || true
+    return 1
+  fi
+
+  echo "Wrote $dest ($(file -b "$dest"); sips -g pixelWidth -g pixelHeight "$dest" 2>/dev/null | paste - - | sed 's/  */ /g')"
+
+  if ! image_has_visible_content "$dest"; then
+    echo "error: captured image is blank (almost all black). Is the display asleep or off-screen?" >&2
+    echo "Open: file://$dest" >&2
+    return 1
+  fi
+  return 0
+}
+
+sync_site_asset() {
+  local src="$1"
+  local name="$2"
+  local dest="$ROOT/site/assets/$name"
+  mkdir -p "$(dirname "$dest")"
+  cp "$src" "$dest"
+  echo "Synced $dest"
+}
+
+capture_shot() {
+  local shot="$1"
+  local dest="$2"
+  local site_name="$3"
+  if [[ "$LAUNCH" -eq 1 ]]; then
+    write_hero_session "$shot"
+    start_demo_app
+    if ! wait_for_window; then
+      echo "error: no Harness window found." >&2
+      echo "Re-run with --launch (builds/starts the app), or open Harness first." >&2
+      echo "Log: /tmp/harness-capture-hero.log" >&2
+      return 1
+    fi
+  else
+    WID="$(resolve_window_id || true)"
+    if [[ -z "${WID:-}" ]]; then
+      echo "error: no Harness window found." >&2
+      echo "Re-run with --launch (builds/starts the app), or open Harness first." >&2
+      return 1
     fi
   fi
-  rm -f "$FULL_PNG"
-fi
-if [[ "$capture_ok" -ne 1 ]]; then
-  echo "error: screencapture failed (Screen Recording permission required)." >&2
-  cat /tmp/harness-capture-hero-screencapture.err >&2 || true
-  exit 1
-fi
+  capture_window_to "$dest" || return 1
+  sync_site_asset "$dest" "$site_name"
+  echo "Open: file://$dest"
+  if [[ "$LAUNCH" -eq 1 ]]; then
+    stop_demo_app
+  fi
+}
 
-echo "Wrote $OUT ($(file -b "$OUT"); sips -g pixelWidth -g pixelHeight "$OUT" 2>/dev/null | paste - - | sed 's/  */ /g')"
-
-if ! image_has_visible_content "$OUT"; then
-  echo "error: captured image is blank (almost all black). Is the display asleep or off-screen?" >&2
-  echo "Open: file://$OUT" >&2
-  git -C "$ROOT" checkout -- media/hero.png 2>/dev/null || true
-  exit 1
+if [[ "$LAUNCH" -eq 1 ]]; then
+  if [[ "$KEEP_EXISTING" -eq 0 ]]; then
+    quit_harness
+  fi
+  seed_demo_profile
 fi
 
-SITE_HERO="$ROOT/site/assets/hero.png"
-mkdir -p "$(dirname "$SITE_HERO")"
-cp "$OUT" "$SITE_HERO"
-echo "Synced $SITE_HERO"
-
-echo "Open: file://$OUT"
+if [[ "$SHOT" == "both" || "$SHOT" == "compose" ]]; then
+  capture_shot compose "$OUT" "hero.png" || exit 1
+fi
+if [[ "$SHOT" == "both" || "$SHOT" == "thread" ]]; then
+  capture_shot thread "$THREAD_OUT" "thread.png" || exit 1
+fi
+if [[ "$KEEP" -eq 1 && "$LAUNCH" -eq 1 ]]; then
+  if [[ "$SHOT" == "thread" ]]; then
+    write_hero_session thread
+  else
+    write_hero_session compose
+  fi
+  start_demo_app
+fi

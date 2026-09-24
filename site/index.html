@@ -6,12 +6,12 @@
     <title>Harness</title>
     <meta
       name="description"
-      content="Personal, voice-first app for macOS — built as a creative tool, not an answer engine. Open source."
+      content="A personal, voice-first app for macOS — dictation, chat without the persona, notes, and tasks. Offline-first. Open source."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
@@ -27,12 +27,47 @@
             width="80"
             height="80"
           />
+          <p class="lede">
+            The app I actually use instead of a chat tab. Dictation, chat
+            without the persona, notes, and tasks — a local thinking partner,
+            not an answer engine.
+          </p>
           <p class="tagline">
-            My personal LLM harness: dictation, chat without the
-            persona, notes, and tasks. Offline-first. Full control over the
-            inputs, the outputs, and everything in between.
+            Commercial tools optimize for a mainstream audience and lock-in.
+            This one is personal: data on disk I can leave with, context I can
+            inspect, voice when typing is the wrong interface.
           </p>
         </header>
+
+        <figure class="shot">
+          <img
+            class="shot__img"
+            src="./assets/hero.png"
+            alt="Harness home screen — a quote, a compose box, and quiet corner facts. The library is closed."
+            width="2940"
+            height="1846"
+          />
+          <figcaption>
+            It opens to a quote and a box. Time, the date, and how much I’ve
+            dictated sit in the corners. The library stays out of the way until
+            I want it.
+          </figcaption>
+        </figure>
+
+        <figure class="shot">
+          <img
+            class="shot__img"
+            src="./assets/thread.png"
+            alt="Harness Q&amp;A mode — a short question in the thread and lettered choices in the composer."
+            width="2940"
+            height="1846"
+          />
+          <figcaption>
+            Q&amp;A asks one question at a time and puts the choices in the
+            composer. Chat stays short; longer writing goes into a note.
+          </figcaption>
+        </figure>
+
         <div class="download">
           <a
             class="cta"
@@ -40,26 +75,12 @@
           >
             Download for macOS
           </a>
-          <p class="download-hint">On the next page, get the file ending in <code>.dmg</code>.</p>
+          <p class="download-hint">
+            On the next page, get the file ending in <code>.dmg</code>.
+            <a href="https://github.com/wgminer/harness">Source on GitHub</a>
+          </p>
         </div>
-        <figure class="hero">
-          <div class="window" data-tilt>
-            <div class="window__chrome" aria-hidden="true">
-              <span class="window__dot window__dot--close"></span>
-              <span class="window__dot window__dot--minimize"></span>
-              <span class="window__dot window__dot--zoom"></span>
-            </div>
-            <div class="window__body">
-              <img
-                class="hero__img"
-                src="./assets/hero.png"
-                alt="Harness desktop app — sidebar library and chat"
-                width="2940"
-                height="1846"
-              />
-            </div>
-          </div>
-        </figure>
+
         <p class="colophon">
           macOS 12 Monterey or later · Apple silicon · Microphone access for
           dictation · Tauri (Rust, React), Swift UI, OpenAI, Apple Speech,
@@ -70,59 +91,5 @@
         </p>
       </div>
     </main>
-    <script>
-      (function () {
-        var windowEl = document.querySelector("[data-tilt]");
-        if (!windowEl) return;
-
-        var reduceMotion = window.matchMedia(
-          "(prefers-reduced-motion: reduce)",
-        );
-        if (reduceMotion.matches) return;
-
-        var maxTilt = 7;
-        var targetX = 0;
-        var targetY = 0;
-        var currentX = 0;
-        var currentY = 0;
-        var raf = 0;
-
-        function apply() {
-          currentX += (targetX - currentX) * 0.1;
-          currentY += (targetY - currentY) * 0.1;
-          windowEl.style.transform =
-            "rotateX(" +
-            currentY.toFixed(3) +
-            "deg) rotateY(" +
-            currentX.toFixed(3) +
-            "deg)";
-          raf = requestAnimationFrame(apply);
-        }
-
-        function onMove(event) {
-          var rect = windowEl.getBoundingClientRect();
-          var cx = rect.left + rect.width / 2;
-          var cy = rect.top + rect.height / 2;
-          var nx = (event.clientX - cx) / (rect.width / 2);
-          var ny = (event.clientY - cy) / (rect.height / 2);
-          // Clamp so far-away cursor doesn't over-rotate
-          nx = Math.max(-1, Math.min(1, nx));
-          ny = Math.max(-1, Math.min(1, ny));
-          targetX = nx * maxTilt;
-          targetY = -ny * maxTilt;
-        }
-
-        document.addEventListener("pointermove", onMove, { passive: true });
-        raf = requestAnimationFrame(apply);
-
-        reduceMotion.addEventListener("change", function (event) {
-          if (event.matches) {
-            cancelAnimationFrame(raf);
-            windowEl.style.transform = "";
-            document.removeEventListener("pointermove", onMove);
-          }
-        });
-      })();
-    </script>
   </body>
 </html>
