@@ -11,7 +11,8 @@ struct HarnessCodeSyntaxHighlighter: CodeSyntaxHighlighter {
     private static let lock = NSLock()
 
     func highlightCode(_ content: String, language: String?) -> Text {
-        let fallback = Text(verbatim: content).font(.system(.body, design: .monospaced))
+        // No explicit font: the theme's code block style sets SF Mono at the right size.
+        let fallback = Text(verbatim: content)
         if isStreaming { return fallback }
         guard let language, !language.isEmpty else { return fallback }
 
@@ -20,7 +21,18 @@ struct HarnessCodeSyntaxHighlighter: CodeSyntaxHighlighter {
         let themeName = colorScheme == .dark ? "github-dark" : "github"
         Self.highlightr?.setTheme(to: themeName)
         guard let highlighted = Self.highlightr?.highlight(content, as: language) else { return fallback }
-        guard let attributed = try? AttributedString(highlighted, including: \.uiKit) else { return fallback }
+        // Carry token colors only. Highlightr's attributes also pin Courier and a theme
+        // background, which would override the theme's SF Mono size and the code well.
+        var attributed = AttributedString(highlighted.string)
+        highlighted.enumerateAttribute(
+            .foregroundColor,
+            in: NSRange(location: 0, length: highlighted.length)
+        ) { value, range, _ in
+            guard let color = value as? UIColor,
+                  let swiftRange = Range(range, in: attributed)
+            else { return }
+            attributed[swiftRange].foregroundColor = Color(color)
+        }
         return Text(attributed)
     }
 }

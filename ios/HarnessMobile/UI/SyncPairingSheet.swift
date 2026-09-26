@@ -23,7 +23,7 @@ struct SyncPairingSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Scan the QR from Harness on your Mac.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HarnessPalette.textMuted)
 
                     if cameraUnavailable {
                         Text("Camera scanning isn’t available on this device. Paste the sync code below.")
@@ -35,17 +35,27 @@ struct SyncPairingSheet: View {
                             onUnavailable: { cameraUnavailable = true }
                         )
                         .frame(height: 280)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(HarnessPalette.hairline, lineWidth: 1)
+                        )
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Or paste the sync code.")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(HarnessPalette.textMuted)
                         TextField("harness-pair:1:…", text: $pasteCode, axis: .vertical)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .lineLimit(3...6)
+                            .font(.system(.footnote, design: .monospaced))
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(HarnessPalette.surface)
+                            )
                         Button("Apply sync code") {
                             Task { await apply(code: pasteCode) }
                         }
@@ -57,6 +67,7 @@ struct SyncPairingSheet: View {
                 }
                 .padding(20)
             }
+            .background(HarnessPalette.background.ignoresSafeArea())
             .navigationTitle("Scan QR code")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -66,6 +77,7 @@ struct SyncPairingSheet: View {
                 }
             }
         }
+        .presentationBackground(HarnessPalette.background)
         .interactiveDismissDisabled(phase == .applying)
     }
 

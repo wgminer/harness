@@ -1,12 +1,34 @@
 import Foundation
 
 enum RecentConversations {
-    static let perChatBodyBudget = 2000
-    static let totalBodyBudget = 8000
-    static let protectRecentCount = 3
+    /// Budgets shared with desktop via bundled `resources/contracts/recentConversations.json`.
+    private static let contract = loadContract()
+    static let perChatBodyBudget = contract.perChatBodyBudget
+    static let totalBodyBudget = contract.totalBodyBudget
+    static let protectRecentCount = contract.protectRecentCount
     /// Max conversations to load from disk when shortlisting by map metadata.
     /// Covers protect-recent + a buffer for same-day / recently created threads without O(library) I/O.
     static let shortlistLoadLimit = 24
+
+    private struct Contract {
+        let perChatBodyBudget: Int
+        let totalBodyBudget: Int
+        let protectRecentCount: Int
+    }
+
+    private static func loadContract() -> Contract {
+        guard let url = Bundle.main.url(forResource: "recentConversations", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let perChat = json["perChatBodyBudget"] as? Int, perChat > 0,
+              let total = json["totalBodyBudget"] as? Int, total > 0,
+              let protect = json["protectRecentCount"] as? Int, protect >= 0
+        else {
+            assertionFailure("resources/contracts/recentConversations.json failed to load or parse from the app bundle")
+            return Contract(perChatBodyBudget: 2000, totalBodyBudget: 8000, protectRecentCount: 3)
+        }
+        return Contract(perChatBodyBudget: perChat, totalBodyBudget: total, protectRecentCount: protect)
+    }
 
     private struct Candidate {
         let id: String

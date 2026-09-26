@@ -6,7 +6,7 @@ import {
   Info,
   Lightbulb,
 } from "lucide-react";
-import { MarkdownContent } from "../chatHelpers";
+import { MarkdownContent } from "../chat/chatHelpers";
 import { MessageContent, Section } from "./storyHelpers";
 
 function MarkdownGallery() {

@@ -22,6 +22,7 @@ struct MobileSettingsView: View {
             dictationSection
             recordingsSection
         }
+        .harnessListBackground()
         .navigationTitle("Settings")
         .onAppear {
             reloadDictationToggles()
@@ -137,7 +138,7 @@ struct MobileSettingsView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(recording.url.lastPathComponent)
+                                Text(recording.recordedAt.formatted(date: .abbreviated, time: .shortened))
                                     .font(.body)
                                     .foregroundStyle(.primary)
                                     .lineLimit(1)
@@ -150,7 +151,9 @@ struct MobileSettingsView: View {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.tertiary)
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
             }
         } header: {
@@ -216,13 +219,11 @@ struct MobileSettingsView: View {
     }
 
     private func recordingDetail(for recording: VoiceRecording) -> String {
-        let timestamp = recording.recordedAt.formatted(
-            .dateTime.month(.abbreviated).day().year()
-        )
+        let fileName = recording.url.lastPathComponent
         if let duration = recording.duration {
-            return "\(timestamp) · \(RecordingStorage.formattedDuration(duration))"
+            return "\(RecordingStorage.formattedDuration(duration)) · \(fileName)"
         }
-        return timestamp
+        return fileName
     }
 }
 

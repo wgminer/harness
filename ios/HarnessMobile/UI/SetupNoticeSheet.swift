@@ -12,11 +12,12 @@ struct SetupNoticeSheet: View {
                         "Chat needs an OpenAI key from your Mac. Scan the sync QR to pull credentials and back up this phone."
                     )
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HarnessPalette.textMuted)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
             }
+            .background(HarnessPalette.background.ignoresSafeArea())
             .navigationTitle("Welcome to Harness")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -29,10 +30,12 @@ struct SetupNoticeSheet: View {
                     Button("Not now") {
                         app.dismissSetupNotice()
                     }
+                    .foregroundStyle(HarnessPalette.textMuted)
                 }
             }
         }
         .presentationDetents([.medium, .large])
+        .presentationBackground(HarnessPalette.background)
     }
 }
 

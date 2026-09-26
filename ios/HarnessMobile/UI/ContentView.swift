@@ -15,6 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
+            HarnessPalette.background.ignoresSafeArea()
             if app.hasCompletedInitialLoad {
                 mainNavigation
                     .transition(.opacity)

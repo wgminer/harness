@@ -145,8 +145,10 @@ final class AppModel: ObservableObject {
                 await self?.clearScheduledSync()
                 return
             }
-            await self?.performSync()
+            // Detach from `scheduledSyncTask` first: `performSync` cancels it, which would
+            // otherwise cancel this very task and abort the R2 requests mid-flight.
             await self?.clearScheduledSync()
+            await self?.performSync()
         }
     }
 
@@ -281,7 +283,24 @@ final class AppModel: ObservableObject {
     }
 
     func dismissDictation() {
+        let abandonedThreadId: String?
+        if case .sendToConversation(let id) = activeDictation {
+            abandonedThreadId = id
+        } else {
+            abandonedThreadId = nil
+        }
         activeDictation = nil
+        if let abandonedThreadId {
+            discardIfEmpty(conversationId: abandonedThreadId)
+        }
+    }
+
+    /// New Chat → mic → cancel would otherwise strand the user in a blank thread.
+    private func discardIfEmpty(conversationId id: String) {
+        guard !hasPendingOutboundMessage(conversationId: id),
+              ConversationStore.sidebarMessageProbe(localDataDir: localDataDir, conversationId: id) == 0
+        else { return }
+        try? deleteConversation(id: id)
     }
 
     func finishThreadDictation(transcript: String) {
@@ -369,11 +388,25 @@ final class AppModel: ObservableObject {
         hasCompletedInitialLoad = true
     }
 
+    private var inFlightSync: Task<Void, Never>?
+
+    /// Serializes overlapping triggers (pull-to-refresh, foreground, debounced edits)
+    /// so two syncs never merge into the same local files at once.
     func performSync(forcePull: Bool = false) async {
         guard R2SettingsStore.isConfigured else {
             syncNotConfigured = true
             return
         }
+        while let inFlightSync {
+            await inFlightSync.value
+        }
+        let task = Task { await runSync(forcePull: forcePull) }
+        inFlightSync = task
+        await task.value
+        if inFlightSync == task { inFlightSync = nil }
+    }
+
+    private func runSync(forcePull: Bool) async {
         scheduledSyncTask?.cancel()
         clearScheduledSync()
         isSyncing = true
@@ -383,7 +416,7 @@ final class AppModel: ObservableObject {
             endSyncBackgroundTaskIfNeeded()
         }
 
-        let beforePull = (try? store.snapshotConversations()) ?? [:]
+        let beforePull = (try? await store.snapshotConversationsAsync()) ?? [:]
 
         do {
             let outcome = try await syncEngine.syncNow(forcePull: forcePull)
@@ -391,7 +424,7 @@ final class AppModel: ObservableObject {
             if outcome.localDataChanged {
                 try await store.reloadAsync()
                 try tasksStore.reload()
-                if let after = try? store.snapshotConversations() {
+                if let after = try? await store.snapshotConversationsAsync() {
                     store.recentlyPulled.mark(
                         SyncChangeSummary.changedConversationIds(before: beforePull, after: after)
                     )
@@ -496,7 +529,7 @@ final class AppModel: ObservableObject {
         if R2SettingsStore.isConfigured {
             return "No sync completed yet on this phone."
         }
-        return "Configure Cloudflare R2 in Settings to sync with desktop."
+        return "Scan the sync QR code from Harness on your Mac to sync chats."
     }
 
     private func applyOutcome(_ outcome: SyncOutcome) {

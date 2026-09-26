@@ -31,11 +31,11 @@ describe("dictationSuggestedPrompts contract", () => {
 
   it("is include_str!'d by Rust", () => {
     const rust = readFileSync(
-      join(root, "src-tauri/src/dictation_suggested_prompts.rs"),
+      join(root, "src-tauri/src/recording/suggested_prompts.rs"),
       "utf8",
     );
     expect(rust).toContain(
-      'include_str!("../../resources/contracts/dictationSuggestedPrompts.json")',
+      'include_str!("../../../resources/contracts/dictationSuggestedPrompts.json")',
     );
   });
 });

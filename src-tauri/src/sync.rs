@@ -1,3 +1,7 @@
+pub mod bundle;
+pub mod merge;
+pub mod remote_store;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -10,18 +14,18 @@ use tokio::time::{interval, sleep};
 
 use crate::credentials::{set_credential, CredentialKey};
 use crate::credentials::resolve_r2_secret_access_key;
-use crate::memory::AppState;
+use crate::state::AppState;
 use crate::paths::{get_local_data_dir, get_local_data_sync_dir};
-use crate::remote_store::{is_r2_config_complete, BackupManifest, R2Config, RemoteBackupStore};
+use crate::sync::remote_store::{is_r2_config_complete, BackupManifest, R2Config, RemoteBackupStore};
 use crate::settings::{get_settings, set_settings};
 use crate::storage::{atomic_write_utf8, file_exists};
-use crate::sync_bundle::{
+use crate::sync::bundle::{
     apply_merged_files, backup_scoped_files, build_bundle, compute_content_revision_from_bundle,
     compute_local_max_mtime, compute_revision, extract_bundle, hash_bundle_bytes, list_scoped_files,
     parse_bundle, DEFAULT_SYNC_SCOPES, USER_CONTENT_SYNC_SCOPES,
 };
 use base64::Engine;
-use crate::sync_merge::{
+use crate::sync::merge::{
     build_default_merge_choices, build_merged_file_map, build_sync_conflict_review, SyncConflictReview,
     SyncFileChoice,
 };
@@ -430,7 +434,7 @@ fn merge_warning_from_review(review: &SyncConflictReview) -> Option<String> {
         .files
         .iter()
         .filter(|file| {
-            file.kind == crate::sync_merge::SyncFileChangeKind::Conflict && !file.supports_merge
+            file.kind == crate::sync::merge::SyncFileChangeKind::Conflict && !file.supports_merge
         })
         .collect();
     if skipped.is_empty() {

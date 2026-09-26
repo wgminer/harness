@@ -9,8 +9,8 @@ import {
   StickyNote,
 } from "lucide-react";
 import { useState } from "react";
-import { WorkspaceListSearch } from "../WorkspaceListSearch";
-import { Skeleton } from "../Skeleton";
+import { WorkspaceListSearch } from "./WorkspaceListSearch";
+import { Skeleton } from "./Skeleton";
 import { Section } from "./storyHelpers";
 
 function ListsGallery() {

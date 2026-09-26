@@ -389,9 +389,7 @@ final class ConversationStore: ObservableObject {
     func markSynced(revision: String) {
         hasLocalEdits = false
         UserDefaults.standard.set(revision, forKey: SyncEngine.lastSyncedRevisionKey)
-        if let snapshot = try? snapshotConversations() {
-            PendingSyncTracker.saveBaseline(snapshot)
-        }
+        saveSyncedBaselineInBackground()
     }
 
     func setUserTitle(conversationId: String, title: String) throws {
@@ -428,9 +426,7 @@ final class ConversationStore: ObservableObject {
 
     func clearLocalEditsFlag() {
         hasLocalEdits = false
-        if let snapshot = try? snapshotConversations() {
-            PendingSyncTracker.saveBaseline(snapshot)
-        }
+        saveSyncedBaselineInBackground()
     }
 
     /// Reconcile the pending-upload flag with the last synced content revision.
@@ -461,7 +457,27 @@ final class ConversationStore: ObservableObject {
     }
 
     func snapshotConversations() throws -> [String: ConversationSnapshot] {
-        let map = try loadConversationMapRaw()
+        try Self.snapshotConversations(localDataDir: localDataDir)
+    }
+
+    /// Parses every messages file — keep it off the main actor.
+    func snapshotConversationsAsync() async throws -> [String: ConversationSnapshot] {
+        let dir = localDataDir
+        return try await Task.detached(priority: .utility) {
+            try Self.snapshotConversations(localDataDir: dir)
+        }.value
+    }
+
+    private func saveSyncedBaselineInBackground() {
+        let dir = localDataDir
+        Task.detached(priority: .utility) {
+            guard let snapshot = try? Self.snapshotConversations(localDataDir: dir) else { return }
+            PendingSyncTracker.saveBaseline(snapshot)
+        }
+    }
+
+    nonisolated static func snapshotConversations(localDataDir: URL) throws -> [String: ConversationSnapshot] {
+        let map = try loadConversationMapRaw(localDataDir: localDataDir)
         var snapshots: [String: ConversationSnapshot] = [:]
         for (id, meta) in map {
             let messageCount = Self.lightweightMessageCount(localDataDir: localDataDir, conversationId: id)

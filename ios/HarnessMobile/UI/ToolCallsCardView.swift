@@ -38,23 +38,25 @@ struct ToolCallsCardView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color(.tertiarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(HarnessPalette.hairline, lineWidth: 1)
+        )
     }
 
     private func summaryRow(label: String, chevron: String, expanded: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: "checkmark")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HarnessPalette.textMuted)
                 Text(label)
                     .font(.subheadline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(HarnessPalette.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: chevron)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HarnessPalette.textMuted)
             }
         }
         .buttonStyle(.plain)
@@ -78,12 +80,12 @@ struct ToolCallsCardView: View {
     private func searchToolRow(hits: [MemorySearchHit]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: "checkmark")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HarnessPalette.textMuted)
                 Text(ToolCallLabels.label(for: "memory_search_conversations"))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HarnessPalette.textMuted)
             }
             ForEach(hits, id: \.id) { hit in searchHitRow(hit) }
         }
@@ -92,12 +94,12 @@ struct ToolCallsCardView: View {
 
     private func defaultToolRow(_ call: ToolCallRecord) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: "checkmark")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HarnessPalette.textMuted)
             Text(ToolCallLabels.label(for: call.toolName))
                 .font(.subheadline)
-                .foregroundStyle(.primary)
+                .foregroundStyle(HarnessPalette.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if call.isPending {
                 HStack(spacing: 8) {
@@ -111,7 +113,7 @@ struct ToolCallsCardView: View {
                         onToolConfirm(call, .cancel)
                     }
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HarnessPalette.textMuted)
                 }
             }
         }
@@ -147,20 +149,20 @@ struct ToolCallsCardView: View {
         return HStack(alignment: .top, spacing: 12) {
             Image(systemName: iconName(for: hit.kind))
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HarnessPalette.textMuted)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(hit.title).font(.body.weight(.medium)).lineLimit(1)
                 Text(snippet.isEmpty ? kind : "\(kind) · \(snippet)")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HarnessPalette.textMuted)
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(HarnessPalette.surface)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 

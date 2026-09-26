@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { CSSProperties } from "react";
-import { Skeleton } from "../Skeleton";
+import { Skeleton } from "./Skeleton";
 import { Section } from "./storyHelpers";
 
 const swatchGrid: CSSProperties = {

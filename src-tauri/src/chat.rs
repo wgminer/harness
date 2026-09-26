@@ -1,3 +1,7 @@
+pub mod assistant_tools;
+pub mod modes;
+pub mod system_prompt;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -5,7 +9,7 @@ use tauri::AppHandle;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use crate::memory::AppState;
+use crate::state::AppState;
 
 mod gated_checkpoint;
 mod stream;

@@ -5,12 +5,12 @@ use serde::Serialize;
 
 use crate::memory::{get_messages, get_user_memory, pop_last_user_message, AppendMessageMeta};
 use crate::openai::{tool_definitions, ChatMessageParam};
-use crate::recent_conversations::build_recent_conversations_block;
-use crate::system_prompt::{
+use crate::memory::recent::build_recent_conversations_block;
+use crate::chat::system_prompt::{
     build_system_prompt_with_mode, contract_fields, SystemPromptPreview,
     SystemPromptPreviewMemory, SystemPromptPreviewTool,
 };
-use crate::conversation_title::schedule_conversation_title_refinement;
+use crate::memory::title::schedule_conversation_title_refinement;
 
 use super::ChatController;
 
@@ -154,17 +154,17 @@ impl ChatController {
         let fields = contract_fields();
         let shared = fields.shared.clone();
         let platform_overlay =
-            crate::system_prompt::platform_overlay(&fields, platform).to_string();
-        let static_prompt = crate::system_prompt::build_static_system_prompt(&fields, platform);
+            crate::chat::system_prompt::platform_overlay(&fields, platform).to_string();
+        let static_prompt = crate::chat::system_prompt::build_static_system_prompt(&fields, platform);
         let mode = if platform == "ios" {
-            crate::chat_modes::ChatMode::Chat
+            crate::chat::modes::ChatMode::Chat
         } else {
-            crate::chat_modes::ChatMode::parse(chat_mode)
+            crate::chat::modes::ChatMode::parse(chat_mode)
         };
         let mode_overlay = if platform == "ios" {
             String::new()
         } else {
-            crate::chat_modes::mode_overlay(mode)
+            crate::chat::modes::mode_overlay(mode)
         };
         let assembled_prompt = build_system_prompt_with_mode(
             &fields,
@@ -269,9 +269,9 @@ impl ChatController {
                 .await
                 .unwrap_or_default()
         } else {
-            crate::chat_modes::ChatMode::Chat
+            crate::chat::modes::ChatMode::Chat
         };
-        let mode_overlay = crate::chat_modes::mode_overlay(chat_mode);
+        let mode_overlay = crate::chat::modes::mode_overlay(chat_mode);
         let coding_scope_block = if let Some(conversation_id) = conversation_id {
             match crate::memory::get_conversation_coding_scope(&self.state, conversation_id).await {
                 Ok(Some(meta)) => match crate::coding::scope_from_meta(&meta) {
@@ -461,7 +461,7 @@ pub(crate) fn format_memory_context_block(selected: &[(String, String)]) -> Stri
 #[cfg(test)]
 mod context_preview_tests {
     use super::*;
-    use crate::system_prompt::build_system_prompt;
+    use crate::chat::system_prompt::build_system_prompt;
     use std::collections::HashMap;
 
     #[test]

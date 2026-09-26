@@ -73,14 +73,15 @@ struct ChatThreadView: View {
     var body: some View {
         Group {
             if isLoadingThread && messages.isEmpty && loadError == nil {
-                ProgressView("Loading conversation…")
+                ProgressView()
+                    .tint(HarnessPalette.textFaint)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemBackground).ignoresSafeArea())
+                    .background(HarnessPalette.background.ignoresSafeArea())
             } else {
                 threadScroll
             }
         }
-        .background(Color(.systemBackground).ignoresSafeArea())
+        .background(HarnessPalette.background.ignoresSafeArea())
         .navigationTitle(conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -98,7 +99,8 @@ struct ChatThreadView: View {
                         Label("Delete", systemImage: "trash")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis")
+                        .foregroundStyle(HarnessPalette.textMuted)
                 }
             }
         }
@@ -169,12 +171,7 @@ struct ChatThreadView: View {
     private var threadScroll: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    if centerSingleMessage {
-                        // Centered landing (1:1 free-space split) — matches compose home.
-                        Spacer(minLength: 0)
-                    }
-
+                LazyVStack(alignment: .leading, spacing: 24) {
                     ForEach(messages) { msg in
                         MessageRowView(
                             message: msg,
@@ -227,15 +224,13 @@ struct ChatThreadView: View {
                             .id(ChatScrollAnchor.replying)
                     }
 
-                    if centerSingleMessage {
-                        Spacer(minLength: 0)
-                    }
-
                     ChatScrollBottomTracker()
                 }
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: centerSingleMessage ? minScrollHeight : nil, alignment: .top)
+                // Centered landing (1:1 free-space split) — matches compose home.
+                // Spacers do not expand inside a LazyVStack, so center via the frame instead.
+                .frame(minHeight: centerSingleMessage ? minScrollHeight : nil, alignment: centerSingleMessage ? .center : .top)
                 .padding(.horizontal, ChatThreadLayout.horizontalInset)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
@@ -275,7 +270,20 @@ struct ChatThreadView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composerDock
             }
-            .onAppear { scrollProxy = proxy }
+            .onAppear {
+                scrollProxy = proxy
+                scrollToLiveEdgeOnOpen()
+            }
+        }
+    }
+
+    /// Messages load before the ScrollView mounts, so the `messages.count` follow fires with no proxy
+    /// and the lazy bottom tracker never materializes. Jump to the newest message once mounted.
+    private func scrollToLiveEdgeOnOpen() {
+        guard !didInitialScrollToLiveEdge, !messages.isEmpty, !centerSingleMessage else { return }
+        didInitialScrollToLiveEdge = true
+        Task { @MainActor in
+            scrollToBottom(animated: false)
         }
     }
 

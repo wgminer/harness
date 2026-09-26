@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import App from "./App";
-import { WindowedNoteView } from "./WindowedNoteView";
-import { getCurrentWindowLabel, noteIdFromStickyWindowLabel } from "./stickyWindow";
-import { useTimeOfDayBackground } from "./useTimeOfDayBackground";
+import { WindowedNoteView } from "./notes/WindowedNoteView";
+import { getCurrentWindowLabel, noteIdFromStickyWindowLabel } from "./notes/stickyWindow";
+import { useTimeOfDayBackground } from "./hooks/useTimeOfDayBackground";
 
 type RootRoute =
   | { kind: "loading" }

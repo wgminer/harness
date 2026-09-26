@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ChevronDown, FileText, Loader2, Plus, Wrench } from "lucide-react";
 import { SettingsEntryRow } from "../settings/SettingsEntryRow";
-import { ToolCallsCard } from "../ToolCallsCard";
+import { ToolCallsCard } from "../chat/ToolCallsCard";
 import { MessageContent, Section, SettingsFrame } from "./storyHelpers";
 
 function CardsGallery() {

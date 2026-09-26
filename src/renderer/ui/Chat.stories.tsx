@@ -10,11 +10,10 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { ChatComposer } from "../ChatComposer";
-import { ChatModePicker } from "../ChatModePicker";
+import { ChatComposer } from "../chat/ChatComposer";
+import { ChatModePicker } from "../chat/ChatModePicker";
 import type { ChatModeId } from "../../shared/chatModes";
-import { balanceQuoteWrap } from "../../shared/quoteWrap";
-import { StreamingAssistantContent } from "../StreamingAssistantContent";
+import { StreamingAssistantContent } from "../chat/StreamingAssistantContent";
 import { MessageContent, Section } from "./storyHelpers";
 
 function ComposerIdle() {
@@ -212,9 +211,7 @@ function ChatGallery() {
             <div className="new-chat-center-stack">
               <span className="tooltip new-chat-quote-tooltip">
                 <p className="new-chat-quote">
-                  {balanceQuoteWrap(
-                    "“The impediment to action advances action. What stands in the way becomes the way.”",
-                  )}
+                  “The impediment to action advances action. What stands in the way becomes the way.”
                 </p>
                 <span className="tooltip__label">
                   <span className="new-chat-quote-tooltip__attr">Marcus Aurelius, Meditations</span>

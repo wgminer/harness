@@ -4,20 +4,24 @@ import SwiftUI
 struct StreamingMarkdownView: View, Equatable {
     let content: String
     @State private var blocks = StreamingMarkdownBlocks(completed: [], trailing: "")
+    /// Matches the theme's block gap so settled blocks do not shift when streaming ends.
+    @ScaledMetric(relativeTo: .body) private var blockGap =
+        AssistantProseStyle.basePointSize * HarnessMarkdownRhythm.blockSpacingEm
 
     static func == (lhs: StreamingMarkdownView, rhs: StreamingMarkdownView) -> Bool {
         lhs.content == rhs.content
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: blockGap) {
             ForEach(Array(blocks.completed.enumerated()), id: \.offset) { _, block in
                 StableStreamingMarkdownBlock(content: block)
                     .equatable()
             }
             if !blocks.trailing.isEmpty {
-                Text(blocks.trailing)
+                Text(blocks.trailing.trimmingCharacters(in: .newlines))
                     .assistantProseStyle()
+                    .foregroundStyle(HarnessPalette.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
                     .animation(nil, value: blocks.trailing)

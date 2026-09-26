@@ -20,12 +20,13 @@ struct DictationReplyStrip: View {
                         onSelect()
                     } label: {
                         Text(label)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(HarnessPalette.text)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
                             .background(
                                 Capsule(style: .continuous)
-                                    .strokeBorder(Color.primary.opacity(0.25), lineWidth: 1)
+                                    .strokeBorder(HarnessPalette.hairline, lineWidth: 1)
                             )
                     }
                     .buttonStyle(.plain)
@@ -44,5 +45,5 @@ struct DictationReplyStrip: View {
 #Preview("Dictation strip") {
     DictationReplyStrip(label: "Distill", loading: false, onSelect: {})
         .padding()
-        .background(Color(.systemGroupedBackground))
+        .background(HarnessPalette.background)
 }

@@ -1,0 +1,435 @@
+//! Side effects from the global Fn recording state machine.
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use tauri::{image::Image, AppHandle, Emitter, Manager};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+use crate::memory::title::finalize_voice_dictation_session;
+use crate::recording::dictation_index;
+use crate::env_util::is_harness_e2e;
+use crate::recording::global_capture::NativeCapture;
+use crate::recording::global_session::GlobalRecordingEffect;
+use crate::memory::{append_message, create_conversation, AppendMessageMeta};
+use crate::paths::{get_recordings_dir, resolve_bundled_resource};
+use crate::recording::{paste_text_impl, transcribe_wav_bytes};
+use crate::settings::get_settings;
+
+use crate::recording::global::{cancel_active_recording, GlobalRecordingRuntime};
+
+#[derive(Clone, Copy)]
+pub enum TrayIconState {
+    Ready,
+    Recording,
+    Processing,
+}
+
+fn tray_icon_file(state: TrayIconState) -> &'static str {
+    match state {
+        TrayIconState::Ready => "icon-tray.png",
+        TrayIconState::Recording => "icon-tray-recording.png",
+        TrayIconState::Processing => "icon-tray-processing.png",
+    }
+}
+
+fn tray_title(state: TrayIconState) -> Option<&'static str> {
+    match state {
+        TrayIconState::Ready => None,
+        TrayIconState::Recording => Some("REC"),
+        TrayIconState::Processing => None,
+    }
+}
+
+pub(crate) fn load_tray_image(file_name: &str) -> Option<Image<'static>> {
+    let path = resolve_bundled_resource(file_name)?;
+    Image::from_path(&path).ok()
+}
+
+fn apply_tray_state(tray: &tauri::tray::TrayIcon, state: TrayIconState) {
+    let file_name = tray_icon_file(state);
+    if let Some(icon) = load_tray_image(file_name) {
+        let _ = tray.set_icon(Some(icon));
+    }
+    let title = tray_title(state).map(str::to_string).or_else(|| Some(String::new()));
+    let _ = tray.set_title(title);
+}
+
+pub async fn set_tray_state(
+    app: &AppHandle,
+    runtime: &GlobalRecordingRuntime,
+    state: TrayIconState,
+) {
+    let Some(tray_id) = runtime.tray_id.lock().await.clone() else {
+        return;
+    };
+    let Some(tray) = app.tray_by_id(&tray_id) else {
+        return;
+    };
+    apply_tray_state(&tray, state);
+}
+
+pub fn is_main_window_focused(app: &AppHandle) -> bool {
+    if is_harness_e2e() {
+        return true;
+    }
+    app.get_webview_window("main")
+        .map(|w| w.is_focused().unwrap_or(false))
+        .unwrap_or(false)
+}
+
+pub fn show_and_focus_main(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
+fn emit_recording_error(app: &AppHandle, message: &str, recording_path: Option<&Path>) {
+    let mut payload = serde_json::json!({ "message": message });
+    if let Some(path) = recording_path {
+        payload["recordingPath"] = serde_json::json!(path.to_string_lossy());
+    }
+    let _ = app.emit("global-recording-error", payload);
+}
+
+fn is_transcription_cancelled(err: &str) -> bool {
+    let lower = err.to_ascii_lowercase();
+    lower.contains("cancelled") || lower.contains("canceled")
+}
+
+/// Poll native capture peaks and emit `global-recording-level` until capture ends.
+fn spawn_recording_level_meter(app: AppHandle, runtime: Arc<GlobalRecordingRuntime>) {
+    tauri::async_runtime::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(40));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let level = {
+                let Ok(guard) = runtime.capture.lock() else {
+                    break;
+                };
+                match guard.as_ref() {
+                    Some(cap) => cap.latest_level(),
+                    None => break,
+                }
+            };
+            let _ = app.emit(
+                "global-recording-level",
+                serde_json::json!({ "level": level }),
+            );
+        }
+    });
+}
+
+async fn save_wav(wav: &[u8]) -> Option<PathBuf> {
+    let dir = get_recordings_dir();
+    if tokio::fs::create_dir_all(&dir).await.is_err() {
+        return None;
+    }
+    let path = dir.join(format!("rec_{}.wav", chrono::Utc::now().timestamp_millis()));
+    if tokio::fs::write(&path, wav).await.is_err() {
+        return None;
+    }
+    Some(path)
+}
+
+async fn bring_to_front_setting(runtime: &GlobalRecordingRuntime) -> bool {
+    let settings = get_settings(&runtime.app_state.write_chains).await;
+    settings
+        .get("recording")
+        .and_then(|v| v.get("bringToFrontOnBackgroundDictation"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+async fn deliver_unfocused(
+    app: &AppHandle,
+    app_state: &crate::state::AppState,
+    text: &str,
+    recording_path: Option<&Path>,
+    paste_target_pid: Option<i32>,
+) -> Result<String, String> {
+    paste_text_impl(app, text, paste_target_pid).await?;
+    let conversation_id = create_conversation(app_state)
+        .await
+        .map_err(|e| e.to_string())?;
+    append_message(
+        app_state,
+        &conversation_id,
+        "user",
+        text,
+        Some(AppendMessageMeta {
+            tool_calls: None,
+            timestamp: Some(chrono::Utc::now().timestamp_millis()),
+            model: None,
+        }),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    finalize_voice_dictation_session(app.clone(), app_state, &conversation_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(path) = recording_path {
+        let _ = dictation_index::link(&conversation_id, path);
+    }
+    Ok(conversation_id)
+}
+
+/// Run stop/transcribe pipeline; `existing_path` skips re-saving when retrying.
+pub async fn run_stop_pipeline_from_path(
+    app: AppHandle,
+    runtime: Arc<GlobalRecordingRuntime>,
+    was_focused: bool,
+    wav: Vec<u8>,
+    existing_path: Option<PathBuf>,
+    paste_target_pid: Option<i32>,
+) {
+    *runtime.transcribing.lock().await = true;
+    register_escape_cancel(&app, &runtime);
+    set_tray_state(&app, &runtime, TrayIconState::Processing).await;
+
+    let recording_path = match existing_path {
+        Some(path) => Some(path),
+        None => save_wav(&wav).await,
+    };
+
+    let mut payload = serde_json::json!({});
+    if let Some(ref path) = recording_path {
+        payload["recordingPath"] = serde_json::json!(path.to_string_lossy());
+    }
+    let _ = app.emit("global-recording-transcribing", payload);
+
+    let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
+    *runtime.transcription_cancel.lock().await = Some(cancel_tx);
+
+    let app_state = runtime.app_state.clone();
+    let result = transcribe_wav_bytes(&app_state, &wav, &mut cancel_rx).await;
+    *runtime.transcription_cancel.lock().await = None;
+
+    // Escape may have already cleared transcribing + emitted cancelled.
+    if !*runtime.transcribing.lock().await {
+        unregister_escape(&app, &runtime);
+        set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+        return;
+    }
+
+    let text = match result {
+        Ok(t) => t.trim().to_string(),
+        Err(err) => {
+            if is_transcription_cancelled(&err) {
+                *runtime.transcribing.lock().await = false;
+                unregister_escape(&app, &runtime);
+                let _ = app.emit("global-recording-cancelled", serde_json::json!({}));
+                set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+                return;
+            }
+            emit_recording_error(&app, &err, recording_path.as_deref());
+            *runtime.transcribing.lock().await = false;
+            unregister_escape(&app, &runtime);
+            set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+            return;
+        }
+    };
+
+    if text.is_empty() {
+        emit_recording_error(
+            &app,
+            "No speech was detected in the recording.",
+            recording_path.as_deref(),
+        );
+        *runtime.transcribing.lock().await = false;
+        unregister_escape(&app, &runtime);
+        set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+        return;
+    }
+
+    if was_focused {
+        let _ = app.emit("global-transcript-ready", serde_json::json!({ "text": text }));
+    } else {
+        match deliver_unfocused(
+            &app,
+            &app_state,
+            &text,
+            recording_path.as_deref(),
+            paste_target_pid,
+        )
+        .await {
+            Ok(conversation_id) => {
+                let _ = app.emit(
+                    "global-transcript-delivered",
+                    serde_json::json!({ "conversationId": conversation_id }),
+                );
+            }
+            Err(err) => {
+                emit_recording_error(&app, &err, recording_path.as_deref());
+                *runtime.transcribing.lock().await = false;
+                unregister_escape(&app, &runtime);
+                set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+                return;
+            }
+        }
+    }
+
+    *runtime.transcribing.lock().await = false;
+    unregister_escape(&app, &runtime);
+    set_tray_state(&app, &runtime, TrayIconState::Ready).await;
+}
+
+pub async fn run_recording_effects(
+    app: &AppHandle,
+    runtime: &Arc<GlobalRecordingRuntime>,
+    effects: Vec<GlobalRecordingEffect>,
+) {
+    for effect in effects {
+        match effect {
+            GlobalRecordingEffect::StartRecording => {
+                if !runtime.is_frontend_ready().await {
+                    eprintln!(
+                        "[Harness] global recording start skipped — frontend not ready yet"
+                    );
+                    runtime.reset_fn_state().await;
+                    continue;
+                }
+
+                let capture_result = if is_harness_e2e() {
+                    Ok(())
+                } else if !crate::recording::mic_permission::request_microphone_access(app).await {
+                    Err(crate::recording::mic_permission::MICROPHONE_PERMISSION_DENIED_MESSAGE.to_string())
+                } else {
+                    NativeCapture::start().map(|cap| {
+                        *runtime.capture.lock().unwrap() = Some(cap);
+                    })
+                };
+
+                match capture_result {
+                    Ok(()) => {
+                        // Snapshot now — bring-to-front / tray clicks must not flip the paste path.
+                        let focused = is_main_window_focused(app);
+                        *runtime.started_focused.lock().await = focused;
+                        #[cfg(target_os = "macos")]
+                        {
+                            *runtime.paste_target_pid.lock().await = if focused {
+                                None
+                            } else {
+                                crate::recording::macos_paste::frontmost_foreign_pid(app)
+                            };
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            *runtime.paste_target_pid.lock().await = None;
+                        }
+                        eprintln!(
+                            "[Harness:recording] start focused={} paste_pid={:?}",
+                            focused,
+                            *runtime.paste_target_pid.lock().await
+                        );
+                        if !focused && bring_to_front_setting(runtime).await {
+                            show_and_focus_main(app);
+                        }
+                        register_escape_cancel(app, runtime);
+                        let _ = app.emit(
+                            "global-recording-started",
+                            serde_json::json!({ "focused": focused }),
+                        );
+                        if !is_harness_e2e() {
+                            spawn_recording_level_meter(app.clone(), runtime.clone());
+                        }
+                        set_tray_state(app, runtime, TrayIconState::Recording).await;
+                    }
+                    Err(err) => {
+                        runtime.reset_fn_state().await;
+                        emit_recording_error(app, &err, None);
+                        set_tray_state(app, runtime, TrayIconState::Ready).await;
+                    }
+                }
+            }
+            GlobalRecordingEffect::StopRecording => {
+                // Keep Escape registered through transcription.
+                let was_focused = *runtime.started_focused.lock().await;
+                let paste_target_pid = *runtime.paste_target_pid.lock().await;
+                eprintln!(
+                    "[Harness:recording] stop started_focused={} paste_pid={:?}",
+                    was_focused, paste_target_pid
+                );
+                let _ = app.emit("global-recording-stopped", serde_json::json!({}));
+                set_tray_state(app, runtime, TrayIconState::Processing).await;
+                if was_focused {
+                    show_and_focus_main(app);
+                }
+
+                let wav_result = if is_harness_e2e() {
+                    Ok(Vec::new())
+                } else {
+                    match runtime.capture.lock().unwrap().take() {
+                        Some(cap) => cap.stop(),
+                        None => Err("Recording was not active.".into()),
+                    }
+                };
+
+                let runtime_arc = runtime.clone();
+                let app_clone = app.clone();
+                match wav_result {
+                    Ok(wav) => {
+                        tauri::async_runtime::spawn(async move {
+                            run_stop_pipeline_from_path(
+                                app_clone,
+                                runtime_arc,
+                                was_focused,
+                                wav,
+                                None,
+                                paste_target_pid,
+                            )
+                            .await;
+                        });
+                    }
+                    Err(err) => {
+                        unregister_escape(app, runtime);
+                        emit_recording_error(app, &err, None);
+                        set_tray_state(app, runtime, TrayIconState::Ready).await;
+                    }
+                }
+            }
+            GlobalRecordingEffect::CancelRecording => {
+                unregister_escape(app, runtime);
+                if let Some(cap) = runtime.capture.lock().unwrap().take() {
+                    cap.cancel();
+                }
+                let _ = app.emit("global-recording-cancelled", serde_json::json!({}));
+                set_tray_state(app, runtime, TrayIconState::Ready).await;
+            }
+        }
+    }
+}
+
+pub fn register_escape_cancel(app: &AppHandle, runtime: &GlobalRecordingRuntime) {
+    if *runtime.escape_registered.lock().unwrap() {
+        return;
+    }
+    *runtime.escape_registered.lock().unwrap() = true;
+    let app_for_handler = app.clone();
+    let _ = app.global_shortcut().on_shortcut(
+        tauri_plugin_global_shortcut::Shortcut::new(None, tauri_plugin_global_shortcut::Code::Escape),
+        move |_app, _shortcut, event| {
+            if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                let app = app_for_handler.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(state) = app.try_state::<Arc<GlobalRecordingRuntime>>() {
+                        cancel_active_recording(&app, &state).await;
+                    }
+                });
+            }
+        },
+    );
+}
+
+pub fn unregister_escape(app: &AppHandle, runtime: &GlobalRecordingRuntime) {
+    if !*runtime.escape_registered.lock().unwrap() {
+        return;
+    }
+    *runtime.escape_registered.lock().unwrap() = false;
+    let _ = app.global_shortcut().unregister(tauri_plugin_global_shortcut::Shortcut::new(
+        None,
+        tauri_plugin_global_shortcut::Code::Escape,
+    ));
+}

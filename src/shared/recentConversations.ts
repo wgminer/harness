@@ -1,8 +1,11 @@
 /** Deterministic recent-chat dialogue cleaning for prompt injection (mirrors Rust/iOS). */
 
-export const RECENT_PER_CHAT_BODY_BUDGET = 2000;
-export const RECENT_TOTAL_BODY_BUDGET = 8000;
-export const RECENT_PROTECT_RECENT_COUNT = 3;
+import contract from "../../resources/contracts/recentConversations.json";
+
+/** Budgets shared with Rust and iOS via resources/contracts/recentConversations.json. */
+export const RECENT_PER_CHAT_BODY_BUDGET: number = contract.perChatBodyBudget;
+export const RECENT_TOTAL_BODY_BUDGET: number = contract.totalBodyBudget;
+export const RECENT_PROTECT_RECENT_COUNT: number = contract.protectRecentCount;
 
 const SENT_AT_PREFIX = /^\[sent_at=[^\]]+\]\n?/;
 

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { appDataFolderButtonLabel } from "../../shared/dataStorageLayout";
-import { Tooltip } from "../Tooltip";
+import { Tooltip } from "../ui/Tooltip";
 import { ClaudeImportModal } from "./ClaudeImportModal";
 import { SecretField } from "./SecretField";
 import { SettingsActions } from "./SettingsActions";

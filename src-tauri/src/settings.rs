@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use crate::credentials::{migrate_secrets_from_settings_raw, set_credential, CredentialKey};
 use crate::paths::{ensure_local_data_migration, get_local_data_settings_path};
 use crate::storage::{atomic_write_utf8, file_exists, read_json_object_file, WriteChains};
-use crate::transcript_cleanup::{
+use crate::recording::transcript_cleanup::{
     default_prompt as default_transcription_prompt, glossary_value, migrate_cleanup_prompt,
 };
 
@@ -546,7 +546,7 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
             );
         }
         if transcription.get("glossary").is_some() || transcription.get("dictionary").is_some() {
-            overlay["glossary"] = json!(crate::transcript_cleanup::resolve_glossary(Some(transcription)));
+            overlay["glossary"] = json!(crate::recording::transcript_cleanup::resolve_glossary(Some(transcription)));
         }
         if let Some(obj) = overlay.as_object_mut() {
             obj.remove("dictionary");

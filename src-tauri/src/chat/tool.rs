@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
-use crate::assistant_tools::{execute_assistant_tool, is_assistant_tool_name};
+use crate::chat::assistant_tools::{execute_assistant_tool, is_assistant_tool_name};
 use crate::coding::{
     coding_gated_preview, coding_tool_is_gated, coding_tool_name_is, execute_coding_tool,
     scope_from_meta,
@@ -163,8 +163,8 @@ impl ChatController {
         };
 
         if (is_assistant_tool_name(name) || coding_tool_name_is(name)) && !skip_tool_panel_update {
-            let mut payload =
-                serde_json::from_str::<Value>(&result).unwrap_or_else(|_| json!(result));
+            let mut payload = tool_record_payload(name, &result)
+                .unwrap_or_else(|| serde_json::from_str::<Value>(&result).unwrap_or_else(|_| json!(result)));
             if let Some(obj) = payload.as_object_mut() {
                 obj.insert("pending".into(), json!(false));
             }
@@ -238,7 +238,7 @@ impl ChatController {
 }
 
 async fn run_gated_action(
-    state: &crate::memory::AppState,
+    state: &crate::state::AppState,
     conversation_id: &str,
     tool: &str,
     args: Value,
@@ -260,6 +260,16 @@ async fn run_gated_action(
     }
 }
 
+/// Payload kept on the conversation's tool-call record, or `None` for tools that are
+/// not recorded.
+pub(crate) fn tool_record_payload(name: &str, result: &str) -> Option<Value> {
+    let recorded = is_assistant_tool_name(name) || coding_tool_name_is(name);
+    if !recorded {
+        return None;
+    }
+    Some(serde_json::from_str::<Value>(result).unwrap_or_else(|_| json!(result)))
+}
+
 fn with_pending_id(result: &str, pending_id: &str) -> String {
     let mut payload = serde_json::from_str::<Value>(result).unwrap_or_else(|_| json!(result));
     if let Some(obj) = payload.as_object_mut() {
@@ -276,7 +286,7 @@ fn with_pending_id(result: &str, pending_id: &str) -> String {
 }
 
 async fn load_scope_for_conversation(
-    state: &crate::memory::AppState,
+    state: &crate::state::AppState,
     conversation_id: &str,
 ) -> Result<crate::coding::scope::CodingScope, String> {
     let meta = get_conversation_coding_scope(state, conversation_id)

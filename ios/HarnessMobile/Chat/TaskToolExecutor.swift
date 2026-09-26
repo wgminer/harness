@@ -150,7 +150,7 @@ enum ToolCallLabels {
         }
     }
 
-    /// Mirrors `toolLabel` fallback in `src/renderer/chatHelpers.tsx` (first char only).
+    /// Mirrors `toolLabel` fallback in `src/renderer/chat/chatHelpers.tsx` (first char only).
     private static func fallbackLabel(for toolName: String) -> String {
         let spaced = toolName.replacingOccurrences(of: "_", with: " ")
         guard let first = spaced.first else { return spaced }

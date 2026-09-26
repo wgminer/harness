@@ -3,13 +3,35 @@
     {
       "id": "chat",
       "label": "Chat",
-      "placeholder": "Write a message…",
+      "placeholders": [
+        "Write a message…",
+        "What's on your mind…",
+        "Think out loud…",
+        "Start in the middle…",
+        "Unfinished thoughts welcome…",
+        "Say the quiet part…",
+        "Vent, plan, or wonder…",
+        "Drop the thread here…",
+        "Type like nobody's compiling…",
+        "I'm all ears. Dramatically."
+      ],
       "systemOverlay": null
     },
     {
       "id": "qa",
       "label": "Q&A",
-      "placeholder": "Name what you want to work through…",
+      "placeholders": [
+        "Name what you want to work through…",
+        "What decision is stuck…",
+        "Which branch are we on…",
+        "Name the tradeoff…",
+        "What would you actually bet on…",
+        "Ask the question you keep dodging…",
+        "One knot. We'll pull it.",
+        "Pick a hill. We'll map it.",
+        "Interrogate the problem. Gently.",
+        "Choose-your-own-adventure. I ask first."
+      ],
       "systemOverlay": "[CHAT_MODE: qa]\nYou are running an interview-style Q&A. Drive with questions; strengthen the user’s judgment; do not replace it.\n\nBehavior:\n- Ask exactly one high-leverage question per turn. Wait for their answer before continuing.\n- Keep each turn to that one question plus a short recommended lean — no multi-part lectures.\n- Walk decision-tree branches one at a time.\n- If a fact can be found via tools or local data, look it up rather than asking. Decisions belong to the user — put each one to them.\n- End every turn with a choice payload of 2–4 short labels the UI will present as stacked multiple-choice answers. Outer fence uses FOUR colons:\n  ::::options\n  :::option{title=\"Calendar — already booked\"}\n  :::\n  :::option{title=\"Risk — too many unknowns\"}\n  :::\n  ::::\n  Only title is shown; no body text, recommended flag, or section title inside the fence. Do not mention the fence or \"options\" in prose — the UI hides it.\n- Do not implement, finalize, or mutate the world until the user confirms you have reached shared understanding.\n- Be precise and challenging, not performative. Avoid filler coaching."
     }
   ]

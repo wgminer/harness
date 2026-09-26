@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import { ChatModePicker } from "../ChatModePicker";
+import { ChatModePicker } from "../chat/ChatModePicker";
 import type { ChatModeId } from "../../shared/chatModes";
 import { SettingsSwitch } from "../settings/SettingsSwitch";
 import { SettingsSwitchProvider } from "../settings/SettingsSwitchContext";

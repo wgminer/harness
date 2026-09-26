@@ -103,14 +103,11 @@ pub fn tool_definitions() -> Value {
 }
 
 pub fn tools_for_request(include_coding: bool) -> Value {
+    let mut tools = tool_definitions();
     if include_coding {
-        crate::coding::merge_tool_definitions(
-            tool_definitions(),
-            crate::coding::coding_tool_definitions(),
-        )
-    } else {
-        tool_definitions()
+        tools = crate::coding::merge_tool_definitions(tools, crate::coding::coding_tool_definitions());
     }
+    tools
 }
 
 pub async fn generate_thread_title_with_openai(

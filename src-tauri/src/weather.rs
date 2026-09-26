@@ -176,7 +176,7 @@ pub async fn current_from_settings(chains: &WriteChains) -> Result<CurrentWeathe
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn weather_get_current(
-    state: tauri::State<'_, crate::memory::AppState>,
+    state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<CurrentWeather, String> {
     current_from_settings(&state.write_chains).await
 }

@@ -1,3 +1,16 @@
+pub mod dictation_index;
+#[cfg(target_os = "macos")]
+pub mod fn_tap;
+pub mod global;
+pub mod global_capture;
+pub mod global_effects;
+pub mod global_session;
+#[cfg(target_os = "macos")]
+pub mod macos_paste;
+pub mod mic_permission;
+pub mod suggested_prompts;
+pub mod transcript_cleanup;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -10,12 +23,11 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::credentials::resolve_openai_api_key;
-use crate::dictation_recording_index;
 use crate::env_util::is_harness_e2e;
 use crate::memory::show_item_in_folder;
 use crate::paths::{get_recordings_dir, resolve_bundled_resource};
 use crate::settings::{default_settings, get_settings};
-use crate::transcript_cleanup::{append_preferred_spellings, resolve_glossary};
+use crate::recording::transcript_cleanup::{append_preferred_spellings, resolve_glossary};
 
 const OPENAI_TRANSCRIPT_CLEANUP_MODEL: &str = "gpt-5.4-mini";
 const HARNESS_E2E_TRANSCRIBE_TEXT: &str = "E2E transcribed text.";
@@ -28,12 +40,12 @@ const EXIT_AUDIO_NOT_READY: i32 = 5;
 pub const HARNESS_SPEECH_BINARY: &str = "HarnessSpeech";
 
 pub struct RecordingRuntime {
-    pub app_state: crate::memory::AppState,
+    pub app_state: crate::state::AppState,
     transcription_cancels: Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>,
 }
 
 impl RecordingRuntime {
-    pub fn new(app_state: crate::memory::AppState) -> Self {
+    pub fn new(app_state: crate::state::AppState) -> Self {
         Self {
             app_state,
             transcription_cancels: Mutex::new(HashMap::new()),
@@ -394,12 +406,12 @@ mod cleanup_framing_tests {
 pub async fn recording_request_microphone_access(
     app: AppHandle,
 ) -> Result<bool, String> {
-    Ok(crate::mic_permission::request_microphone_access(&app).await)
+    Ok(crate::recording::mic_permission::request_microphone_access(&app).await)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn recording_microphone_permission_status() -> Result<String, String> {
-    Ok(crate::mic_permission::microphone_permission_status()
+    Ok(crate::recording::mic_permission::microphone_permission_status()
         .as_str()
         .to_string())
 }
@@ -522,12 +534,12 @@ pub async fn recording_open_folder() -> Result<(), String> {
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn recording_count_files() -> Result<u64, String> {
-    Ok(dictation_recording_index::count_files())
+    Ok(dictation_index::count_files())
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn recording_archive_stats() -> Result<dictation_recording_index::ArchiveStats, String> {
-    Ok(dictation_recording_index::archive_stats())
+pub fn recording_archive_stats() -> Result<dictation_index::ArchiveStats, String> {
+    Ok(dictation_index::archive_stats())
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -544,7 +556,7 @@ pub async fn recording_cancel_transcription(
 
 /// Transcribe WAV bytes for global Fn hotkey (supports cancellation via `cancel`).
 pub async fn transcribe_wav_bytes(
-    app_state: &crate::memory::AppState,
+    app_state: &crate::state::AppState,
     data: &[u8],
     cancel: &mut tokio::sync::watch::Receiver<bool>,
 ) -> Result<String, String> {
@@ -564,7 +576,7 @@ pub async fn paste_text_impl(
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        return crate::macos_paste::paste_text(app, text, target_pid).await;
+        return crate::recording::macos_paste::paste_text(app, text, target_pid).await;
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -630,6 +642,6 @@ pub async fn recording_paste_text(app: AppHandle, text: String) -> Result<(), St
     paste_text_impl(&app, &text, None).await
 }
 
-pub fn init_recording_runtime(app_state: crate::memory::AppState) -> Arc<RecordingRuntime> {
+pub fn init_recording_runtime(app_state: crate::state::AppState) -> Arc<RecordingRuntime> {
     Arc::new(RecordingRuntime::new(app_state))
 }

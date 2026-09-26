@@ -6,8 +6,7 @@ use tauri::Emitter;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use crate::assistant_tools::is_assistant_tool_name;
-use crate::conversation_title::schedule_conversation_title_refinement;
+use crate::memory::title::schedule_conversation_title_refinement;
 use crate::credentials::resolve_openai_api_key;
 use crate::env_util::is_harness_e2e;
 use crate::memory::{append_message, AppendMessageMeta, ToolCallRecord};
@@ -249,7 +248,7 @@ impl ChatController {
                     Err(e) => json!({ "error": e }).to_string(),
                 }
             } else {
-                crate::assistant_tools::execute_assistant_tool(
+                crate::chat::assistant_tools::execute_assistant_tool(
                     &self.state,
                     &checkpoint.tool,
                     checkpoint.args.clone(),
@@ -302,11 +301,7 @@ impl ChatController {
                 .await
             {
                 Ok(result) => {
-                    if is_assistant_tool_name(&tc.function.name)
-                        || crate::coding::coding_tool_name_is(&tc.function.name)
-                    {
-                        let payload = serde_json::from_str::<Value>(&result)
-                            .unwrap_or_else(|_| json!(result));
+                    if let Some(payload) = super::tool::tool_record_payload(&tc.function.name, &result) {
                         tool_calls_this_turn.lock().await.push(ToolCallRecord {
                             tool_name: tc.function.name.clone(),
                             payload: Some(payload),
@@ -373,11 +368,7 @@ impl ChatController {
                                 .await
                             {
                                 Ok(result) => {
-                                    if is_assistant_tool_name(&name)
-                                        || crate::coding::coding_tool_name_is(&name)
-                                    {
-                                        let payload = serde_json::from_str::<Value>(&result)
-                                            .unwrap_or_else(|_| json!(result));
+                                    if let Some(payload) = super::tool::tool_record_payload(&name, &result) {
                                         tool_calls_cb.lock().await.push(ToolCallRecord {
                                             tool_name: name,
                                             payload: Some(payload),
@@ -488,11 +479,7 @@ impl ChatController {
                                 .await
                             {
                                 Ok(result) => {
-                                    if is_assistant_tool_name(&name)
-                                        || crate::coding::coding_tool_name_is(&name)
-                                    {
-                                        let payload = serde_json::from_str::<Value>(&result)
-                                            .unwrap_or_else(|_| json!(result));
+                                    if let Some(payload) = super::tool::tool_record_payload(&name, &result) {
                                         tool_calls_cb.lock().await.push(ToolCallRecord {
                                             tool_name: name,
                                             payload: Some(payload),

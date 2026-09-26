@@ -11,19 +11,28 @@ enum BottomBarMetrics {
     static let collapsedCornerRadius: CGFloat = 999
 }
 
-private struct ContinuousGlassShape: Shape {
+private struct ContinuousGlassShape: InsettableShape {
+    var insetAmount: CGFloat = 0
     var cornerRadius: CGFloat
 
     func path(in rect: CGRect) -> Path {
-        let radius = min(cornerRadius, rect.height / 2, rect.width / 2)
-        return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: rect)
+        let inset = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        let radius = max(0, min(cornerRadius, rect.height / 2, rect.width / 2) - insetAmount)
+        return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: inset)
+    }
+
+    func inset(by amount: CGFloat) -> some InsettableShape {
+        var shape = self
+        shape.insetAmount += amount
+        return shape
     }
 }
 
+/// Floating bottom-bar surface: desktop composer box (page-dark fill, hairline edge)
+/// with a light blur so scrolled content reads as underneath.
 struct LiquidGlassSurface: ViewModifier {
     var cornerRadius: CGFloat
     var shadowOffsetY: CGFloat
-    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
@@ -32,16 +41,13 @@ struct LiquidGlassSurface: ViewModifier {
                     .fill(.ultraThinMaterial)
                     .overlay {
                         ContinuousGlassShape(cornerRadius: cornerRadius)
-                            .stroke(
-                                Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.10),
-                                lineWidth: 1
-                            )
+                            .fill(HarnessPalette.surface.opacity(0.88))
                     }
-                    .shadow(
-                        color: .black.opacity(colorScheme == .dark ? 0.22 : 0.08),
-                        radius: 8,
-                        y: shadowOffsetY
-                    )
+                    .overlay {
+                        ContinuousGlassShape(cornerRadius: cornerRadius)
+                            .strokeBorder(HarnessPalette.hairline, lineWidth: 1)
+                    }
+                    .shadow(color: .black.opacity(0.35), radius: 12, y: shadowOffsetY)
             }
     }
 }

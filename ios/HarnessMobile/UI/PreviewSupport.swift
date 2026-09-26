@@ -94,12 +94,29 @@ enum PreviewSupport {
                 content: """
                 ### Packing for Tokyo in April
 
-                April is mild (roughly 50–65°F) with occasional showers. Pack layers:
+                April is mild (roughly 50–65°F) with *occasional* showers. Pack **layers**, \
+                and leave room for anything you pick up along the way.
 
                 - Light rain jacket
                 - Comfortable walking shoes
+                  - Broken in before the flight
                 - Compact umbrella
                 - Universal adapter
+
+                > Cherry blossoms usually peak in early April, so parks get busy on weekends.
+
+                #### Daily rhythm
+
+                1. Pick one neighborhood per day
+                2. Ride the train between them
+                3. Leave the evening open
+
+                | Item | Why |
+                | --- | --- |
+                | Suica card | Trains and convenience stores |
+                | Tote bag | Stores charge for bags |
+
+                ---
 
                 Example checklist helper:
 

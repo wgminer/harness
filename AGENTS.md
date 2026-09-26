@@ -30,10 +30,16 @@ Use product terms from the glossary. Highlights:
 
 **Do not hand-copy cross-language contracts.** Shared values live under [`resources/contracts/`](resources/contracts/); wire TS / Rust / Swift to the same file.
 
-- **Today:** `tools.json`, `systemPrompt.json`, `chatModes.json`, `chatStreamBatch.json`, `homeHeaderQuotes.json`, `transcriptCleanup.json`.
+- **Today:** `tools.json`, `codingTools.json`, `systemPrompt.json`, `chatModes.json`, `chatStreamBatch.json`, `conversationSearch.json`, `dictationSuggestedPrompts.json`, `homeHeaderQuotes.json`, `imageMarkerPrompt.json`, `recentConversations.json`, `selfModifyScopes.json`, `transcriptCleanup.json`.
+- **iOS:** the checked-in `ios/HarnessMobile.xcodeproj` lists each contract file under `SharedContracts`; register new ones there (CI regenerates via xcodegen, local Xcode does not).
 - **Planned:** model names, sync scopes, gated tool names, and other shared value contracts.
 
 If code cannot share a file (logic mirrors), add a **parity test** that reads the real sources and fails on drift — same pattern as `src/shared/versionParity.test.ts` and `src/shared/ipcNames.test.ts`.
+
+## Code layout
+
+- **Renderer (`src/renderer/`)** is grouped by feature: `chat/`, `notes/`, `tasks/`, `images/`, `search/`, `sidebar/`, `recording/`, `setup/`, `settings/`. Shared primitives live in `ui/`, shared hooks in `hooks/`. Each feature keeps its components, CSS, hooks, and tests together. `App.tsx` composes per-feature hooks (`useConversations`, `useNotesLibrary`, `useImageLibrary`, `useSetupState`, ...) — add new state to the owning hook, not to `App`.
+- **Rust (`src-tauri/src/`)** groups domains as a parent file plus a folder of children (same as `chat.rs` + `chat/`): `recording`, `memory`, `sync`, `notes`, `chat`, `images`. Tauri command handlers live in `commands/<domain>.rs`; process-wide state is `state.rs`.
 
 ## IPC naming (desktop)
 

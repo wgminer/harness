@@ -12,6 +12,7 @@ struct ComposeChatView: View {
     /// Drawn once per compose visit (shuffle bag); not recomputed on re-render.
     @State private var headerQuote: String
     @FocusState private var isComposerFocused: Bool
+    @Environment(\.dismiss) private var dismiss
 
     init(app: AppModel, onConversationCreated: @escaping (String) -> Void = { _ in }) {
         self.app = app
@@ -27,22 +28,27 @@ struct ComposeChatView: View {
 
                 if !headerQuote.isEmpty {
                     Text(headerQuote)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
+                        .font(.system(.title3, design: .serif))
+                        .foregroundStyle(HarnessPalette.textMuted)
                         .multilineTextAlignment(.center)
                         .lineSpacing(Self.quoteLineSpacing)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 32)
+                        .padding(.horizontal, 40)
                         .frame(maxWidth: .infinity)
                 }
 
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemBackground).ignoresSafeArea())
+            .background(HarnessPalette.background.ignoresSafeArea())
             .navigationTitle("New Chat")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(HarnessPalette.textMuted)
+                }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composerDock
             }
@@ -52,6 +58,7 @@ struct ComposeChatView: View {
         } message: {
             Text(sendError ?? "")
         }
+        .presentationBackground(HarnessPalette.background)
         .onDisappear {
             app.flushComposerDrafts()
         }
@@ -67,8 +74,8 @@ struct ComposeChatView: View {
     }
 
     private static var quoteLineSpacing: CGFloat {
-        let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .title2).pointSize, weight: .semibold)
-        let targetLineHeight = font.pointSize * 1.5
+        let font = AssistantProseStyle.uiFont(ofSize: UIFont.preferredFont(forTextStyle: .title3).pointSize)
+        let targetLineHeight = font.pointSize * 1.45
         return max(0, targetLineHeight - font.lineHeight)
     }
 

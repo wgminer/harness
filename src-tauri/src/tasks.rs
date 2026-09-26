@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::env_util::generate_id;
-use crate::memory::{AppState, TASKS_FILE};
+use crate::state::AppState;
+use crate::memory::TASKS_FILE;
 use crate::paths::get_app_state_dir;
 use crate::storage::{file_exists, write_json_pretty, JsonWriteStyle};
 

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import { Modal } from "../Modal";
-import { SetupNoticeModal } from "../SetupNoticeModal";
+import { Modal } from "./Modal";
+import { SetupNoticeModal } from "../setup/SetupNoticeModal";
 import { Section } from "./storyHelpers";
 
 function ModalChromeDemo() {

@@ -1,0 +1,344 @@
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Loader2 } from "lucide-react";
+import { stripSentAtPrefix } from "../../shared/chatTemporalContext";
+import {
+  type Message,
+  type ToolCallDisplay,
+  MarkdownContent,
+  CopyButton,
+  SaveToNotesButton,
+  formatMessageTime,
+  getInlineWriteup,
+  isAttachedNoteCreate,
+  isToolCallPending,
+  type LiveNoteStream,
+  memorySearchHitsFromToolCall,
+} from "./chatHelpers";
+import { InlineWriteupCard } from "./DocumentCard";
+import { ToolCallsCard } from "./ToolCallsCard";
+import { StreamingAssistantContent } from "./StreamingAssistantContent";
+import {
+  shouldUseStreamingAssistantRenderer,
+  useStreamedAssistantIds,
+} from "./streamRevealHold";
+
+function isAwaitingToolConfirmation(call: ToolCallDisplay): boolean {
+  if (!isToolCallPending(call)) return false;
+  const payload = call.payload as { resolving?: boolean } | undefined;
+  return payload?.resolving !== true;
+}
+
+interface ChatMessageListProps {
+  displayMessages: Message[];
+  copiedId: string | null;
+  savedToNotesId: string | null;
+  onCopied: (id: string | null) => void;
+  onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
+  streamingContent: string;
+  sending: boolean;
+  polishHintAfterDictation: boolean;
+  llmActionsEnabled?: boolean;
+  onToolConfirm: (tc: ToolCallDisplay, action: "proceed" | "cancel") => void;
+  onPolish: () => void;
+  /** Reply-strip controls while awaiting a reply (suggested prompts or mode picker). */
+  replyModeControl?: ReactNode;
+  liveNoteStream?: LiveNoteStream | null;
+  onOpenNoteInEditor?: (noteId: string) => void;
+  onOpenConversation?: (conversationId: string) => void;
+  onOpenImage?: (imageId: string) => void;
+  /** When true, secondary actions are rendered by the parent (bottom dock). */
+  dockSecondaryActions?: boolean;
+}
+
+export function ChatMessageList({
+  displayMessages,
+  copiedId,
+  savedToNotesId,
+  onCopied,
+  onSaveToNotes,
+  streamingContent,
+  sending,
+  polishHintAfterDictation,
+  llmActionsEnabled = true,
+  onToolConfirm,
+  onPolish,
+  replyModeControl,
+  liveNoteStream,
+  onOpenNoteInEditor,
+  onOpenConversation,
+  onOpenImage,
+  dockSecondaryActions = false,
+}: ChatMessageListProps) {
+  const [expandedUserCards, setExpandedUserCards] = useState<Set<string>>(new Set());
+  const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set());
+  const [overflowedUserCards, setOverflowedUserCards] = useState<Set<string>>(new Set());
+  const [noteBodyCache, setNoteBodyCache] = useState<Record<string, string>>({});
+  const userCardContentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const expandUserCard = useCallback((messageId: string) => {
+    setExpandedUserCards((prev) => {
+      if (prev.has(messageId)) return prev;
+      const next = new Set(prev);
+      next.add(messageId);
+      return next;
+    });
+  }, []);
+
+  const handleNoteBodyLoaded = useCallback((noteId: string, body: string) => {
+    setNoteBodyCache((prev) => (prev[noteId] === body ? prev : { ...prev, [noteId]: body }));
+  }, []);
+
+  const toggleToolCardExpanded = useCallback((messageId: string) => {
+    setExpandedToolCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    const next = new Set<string>();
+    displayMessages.forEach((m) => {
+      if (m.role !== "user") return;
+      if (expandedUserCards.has(m.id)) return;
+      const el = userCardContentRefs.current[m.id];
+      if (el && el.scrollHeight > el.clientHeight) next.add(m.id);
+    });
+    setOverflowedUserCards((prev) =>
+      prev.size !== next.size || [...prev].some((id) => !next.has(id)) ? next : prev
+    );
+  }, [displayMessages, expandedUserCards]);
+
+  const lastMessage = displayMessages[displayMessages.length - 1];
+  const liveAssistantId = lastMessage?.role === "assistant" ? lastMessage.id : null;
+  const streamedAssistantIds = useStreamedAssistantIds(sending, liveAssistantId);
+  const showReplyActions =
+    displayMessages.length > 0 && lastMessage?.role === "user" && !streamingContent;
+  const showPolishInStrip = showReplyActions && polishHintAfterDictation;
+  const showStripModes = showReplyActions && !!replyModeControl;
+  const showSecondaryActions =
+    !dockSecondaryActions && (showPolishInStrip || showStripModes);
+  return (
+    <>
+      <div className="chat-messages-stack">
+        {displayMessages.map((m, idx) => {
+          const isAssistant = m.role === "assistant";
+          const hasToolCalls = isAssistant && m.toolCalls && m.toolCalls.length > 0;
+          const inlineWriteup = isAssistant ? getInlineWriteup(m.toolCalls) : null;
+          const isLatestAssistant = isAssistant && idx === displayMessages.length - 1;
+          const isStreamingWriteup =
+            sending && !!liveNoteStream && isLatestAssistant;
+          const isStreamingAssistantText = isLatestAssistant && sending;
+          const useStreamingAssistant =
+            shouldUseStreamingAssistantRenderer(
+              isLatestAssistant,
+              m.id,
+              streamedAssistantIds,
+            ) || (isLatestAssistant && sending);
+          const waitingForHumanInput =
+            isStreamingAssistantText && hasToolCalls && m.toolCalls!.some(isAwaitingToolConfirmation);
+          const showStreamFooterSpinner = isStreamingAssistantText && !waitingForHumanInput;
+
+          const cachedNoteBody =
+            inlineWriteup?.noteId != null ? noteBodyCache[inlineWriteup.noteId] : undefined;
+          const liveWriteupBody =
+            isStreamingWriteup && liveNoteStream ? liveNoteStream.body : undefined;
+          const saveCopyContent =
+            liveWriteupBody ||
+            inlineWriteup?.body ||
+            cachedNoteBody ||
+            m.content;
+          const hideSaveToNotes = !!inlineWriteup?.noteId && !inlineWriteup.body;
+
+          const libraryHits = hasToolCalls
+            ? m.toolCalls!.flatMap(memorySearchHitsFromToolCall)
+            : [];
+          const libraryLinkActions = {
+            libraryHits,
+            onOpenConversation,
+            onOpenNote: onOpenNoteInEditor,
+            onOpenImage,
+          };
+
+          let assistantBubbleBody: ReactNode = null;
+          if (m.role !== "user") {
+            if (useStreamingAssistant) {
+              assistantBubbleBody = (
+                <StreamingAssistantContent
+                  content={m.content}
+                  isStreaming={isStreamingAssistantText}
+                  waitingForHumanInput={waitingForHumanInput}
+                  messageId={m.id}
+                  messageTimestamp={m.timestamp}
+                  copiedId={copiedId}
+                  savedToNotesId={savedToNotesId}
+                  onCopied={onCopied}
+                  onSaveToNotes={onSaveToNotes}
+                  {...libraryLinkActions}
+                />
+              );
+            } else if (m.content) {
+              assistantBubbleBody = (
+                <MarkdownContent
+                  content={stripSentAtPrefix(m.content)}
+                  messageId={m.id}
+                  messageTimestamp={m.timestamp}
+                  copiedId={copiedId}
+                  savedToNotesId={savedToNotesId}
+                  onCopied={onCopied}
+                  onSaveToNotes={onSaveToNotes}
+                  {...libraryLinkActions}
+                />
+              );
+            }
+          }
+
+          const markdownActions = {
+            messageId: m.id,
+            messageTimestamp: m.timestamp,
+            copiedId,
+            savedToNotesId,
+            onCopied,
+            onSaveToNotes,
+          };
+
+          return (
+            <div
+              key={m.id}
+              className={`message-block ${m.role}`}
+              data-message-role={m.role}
+              data-message-ts={m.timestamp != null ? String(m.timestamp) : undefined}
+              data-message-id={m.id}
+            >
+              <div className="content">
+                {m.role === "user" ? (
+                  <div
+                    className={`message-user-card${expandedUserCards.has(m.id) ? " message-user-card--expanded" : ""}${
+                      overflowedUserCards.has(m.id) && !expandedUserCards.has(m.id)
+                        ? " message-user-card--overlay-toggle"
+                        : ""
+                    }`}
+                  >
+                    {overflowedUserCards.has(m.id) && !expandedUserCards.has(m.id) ? (
+                      <div className="message-user-card__fade" aria-hidden />
+                    ) : null}
+                    <div className="message-user-card__content" ref={(el) => { userCardContentRefs.current[m.id] = el; }}>
+                      {m.content ? <MarkdownContent content={m.content} {...markdownActions} /> : null}
+                    </div>
+                    {overflowedUserCards.has(m.id) && !expandedUserCards.has(m.id) && (
+                      <button
+                        type="button"
+                        className="message-user-card__toggle"
+                        onClick={() => expandUserCard(m.id)}
+                        aria-expanded={false}
+                        aria-label="Show more"
+                        title="Show more"
+                      >
+                        <ChevronDown strokeWidth={2} size={16} aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {hasToolCalls && (
+                      <ToolCallsCard
+                        toolCalls={
+                          m.toolCalls!.filter((tc, i, arr) => {
+                            if (isAttachedNoteCreate(tc)) {
+                              return (
+                                arr.findIndex(
+                                  (x) =>
+                                    x.toolName === "note_create" && isAttachedNoteCreate(x),
+                                ) === i
+                              );
+                            }
+                            if (tc.toolName === "open_long_response") {
+                              return (
+                                arr.findIndex((x) => x.toolName === "open_long_response") === i
+                              );
+                            }
+                            return true;
+                          })
+                        }
+                        expanded={expandedToolCards.has(m.id)}
+                        onToggleExpanded={() => toggleToolCardExpanded(m.id)}
+                        onToolConfirm={onToolConfirm}
+                        onOpenNote={onOpenNoteInEditor}
+                        onOpenConversation={onOpenConversation}
+                        onOpenImage={onOpenImage}
+                      />
+                    )}
+                    {assistantBubbleBody}
+                    {inlineWriteup && (
+                      <InlineWriteupCard
+                        writeup={inlineWriteup}
+                        liveStream={liveNoteStream}
+                        streaming={isStreamingWriteup}
+                        onOpenInEditor={onOpenNoteInEditor}
+                        onBodyLoaded={handleNoteBodyLoaded}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="message-block-footer">
+                <div className="message-block-meta">
+                  {m.role !== "user" && showStreamFooterSpinner ? (
+                    <Loader2
+                      size={12}
+                      className="voice-spinner message-block-meta-spinner"
+                      aria-label="Streaming reply"
+                    />
+                  ) : null}
+                  <span
+                    className={
+                      m.role === "user" ? "message-block-meta-role" : "message-block-meta-role message-block-meta-model"
+                    }
+                  >
+                    {m.role === "user" ? "You" : m.model?.trim() || "Assistant"}
+                  </span>
+                  {m.timestamp != null ? (
+                    <span className="message-block-meta-text">
+                      <span className="message-block-meta-sep" aria-hidden="true">
+                        ·
+                      </span>
+                      <span className="message-block-meta-time">{formatMessageTime(m.timestamp)}</span>
+                    </span>
+                  ) : null}
+                </div>
+                <div className="message-block-footer-actions">
+                  {!hideSaveToNotes ? (
+                    <SaveToNotesButton
+                      content={saveCopyContent}
+                      messageId={m.id}
+                      messageTimestamp={m.timestamp}
+                      savedNoteId={savedToNotesId}
+                      onSaveToNotes={onSaveToNotes}
+                    />
+                  ) : null}
+                  <CopyButton content={saveCopyContent} messageId={m.id} copiedId={copiedId} onCopied={onCopied} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {showSecondaryActions && (
+        <div className="chat-secondary-actions" data-testid="chat-secondary-actions">
+          {showPolishInStrip && (
+            <button
+              type="button"
+              className="btn btn-compact chat-pane-btn"
+              onClick={onPolish}
+              disabled={!llmActionsEnabled}
+            >
+              Polish
+            </button>
+          )}
+          {showStripModes ? replyModeControl : null}
+        </div>
+      )}
+    </>
+  );
+}

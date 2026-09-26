@@ -3,10 +3,10 @@ import SwiftUI
 struct HarnessBootView: View {
     var body: some View {
         ZStack {
-            Color(.systemBackground).ignoresSafeArea()
+            HarnessPalette.background.ignoresSafeArea()
             Text("Harness")
-                .font(.largeTitle.weight(.semibold))
-                .foregroundStyle(.primary)
+                .font(.system(.title2, design: .serif))
+                .foregroundStyle(HarnessPalette.textMuted)
         }
         .accessibilityLabel("Harness")
     }

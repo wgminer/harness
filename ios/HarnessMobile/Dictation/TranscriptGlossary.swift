@@ -59,7 +59,7 @@ enum TranscriptGlossary {
     static func fromLegacyDictionary(_ dictionary: [[String: Any]]) -> [String] {
         let terms = dictionary.compactMap { entry -> String? in
             let from = (entry["from"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if let Some(toRaw) = entry["to"] as? String {
+            if let toRaw = entry["to"] as? String {
                 let to = toRaw.trimmingCharacters(in: .whitespacesAndNewlines)
                 return to.isEmpty ? nil : to
             }

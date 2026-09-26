@@ -73,7 +73,8 @@ struct ConversationListView: View {
                 NavigationLink {
                     TasksListView(app: app)
                 } label: {
-                    Image(systemName: "list.bullet.clipboard")
+                    Image(systemName: "checklist")
+                        .foregroundStyle(HarnessPalette.textMuted)
                 }
                 .accessibilityLabel("Tasks")
             }
@@ -84,6 +85,7 @@ struct ConversationListView: View {
                         MobileSettingsView(app: app)
                     } label: {
                         Image(systemName: "gearshape")
+                            .foregroundStyle(HarnessPalette.textMuted)
                     }
                 }
             }
@@ -123,18 +125,44 @@ struct ConversationListView: View {
         List {
             if !store.conversations.isEmpty {
                 Section {
-                    TextField("Search conversations…", text: $searchQuery)
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.subheadline)
+                            .foregroundStyle(HarnessPalette.textFaint)
+                        TextField(
+                            "",
+                            text: $searchQuery,
+                            prompt: Text("Search").foregroundStyle(HarnessPalette.textFaint)
+                        )
+                        .foregroundStyle(HarnessPalette.text)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(HarnessPalette.surface)
+                    )
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 12, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
             }
 
             if store.conversations.isEmpty {
-                ContentUnavailableView(
-                    "No conversations",
-                    systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Start a new chat or sync from R2 in Settings.")
-                )
+                VStack(spacing: 10) {
+                    Text("Nothing here yet")
+                        .font(.system(.title3, design: .serif))
+                        .foregroundStyle(HarnessPalette.textMuted)
+                    Text("Start a new chat, or sync from your Mac in Settings.")
+                        .font(.footnote)
+                        .foregroundStyle(HarnessPalette.textFaint)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 120)
+                .padding(.horizontal, 32)
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             } else if filteredConversations.isEmpty {
@@ -157,11 +185,11 @@ struct ConversationListView: View {
                         )
                     } label: {
                         Text("More")
-                            .font(.body.weight(.medium))
+                            .font(.subheadline)
+                            .foregroundStyle(HarnessPalette.textMuted)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
+                    .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
@@ -172,6 +200,7 @@ struct ConversationListView: View {
             }
         }
         .listStyle(.plain)
+        .harnessListBackground()
     }
 
     private var homeBottomBar: some View {
@@ -182,8 +211,8 @@ struct ConversationListView: View {
             } label: {
                 Label("New Chat", systemImage: "plus")
                     .labelStyle(.titleAndIcon)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(HarnessPalette.text)
                     .padding(.horizontal, BottomBarMetrics.collapsedInnerHorizontal)
                     .padding(.vertical, BottomBarMetrics.collapsedInnerVertical)
                     .frame(maxWidth: .infinity)
@@ -199,11 +228,7 @@ struct ConversationListView: View {
                 HapticFeedback.medium()
                 app.beginCreateSessionDictation()
             } label: {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color(.systemBackground))
-                    .frame(width: 56, height: 56)
-                    .background(Circle().fill(Color.red))
+                HarnessIconButtonLabel(systemName: "mic", role: .primary, size: 60, glyphSize: 20)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Dictate")
@@ -247,6 +272,9 @@ struct ConversationListView: View {
         } label: {
             ConversationRow(item: item, recentlyPulled: arrivals.contains(item.id))
         }
+        .listRowBackground(HarnessPalette.background)
+        .listRowSeparatorTint(HarnessPalette.separator)
+        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 deleteConversation(id: item.id)
@@ -278,41 +306,20 @@ private struct ConversationRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(item.displayTitle)
-                .font(.headline)
-                .foregroundStyle(.primary)
+                .font(.body)
+                .foregroundStyle(HarnessPalette.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if recentlyPulled {
                 Circle()
-                    .fill(Color.accentColor)
-                    .frame(width: 7, height: 7)
+                    .fill(HarnessPalette.accent)
+                    .frame(width: 6, height: 6)
                     .accessibilityLabel("Arrived from sync")
             }
         }
-        .padding(.vertical, 2)
-        .overlay {
-            if recentlyPulled {
-                ArrivalHalo()
-            }
-        }
-    }
-}
-
-private struct ArrivalHalo: View {
-    @State private var glow = true
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .stroke(Color.accentColor.opacity(glow ? 0.55 : 0), lineWidth: 1)
-            .padding(.horizontal, -8)
-            .padding(.vertical, -4)
-            .allowsHitTesting(false)
-            .onAppear {
-                withAnimation(.easeOut(duration: 8)) {
-                    glow = false
-                }
-            }
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
     }
 }
 
@@ -324,6 +331,7 @@ private struct HomeSyncIndicator: View {
         if app.isSyncing {
             ProgressView()
                 .controlSize(.small)
+                .tint(HarnessPalette.textMuted)
                 .accessibilityLabel("Syncing")
         }
     }

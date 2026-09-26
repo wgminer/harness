@@ -50,16 +50,27 @@ struct TasksListView: View {
     var body: some View {
         List {
             Section {
-                TextField("Search tasks…", text: $searchQuery)
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.subheadline)
+                        .foregroundStyle(HarnessPalette.textFaint)
+                    TextField(
+                        "",
+                        text: $searchQuery,
+                        prompt: Text("Search").foregroundStyle(HarnessPalette.textFaint)
+                    )
+                    .foregroundStyle(HarnessPalette.text)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                }
             }
+            .listRowBackground(HarnessPalette.surface)
 
             Section {
                 DisclosureGroup(isExpanded: $activeOpen) {
                     if activeTasks.isEmpty {
                         Text(emptyActiveMessage)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(HarnessPalette.textMuted)
                     } else {
                         ForEach(activeTasks) { task in
                             taskRow(task)
@@ -76,7 +87,7 @@ struct TasksListView: View {
                                     } label: {
                                         Label("Done", systemImage: "checkmark")
                                     }
-                                    .tint(.green)
+                                    .tint(HarnessPalette.accent)
 
                                     if TaskStatusPolicy.resolveStatus(for: task) != .in_progress {
                                         Button {
@@ -84,7 +95,7 @@ struct TasksListView: View {
                                         } label: {
                                             Label("In Progress", systemImage: "arrow.right.circle")
                                         }
-                                        .tint(.blue)
+                                        .tint(HarnessPalette.control)
                                     }
                                 }
                         }
@@ -93,16 +104,18 @@ struct TasksListView: View {
                 } label: {
                     HStack {
                         Text("Active")
-                            .font(.headline)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(HarnessPalette.text)
                         Spacer()
                         if !activeTasks.isEmpty {
                             Text("\(activeTasks.count)")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(HarnessPalette.textFaint)
                         }
                     }
                 }
             }
+            .listRowBackground(HarnessPalette.surface)
 
             if !completedTasks.isEmpty {
                 Section {
@@ -122,23 +135,26 @@ struct TasksListView: View {
                                     } label: {
                                         Label("Reopen", systemImage: "arrow.uturn.backward")
                                     }
-                                    .tint(.blue)
+                                    .tint(HarnessPalette.control)
                                 }
                         }
                     } label: {
                         HStack {
                             Text("Completed")
-                                .font(.headline)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(HarnessPalette.text)
                             Spacer()
                             Text("\(completedTasks.count)")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(HarnessPalette.textFaint)
                         }
                     }
                 }
+                .listRowBackground(HarnessPalette.surface)
             }
         }
         .listStyle(.insetGrouped)
+        .harnessListBackground()
         .environment(\.editMode, .constant(isReordering ? .active : .inactive))
         .navigationTitle("Tasks")
         .navigationBarTitleDisplayMode(.inline)
@@ -160,7 +176,8 @@ struct TasksListView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis")
+                        .foregroundStyle(HarnessPalette.textMuted)
                 }
             }
         }
@@ -245,9 +262,9 @@ struct TasksListView: View {
             Button {
                 toggleDone(task)
             } label: {
-                Image(systemName: done ? "checkmark.square.fill" : "square")
-                    .font(.title3)
-                    .foregroundStyle(done ? .primary : .secondary)
+                Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                    .font(.title3.weight(.light))
+                    .foregroundStyle(done ? HarnessPalette.textMuted : HarnessPalette.textFaint)
             }
             .buttonStyle(.plain)
 
@@ -257,15 +274,15 @@ struct TasksListView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(task.title)
-                            .foregroundStyle(.primary)
-                            .strikethrough(done)
+                            .foregroundStyle(done ? HarnessPalette.textFaint : HarnessPalette.text)
+                            .strikethrough(done, color: HarnessPalette.textFaint)
                         if status == .in_progress {
                             Text("In progress")
                                 .font(.caption2.weight(.semibold))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.blue.opacity(0.15))
-                                .foregroundStyle(.blue)
+                                .background(HarnessPalette.accentTint)
+                                .foregroundStyle(HarnessPalette.accentReadable)
                                 .clipShape(Capsule())
                         }
                     }
@@ -296,7 +313,7 @@ struct TasksListView: View {
                 Section("Tags") {
                     Text("Press Return to add. Underscores show as spaces in the list.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HarnessPalette.textMuted)
                     if !modalTags.isEmpty {
                         TaskTagEditor(tags: $modalTags)
                     }
@@ -306,6 +323,7 @@ struct TasksListView: View {
                         .onSubmit { addModalTagFromInput() }
                 }
             }
+            .harnessListBackground()
             .navigationTitle("Edit task")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -453,7 +471,8 @@ private struct TaskTagChips: View {
                     .font(.caption)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color(.quaternarySystemFill))
+                    .foregroundStyle(HarnessPalette.textMuted)
+                    .background(HarnessPalette.control)
                     .clipShape(Capsule())
             }
         }
@@ -479,7 +498,8 @@ private struct TaskTagEditor: View {
                 .font(.caption)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color(.quaternarySystemFill))
+                .foregroundStyle(HarnessPalette.textMuted)
+                .background(HarnessPalette.control)
                 .clipShape(Capsule())
             }
         }

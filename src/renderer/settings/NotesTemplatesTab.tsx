@@ -9,7 +9,7 @@ import {
   normalizeNoteTemplates,
   type NoteTemplateConfig,
 } from "../../shared/writing";
-import { Modal } from "../Modal";
+import { Modal } from "../ui/Modal";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsTabPanel } from "./SettingsTabPanel";
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
-import { ChatSurface } from "../ChatSurface";
-import { DictationSuggestedPromptChips } from "../DictationSuggestedPromptChips";
-import type { Message } from "../chatHelpers";
+import { ChatSurface } from "../chat/ChatSurface";
+import { DictationSuggestedPromptChips } from "../chat/DictationSuggestedPromptChips";
+import type { Message } from "../chat/chatHelpers";
 import {
   DEV_CHAT_ASSISTANT_1,
   DEV_CHAT_ASSISTANT_2,

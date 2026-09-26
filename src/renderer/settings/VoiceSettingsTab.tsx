@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { settingsSection } from "../../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../../shared/types";
-import { Modal } from "../Modal";
+import { Modal } from "../ui/Modal";
 import { SettingsActions } from "./SettingsActions";
 import { SettingsEntryRow } from "./SettingsEntryRow";
 import { SettingsGroup } from "./SettingsGroup";

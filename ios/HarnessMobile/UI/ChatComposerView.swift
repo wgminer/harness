@@ -143,9 +143,10 @@ struct ChatComposerView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
+                        .tint(HarnessPalette.textMuted)
                     Text("Replying…")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(.body)
+                        .foregroundStyle(HarnessPalette.textMuted)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -158,12 +159,12 @@ struct ChatComposerView: View {
                     HStack(spacing: 8) {
                         if pendingImage != nil {
                             Image(systemName: "photo")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(HarnessPalette.textMuted)
                         }
                         Text(ComposerCollapsePolicy.collapsedLabel(draft: draft))
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(canSend ? .primary : .secondary)
+                            .font(.body)
+                            .foregroundStyle(canSend ? HarnessPalette.text : HarnessPalette.textFaint)
                             .lineLimit(1)
                         Spacer(minLength: 0)
                     }
@@ -188,11 +189,10 @@ struct ChatComposerView: View {
             HapticFeedback.light()
             action()
         } label: {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.primary)
+            Image(systemName: "camera")
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(HarnessPalette.textMuted)
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.primary.opacity(0.08)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Take photo")
@@ -203,11 +203,7 @@ struct ChatComposerView: View {
             HapticFeedback.medium()
             action()
         } label: {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.red))
+            HarnessIconButtonLabel(systemName: "mic", role: .primary)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Dictate")
@@ -218,15 +214,12 @@ struct ChatComposerView: View {
             HapticFeedback.medium()
             onStop()
         } label: {
-            Text("Stop")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
-                )
+            Image(systemName: "stop.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(HarnessPalette.text)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(HarnessPalette.control))
+                .accessibilityLabel("Stop")
         }
         .buttonStyle(.plain)
     }
@@ -239,10 +232,16 @@ struct ChatComposerView: View {
                     .padding(.top, 14)
             }
 
-            TextField("Write a message…", text: $draft, axis: .vertical)
+            TextField(
+                "",
+                text: $draft,
+                prompt: Text("Write a message…").foregroundStyle(HarnessPalette.textFaint),
+                axis: .vertical
+            )
                 .lineLimit(1 ... 8)
                 .focused($isFocused)
                 .font(.body)
+                .foregroundStyle(HarnessPalette.text)
                 .textFieldStyle(.plain)
                 .frame(maxWidth: .infinity, minHeight: ComposerLayout.textAreaMinHeight, alignment: .topLeading)
                 .disabled(isStreaming)
@@ -263,14 +262,7 @@ struct ChatComposerView: View {
                     Button {
                         submitDraft()
                     } label: {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(Color(.systemBackground))
-                            .frame(width: 36, height: 36)
-                            .background(
-                                Circle()
-                                    .fill(Color.accentColor)
-                            )
+                        HarnessIconButtonLabel(systemName: "arrow.up", role: .primary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Send message")
@@ -354,7 +346,7 @@ struct ChatComposerView: View {
                 .padding(.horizontal, BottomBarMetrics.horizontalInset)
                 .padding(.bottom, BottomBarMetrics.bottomInset)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(HarnessPalette.background)
         }
     }
     return Host()
@@ -383,7 +375,7 @@ struct ChatComposerView: View {
                 .padding(.horizontal, BottomBarMetrics.horizontalInset)
                 .padding(.bottom, BottomBarMetrics.bottomInset)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(HarnessPalette.background)
         }
     }
     return Host()
@@ -412,7 +404,7 @@ struct ChatComposerView: View {
                 .padding(.horizontal, BottomBarMetrics.horizontalInset)
                 .padding(.bottom, BottomBarMetrics.bottomInset)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(HarnessPalette.background)
         }
     }
     return Host()

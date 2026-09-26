@@ -93,10 +93,12 @@ struct MessageRowView: View, Equatable {
 struct ReplyingIndicatorView: View {
     var body: some View {
         HStack(spacing: 8) {
-            ProgressView().controlSize(.small)
+            ProgressView()
+                .controlSize(.small)
+                .tint(HarnessPalette.textFaint)
             Text("Replying…")
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HarnessPalette.textFaint)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -126,6 +128,7 @@ struct AssistantMessageView: View {
                     } else if !UserMessageCard.looksLikeMarkdown(content) {
                         Text(content)
                             .assistantProseStyle()
+                            .foregroundStyle(HarnessPalette.text)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                     } else {
@@ -154,6 +157,10 @@ struct UserMessageCard: View {
     @Binding var isExpanded: Bool
 
     private static let collapsedLineLimit = 5
+    /// ~1.45 line height for sans body; matches the markdown theme's non-prose spacing.
+    static var bodyLineSpacing: CGFloat {
+        UIFont.preferredFont(forTextStyle: .body).pointSize * 0.22
+    }
     private static let approxCharsPerLine = 70
 
     static func looksLikeMarkdown(_ content: String) -> Bool {
@@ -190,8 +197,8 @@ struct UserMessageCard: View {
                     if !isExpanded && isOverflowing {
                         LinearGradient(
                             colors: [
-                                Color(.secondarySystemBackground).opacity(0),
-                                Color(.secondarySystemBackground),
+                                HarnessPalette.surface.opacity(0),
+                                HarnessPalette.surface,
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -207,14 +214,14 @@ struct UserMessageCard: View {
                     }
                     .font(.caption)
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HarnessPalette.textMuted)
                 }
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground))
+        .background(HarnessPalette.surface)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture {
@@ -250,6 +257,8 @@ struct UserMessageCard: View {
         } else {
             Text(content)
                 .font(.body)
+                .lineSpacing(UserMessageCard.bodyLineSpacing)
+                .foregroundStyle(HarnessPalette.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
@@ -302,5 +311,5 @@ struct UserMessageCard: View {
         }
         .padding(16)
     }
-    .background(Color(.systemGroupedBackground))
+    .background(HarnessPalette.background)
 }

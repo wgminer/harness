@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { LLM_CONTEXT_EXPORT_PROMPT } from "../../shared/memoryImport";
 import { sortedMemoryEntries } from "../../shared/memoryInjection";
-import { Modal } from "../Modal";
+import { Modal } from "../ui/Modal";
 import { SettingsActions } from "./SettingsActions";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";

@@ -1,12 +1,14 @@
 import SwiftUI
 import UIKit
 
-/// Desktop assistant message typography: serif at title size (~1.125× body) with ~28/18 line-height.
+/// Assistant message typography: desktop's serif voice, tuned for a phone measure.
+/// Desktop sets 18/28 over ~65 characters; a phone line holds ~35, so the size steps
+/// down slightly and leading tightens to keep lines reading as one paragraph.
 enum AssistantProseStyle {
-    /// Desktop `--font-size-title` / `--font-size-body` (18 / 16).
-    static let sizeScale: CGFloat = 1.125
-    /// Desktop `--line-height-message` / `--font-size-title` (28 / 18).
-    static let lineHeightMultiple: CGFloat = 28.0 / 18.0
+    /// 18pt at default Dynamic Type (UIKit body = 17pt).
+    static let sizeScale: CGFloat = 18.0 / 17.0
+    /// ~1.45 line height: open enough for serif, tight enough for short lines.
+    static let lineHeightMultiple: CGFloat = 1.45
     /// Absolute size at default Dynamic Type (UIKit body = 17pt); MarkdownUI scales via `@ScaledMetric`.
     static let basePointSize: CGFloat = 17 * sizeScale
 

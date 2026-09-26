@@ -88,6 +88,8 @@ struct DictationRecordingSheet: View {
                 }
             }
             .padding(.bottom, 32)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(HarnessPalette.background.ignoresSafeArea())
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -95,9 +97,11 @@ struct DictationRecordingSheet: View {
                     Button("Cancel") {
                         Task { await cancelAndDismiss() }
                     }
+                    .foregroundStyle(HarnessPalette.textMuted)
                 }
             }
         }
+        .presentationBackground(HarnessPalette.background)
         .interactiveDismissDisabled(isRecordingOrProcessing)
         .sheet(isPresented: $showFailedRecordingShareSheet) {
             if let savedAudioURL {
@@ -154,9 +158,10 @@ struct DictationRecordingSheet: View {
         VStack(spacing: 16) {
             ProgressView()
                 .controlSize(.large)
+                .tint(HarnessPalette.textFaint)
             Text("Starting microphone…")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+                .font(.subheadline)
+                .foregroundStyle(HarnessPalette.textMuted)
         }
     }
 
@@ -166,12 +171,12 @@ struct DictationRecordingSheet: View {
             VStack(spacing: 12) {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
+                        .fill(HarnessPalette.recording)
+                        .frame(width: 7, height: 7)
                         .accessibilityHidden(true)
                     Text("Recording")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(HarnessPalette.textMuted)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Recording")
@@ -189,10 +194,7 @@ struct DictationRecordingSheet: View {
                     HapticFeedback.warning()
                     Task { await cancelAndDismiss() }
                 } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 17, weight: .semibold))
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(Color.primary.opacity(0.1)))
+                    HarnessIconButtonLabel(systemName: "xmark", size: 56, glyphSize: 17)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Cancel recording")
@@ -201,11 +203,7 @@ struct DictationRecordingSheet: View {
                     HapticFeedback.success()
                     Task { await stopAndTranscribe() }
                 } label: {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 32, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 96, height: 96)
-                        .background(Circle().fill(Color.accentColor))
+                    HarnessIconButtonLabel(systemName: "checkmark", role: .primary, size: 96, glyphSize: 30)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Stop and transcribe")
@@ -220,9 +218,10 @@ struct DictationRecordingSheet: View {
         VStack(spacing: 16) {
             ProgressView()
                 .controlSize(.large)
+                .tint(HarnessPalette.textFaint)
             Text("Transcribing…")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+                .font(.subheadline)
+                .foregroundStyle(HarnessPalette.textMuted)
         }
     }
 
@@ -401,12 +400,14 @@ struct DictationRecordingSheet: View {
                     userMessage: transcript,
                     recordingURL: audioURL
                 )
-                isPresented = false
+                // Deliver before dismissing: the isPresented setter clears `activeDictation`,
+                // which the delivery callbacks still need.
                 onConversationCreated(conversationId)
+                isPresented = false
             case .sendToConversation(let conversationId):
                 try DictationRecordingIndex.link(conversationId: conversationId, recordingURL: audioURL)
-                isPresented = false
                 onTranscriptSent(transcript)
+                isPresented = false
             }
         } catch is CancellationError {
             guard generation == operationGeneration else { return }
@@ -473,9 +474,9 @@ private struct DictationElapsedLabel: View {
 
     var body: some View {
         Text(DictationElapsedFormatting.string(ms: elapsedMs))
-            .font(.body.weight(.medium))
+            .font(.system(size: 44, weight: .light))
             .monospacedDigit()
-            .foregroundStyle(.primary)
+            .foregroundStyle(HarnessPalette.text)
             .accessibilityLabel("Recording duration")
             .accessibilityValue(DictationElapsedFormatting.string(ms: elapsedMs))
             .onAppear { elapsedMs = recorder.elapsedMs }

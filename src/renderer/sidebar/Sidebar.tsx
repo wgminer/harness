@@ -1,0 +1,701 @@
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  StickyNote,
+  Image as ImageIcon,
+  X,
+  Loader2,
+  Circle,
+  ArrowUpRight,
+  Plus,
+  ChevronDown,
+  Search,
+  CheckLine,
+  Settings2 as SettingsIcon,
+  Check,
+  AlertCircle,
+} from "lucide-react";
+import {
+  conversationDisplayTitle,
+  conversationSidebarIconKind,
+  isConversationTitlePending,
+} from "../../shared/conversationSession";
+import { useDismissible } from "../hooks/useDismissible";
+import { getDisplayNoteTitle, type NoteSummary } from "../../shared/writing";
+import { getDisplayImageTitle, type GeneratedImage } from "../../shared/images";
+import { SETTINGS_PAGE_TITLE } from "../../shared/settingsPage";
+import {
+  sidebarSyncStatusTooltip,
+  syncResultChangedLocalData,
+  type SyncStatus,
+} from "../../shared/sync";
+import {
+  isUpdateButtonDisabled,
+  shouldShowUpdateButton,
+  updateButtonLabel,
+  updateButtonTitle,
+  type UpdateStatus,
+} from "../../shared/updateStatus";
+import { Skeleton } from "../ui/Skeleton";
+import {
+  type Conversation,
+  type LibraryRow,
+  type View,
+  type DevView,
+  type SidebarGroup,
+  type SidebarLibraryFilter,
+  type SidebarListSortMode,
+  SIDEBAR_PAGE_SIZE,
+  groupConversations,
+  libraryRowMatchesFilter,
+  pickSidebarLibraryRows,
+  sidebarLibraryFilterLabel,
+} from "./sidebarUtils";
+import { SidebarListMenu } from "./SidebarListMenu";
+import { useScrollFadeEdges } from "../hooks/useScrollFadeEdges";
+
+interface SidebarProps {
+  conversations: Conversation[];
+  notes: NoteSummary[];
+  images: GeneratedImage[];
+  conversationId: string | null;
+  activeNoteId: string | null;
+  activeImageId: string | null;
+  view: View;
+  onViewChange: (v: View) => void;
+  onConversationSelect: (id: string) => void;
+  onConversationDelete: (id: string) => void;
+  onSelectNote: (id: string) => void;
+  onNoteDelete: (id: string) => void;
+  onSelectImage: (id: string) => void;
+  onImageDelete: (id: string) => void;
+  onNewChat: () => void;
+  onNewNote: () => void;
+  onNewImage: () => void;
+  activeChatProcessing: boolean;
+  /** Image ids currently generating/adjusting — show sidebar spinner. */
+  processingImageIds?: Record<string, true>;
+  titleGenInFlight: Record<string, number>;
+  titleAwaitingIds: Record<string, true>;
+  appVersion: string | null;
+  updateStatus: UpdateStatus;
+  onUpdateClick: () => void;
+  onSyncComplete?: () => void;
+  onOpenDataSettings?: () => void;
+  showDevSection?: boolean;
+  onDevViewSelect?: (v: DevView) => void;
+  /** Library ids recently pulled from R2. */
+  arrivedLibraryIds?: Record<string, number>;
+}
+
+export function Sidebar({
+  conversations,
+  notes,
+  images,
+  conversationId,
+  activeNoteId,
+  activeImageId,
+  view,
+  onViewChange,
+  onConversationSelect,
+  onConversationDelete,
+  onSelectNote,
+  onNoteDelete,
+  onSelectImage,
+  onImageDelete,
+  onNewChat,
+  onNewNote,
+  onNewImage,
+  activeChatProcessing,
+  processingImageIds = {},
+  titleGenInFlight,
+  titleAwaitingIds,
+  appVersion,
+  updateStatus,
+  onUpdateClick,
+  onSyncComplete,
+  onOpenDataSettings,
+  showDevSection = false,
+  onDevViewSelect,
+  arrivedLibraryIds = {},
+}: SidebarProps) {
+  const updateLabel = updateButtonLabel(updateStatus);
+  const showUpdateButton = shouldShowUpdateButton(updateStatus);
+  const updateButtonDisabled = isUpdateButtonDisabled(updateStatus);
+
+  const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_PAGE_SIZE);
+  const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("recent");
+  const [libraryFilter, setLibraryFilter] = useState<SidebarLibraryFilter>("all");
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const newMenuRef = useRef<HTMLDivElement | null>(null);
+  const modKey = navigator.platform.startsWith("Mac") ? "⌘" : "Ctrl+";
+
+  const { scrollRef: sidebarListRef, fadeTop, fadeBottom, onScroll: onSidebarListScroll } =
+    useScrollFadeEdges();
+
+  const syncConfigured = syncStatus?.configured ?? false;
+  const syncHasError = Boolean(syncStatus?.lastError);
+  const syncTooltip = sidebarSyncStatusTooltip({
+    busy: syncBusy,
+    configured: syncConfigured,
+    lastError: syncStatus?.lastError ?? null,
+    lastSuccessAt: syncStatus?.lastSuccessAt ?? null,
+  });
+
+  const refreshSyncStatus = useCallback(() => {
+    void window.harness.sync.getStatus().then((status) => {
+      setSyncStatus(status);
+    });
+  }, []);
+
+  useEffect(() => {
+    refreshSyncStatus();
+  }, [refreshSyncStatus]);
+
+  useEffect(() => {
+    if (view === "settings") return;
+    refreshSyncStatus();
+  }, [view, refreshSyncStatus]);
+
+  useEffect(() => {
+    return window.harness.sync.onChanged(() => {
+      refreshSyncStatus();
+    });
+  }, [refreshSyncStatus]);
+
+  const runSidebarSync = useCallback(async () => {
+    if (syncBusy || !syncConfigured) return;
+    setSyncBusy(true);
+    try {
+      const result = await window.harness.sync.runNow();
+      setSyncStatus(result.status);
+      if (syncResultChangedLocalData(result)) {
+        onSyncComplete?.();
+      }
+    } finally {
+      setSyncBusy(false);
+    }
+  }, [syncBusy, syncConfigured, onSyncComplete]);
+
+  const handleSyncControlClick = useCallback(() => {
+    if (!syncConfigured || syncHasError) {
+      onOpenDataSettings?.();
+      return;
+    }
+    void runSidebarSync();
+  }, [syncConfigured, syncHasError, onOpenDataSettings, runSidebarSync]);
+
+  useDismissible({
+    open: newMenuOpen,
+    onDismiss: () => setNewMenuOpen(false),
+    refs: [newMenuRef],
+    pointerEvent: "mousedown",
+  });
+
+  const libraryRows = useMemo<LibraryRow[]>(
+    () => [
+      ...conversations.map((c): LibraryRow => ({ ...c, itemKind: "conversation" })),
+      ...notes.map(
+        (n): LibraryRow => ({
+          id: n.id,
+          title: n.title,
+          createdAt: n.updatedAt,
+          itemKind: "note",
+        })
+      ),
+      ...images.map(
+        (img): LibraryRow => ({
+          id: img.id,
+          title: img.title,
+          createdAt: img.updatedAt,
+          itemKind: "image",
+        })
+      ),
+    ],
+    [conversations, notes, images]
+  );
+
+  const filteredLibraryRows = useMemo(
+    () => libraryRows.filter((row) => libraryRowMatchesFilter(row, libraryFilter)),
+    [libraryRows, libraryFilter]
+  );
+
+  const onLibraryFilterChange = useCallback((filter: SidebarLibraryFilter) => {
+    setLibraryFilter(filter);
+    setSidebarVisibleLimit(SIDEBAR_PAGE_SIZE);
+  }, []);
+
+  const sidebarListItems = useMemo(
+    () =>
+      pickSidebarLibraryRows(
+        filteredLibraryRows,
+        conversationId ?? activeNoteId ?? activeImageId,
+        sidebarVisibleLimit
+      ),
+    [filteredLibraryRows, conversationId, activeNoteId, activeImageId, sidebarVisibleLimit]
+  );
+
+  const { groups: sidebarGroups } = useMemo(
+    () => groupConversations(sidebarListItems, listSortMode),
+    [sidebarListItems, listSortMode]
+  );
+
+  const showSidebarMoreControl = sidebarListItems.length < filteredLibraryRows.length;
+
+  const onSidebarShowMore = useCallback(() => {
+    setSidebarVisibleLimit((n) => Math.min(filteredLibraryRows.length, n + SIDEBAR_PAGE_SIZE));
+  }, [filteredLibraryRows.length]);
+
+  const filterLabel = sidebarLibraryFilterLabel(libraryFilter);
+  const listMenu = (
+    <SidebarListMenu
+      filter={libraryFilter}
+      onFilterChange={onLibraryFilterChange}
+      sortMode={listSortMode}
+      onSortModeChange={setListSortMode}
+    />
+  );
+
+  const renderDevItem = useCallback(
+    (devView: DevView, label: string, Icon: typeof Circle) => {
+      const isActive = view === devView;
+      return (
+        <li
+          key={devView}
+          className={["sidebar-item", isActive ? "active" : ""].filter(Boolean).join(" ")}
+          data-testid={`sidebar-dev-${devView}`}
+          onClick={() => onDevViewSelect?.(devView)}
+        >
+          <span className="sidebar-item-icon" aria-hidden title={label}>
+            <Icon size={12} className="sidebar-item-icon__svg" />
+          </span>
+          <span className="sidebar-item-title">{label}</span>
+        </li>
+      );
+    },
+    [onDevViewSelect, view],
+  );
+
+  const renderLibraryItem = useCallback(
+    (row: LibraryRow) => {
+      if (row.itemKind === "note") {
+        const isActive = view === "notes" && activeNoteId === row.id;
+        return (
+          <li
+            key={row.id}
+            className={[
+              "sidebar-item",
+              isActive ? "active" : "",
+              arrivedLibraryIds[row.id] ? "sidebar-item--arrived" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            data-testid="sidebar-note"
+            data-note-id={row.id}
+            onClick={() => onSelectNote(row.id)}
+          >
+            <span className="sidebar-item-icon" aria-hidden title="Note">
+              <StickyNote size={12} className="sidebar-item-icon__svg" />
+            </span>
+            <span className="sidebar-item-title">{getDisplayNoteTitle(row.title ?? "")}</span>
+            <button
+              type="button"
+              className="sidebar-item-delete"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNoteDelete(row.id);
+              }}
+              aria-label="Delete note"
+            >
+              <X size={12} strokeWidth={2.5} aria-hidden />
+            </button>
+          </li>
+        );
+      }
+      if (row.itemKind === "image") {
+        const isActive = view === "images" && activeImageId === row.id;
+        const imageGenerating = Boolean(processingImageIds[row.id]);
+        return (
+          <li
+            key={row.id}
+            className={[
+              "sidebar-item",
+              isActive ? "active" : "",
+              arrivedLibraryIds[row.id] ? "sidebar-item--arrived" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            data-testid="sidebar-image"
+            data-image-id={row.id}
+            onClick={() => onSelectImage(row.id)}
+            aria-busy={imageGenerating ? true : undefined}
+          >
+            {imageGenerating ? (
+              <span className="sidebar-item-spinner" aria-hidden>
+                <Loader2 size={12} className="voice-spinner" />
+              </span>
+            ) : (
+              <span className="sidebar-item-icon" aria-hidden title="Image">
+                <ImageIcon size={12} className="sidebar-item-icon__svg" />
+              </span>
+            )}
+            <span className="sidebar-item-title">{getDisplayImageTitle(row.title)}</span>
+            <button
+              type="button"
+              className="sidebar-item-delete"
+              onClick={(e) => {
+                e.stopPropagation();
+                onImageDelete(row.id);
+              }}
+              aria-label="Delete image"
+            >
+              <X size={12} strokeWidth={2.5} aria-hidden />
+            </button>
+          </li>
+        );
+      }
+      const c = row as Conversation;
+      const isActive = conversationId === c.id && view === "chat";
+      const titleGenerating =
+        (titleGenInFlight[c.id] ?? 0) > 0 || !!titleAwaitingIds[c.id];
+      const titlePending = isConversationTitlePending(c.title, titleGenerating);
+      const chatStreaming =
+        view === "chat" && conversationId === c.id && activeChatProcessing;
+      const iconKind = conversationSidebarIconKind(c);
+      const Icon = iconKind === "dictation" ? ArrowUpRight : Circle;
+      return (
+        <li
+          key={c.id}
+          className={[
+            "sidebar-item",
+            isActive ? "active" : "",
+            arrivedLibraryIds[c.id] ? "sidebar-item--arrived" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          data-testid="sidebar-conversation"
+          data-conversation-id={c.id}
+          data-session-icon={iconKind}
+          onClick={() => {
+            onConversationSelect(c.id);
+            onViewChange("chat");
+          }}
+          aria-busy={titlePending || chatStreaming ? true : undefined}
+        >
+          {chatStreaming ? (
+            <span className="sidebar-item-spinner" aria-hidden>
+              <Loader2 size={12} className="voice-spinner" />
+            </span>
+          ) : (
+            <span
+              className="sidebar-item-icon"
+              aria-hidden
+              title={iconKind === "dictation" ? "Dictation" : "Chat"}
+            >
+              <Icon size={12} className="sidebar-item-icon__svg" />
+            </span>
+          )}
+          {titlePending ? (
+            <Skeleton className="ui-skeleton--sidebar-title" label="Generating title" />
+          ) : (
+            <span className="sidebar-item-title">
+              {conversationDisplayTitle(c.title, c.createdAt)}
+            </span>
+          )}
+          <button
+            type="button"
+            className="sidebar-item-delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              onConversationDelete(c.id);
+            }}
+            aria-label="Delete conversation"
+          >
+            <X size={12} strokeWidth={2.5} aria-hidden />
+          </button>
+        </li>
+      );
+    },
+    [
+      activeChatProcessing,
+      activeImageId,
+      activeNoteId,
+      conversationId,
+      processingImageIds,
+      onConversationDelete,
+      onConversationSelect,
+      onImageDelete,
+      onNoteDelete,
+      onSelectImage,
+      onSelectNote,
+      onViewChange,
+      titleGenInFlight,
+      titleAwaitingIds,
+      arrivedLibraryIds,
+      view,
+    ]
+  );
+
+  return (
+    <div className="sidebar-dock">
+      <aside className="sidebar" id="app-sidebar">
+        <div className="sidebar-buttons">
+          <div className="sidebar-new-menu-wrap" ref={newMenuRef}>
+            <div className="sidebar-new-split" role="group" aria-label="New">
+              <button
+                type="button"
+                className="btn sidebar-new-chat-btn"
+                data-testid="sidebar-new-chat"
+                aria-label="New chat"
+                title="New chat"
+                onClick={() => {
+                  setNewMenuOpen(false);
+                  onNewChat();
+                }}
+              >
+                <Plus size={16} className="sidebar-new-chat-icon" aria-hidden />
+                <span className="sidebar-new-chat-label">New</span>
+              </button>
+              <button
+                type="button"
+                className="btn sidebar-new-menu-trigger"
+                data-testid="sidebar-new-menu"
+                aria-label="More create options"
+                aria-haspopup="menu"
+                aria-expanded={newMenuOpen}
+                title="More create options"
+                onClick={() => setNewMenuOpen((open) => !open)}
+              >
+                <ChevronDown size={14} className="sidebar-new-menu-chevron" aria-hidden />
+              </button>
+            </div>
+            {newMenuOpen ? (
+              <div className="sidebar-new-menu" role="menu" aria-label="Create new">
+                <button
+                  type="button"
+                  className="sidebar-new-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setNewMenuOpen(false);
+                    onNewChat();
+                  }}
+                >
+                  <span className="sidebar-new-menu-item__main">
+                    <Circle size={16} className="sidebar-new-menu-item__icon" aria-hidden />
+                    <span>New chat</span>
+                  </span>
+                  <span className="sidebar-new-menu-item__shortcut" aria-hidden>
+                    {modKey}N
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-new-menu-item"
+                  role="menuitem"
+                  data-testid="sidebar-new-note"
+                  onClick={() => {
+                    setNewMenuOpen(false);
+                    onNewNote();
+                  }}
+                >
+                  <span className="sidebar-new-menu-item__main">
+                    <StickyNote size={16} className="sidebar-new-menu-item__icon" aria-hidden />
+                    <span>New note</span>
+                  </span>
+                  <span className="sidebar-new-menu-item__shortcut" aria-hidden>
+                    ⇧{modKey}N
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-new-menu-item"
+                  role="menuitem"
+                  data-testid="sidebar-new-image"
+                  onClick={() => {
+                    setNewMenuOpen(false);
+                    onNewImage();
+                  }}
+                >
+                  <span className="sidebar-new-menu-item__main">
+                    <ImageIcon size={16} className="sidebar-new-menu-item__icon" aria-hidden />
+                    <span>New image</span>
+                  </span>
+                  <span className="sidebar-new-menu-item__shortcut" aria-hidden>
+                    ⇧{modKey}I
+                  </span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div className="sidebar-nav">
+            <button
+              type="button"
+              className={`btn btn-icon${view === "search" ? " btn-primary" : ""}`}
+              onClick={() => onViewChange("search")}
+              aria-label="Search"
+              aria-pressed={view === "search"}
+              title="Search"
+              data-testid="sidebar-search"
+            >
+              <Search size={16} />
+            </button>
+            <button
+              type="button"
+              className={`btn btn-icon${view === "tasks" ? " btn-primary" : ""}`}
+              onClick={() => onViewChange("tasks")}
+              aria-label="Tasks"
+              aria-pressed={view === "tasks"}
+              title="Tasks"
+              data-testid="library-tasks"
+            >
+              <CheckLine size={16} />
+            </button>
+            <button
+              type="button"
+              className={`btn btn-icon${view === "settings" ? " btn-primary" : ""}`}
+              onClick={() => onViewChange("settings")}
+              aria-label={SETTINGS_PAGE_TITLE}
+              aria-pressed={view === "settings"}
+              title={SETTINGS_PAGE_TITLE}
+              data-testid="library-settings"
+            >
+              <SettingsIcon size={16} />
+            </button>
+          </div>
+        </div>
+        <div
+          className={[
+            "sidebar-list-wrap",
+            fadeTop ? "sidebar-list-wrap--fade-top" : "",
+            fadeBottom ? "sidebar-list-wrap--fade-bottom" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <ul ref={sidebarListRef} className="sidebar-list" onScroll={onSidebarListScroll}>
+            {showDevSection ? (
+              <li className="sidebar-group">
+                <span className="sidebar-group-label">Dev</span>
+                <ul className="sidebar-group-items">
+                  {renderDevItem("dev-chat", "Chat", Circle)}
+                  {renderDevItem("dev-dictation", "Dictation", ArrowUpRight)}
+                  {renderDevItem("dev-note", "Note", StickyNote)}
+                  {renderDevItem("dev-image", "Image", ImageIcon)}
+                </ul>
+              </li>
+            ) : null}
+            {sidebarGroups.length === 0 && libraryRows.length > 0 ? (
+              <li className="sidebar-group">
+                <div className="sidebar-group-header">
+                  <span className="sidebar-group-label">{filterLabel}</span>
+                  {listMenu}
+                </div>
+                <p className="sidebar-list-empty" data-testid="sidebar-filter-empty">
+                  No {filterLabel.toLowerCase()} yet
+                </p>
+              </li>
+            ) : null}
+            {sidebarGroups.map(({ key, label, weekday, items }: SidebarGroup, groupIndex) => {
+              const groupLabelTitle =
+                key === "recent"
+                  ? `${filteredLibraryRows.length} item${filteredLibraryRows.length === 1 ? "" : "s"}`
+                  : undefined;
+              const displayLabel = key === "recent" && libraryFilter !== "all" ? filterLabel : label;
+              const groupLabel = (
+                <span className="sidebar-group-label" title={groupLabelTitle}>
+                  {displayLabel}
+                  {weekday ? <span className="sidebar-group-weekday">{weekday}</span> : null}
+                </span>
+              );
+              return (
+                <li key={key} className="sidebar-group">
+                  {groupIndex === 0 ? (
+                    <div className="sidebar-group-header">
+                      {groupLabel}
+                      {listMenu}
+                    </div>
+                  ) : (
+                    groupLabel
+                  )}
+                  <ul className="sidebar-group-items">
+                    {items.map((row) => renderLibraryItem(row))}
+                  </ul>
+                </li>
+              );
+            })}
+            {showSidebarMoreControl ? (
+              <li className="sidebar-list-expand">
+                <button
+                  type="button"
+                  className="sidebar-list-expand-btn"
+                  data-testid="sidebar-conversations-show-more"
+                  aria-label={`Show ${SIDEBAR_PAGE_SIZE} more items`}
+                  onClick={onSidebarShowMore}
+                >
+                  More
+                </button>
+              </li>
+            ) : null}
+          </ul>
+        </div>
+        <div className="sidebar-footer">
+          <div className="sidebar-footer__meta">
+            {appVersion != null && appVersion !== "" ? (
+              <span className="sidebar-version" title={`Harness ${appVersion}`}>
+                v{appVersion}
+              </span>
+            ) : null}
+            {showUpdateButton ? (
+              <button
+                type="button"
+                className={
+                  updateStatus.status === "error"
+                    ? "btn sidebar-footer__update-btn sidebar-footer__update-btn--error"
+                    : "btn sidebar-footer__update-btn"
+                }
+                data-testid="sidebar-update"
+                onClick={onUpdateClick}
+                disabled={updateButtonDisabled}
+                title={updateButtonTitle(updateStatus)}
+              >
+                {updateLabel}
+              </button>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className={
+              syncConfigured
+                ? `sidebar-footer__sync-toggle${syncHasError ? " sidebar-footer__sync-toggle--error" : ""}`
+                : "sidebar-footer__sync-setup"
+            }
+            data-testid="sidebar-sync"
+            onClick={handleSyncControlClick}
+            disabled={syncBusy && syncConfigured}
+            aria-label={
+              !syncConfigured
+                ? "Set up sync"
+                : syncBusy
+                  ? "Syncing"
+                  : syncHasError
+                    ? "Sync error — open Data settings"
+                    : syncTooltip
+            }
+            title={syncTooltip}
+          >
+            {!syncConfigured ? (
+              "Set up sync"
+            ) : syncBusy ? (
+              <Loader2 size={12} className="voice-spinner" aria-hidden />
+            ) : syncHasError ? (
+              <AlertCircle size={12} aria-hidden />
+            ) : (
+              <Check size={12} strokeWidth={2.5} aria-hidden />
+            )}
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}

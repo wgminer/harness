@@ -1,3 +1,10 @@
+pub mod chat_import;
+pub mod distill;
+pub mod llm_context_import;
+pub mod recent;
+pub mod search;
+pub mod title;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -10,9 +17,9 @@ use crate::paths::{
     cleanup_legacy_memory_dir, get_app_state_dir, get_legacy_memory_dir, get_local_data_dir,
     get_local_data_settings_path, get_recordings_dir, get_user_data_dir,
 };
+use crate::state::AppState;
 use crate::storage::{
     file_exists, read_json_array_file, read_json_object_file, write_json_pretty, JsonWriteStyle,
-    WriteChains, new_write_chains,
 };
 
 pub const TASKS_FILE: &str = "tasks.json";
@@ -21,26 +28,7 @@ pub const CLIPPINGS_FILE: &str = "clippings.json";
 const CONVERSATIONS_FILE: &str = "conversations.json";
 const USER_MEMORY_FILE: &str = "user_memory.json";
 
-pub use crate::conversation_search::{MemorySearchHit, SearchResult, SearchResultKind};
-
-#[derive(Clone)]
-pub struct AppState {
-    pub write_chains: WriteChains,
-}
-
-impl AppState {
-    pub fn new() -> Self {
-        Self {
-            write_chains: new_write_chains(),
-        }
-    }
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub use crate::memory::search::{MemorySearchHit, SearchResult, SearchResultKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -356,8 +344,8 @@ pub async fn create_conversation_with_mode(
 ) -> Result<String, std::io::Error> {
     let memory_dir = get_memory_dir();
     let id = generate_id("conv");
-    let mode = crate::chat_modes::ChatMode::parse(chat_mode);
-    let chat_mode_field = if mode == crate::chat_modes::ChatMode::Chat {
+    let mode = crate::chat::modes::ChatMode::parse(chat_mode);
+    let chat_mode_field = if mode == crate::chat::modes::ChatMode::Chat {
         None
     } else {
         Some(mode.as_str().to_string())
@@ -391,8 +379,8 @@ pub async fn set_conversation_chat_mode(
     conversation_id: &str,
     chat_mode: &str,
 ) -> Result<(), std::io::Error> {
-    let mode = crate::chat_modes::ChatMode::parse(Some(chat_mode));
-    let value = if mode == crate::chat_modes::ChatMode::Chat {
+    let mode = crate::chat::modes::ChatMode::parse(Some(chat_mode));
+    let value = if mode == crate::chat::modes::ChatMode::Chat {
         // Store None for default chat — clear by writing None via patch sentinel.
         None
     } else {
@@ -412,10 +400,10 @@ pub async fn set_conversation_chat_mode(
 pub async fn get_conversation_chat_mode(
     state: &AppState,
     conversation_id: &str,
-) -> Result<crate::chat_modes::ChatMode, std::io::Error> {
+) -> Result<crate::chat::modes::ChatMode, std::io::Error> {
     let memory_dir = get_memory_dir();
     let conv = load_conversations_map(state, &memory_dir).await;
-    Ok(crate::chat_modes::ChatMode::parse(
+    Ok(crate::chat::modes::ChatMode::parse(
         conv.get(conversation_id)
             .and_then(|m| m.chat_mode.as_deref()),
     ))
@@ -685,7 +673,7 @@ pub async fn delete_conversation(state: &AppState, conversation_id: &str) -> Res
     if file_exists(&messages_path).await {
         tokio::fs::remove_file(messages_path).await?;
     }
-    crate::dictation_recording_index::unlink(conversation_id);
+    crate::recording::dictation_index::unlink(conversation_id);
     Ok(())
 }
 
@@ -767,13 +755,13 @@ fn conversation_activity_at(messages: &[MessageRecord], created_at: i64) -> i64 
 async fn load_conversation_search_candidates(
     state: &AppState,
     memory_dir: &Path,
-) -> Vec<crate::conversation_search::SearchConversationCandidate> {
+) -> Vec<crate::memory::search::SearchConversationCandidate> {
     let conv = load_conversations_map(state, memory_dir).await;
     let mut out = Vec::new();
     for (id, meta) in conv {
         let messages = load_messages_in(state, memory_dir, &id).await;
         let activity_at = conversation_activity_at(&messages, meta.created_at);
-        out.push(crate::conversation_search::SearchConversationCandidate {
+        out.push(crate::memory::search::SearchConversationCandidate {
             id,
             meta,
             messages,
@@ -790,7 +778,7 @@ pub async fn search_conversations(
 ) -> Result<Vec<SearchResult>, std::io::Error> {
     let memory_dir = get_memory_dir();
     let candidates = load_conversation_search_candidates(state, &memory_dir).await;
-    Ok(crate::conversation_search::search_conversation_candidates(
+    Ok(crate::memory::search::search_conversation_candidates(
         &candidates,
         query,
         None,
@@ -806,29 +794,29 @@ pub async fn search_library(
     let memory_dir = get_memory_dir();
     let conversations = load_conversation_search_candidates(state, &memory_dir).await;
 
-    let note_candidates: Vec<crate::conversation_search::SearchTitleCandidate> =
+    let note_candidates: Vec<crate::memory::search::SearchTitleCandidate> =
         crate::notes::list_notes(state)
             .await?
             .into_iter()
-            .map(|n| crate::conversation_search::SearchTitleCandidate {
+            .map(|n| crate::memory::search::SearchTitleCandidate {
                 id: n.id,
                 title: n.title,
                 activity_at: n.updated_at,
             })
             .collect();
 
-    let image_candidates: Vec<crate::conversation_search::SearchTitleCandidate> =
+    let image_candidates: Vec<crate::memory::search::SearchTitleCandidate> =
         crate::images::list_images(state)
             .await?
             .into_iter()
-            .map(|img| crate::conversation_search::SearchTitleCandidate {
+            .map(|img| crate::memory::search::SearchTitleCandidate {
                 id: img.id,
                 title: img.title,
                 activity_at: img.updated_at,
             })
             .collect();
 
-    Ok(crate::conversation_search::build_memory_search_hits(
+    Ok(crate::memory::search::build_memory_search_hits(
         &conversations,
         &note_candidates,
         &image_candidates,

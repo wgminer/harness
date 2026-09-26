@@ -48,9 +48,9 @@ describe("resources/contracts/systemPrompt.json", () => {
     expect(DEFAULT_SYSTEM_PROMPT_IOS).toBe(c.ios);
   });
 
-  it("is include_str!'d by Rust (system_prompt.rs)", () => {
-    const rust = readFileSync(join(root, "src-tauri/src/system_prompt.rs"), "utf8");
-    expect(rust).toContain('include_str!("../../resources/contracts/systemPrompt.json")');
+  it("is include_str!'d by Rust (chat/system_prompt.rs)", () => {
+    const rust = readFileSync(join(root, "src-tauri/src/chat/system_prompt.rs"), "utf8");
+    expect(rust).toContain('include_str!("../../../resources/contracts/systemPrompt.json")');
   });
 });
 

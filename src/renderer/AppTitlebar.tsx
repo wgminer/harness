@@ -1,6 +1,6 @@
 import { useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { PanelLeft } from "lucide-react";
-import { Skeleton } from "./Skeleton";
+import { Skeleton } from "./ui/Skeleton";
 
 type AppTitlebarProps = {
   libraryOpen: boolean;

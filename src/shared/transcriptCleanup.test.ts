@@ -28,8 +28,8 @@ describe("resources/contracts/transcriptCleanup.json", () => {
   });
 
   it("is include_str!'d by Rust", () => {
-    const rust = readFileSync(join(root, "src-tauri/src/transcript_cleanup.rs"), "utf8");
-    expect(rust).toContain('include_str!("../../resources/contracts/transcriptCleanup.json")');
+    const rust = readFileSync(join(root, "src-tauri/src/recording/transcript_cleanup.rs"), "utf8");
+    expect(rust).toContain('include_str!("../../../resources/contracts/transcriptCleanup.json")');
   });
 
   it("matches DEFAULT_SETTINGS cleanup prompt", () => {

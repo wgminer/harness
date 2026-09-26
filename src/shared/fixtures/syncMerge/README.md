@@ -6,7 +6,7 @@ Golden outputs for cross-platform sync-merge serialization parity.
 
 **Consumers:**
 - TypeScript: `src/shared/syncMerge.test.ts`, `src/shared/canonicalJson.test.ts`
-- Rust: `src-tauri/src/sync_merge.rs` (`include_str!` on `*.expected.*` files)
+- Rust: `src-tauri/src/sync/merge.rs` (`include_str!` on `*.expected.*` files)
 - Swift: `ios/HarnessMobileTests/SyncMergeTests.swift` (inline expected strings — update when fixtures change)
 
 **Fixtures:** `conversations-merge`, `tasks-merge`, `messages-merge`, `notes-merge`, plus `message-dedup-stamp`.
