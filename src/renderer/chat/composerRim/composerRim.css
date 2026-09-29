@@ -1,0 +1,187 @@
+/*
+ * Animated rim + glow around the compose-mode composer.
+ * Host: `.new-chat-composer[data-rim]`. Tuning values come from `composerRimVars()`.
+ *   ::before — thin gradient ring, masked to the border band.
+ *   ::after  — blurred copy of the gradient behind the glass for the halo.
+ */
+
+@property --rim-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@property --rim-drift {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 0%;
+}
+
+/* 0 = exhale (dim, base width), 1 = inhale (bright, swollen). */
+@property --rim-breath {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --rim-visible {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+.new-chat-composer[data-rim] {
+  --rim-radius: var(--radius-lg);
+  --rim-c1: oklch(var(--rim-lightness) var(--rim-chroma) var(--rim-hue));
+  --rim-c2: oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + var(--rim-hue-spread)));
+  --rim-c3: oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + var(--rim-hue-spread) / 2));
+  --rim-level: calc(var(--rim-pulse-floor) + (1 - var(--rim-pulse-floor)) * var(--rim-breath));
+  --rim-live-width: calc(var(--rim-width) + var(--rim-swell) * var(--rim-breath));
+  position: relative;
+  isolation: isolate;
+  animation:
+    composer-rim-spin var(--rim-spin-duration) linear infinite var(--rim-spin-state),
+    composer-rim-pulse var(--rim-pulse-duration) ease-in-out infinite var(--rim-pulse-state);
+  transition: --rim-visible 400ms ease;
+}
+
+.new-chat-composer[data-rim="off"] {
+  animation: none;
+}
+
+.new-chat-composer[data-rim]:not([data-rim="off"]) .chat-composer-inner {
+  background: color-mix(in oklab, var(--bg) var(--rim-glass-fill), transparent);
+}
+
+.new-chat-composer[data-rim]:not([data-rim="off"])::before,
+.new-chat-composer[data-rim]:not([data-rim="off"])::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  background: var(--rim-fill);
+  background-size: var(--rim-fill-size, auto);
+  background-position: var(--rim-fill-position, 0 0);
+}
+
+/* Ring: sits over the 1px border and grows outward as it breathes. */
+.new-chat-composer[data-rim]:not([data-rim="off"])::before {
+  z-index: 1;
+  inset: calc(1px - var(--rim-live-width));
+  padding: var(--rim-live-width);
+  border-radius: calc(var(--rim-radius) + var(--rim-live-width) - 1px);
+  opacity: calc(var(--rim-opacity) * var(--rim-level) * var(--rim-visible));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+/* Halo: behind the composer; glass fill controls how much bleeds through. */
+.new-chat-composer[data-rim]:not([data-rim="off"])::after {
+  z-index: -1;
+  inset: calc(var(--rim-glow-spread) * -1);
+  border-radius: calc(var(--rim-radius) + var(--rim-glow-spread));
+  filter: blur(var(--rim-glow-blur));
+  opacity: calc(var(--rim-glow-opacity) * var(--rim-level) * var(--rim-visible));
+}
+
+/* Accent-keyed palette: follows the app accent, hue spread fans out around it. */
+.new-chat-composer[data-rim-color="accent"] {
+  --rim-c1: var(--accent);
+  --rim-c2: oklch(from var(--accent) l c calc(h + var(--rim-hue-spread)));
+  --rim-c3: oklch(from var(--accent) l c calc(h + var(--rim-hue-spread) / 2));
+}
+
+/* ---- Patterns ---- */
+
+.new-chat-composer[data-rim="rainbow"] {
+  --rim-fill: conic-gradient(
+    from var(--rim-angle),
+    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 0)),
+    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 60)),
+    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 120)),
+    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 180)),
+    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 240)),
+    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 300)),
+    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 360))
+  );
+}
+
+/* A bright head sweeping around a dark track. */
+.new-chat-composer[data-rim="comet"] {
+  --rim-fill: conic-gradient(
+    from var(--rim-angle),
+    transparent 0turn,
+    transparent 0.55turn,
+    color-mix(in oklab, var(--rim-c1) 40%, transparent) 0.8turn,
+    var(--rim-c2) 0.97turn,
+    transparent 1turn
+  );
+}
+
+/* Two hues chasing each other. */
+.new-chat-composer[data-rim="duo"] {
+  --rim-fill: conic-gradient(
+    from var(--rim-angle),
+    var(--rim-c1),
+    var(--rim-c2),
+    var(--rim-c1),
+    var(--rim-c2),
+    var(--rim-c1)
+  );
+}
+
+/* Static wash; motion comes from the pulse only. */
+.new-chat-composer[data-rim="breathe"] {
+  --rim-fill: linear-gradient(135deg, var(--rim-c1), var(--rim-c3), var(--rim-c2));
+}
+
+/* Soft bands drifting sideways on the spin clock; 200% position = one full seamless loop. */
+.new-chat-composer[data-rim="aurora"] {
+  --rim-fill: linear-gradient(
+    90deg,
+    var(--rim-c1),
+    var(--rim-c3),
+    var(--rim-c2),
+    var(--rim-c3),
+    var(--rim-c1)
+  );
+  --rim-fill-size: 200% 100%;
+  --rim-fill-position: var(--rim-drift) 0;
+}
+
+/* ---- When ---- */
+
+.new-chat-composer[data-rim-when="focus"]:not(:focus-within) {
+  --rim-visible: 0;
+}
+
+.new-chat-composer[data-rim-when="idle"]:focus-within {
+  --rim-visible: 0;
+}
+
+@keyframes composer-rim-spin {
+  to {
+    --rim-angle: 360deg;
+    --rim-drift: 200%;
+  }
+}
+
+@keyframes composer-rim-pulse {
+  0%,
+  100% {
+    --rim-breath: 0;
+  }
+  50% {
+    --rim-breath: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-chat-composer[data-rim] {
+    animation: none;
+  }
+}

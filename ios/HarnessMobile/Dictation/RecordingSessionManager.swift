@@ -1,5 +1,6 @@
 import ActivityKit
 import Foundation
+import UIKit
 
 @MainActor
 final class RecordingSessionManager: ObservableObject {
@@ -12,6 +13,7 @@ final class RecordingSessionManager: ObservableObject {
     private var liveActivity: Activity<DictationRecordingAttributes>?
     /// Serializes ActivityKit request/end so orphan Tasks do not race.
     private var liveActivityTask: Task<Void, Never>?
+    private var stopBackgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     init() {
         // Do not forward recorder.objectWillChange — leaf views observe elapsed/isRecording.
@@ -90,6 +92,21 @@ final class RecordingSessionManager: ObservableObject {
         enqueueLiveActivityWork { [weak self] in
             await self?.endLiveActivity()
         }
+    }
+
+    /// Stopping the mic drops the background-audio privilege. A lock-screen stop would
+    /// otherwise suspend the app mid-transcription and lose the take.
+    func beginStopBackgroundWork() {
+        guard stopBackgroundTask == .invalid else { return }
+        stopBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "HarnessDictationStop") { [weak self] in
+            self?.endStopBackgroundWork()
+        }
+    }
+
+    func endStopBackgroundWork() {
+        guard stopBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(stopBackgroundTask)
+        stopBackgroundTask = .invalid
     }
 
     // MARK: - Live Activity (always off the mic critical path)

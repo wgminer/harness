@@ -18,6 +18,7 @@ import {
 } from "../../shared/writing";
 import type { GlobalRecordingStatus } from "../../shared/desktopAPI";
 import { SyncQrModal } from "./SyncQrModal";
+import { CliInstallSection } from "./CliInstallSection";
 import { WorkspaceHeader } from "../ui/WorkspaceHeader";
 import {
   SettingsActions,
@@ -867,6 +868,8 @@ export function SettingsView({
                 </>
               ) : null}
             </SettingsGroup>
+
+            {isMac ? <CliInstallSection /> : null}
 
             <SettingsGroup
               title="Weather"

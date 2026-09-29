@@ -580,24 +580,18 @@ hr {
 }
 
 /* Shared list-item base */
-.list-item-base,
-.sidebar-item,
-.search-result-item {
+.list-item-base {
   padding: var(--space-2) var(--space-3);
   border-left: 2px solid transparent;
   cursor: pointer;
   overflow: hidden;
 }
 
-.list-item-base:hover,
-.sidebar-item:hover,
-.search-result-item:hover {
+.list-item-base:hover {
   background: var(--overlay-subtle);
 }
 
-.list-item-base.active,
-.sidebar-item.active,
-.search-result-item.active {
+.list-item-base.active {
   border-left-color: var(--accent);
   background: var(--overlay-subtle);
 }
@@ -676,6 +670,97 @@ hr {
 }
 
 .app-titlebar__sidebar-toggle svg {
+  display: block;
+  width: var(--titlebar-toggle-size);
+  height: var(--titlebar-toggle-size);
+}
+
+/* New + Search, right-aligned to the sidebar column below. */
+.app-titlebar__sidebar-actions {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(min(var(--sidebar-width), 50%) - var(--space-2));
+  transform: translateX(-100%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  z-index: 2;
+}
+
+.app[data-sidebar="right"] .app-titlebar__sidebar-actions {
+  left: auto;
+  /* Leave room for Settings, which owns the far right. */
+  right: calc(var(--space-2) + var(--titlebar-toggle-size) + var(--space-3) + var(--space-1));
+  transform: none;
+}
+
+.app[data-library-open="false"]:not([data-sidebar="right"]) .app-titlebar__sidebar-actions {
+  /* No sidebar column to align to: sit beside the toggle instead. */
+  position: static;
+  transform: none;
+  margin-left: var(--space-2);
+}
+
+/* Settings, pinned to the far right of the titlebar. */
+.app-titlebar__trailing-actions {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: var(--space-2);
+  display: flex;
+  align-items: center;
+  z-index: 2;
+}
+
+.app-titlebar__action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--titlebar-toggle-size) + var(--space-3));
+  height: calc(var(--titlebar-toggle-size) + var(--space-3));
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: var(--radius-control-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  opacity: 0.55;
+  cursor: pointer;
+  transition:
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    opacity var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.app-titlebar__action:hover,
+.app-titlebar__action[aria-expanded="true"],
+.app-titlebar__action--active {
+  color: var(--fg);
+  opacity: 1;
+}
+
+.app-titlebar__action--active {
+  background: var(--overlay-subtle);
+}
+
+.app-titlebar__action:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.app-titlebar__action-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--danger, #c44);
+}
+
+.app-titlebar__action svg {
   display: block;
   width: var(--titlebar-toggle-size);
   height: var(--titlebar-toggle-size);

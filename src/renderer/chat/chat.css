@@ -1043,6 +1043,7 @@
 
 .chat-mode-picker--segment.chat-mode-picker--quiet {
   --seg-inset: 2px;
+  position: relative;
   box-sizing: border-box;
   height: var(--input-height);
   padding: var(--seg-inset);
@@ -1052,7 +1053,27 @@
   background: var(--overlay-subtle);
 }
 
+/* Sliding highlight behind the active segment; position set from ChatModePicker. */
+.chat-mode-picker__thumb {
+  position: absolute;
+  top: var(--seg-inset);
+  bottom: var(--seg-inset);
+  left: 0;
+  width: var(--seg-thumb-w, 0);
+  transform: translateX(var(--seg-thumb-x, 0));
+  border-radius: calc(min(var(--radius-lg), calc(var(--input-height) / 4)) - var(--seg-inset));
+  background: var(--btn-bg);
+  pointer-events: none;
+}
+
+.chat-mode-picker--thumb-ready .chat-mode-picker__thumb {
+  transition:
+    transform var(--motion-duration-switch) var(--motion-ease-switch-thumb),
+    width var(--motion-duration-switch) var(--motion-ease-switch-thumb);
+}
+
 .chat-mode-picker__seg {
+  position: relative;
   appearance: none;
   display: inline-flex;
   align-items: center;
@@ -1072,7 +1093,11 @@
   cursor: pointer;
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
-    background var(--motion-duration-ui) var(--motion-ease-standard);
+    transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.chat-mode-picker__seg:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .chat-mode-picker__seg:hover:not(:disabled):not(.chat-mode-picker__seg--active) {
@@ -1082,7 +1107,17 @@
 .chat-mode-picker__seg--active {
   color: var(--fg);
   font-weight: 600;
-  background: var(--btn-bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-mode-picker--thumb-ready .chat-mode-picker__thumb,
+  .chat-mode-picker__seg {
+    transition: none;
+  }
+
+  .chat-mode-picker__seg:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 .chat-mode-picker__seg:focus-visible {
@@ -1101,64 +1136,6 @@
 .chat-mode-picker--outline {
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-
-/* Portal menus anchored to composer buttons (Plus menu). */
-.chat-mode-picker__menu {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  width: max-content;
-  min-width: 8.5rem;
-  padding: var(--space-1);
-  border: 1px solid var(--border-input);
-  border-radius: var(--radius-md);
-  background: var(--bg-elevated);
-  box-shadow: 0 var(--space-2) var(--space-6) rgba(0, 0, 0, 0.28);
-}
-
-.chat-mode-picker__menu--portal {
-  position: fixed;
-  z-index: 1000;
-}
-
-.chat-mode-picker__menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: var(--fg);
-  font-family: var(--font-family);
-  font-size: var(--font-size-ui);
-  font-weight: 500;
-  line-height: var(--line-height-tight);
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-control-sm);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.chat-mode-picker__menu-item:hover,
-.chat-mode-picker__menu-item:focus-visible {
-  background: var(--overlay-strong);
-}
-
-.chat-mode-picker__menu-item:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: -2px;
-}
-
-.chat-mode-picker__menu-item--active {
-  color: var(--fg);
-}
-
-.chat-mode-picker__menu-check {
-  flex-shrink: 0;
-  color: var(--fg-muted);
 }
 
 /*
@@ -1455,10 +1432,6 @@
   color: var(--accent);
 }
 
-.chat-plus-menu {
-  min-width: 180px;
-}
-
 .tool-card:has(.tool-card-preview) {
   max-width: 100%;
   width: 100%;
@@ -1545,6 +1518,27 @@
 
 .input-actions .btn {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+  transition:
+    color var(--motion-duration-ui) var(--motion-ease-standard),
+    background var(--motion-duration-ui) var(--motion-ease-standard),
+    border-color var(--motion-duration-ui) var(--motion-ease-standard),
+    opacity var(--motion-duration-ui) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+/* Same press feedback as the Chat | Q&A segments. */
+.input-actions .btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input-actions .btn {
+    transition: none;
+  }
+
+  .input-actions .btn:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 .input-actions-spacer {
@@ -1984,3 +1978,94 @@
   animation: motion-spin 0.8s linear infinite;
 }
 
+
+/* Note card: one bordered header (pill + actions), optional inline review body. */
+.document-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  transition: border-color var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.document-card__header:hover {
+  border-color: var(--border-light);
+}
+
+.document-card__header .document-card__pill {
+  flex: 1;
+  align-items: center;
+  border: none;
+  background: transparent;
+}
+
+.document-card__header .document-card__pill:hover:not(:disabled) {
+  background: transparent;
+}
+
+.document-card__header:has(.document-card__pill--streaming) {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--border-input));
+}
+
+.document-card__header:has(.document-card__pill--error) {
+  border-color: color-mix(in oklab, var(--danger-fg) 35%, var(--border-input));
+}
+
+.document-card--expanded .document-card__header {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.document-card__chevron {
+  flex-shrink: 0;
+  color: var(--fg-muted);
+  transition: transform var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.document-card__chevron--open {
+  transform: rotate(180deg);
+}
+
+.document-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  padding-right: var(--space-2);
+}
+
+.document-card__body {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-input);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: var(--bg-secondary);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--fg);
+}
+
+.document-card__body > :first-child {
+  margin-top: 0;
+}
+
+.document-card__body > :last-child {
+  margin-bottom: 0;
+}
+
+.document-card__body h1,
+.document-card__body h2,
+.document-card__body h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--font-size-body);
+  font-weight: 600;
+}
+
+.document-card__body h1 {
+  font-size: calc(var(--font-size-body) * 1.2);
+}

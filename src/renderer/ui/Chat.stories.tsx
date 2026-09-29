@@ -143,7 +143,7 @@ function ChatGallery() {
             isStreaming
             messageId="story-wait"
             copiedId={null}
-            savedToNotesId={null}
+            savedNoteIds={{}}
             onCopied={() => {}}
             onSaveToNotes={() => {}}
           />

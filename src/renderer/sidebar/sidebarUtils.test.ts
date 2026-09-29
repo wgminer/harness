@@ -2,13 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   groupConversations,
   libraryRowMatchesFilter,
+  isUntitledNoteTitle,
   pickSidebarLibraryRows,
   SIDEBAR_PAGE_SIZE,
 } from "./sidebarUtils";
 
 describe("sidebarUtils", () => {
-  it("uses one page size for the initial window and each More click", () => {
-    expect(SIDEBAR_PAGE_SIZE).toBe(10);
+  it("uses one page size for the initial window and each scroll load", () => {
+    expect(SIDEBAR_PAGE_SIZE).toBe(30);
+  });
+
+  it("treats empty and default note titles as untitled", () => {
+    expect(isUntitledNoteTitle("")).toBe(true);
+    expect(isUntitledNoteTitle("Note")).toBe(true);
+    expect(isUntitledNoteTitle("Notes on the shed")).toBe(false);
   });
 
   it("always includes the active row in the preview window", () => {

@@ -107,6 +107,9 @@ pub fn tools_for_request(include_coding: bool) -> Value {
     if include_coding {
         tools = crate::coding::merge_tool_definitions(tools, crate::coding::coding_tool_definitions());
     }
+    if crate::gmail::auth::is_connected() {
+        tools = crate::coding::merge_tool_definitions(tools, crate::gmail::tool_definitions());
+    }
     tools
 }
 

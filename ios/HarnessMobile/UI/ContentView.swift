@@ -1,16 +1,19 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var app: AppModel
-    @StateObject private var chatRouter: ChatRouter
+    /// Owned by `HarnessMobileApp` so a rebuilt scene keeps the open thread and dictation.
+    @ObservedObject private var app: AppModel
+    @ObservedObject private var chatRouter: ChatRouter
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSetupPairing = false
 
-    init(app: AppModel? = nil, initialChatRoute: ChatRoute? = nil) {
-        _app = StateObject(wrappedValue: app ?? AppModel())
-        let router = ChatRouter()
-        router.route = initialChatRoute
-        _chatRouter = StateObject(wrappedValue: router)
+    init(app: AppModel, chatRouter: ChatRouter? = nil, initialChatRoute: ChatRoute? = nil) {
+        self.app = app
+        let router = chatRouter ?? ChatRouter()
+        if let initialChatRoute {
+            router.route = initialChatRoute
+        }
+        self.chatRouter = router
     }
 
     var body: some View {

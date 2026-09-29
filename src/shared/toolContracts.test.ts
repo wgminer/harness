@@ -100,3 +100,19 @@ describe("resources/contracts/codingTools.json", () => {
     }
   });
 });
+
+describe("resources/contracts/gmailTools.json", () => {
+  it("parses as Gmail tool definitions", () => {
+    const raw = readFileSync(join(root, "resources/contracts/gmailTools.json"), "utf8");
+    const defs = JSON.parse(raw) as ToolDefinition[];
+    const names = defs.map((d) => d.function.name).sort();
+    expect(names).toEqual([
+      "gmail_create_draft",
+      "gmail_list_labels",
+      "gmail_modify_threads",
+      "gmail_read_thread",
+      "gmail_search",
+      "gmail_send",
+    ]);
+  });
+});

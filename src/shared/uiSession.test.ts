@@ -46,8 +46,8 @@ describe("normalizeUiSession", () => {
     });
   });
 
-  it("keeps search view", () => {
-    expect(normalizeUiSession({ view: "search" }).view).toBe("search");
+  it("falls back to chat for the retired search view", () => {
+    expect(normalizeUiSession({ view: "search" }).view).toBe("chat");
   });
 
   it("keeps images view and image id", () => {

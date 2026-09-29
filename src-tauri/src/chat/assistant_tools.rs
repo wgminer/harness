@@ -450,7 +450,12 @@ pub async fn lookup_image(query: &str) -> LookupImagePayload {
     }
 }
 
-async fn execute_note_tool(state: &AppState, name: &str, args: &Value) -> Value {
+async fn execute_note_tool(
+    state: &AppState,
+    name: &str,
+    args: &Value,
+    conversation_id: Option<&str>,
+) -> Value {
     match name {
         "note_list" => match notes::list_notes(state).await {
             Ok(notes) => json!({ "notes": notes }),
@@ -465,7 +470,7 @@ async fn execute_note_tool(state: &AppState, name: &str, args: &Value) -> Value 
                 .unwrap_or("")
                 .trim()
                 .to_string();
-            match notes::create_note(state, title, content).await {
+            match notes::create_note_linked(state, title, content, conversation_id).await {
                 Ok(note) => {
                     if summary.is_empty() {
                         json!({ "note": note })
@@ -497,7 +502,11 @@ async fn execute_note_tool(state: &AppState, name: &str, args: &Value) -> Value 
             if id.is_empty() {
                 return json!({ "error": "note_save requires a non-empty 'id' string" });
             }
-            match notes::save_note(state, id, content).await {
+            let options = notes::SaveNoteOptions {
+                conversation_id,
+                ..Default::default()
+            };
+            match notes::save_note_with(state, id, content, options).await {
                 Ok(note) => json!({ "note": note }),
                 Err(err) => json!({ "error": err.to_string() }),
             }
@@ -537,7 +546,7 @@ pub async fn execute_assistant_tool(
         "get_datetime" => get_datetime(&args),
         "web_search" => serde_json::to_value(fetch_web_search(&args).await)?.into(),
         "note_list" | "note_create" | "note_read" | "note_save" | "note_delete" => {
-            execute_note_tool(state, name, &args).await
+            execute_note_tool(state, name, &args, exclude_conversation_id).await
         }
         _ => json!({ "error": format!("Unknown assistant tool: {name}") }),
     };

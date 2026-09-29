@@ -12,6 +12,9 @@ export interface UseChatComposerOptions {
   pendingHotkeyText?: string | null;
   pendingHotkeyDraftOnly?: boolean;
   onPendingHotkeyTextConsumed?: () => void;
+  /** Text to place in the composer without sending (e.g. a note link from Discuss). */
+  composerDraft?: ComposerDraft | null;
+  onComposerDraftConsumed?: () => void;
   focusComposerNonce?: number;
   composerRef?: RefObject<HTMLDivElement | null>;
   /** When true, blocks send (e.g. model turn in progress). */
@@ -26,11 +29,18 @@ export interface UseChatComposerOptions {
   mirrorGlobalFnRecording?: boolean;
 }
 
+export interface ComposerDraft {
+  text: string;
+  nonce: number;
+}
+
 export function useChatComposer({
   onSubmit,
   pendingHotkeyText,
   pendingHotkeyDraftOnly,
   onPendingHotkeyTextConsumed,
+  composerDraft,
+  onComposerDraftConsumed,
   focusComposerNonce,
   composerRef,
   submitDisabled = false,
@@ -190,6 +200,19 @@ export function useChatComposer({
     pendingHotkeyText,
     onPendingHotkeyTextConsumed,
   ]);
+
+  useEffect(() => {
+    if (!composerDraft?.text) return;
+    const text = composerDraft.text;
+    setInput((prev) => (prev.trim() ? `${prev.replace(/\s+$/, "")}\n\n${text}` : text));
+    onComposerDraftConsumed?.();
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }, [composerDraft, onComposerDraftConsumed]);
 
   const resetComposerInput = useCallback(() => {
     setInput("");

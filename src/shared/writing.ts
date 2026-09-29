@@ -5,6 +5,23 @@ export interface NoteSummary {
   updatedAt: number;
   createdAt: number;
   wordCount: number;
+  /** Conversations that created, edited, or saved into this note. */
+  conversationIds?: string[];
+}
+
+/** Broadcast whenever any window, chat tool, or note stream writes a note. */
+export interface NoteChangedEvent {
+  id: string;
+  updatedAt: number | null;
+  deleted: boolean;
+}
+
+/** Backend rejection when a save was based on an older version of the note. */
+export const NOTE_CONFLICT_ERROR = "note_conflict";
+
+export function isNoteConflictError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return message.includes(NOTE_CONFLICT_ERROR);
 }
 
 export interface Note extends NoteSummary {

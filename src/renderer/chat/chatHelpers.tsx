@@ -2,6 +2,7 @@ import {
   isValidElement,
   useMemo,
   useRef,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 import { Check, Copy, SquarePen } from "lucide-react";
@@ -22,6 +23,7 @@ import {
   type MemorySearchHit,
 } from "../../shared/conversationSearch";
 import { parseLocalFilePath } from "../../shared/localFilePath";
+import { isEditableTextPath } from "../../shared/files";
 import { stripQaOptions } from "../../shared/qaOptions";
 import { scheduleCopyFeedbackClear, useCopyFeedback } from "../hooks/useCopyFeedback";
 
@@ -176,7 +178,7 @@ export interface MarkdownContentProps {
   messageId?: string;
   messageTimestamp?: number;
   copiedId?: string | null;
-  savedToNotesId?: string | null;
+  savedNoteIds?: Record<string, string>;
   onCopied?: (id: string | null) => void;
   onSaveToNotes?: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   libraryHits?: MemorySearchHit[];
@@ -210,19 +212,29 @@ function LibraryRefLink({
 
 function FilePathLink({ path, children }: { path: string; children?: ReactNode }) {
   const label = children ?? path;
-  const open = () => {
+  // Text files open in a Harness file window; Cmd-click (or anything else) reveals in Finder.
+  const editable = isEditableTextPath(path);
+  const reveal = () => {
     const api = window.harness?.system?.showInFolder;
     if (!api) return;
     void api(path).catch(() => {
       /* ignore missing paths / browser shell */
     });
   };
+  const open = (e: MouseEvent<HTMLButtonElement>) => {
+    const openWindow = window.harness?.files?.openWindow;
+    if (!editable || e.metaKey || !openWindow) {
+      reveal();
+      return;
+    }
+    void openWindow(path).catch(reveal);
+  };
   return (
     <button
       type="button"
       className="library-ref"
       onClick={open}
-      title={`Show in Finder: ${path}`}
+      title={editable ? `Open in Harness (⌘-click to show in Finder): ${path}` : `Show in Finder: ${path}`}
     >
       {label}
     </button>
@@ -233,7 +245,7 @@ function CodeBlock({
   blockKey,
   codeText,
   copiedId,
-  savedToNotesId,
+  savedNoteIds,
   onCopied,
   onSaveToNotes,
   messageTimestamp,
@@ -243,7 +255,7 @@ function CodeBlock({
   blockKey: string;
   codeText: string;
   copiedId?: string | null;
-  savedToNotesId?: string | null;
+  savedNoteIds?: Record<string, string>;
   onCopied?: (id: string | null) => void;
   onSaveToNotes?: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   messageTimestamp?: number;
@@ -251,7 +263,7 @@ function CodeBlock({
 }) {
   const { copied: localCopied, copyText } = useCopyFeedback();
   const justCopied = onCopied ? copiedId === blockKey : localCopied;
-  const justSaved = savedToNotesId === blockKey;
+  const justSaved = !!savedNoteIds?.[blockKey];
 
   const handleCopy = async () => {
     if (onCopied) {
@@ -276,8 +288,8 @@ function CodeBlock({
             className="md-code-block__btn"
             onClick={() => void onSaveToNotes(blockKey, codeText, messageTimestamp)}
             disabled={!codeText.trim()}
-            title={justSaved ? "Added to editor" : "Add to editor"}
-            aria-label={justSaved ? "Added to editor" : "Add code to editor"}
+            title={justSaved ? "Open saved note" : "Save as note"}
+            aria-label={justSaved ? "Open saved note" : "Save code as note"}
           >
             {justSaved ? <Check size={12} /> : <SquarePen size={12} />}
           </button>
@@ -310,7 +322,7 @@ export function MarkdownContent({
   messageId,
   messageTimestamp,
   copiedId,
-  savedToNotesId,
+  savedNoteIds,
   onCopied,
   onSaveToNotes,
   libraryHits,
@@ -348,7 +360,7 @@ export function MarkdownContent({
         blockKey={blockKey}
         codeText={codeText}
         copiedId={copiedId}
-        savedToNotesId={savedToNotesId}
+        savedNoteIds={savedNoteIds}
         onCopied={onCopied}
         onSaveToNotes={onSaveToNotes}
         messageTimestamp={messageTimestamp}
@@ -473,6 +485,12 @@ export function toolLabel(name: string): string {
     git_status: "Git status",
     git_diff: "Git diff",
     git_checkout_branch: "Checkout branch",
+    gmail_search: "Searched Gmail",
+    gmail_read_thread: "Read email",
+    gmail_list_labels: "Listed Gmail labels",
+    gmail_create_draft: "Draft email",
+    gmail_send: "Send email",
+    gmail_modify_threads: "Update Gmail labels",
   };
   return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
@@ -519,24 +537,24 @@ export function SaveToNotesButton({
   content,
   messageId,
   messageTimestamp,
-  savedNoteId,
+  savedNoteIds,
   onSaveToNotes,
 }: {
   content: string;
   messageId: string;
   messageTimestamp?: number;
-  savedNoteId: string | null;
+  savedNoteIds: Record<string, string>;
   onSaveToNotes: (messageId: string, content: string, messageTimestamp?: number) => void | Promise<void>;
 }) {
-  const justSaved = savedNoteId === messageId;
+  const justSaved = !!savedNoteIds[messageId];
   return (
     <button
       type="button"
       className="message-footer-icon-btn"
       onClick={() => void onSaveToNotes(messageId, content, messageTimestamp)}
       disabled={!content.trim()}
-      title={justSaved ? "Added to editor" : "Add to editor"}
-      aria-label={justSaved ? "Added to editor" : "Add message to editor"}
+      title={justSaved ? "Open saved note" : "Save as note"}
+      aria-label={justSaved ? "Open saved note" : "Save message as note"}
     >
       {justSaved ? <Check size={12} /> : <SquarePen size={12} />}
     </button>

@@ -18,7 +18,7 @@ interface StreamingAssistantContentProps {
   messageId: string;
   messageTimestamp?: number;
   copiedId: string | null;
-  savedToNotesId: string | null;
+  savedNoteIds: Record<string, string>;
   onCopied: (id: string | null) => void;
   onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   libraryHits?: MemorySearchHit[];
@@ -53,7 +53,7 @@ export function StreamingAssistantContent({
   messageId,
   messageTimestamp,
   copiedId,
-  savedToNotesId,
+  savedNoteIds,
   onCopied,
   onSaveToNotes,
   libraryHits,
@@ -93,7 +93,7 @@ export function StreamingAssistantContent({
             messageId={messageId}
             messageTimestamp={messageTimestamp}
             copiedId={copiedId}
-            savedToNotesId={savedToNotesId}
+            savedNoteIds={savedNoteIds}
             onCopied={onCopied}
             onSaveToNotes={onSaveToNotes}
             libraryHits={libraryHits}

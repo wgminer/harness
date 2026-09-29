@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   MessageCircle,
   Pin,
+  Plus,
   Search,
   Settings2,
   SquareArrowDownLeft,
@@ -17,9 +18,26 @@ function ShellGallery() {
     <div>
       <Section title="App titlebar" stack>
         <header className="app-titlebar" style={{ paddingLeft: 16 }}>
-          <button type="button" className="app-titlebar__sidebar-toggle" aria-label="Show sidebar">
+          <button type="button" className="app-titlebar__sidebar-toggle" aria-label="Hide sidebar">
             <PanelLeft size={16} strokeWidth={1.75} aria-hidden />
           </button>
+          <div className="app-titlebar__sidebar-actions">
+            <button type="button" className="app-titlebar__action" aria-label="New">
+              <Plus size={16} strokeWidth={1.75} aria-hidden />
+            </button>
+            <button type="button" className="app-titlebar__action" aria-label="Search">
+              <Search size={16} strokeWidth={1.75} aria-hidden />
+            </button>
+            <button type="button" className="app-titlebar__action app-titlebar__action--active" aria-label="Tasks">
+              <CheckLine size={16} strokeWidth={1.75} aria-hidden />
+            </button>
+          </div>
+          <div className="app-titlebar__trailing-actions">
+            <button type="button" className="app-titlebar__action" aria-label="Settings">
+              <Settings2 size={16} strokeWidth={1.75} aria-hidden />
+              <span className="app-titlebar__action-dot" />
+            </button>
+          </div>
           <button type="button" className="app-titlebar__title app-titlebar__title--action">
             Product brainstorm
           </button>
@@ -48,29 +66,15 @@ function ShellGallery() {
         </div>
       </Section>
 
-      <Section title="Sidebar button cluster" stack>
-        <div className="sidebar" style={{ width: 280, background: "var(--bg)" }}>
-          <div className="sidebar-buttons">
-            <div className="sidebar-new-split" role="group" aria-label="New">
-              <button type="button" className="btn sidebar-new-chat-btn">
-                New
-              </button>
-              <button type="button" className="btn sidebar-new-menu-trigger" aria-label="More create options">
-                <ChevronDown size={14} className="sidebar-new-menu-chevron" aria-hidden />
-              </button>
-            </div>
-            <div className="sidebar-nav">
-              <button type="button" className="btn btn-icon" aria-label="Search">
-                <Search size={16} />
-              </button>
-              <button type="button" className="btn btn-icon btn-primary" aria-label="Tasks" aria-pressed>
-                <CheckLine size={16} />
-              </button>
-              <button type="button" className="btn btn-icon" aria-label="Settings">
-                <Settings2 size={16} />
-              </button>
-            </div>
+      <Section title="Sidebar list header" stack>
+        <div className="sidebar" style={{ width: 280, height: 80, background: "var(--bg)" }}>
+          <div className="sidebar-list-header">
+            <button type="button" className="sidebar-list-menu__trigger">
+              <span className="sidebar-list-menu__trigger-label">Harness</span>
+              <ChevronDown size={12} className="sidebar-list-menu__chevron" aria-hidden />
+            </button>
           </div>
+          <span className="sidebar-group-label">Today</span>
         </div>
       </Section>
 

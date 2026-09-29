@@ -146,6 +146,10 @@ struct ChatThreadView: View {
         .onChange(of: messages.count) { _, _ in
             followLiveEdgeIfPinned(animated: false)
         }
+        .onChange(of: streamingToolCalls.count) { _, _ in
+            // Keep the stacking tool card in view as calls arrive.
+            followLiveEdgeIfPinned(animated: true)
+        }
         .onDisappear {
             app.flushComposerDrafts()
         }

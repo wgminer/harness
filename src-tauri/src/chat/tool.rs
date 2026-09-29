@@ -8,6 +8,7 @@ use crate::coding::{
     scope_from_meta,
 };
 use crate::customization::{execute_customization_tool, is_customization_tool_name};
+use crate::gmail::{execute_gmail_tool, gated_preview as gmail_gated_preview, is_gated_gmail_tool, is_gmail_tool_name};
 use crate::memory::{get_conversation_coding_scope, ToolCallRecord};
 use crate::openai::{ChatMessageParam, ToolCallParam};
 
@@ -135,6 +136,27 @@ impl ChatController {
             } else {
                 execute_coding_tool(&scope, name, args).await
             }
+        } else if is_gmail_tool_name(name) {
+            if is_gated_gmail_tool(name) {
+                let pending_id = Uuid::new_v4().to_string();
+                let mut pending_payload = gmail_gated_preview(name, &args).await;
+                if let Some(obj) = pending_payload.as_object_mut() {
+                    obj.insert("pendingId".into(), json!(pending_id));
+                    obj.insert("pending".into(), json!(true));
+                    obj.insert("tool".into(), json!(name));
+                }
+                self.await_gated_approval(
+                    conversation_id,
+                    name,
+                    args,
+                    pending_payload,
+                    &pending_id,
+                    snapshot,
+                )
+                .await
+            } else {
+                execute_gmail_tool(name, &args).await
+            }
         } else if is_assistant_tool_name(name) {
             if gated_task {
                 let pending_id = Uuid::new_v4().to_string();
@@ -162,7 +184,9 @@ impl ChatController {
             json!({ "error": format!("Unknown tool: {name}") }).to_string()
         };
 
-        if (is_assistant_tool_name(name) || coding_tool_name_is(name)) && !skip_tool_panel_update {
+        if (is_assistant_tool_name(name) || coding_tool_name_is(name) || is_gmail_tool_name(name))
+            && !skip_tool_panel_update
+        {
             let mut payload = tool_record_payload(name, &result)
                 .unwrap_or_else(|| serde_json::from_str::<Value>(&result).unwrap_or_else(|_| json!(result)));
             if let Some(obj) = payload.as_object_mut() {
@@ -250,6 +274,8 @@ async fn run_gated_action(
                 Ok(scope) => execute_coding_tool(&scope, tool, args).await,
                 Err(e) => json!({ "error": e }).to_string(),
             }
+        } else if is_gmail_tool_name(tool) {
+            execute_gmail_tool(tool, &args).await
         } else {
             execute_assistant_tool(state, tool, args, None)
                 .await
@@ -261,13 +287,18 @@ async fn run_gated_action(
 }
 
 /// Payload kept on the conversation's tool-call record, or `None` for tools that are
-/// not recorded.
+/// not recorded. Gmail bodies stay out of saved (and synced) conversations.
 pub(crate) fn tool_record_payload(name: &str, result: &str) -> Option<Value> {
-    let recorded = is_assistant_tool_name(name) || coding_tool_name_is(name);
+    let recorded =
+        is_assistant_tool_name(name) || coding_tool_name_is(name) || is_gmail_tool_name(name);
     if !recorded {
         return None;
     }
-    Some(serde_json::from_str::<Value>(result).unwrap_or_else(|_| json!(result)))
+    let mut payload = serde_json::from_str::<Value>(result).unwrap_or_else(|_| json!(result));
+    if is_gmail_tool_name(name) {
+        crate::gmail::strip_bodies_for_record(&mut payload);
+    }
+    Some(payload)
 }
 
 fn with_pending_id(result: &str, pending_id: &str) -> String {

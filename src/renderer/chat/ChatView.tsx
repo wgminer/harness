@@ -12,7 +12,7 @@ import { ChatSurface } from "./ChatSurface";
 import { ChatComposer } from "./ChatComposer";
 import { ChatModePicker } from "./ChatModePicker";
 import { DictationSuggestedPromptChips } from "./DictationSuggestedPromptChips";
-import { useChatComposer } from "./useChatComposer";
+import { useChatComposer, type ComposerDraft } from "./useChatComposer";
 import {
   type Message,
   type ToolCallDisplay,
@@ -38,6 +38,7 @@ import {
 } from "../../shared/dictationSuggestedPrompts";
 import type { ConversationSessionKind } from "../../shared/conversationSession";
 import { ComposeCornerMeta, ComposeHeaderQuote } from "./ComposeHome";
+import { ComposerRimJig, useComposerRim } from "./composerRim/ComposerRimJig";
 import { useChatModeState } from "./useChatModeState";
 import { useConversationTitleModal } from "./useConversationTitleModal";
 
@@ -54,6 +55,8 @@ interface ChatViewProps {
   pendingHotkeyText?: string | null;
   /** If true, always pre-fill input (never auto-send), e.g. recording stopped while the app was unfocused. */
   pendingHotkeyDraftOnly?: boolean;
+  composerDraft?: ComposerDraft | null;
+  onComposerDraftConsumed?: () => void;
   onPendingHotkeyTextConsumed?: () => void;
   /** Fires when this chat is waiting on / streaming from the model (not composer voice). */
   onChatActivityChange?: (active: boolean) => void;
@@ -88,6 +91,8 @@ export function ChatView({
   onAssignConversationId,
   pendingHotkeyText,
   pendingHotkeyDraftOnly,
+  composerDraft,
+  onComposerDraftConsumed,
   onPendingHotkeyTextConsumed,
   onChatActivityChange,
   focusComposerNonce,
@@ -114,7 +119,8 @@ export function ChatView({
   const [isStreaming, setIsStreaming] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [savedToNotesId, setSavedToNotesId] = useState<string | null>(null);
+  // Message / code-block key -> note it was saved as, so the button can reopen it.
+  const [savedNoteIds, setSavedNoteIds] = useState<Record<string, string>>({});
   const [activeChatModel, setActiveChatModel] = useState(OPENAI_CHAT_MODEL);
   const activeChatModelRef = useRef(OPENAI_CHAT_MODEL);
   const conversationIdRef = useRef<string | null>(conversationId);
@@ -417,7 +423,7 @@ export function ChatView({
         setIsStreaming(false);
         setIsStopping(false);
         setCopiedId(null);
-        setSavedToNotesId(null);
+        setSavedNoteIds({});
         setPolishHintAfterDictation(false);
         setDictationReplyAction(null);
         setDictationReplyActionLoading(false);
@@ -445,7 +451,7 @@ export function ChatView({
 
     resetComposerInputRef.current();
     setCopiedId(null);
-    setSavedToNotesId(null);
+    setSavedNoteIds({});
     setPolishHintAfterDictation(false);
     setDictationReplyAction(
       conversationDictationReplyAction
@@ -879,6 +885,8 @@ export function ChatView({
     pendingHotkeyText,
     pendingHotkeyDraftOnly,
     onPendingHotkeyTextConsumed,
+    composerDraft,
+    onComposerDraftConsumed,
     focusComposerNonce,
     composerRef,
     submitDisabled: sending,
@@ -939,22 +947,27 @@ export function ChatView({
 
   const saveMessageToNotes = useCallback(
     async (messageId: string, content: string, messageTimestamp?: number) => {
+      const existingNoteId = savedNoteIds[messageId];
+      if (existingNoteId) {
+        onOpenNotesView?.(existingNoteId);
+        return;
+      }
       const trimmed = content.trim();
       if (!trimmed) return;
       try {
         const title =
           messageTimestamp != null ? formatMessageNoteTitle(messageTimestamp) : undefined;
-        const note = await window.harness.notes.create(title, trimmed);
-        setSavedToNotesId(messageId);
-        window.setTimeout(() => {
-          setSavedToNotesId((current) => (current === messageId ? null : current));
-        }, 2000);
-        onOpenNotesView?.(note.id);
+        // Stay in the conversation; the button flips to "Open saved note".
+        const note = await window.harness.notes.create(title, trimmed, {
+          conversationId: conversationIdRef.current ?? undefined,
+        });
+        setSavedNoteIds((prev) => ({ ...prev, [messageId]: note.id }));
+        onNotesChanged?.();
       } catch {
         // Ignore; user can retry.
       }
     },
-    [onOpenNotesView]
+    [onNotesChanged, onOpenNotesView, savedNoteIds]
   );
 
 
@@ -1196,6 +1209,8 @@ export function ChatView({
     onCycleMode: handleCycleMode,
   };
 
+  const composerRim = useComposerRim();
+
   if (isComposeMode) {
     return (
       <>
@@ -1209,6 +1224,7 @@ export function ChatView({
               data-testid="chat-composer"
               role="group"
               aria-label="Message composer"
+              {...composerRim.hostProps}
             >
               <ChatComposer {...composerProps} />
             </div>
@@ -1216,6 +1232,7 @@ export function ChatView({
           </div>
         </div>
         </div>
+        <ComposerRimJig settings={composerRim.settings} onChange={composerRim.setSettings} />
       </>
     );
   }
@@ -1227,7 +1244,7 @@ export function ChatView({
         composerRef={composerRef}
         displayMessages={messages}
         copiedId={copiedId}
-        savedToNotesId={savedToNotesId}
+        savedNoteIds={savedNoteIds}
         onCopied={setCopiedId}
         onSaveToNotes={saveMessageToNotes}
         streamingContent={streamingContent}

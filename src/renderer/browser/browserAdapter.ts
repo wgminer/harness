@@ -1,4 +1,4 @@
-import type { HarnessAPI, TasksPayload } from "../../shared/desktopAPI";
+import type { GmailStatus, HarnessAPI, TasksPayload } from "../../shared/desktopAPI";
 import type { SearchResult } from "../../shared/conversationSearch";
 import { searchConversations, searchTitleOnly } from "../../shared/conversationSearch";
 import { IDLE_UPDATE_STATUS } from "../../shared/updateStatus";
@@ -11,6 +11,7 @@ import { browserContextPreview, browserSystemPromptPreview } from "./browserProm
 import { createBrowserStore } from "./browserStore";
 
 const WEB_UNSUPPORTED = "This action is desktop-only. The browser shell keeps chat, notes, tasks, and settings in localStorage.";
+const gmailStub: GmailStatus = { clientConfigured: false, connected: false, email: null };
 
 function browserSyncStatus(): SyncStatus {
   return {
@@ -91,6 +92,14 @@ export function createBrowserAdapter(): HarnessAPI {
         store.setSecret("tavilyApiKey", value.trim());
       },
       setR2SecretAccessKey: async () => {},
+    },
+    gmail: {
+      getStatus: async () => gmailStub,
+      setClient: async () => gmailStub,
+      connect: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
+      disconnect: async () => gmailStub,
     },
     memory: {
       createConversation: async (chatMode) => store.createConversation(chatMode),
@@ -285,6 +294,25 @@ export function createBrowserAdapter(): HarnessAPI {
       setStickyTitle: async () => {},
       popInSticky: async () => {},
       onOpenInMain: () => () => {},
+      onChanged: () => () => {},
+    },
+    files: {
+      readText: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
+      stat: async () => null,
+      saveText: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
+      importAsNote: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
+      openWindow: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
+      installCli: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
     },
     images: {
       list: async () => [],

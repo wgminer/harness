@@ -56,6 +56,24 @@
       "../resources/icon-tray-recording.png",
       "../resources/icon-tray-processing.png"
     ],
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "mdown"],
+        "name": "Markdown",
+        "description": "Markdown document",
+        "role": "Editor",
+        "rank": "Alternate",
+        "mimeType": "text/markdown"
+      },
+      {
+        "ext": ["txt"],
+        "name": "Plain Text",
+        "description": "Plain text document",
+        "role": "Editor",
+        "rank": "Alternate",
+        "mimeType": "text/plain"
+      }
+    ],
     "macOS": {
       "minimumSystemVersion": "12.0",
       "infoPlist": "Info.plist",

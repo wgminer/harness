@@ -7,8 +7,8 @@ use crate::notes::sticky::{
     open_sticky_window, pop_in_sticky, set_sticky_pinned, set_sticky_title, StickyWindowEntry,
 };
 use crate::notes::{
-    create_note, delete_note, list_notes, propose_note_edit, propose_note_spell_check, read_note,
-    save_note, show_note_in_folder,
+    create_note_linked, delete_note, list_notes, propose_note_edit, propose_note_spell_check,
+    read_note, save_note_with, show_note_in_folder, SaveNoteOptions,
 };
 use crate::state::AppState;
 
@@ -25,10 +25,16 @@ pub async fn notes_create(
     state: State<'_, AppState>,
     title: Option<String>,
     content: Option<String>,
+    conversation_id: Option<String>,
 ) -> Result<Value, String> {
-    let note = create_note(&state, title.as_deref(), content.as_deref().unwrap_or(""))
-        .await
-        .map_err(map_err)?;
+    let note = create_note_linked(
+        &state,
+        title.as_deref(),
+        content.as_deref().unwrap_or(""),
+        conversation_id.as_deref(),
+    )
+    .await
+    .map_err(map_err)?;
     serde_json::to_value(note).map_err(map_err)
 }
 
@@ -43,8 +49,15 @@ pub async fn notes_save(
     state: State<'_, AppState>,
     id: String,
     content: String,
+    expected_updated_at: Option<i64>,
 ) -> Result<Value, String> {
-    let note = save_note(&state, &id, &content).await.map_err(map_err)?;
+    let options = SaveNoteOptions {
+        expected_updated_at,
+        ..Default::default()
+    };
+    let note = save_note_with(&state, &id, &content, options)
+        .await
+        .map_err(map_err)?;
     serde_json::to_value(note).map_err(map_err)
 }
 

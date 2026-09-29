@@ -90,6 +90,7 @@ final class AppModel: ObservableObject {
     weak var chatRouter: ChatRouter?
 
     private var pendingAutoGenerateReply: Set<String> = []
+    private var didBootstrap = false
 
     init(localDataSubpath: String = "local-data") {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -315,6 +316,10 @@ final class AppModel: ObservableObject {
     }
 
     func bootstrap() async {
+        // A rebuilt scene re-runs ContentView's task. Bootstrap prunes empty conversations,
+        // which would delete a New Chat thread still waiting on its dictation.
+        guard !didBootstrap else { return }
+        didBootstrap = true
         let dir = localDataDir
         try? LocalDataLayout.ensureDirectories(at: dir)
         try? LocalDataLayout.ensureConversationsFile(at: dir)

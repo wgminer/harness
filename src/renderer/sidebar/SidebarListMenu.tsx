@@ -1,6 +1,8 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronRight, ListFilter } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { useDismissible } from "../hooks/useDismissible";
+import { HEX_SCRAMBLE_HOVER } from "../setup/hexScrambleReveal";
+import { useHexScrambleReveal } from "../setup/useHexScrambleReveal";
 import {
   SIDEBAR_LIBRARY_FILTERS,
   SIDEBAR_LIST_SORT_MODES,
@@ -13,6 +15,9 @@ import {
 type Submenu = "show" | "group";
 
 interface SidebarListMenuProps {
+  /** The list's first group label, which doubles as the menu trigger. */
+  label: ReactNode;
+  title?: string;
   filter: SidebarLibraryFilter;
   onFilterChange: (filter: SidebarLibraryFilter) => void;
   sortMode: SidebarListSortMode;
@@ -21,6 +26,8 @@ interface SidebarListMenuProps {
 
 /** Sidebar list options: Show (item kind) and Group by, each as a flyout submenu. */
 export function SidebarListMenu({
+  label,
+  title,
   filter,
   onFilterChange,
   sortMode,
@@ -29,6 +36,9 @@ export function SidebarListMenu({
   const [open, setOpen] = useState(false);
   const [submenu, setSubmenu] = useState<Submenu | null>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [hovered, setHovered] = useState(false);
+  const textLabel = typeof label === "string" ? label : "";
+  const scramble = useHexScrambleReveal(textLabel, hovered && textLabel !== "", HEX_SCRAMBLE_HOVER);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -110,20 +120,32 @@ export function SidebarListMenu({
         ref={triggerRef}
         type="button"
         className={[
-          "btn btn-icon sidebar-group-sort-toggle",
-          filtered ? "sidebar-group-sort-toggle--active" : "",
-          open ? "sidebar-group-sort-toggle--open" : "",
+          "sidebar-list-menu__trigger",
+          filtered ? "sidebar-list-menu__trigger--filtered" : "",
+          open ? "sidebar-list-menu__trigger--open" : "",
         ]
           .filter(Boolean)
           .join(" ")}
         data-testid="sidebar-list-sort-toggle"
-        aria-label="List options"
         aria-haspopup="menu"
         aria-expanded={open}
-        title={filtered ? `Showing ${sidebarLibraryFilterLabel(filter).toLowerCase()}` : "List options"}
+        title={title ?? (filtered ? `Showing ${sidebarLibraryFilterLabel(filter).toLowerCase()}` : "List options")}
         onClick={() => (open ? close() : setOpen(true))}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        <ListFilter size={10} aria-hidden />
+        {textLabel ? (
+          // The real label holds the width; the scramble overlays it so the chevron stays put.
+          <span className="sidebar-list-menu__trigger-label sidebar-list-menu__trigger-label--scramble">
+            <span className="sidebar-list-menu__trigger-label-sizer">{textLabel}</span>
+            <span className="sidebar-list-menu__trigger-label-glyphs" aria-hidden>
+              {scramble.display}
+            </span>
+          </span>
+        ) : (
+          <span className="sidebar-list-menu__trigger-label">{label}</span>
+        )}
+        <ChevronDown size={12} className="sidebar-list-menu__chevron" aria-hidden />
       </button>
       {open && position ? (
         <div

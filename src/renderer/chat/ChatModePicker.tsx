@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import { CHAT_MODES, getChatMode, type ChatModeId } from "../../shared/chatModes";
 
 interface ChatModePickerProps {
@@ -16,14 +17,30 @@ export function ChatModePicker({
   disabled,
 }: ChatModePickerProps) {
   const activeMode = getChatMode(value);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const [thumbReady, setThumbReady] = useState(false);
+
+  // Slide the thumb under the active segment; first placement is instant.
+  useLayoutEffect(() => {
+    if (variant !== "quiet") return;
+    const group = groupRef.current;
+    const active = group?.querySelector<HTMLElement>(".chat-mode-picker__seg--active");
+    if (!group || !active) return;
+    group.style.setProperty("--seg-thumb-x", `${active.offsetLeft}px`);
+    group.style.setProperty("--seg-thumb-w", `${active.offsetWidth}px`);
+    if (!thumbReady) requestAnimationFrame(() => setThumbReady(true));
+  }, [activeMode.id, variant, thumbReady]);
+
   return (
     <div
+      ref={groupRef}
       className={`chat-mode-picker chat-mode-picker--segment${
         variant === "outline" ? " chat-mode-picker--outline" : " chat-mode-picker--quiet"
-      }`}
+      }${thumbReady ? " chat-mode-picker--thumb-ready" : ""}`}
       role="group"
       aria-label="Chat mode"
     >
+      {variant === "quiet" && <span className="chat-mode-picker__thumb" aria-hidden />}
       {CHAT_MODES.map((mode) => {
         const active = mode.id === activeMode.id;
         return (

@@ -230,7 +230,9 @@ impl ChatController {
         self.emit_tool_panel_update(&conversation_id, &checkpoint.tool, resolving);
 
         let action_result = if action == "proceed" {
-            if crate::coding::coding_tool_name_is(&checkpoint.tool) {
+            if crate::gmail::is_gmail_tool_name(&checkpoint.tool) {
+                crate::gmail::execute_gmail_tool(&checkpoint.tool, &checkpoint.args).await
+            } else if crate::coding::coding_tool_name_is(&checkpoint.tool) {
                 match crate::memory::get_conversation_coding_scope(&self.state, &conversation_id)
                     .await
                     .map_err(|e| e.to_string())?
@@ -522,7 +524,13 @@ impl ChatController {
         if let Some(ref stream) = stream_state {
             if !stream.body.is_empty() {
                 let body = notes::ensure_leading_note_h1(&stream.body, &stream.title);
-                if let Ok(note) = notes::save_note(&self.state, &stream.note_id, &body).await {
+                let options = notes::SaveNoteOptions {
+                    conversation_id: Some(conversation_id),
+                    ..Default::default()
+                };
+                if let Ok(note) =
+                    notes::save_note_with(&self.state, &stream.note_id, &body, options).await
+                {
                     tool_calls_this_turn =
                         finalize_tool_calls_with_note_stream(tool_calls_this_turn, stream, &note);
                 } else {

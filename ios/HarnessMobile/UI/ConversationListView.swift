@@ -79,14 +79,11 @@ struct ConversationListView: View {
                 .accessibilityLabel("Tasks")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 12) {
-                    HomeSyncIndicator(app: app)
-                    NavigationLink {
-                        MobileSettingsView(app: app)
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundStyle(HarnessPalette.textMuted)
-                    }
+                NavigationLink {
+                    MobileSettingsView(app: app)
+                } label: {
+                    Image(systemName: "gearshape")
+                        .foregroundStyle(HarnessPalette.textMuted)
                 }
             }
         }
@@ -144,7 +141,8 @@ struct ConversationListView: View {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(HarnessPalette.surface)
                     )
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 12, trailing: 16))
+                    // Equal air above and below the search field.
+                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                 }
@@ -320,20 +318,6 @@ private struct ConversationRow: View {
         }
         .padding(.vertical, 14)
         .contentShape(Rectangle())
-    }
-}
-
-/// Observes AppModel only for sync chrome — does not rebuild the conversation list.
-private struct HomeSyncIndicator: View {
-    @ObservedObject var app: AppModel
-
-    var body: some View {
-        if app.isSyncing {
-            ProgressView()
-                .controlSize(.small)
-                .tint(HarnessPalette.textMuted)
-                .accessibilityLabel("Syncing")
-        }
     }
 }
 

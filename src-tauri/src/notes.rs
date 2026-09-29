@@ -2,10 +2,12 @@ pub mod print;
 pub mod sticky;
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use chrono::Local;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::state::AppState;
@@ -18,6 +20,34 @@ const NOTES_DIR: &str = "notes";
 const LEGACY_IMPORTED_NOTE_TITLE: &str = "Imported note";
 const UNTITLED_NOTE_TITLE: &str = "Untitled";
 const NOTE_TEMPLATE_TODAY_TOKEN: &str = "{{today}}";
+/// Error message returned when a save was based on an older version of the note.
+pub const NOTE_CONFLICT_ERROR: &str = "note_conflict";
+const NOTES_CHANGED_EVENT: &str = "notes-changed";
+
+static EVENT_APP: OnceLock<AppHandle> = OnceLock::new();
+
+/// Registers the app handle used to broadcast `notes-changed` to every window.
+pub fn init_events(app: &AppHandle) {
+    let _ = EVENT_APP.set(app.clone());
+}
+
+fn emit_notes_changed(id: &str, updated_at: Option<i64>, deleted: bool) {
+    if let Some(app) = EVENT_APP.get() {
+        let _ = app.emit(
+            NOTES_CHANGED_EVENT,
+            serde_json::json!({ "id": id, "updatedAt": updated_at, "deleted": deleted }),
+        );
+    }
+}
+
+fn push_conversation_id(ids: &mut Vec<String>, conversation_id: Option<&str>) {
+    let Some(cid) = conversation_id.map(str::trim).filter(|c| !c.is_empty()) else {
+        return;
+    };
+    if !ids.iter().any(|existing| existing == cid) {
+        ids.push(cid.to_string());
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,6 +57,8 @@ pub struct NoteSummary {
     pub created_at: i64,
     pub updated_at: i64,
     pub word_count: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conversation_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +69,8 @@ pub struct Note {
     pub created_at: i64,
     pub updated_at: i64,
     pub word_count: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conversation_ids: Vec<String>,
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_cursor_offset: Option<usize>,
@@ -50,6 +84,8 @@ struct NotesIndexEntry {
     created_at: i64,
     updated_at: i64,
     word_count: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    conversation_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -71,6 +107,17 @@ fn notes_dir_path(memory_dir: &Path) -> PathBuf {
 
 fn note_path(memory_dir: &Path, id: &str) -> PathBuf {
     notes_dir_path(memory_dir).join(format!("{id}.md"))
+}
+
+/// Note id when `path` is one of Harness's own note files (`notes/<id>.md`).
+pub fn note_id_for_file(path: &Path) -> Option<String> {
+    let notes_dir = notes_dir_path(&get_app_state_dir());
+    let notes_dir = notes_dir.canonicalize().unwrap_or(notes_dir);
+    let parent = path.parent()?.canonicalize().ok()?;
+    if parent != notes_dir || path.extension()?.to_str()? != "md" {
+        return None;
+    }
+    Some(path.file_stem()?.to_str()?.to_string())
 }
 
 pub fn normalize_content(content: &str) -> String {
@@ -101,6 +148,7 @@ fn to_summary(entry: &NotesIndexEntry) -> NoteSummary {
         created_at: entry.created_at,
         updated_at: entry.updated_at,
         word_count: entry.word_count,
+        conversation_ids: entry.conversation_ids.clone(),
     }
 }
 
@@ -139,6 +187,15 @@ async fn load_notes_index(memory_dir: &Path) -> Result<NotesIndex, std::io::Erro
         let created_at = obj.get("createdAt").and_then(|v| v.as_i64());
         let updated_at = obj.get("updatedAt").and_then(|v| v.as_i64());
         let word_count = obj.get("wordCount").and_then(|v| v.as_u64());
+        let conversation_ids: Vec<String> = obj
+            .get("conversationIds")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
         if id.is_empty() || title.is_empty() || created_at.is_none() || updated_at.is_none() {
             continue;
         }
@@ -148,6 +205,7 @@ async fn load_notes_index(memory_dir: &Path) -> Result<NotesIndex, std::io::Erro
             created_at: created_at.unwrap(),
             updated_at: updated_at.unwrap(),
             word_count: word_count.map(|n| n as usize).unwrap_or(0),
+            conversation_ids,
         });
     }
     sort_by_updated_at_desc(&mut notes);
@@ -327,6 +385,7 @@ async fn migrate_legacy_doc(state: &AppState, memory_dir: &Path) -> Result<(), s
                 created_at,
                 updated_at: created_at,
                 word_count: count_words(&normalized),
+                conversation_ids: Vec::new(),
             }],
         },
     )
@@ -347,12 +406,25 @@ pub async fn list_notes(state: &AppState) -> Result<Vec<NoteSummary>, std::io::E
 
     for entry in &index.notes {
         let path = note_path(&memory_dir, &entry.id);
-        let content = if file_exists(&path).await {
-            tokio::fs::read_to_string(&path).await.unwrap_or_default()
-        } else {
-            String::new()
+        // Saves keep word counts current; only reread files changed outside
+        // Harness (sync pulls, external editors) since the index was written.
+        let modified_ms = tokio::fs::metadata(&path)
+            .await
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as i64);
+        let stale = match modified_ms {
+            Some(ms) => ms > entry.updated_at + 1000,
+            None => entry.word_count != 0,
         };
-        let word_count = count_words(&content);
+        let word_count = if !stale {
+            entry.word_count
+        } else if modified_ms.is_some() {
+            count_words(&tokio::fs::read_to_string(&path).await.unwrap_or_default())
+        } else {
+            0
+        };
         if word_count != entry.word_count {
             changed = true;
         }
@@ -362,6 +434,7 @@ pub async fn list_notes(state: &AppState) -> Result<Vec<NoteSummary>, std::io::E
             created_at: entry.created_at,
             updated_at: entry.updated_at,
             word_count,
+            conversation_ids: entry.conversation_ids.clone(),
         });
     }
 
@@ -378,6 +451,16 @@ pub async fn create_note(
     title: Option<&str>,
     content: &str,
 ) -> Result<Note, std::io::Error> {
+    create_note_linked(state, title, content, None).await
+}
+
+/// Creates a note, recording `conversation_id` as a linked conversation when given.
+pub async fn create_note_linked(
+    state: &AppState,
+    title: Option<&str>,
+    content: &str,
+    conversation_id: Option<&str>,
+) -> Result<Note, std::io::Error> {
     let memory_dir = get_app_state_dir();
     let index = ensure_notes_ready(state, &memory_dir).await?;
     let id = Uuid::new_v4().to_string();
@@ -387,12 +470,15 @@ pub async fn create_note(
     let interpolated_title = title.map(interpolate_note_template_string);
     let fallback_title = normalize_title(interpolated_title.as_deref(), UNTITLED_NOTE_TITLE);
     let ensured_content = ensure_leading_note_h1(&normalized_content, &fallback_title);
+    let mut conversation_ids = Vec::new();
+    push_conversation_id(&mut conversation_ids, conversation_id);
     let entry = NotesIndexEntry {
         id: id.clone(),
         title: title_from_markdown_content(&ensured_content, &fallback_title),
         created_at: now,
         updated_at: now,
         word_count: count_words(&ensured_content),
+        conversation_ids,
     };
     atomic_write_utf8(
         &state.write_chains,
@@ -403,6 +489,7 @@ pub async fn create_note(
     let mut notes = index.notes;
     notes.insert(0, entry.clone());
     save_notes_index(state, &memory_dir, &NotesIndex { notes }).await?;
+    emit_notes_changed(&entry.id, Some(entry.updated_at), false);
 
     let cursor_shift = if ensured_content == normalized_content {
         0
@@ -426,6 +513,7 @@ pub async fn create_note(
         created_at: entry.created_at,
         updated_at: entry.updated_at,
         word_count: entry.word_count,
+        conversation_ids: entry.conversation_ids,
         content: ensured_content,
         initial_cursor_offset,
     })
@@ -453,12 +541,31 @@ pub async fn read_note(state: &AppState, id: &str) -> Result<Option<Note>, std::
         created_at: entry.created_at,
         updated_at: entry.updated_at,
         word_count: entry.word_count,
+        conversation_ids: entry.conversation_ids.clone(),
         content,
         initial_cursor_offset: None,
     }))
 }
 
 pub async fn save_note(state: &AppState, id: &str, content: &str) -> Result<Note, std::io::Error> {
+    save_note_with(state, id, content, SaveNoteOptions::default()).await
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SaveNoteOptions<'a> {
+    /// Linked conversation to record on the note (chat tools, note streams).
+    pub conversation_id: Option<&'a str>,
+    /// When set, the save is rejected with `NOTE_CONFLICT_ERROR` if the stored
+    /// note has a different `updatedAt` (someone else saved since it was read).
+    pub expected_updated_at: Option<i64>,
+}
+
+pub async fn save_note_with(
+    state: &AppState,
+    id: &str,
+    content: &str,
+    options: SaveNoteOptions<'_>,
+) -> Result<Note, std::io::Error> {
     let clean_id = id.trim();
     if clean_id.is_empty() {
         return Err(std::io::Error::new(
@@ -478,6 +585,11 @@ pub async fn save_note(state: &AppState, id: &str, content: &str) -> Result<Note
                 format!("Note not found: {clean_id}"),
             )
         })?;
+    if let Some(expected) = options.expected_updated_at {
+        if index.notes[note_index].updated_at != expected {
+            return Err(std::io::Error::other(NOTE_CONFLICT_ERROR));
+        }
+    }
     let normalized = normalize_content(content);
     atomic_write_utf8(
         &state.write_chains,
@@ -487,22 +599,27 @@ pub async fn save_note(state: &AppState, id: &str, content: &str) -> Result<Note
     .await?;
     let now = chrono::Utc::now().timestamp_millis();
     let current = &index.notes[note_index];
+    let mut conversation_ids = current.conversation_ids.clone();
+    push_conversation_id(&mut conversation_ids, options.conversation_id);
     let updated_entry = NotesIndexEntry {
         id: current.id.clone(),
         title: title_from_markdown_content(&normalized, &current.title),
         created_at: current.created_at,
         updated_at: now,
         word_count: count_words(&normalized),
+        conversation_ids,
     };
     let mut next = index.notes;
     next[note_index] = updated_entry.clone();
     save_notes_index(state, &memory_dir, &NotesIndex { notes: next }).await?;
+    emit_notes_changed(&updated_entry.id, Some(updated_entry.updated_at), false);
     Ok(Note {
         id: updated_entry.id,
         title: updated_entry.title,
         created_at: updated_entry.created_at,
         updated_at: updated_entry.updated_at,
         word_count: updated_entry.word_count,
+        conversation_ids: updated_entry.conversation_ids,
         content: normalized,
         initial_cursor_offset: None,
     })
@@ -529,6 +646,7 @@ pub async fn delete_note(state: &AppState, id: &str) -> Result<Vec<NoteSummary>,
         let _ = tokio::fs::remove_file(path).await;
     }
     save_notes_index(state, &memory_dir, &NotesIndex { notes: next.clone() }).await?;
+    emit_notes_changed(clean_id, None, true);
     Ok(next.iter().map(to_summary).collect())
 }
 
@@ -623,6 +741,36 @@ pub async fn propose_note_spell_check(input: &serde_json::Value) -> Result<NoteE
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn push_conversation_id_dedupes_and_skips_blank() {
+        let mut ids = vec!["a".to_string()];
+        push_conversation_id(&mut ids, Some("a"));
+        push_conversation_id(&mut ids, Some("  "));
+        push_conversation_id(&mut ids, None);
+        push_conversation_id(&mut ids, Some(" b "));
+        assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn note_summary_omits_empty_conversation_ids() {
+        let summary = NoteSummary {
+            id: "n".into(),
+            title: "T".into(),
+            created_at: 1,
+            updated_at: 2,
+            word_count: 0,
+            conversation_ids: Vec::new(),
+        };
+        let json = serde_json::to_value(&summary).unwrap();
+        assert!(json.get("conversationIds").is_none());
+        let linked = NoteSummary {
+            conversation_ids: vec!["c1".into()],
+            ..summary
+        };
+        let json = serde_json::to_value(&linked).unwrap();
+        assert_eq!(json["conversationIds"], serde_json::json!(["c1"]));
+    }
 
     #[test]
     fn ensure_leading_note_h1_prepends_when_missing() {

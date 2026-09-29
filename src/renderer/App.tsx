@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChatView } from "./chat/ChatView";
+import type { ComposerDraft } from "./chat/useChatComposer";
 import { ChatLayoutDebugHost } from "./layoutDebug/ChatLayoutDebugHost";
 import { AppTitlebar } from "./AppTitlebar";
+import { SidebarTitlebarActions, TitlebarSettingsButton } from "./sidebar/SidebarTitlebarActions";
 import { SettingsView } from "./settings/SettingsView";
 import { setCachedSettings } from "./settings/settingsSessionCache";
 import { TasksView } from "./tasks/TasksView";
-import { SearchView } from "./search/SearchView";
+import { SearchPalette } from "./search/SearchPalette";
 import { NotesView } from "./notes/WritingSurfaceView";
 import { ImageCanvasView } from "./images/ImageCanvasView";
 import { Sidebar } from "./sidebar/Sidebar";
@@ -36,6 +38,7 @@ import type { SettingsTabId } from "./settings/settingsNavConfig";
 
 export default function App() {
   const [view, setView] = useState<View>("chat");
+  const [searchOpen, setSearchOpen] = useState(false);
   const viewRef = useRef(view);
   useEffect(() => { viewRef.current = view; }, [view]);
   /** Incremented when the chat composer should be focused. */
@@ -53,6 +56,7 @@ export default function App() {
   const [pendingHotkeyText, setPendingHotkeyText] = useState<string | null>(null);
   /** When true, hotkey text is always pre-filled (never auto-sent). Used for global recording while the app was unfocused. */
   const [pendingHotkeyDraftOnly, setPendingHotkeyDraftOnly] = useState(false);
+  const [composerDraft, setComposerDraft] = useState<ComposerDraft | null>(null);
   const [pendingNoteHotkeyText, setPendingNoteHotkeyText] = useState<string | null>(null);
 
   const layout = useLayoutOptions();
@@ -86,6 +90,7 @@ export default function App() {
     openNoteInMain,
     createNewNote,
     loadNotesList,
+    noteReturnTo,
   } = notesLib;
   const { images, setImages, imagesRef, activeImageId, setActiveImageId, openImageInMain, createNewImage } =
     imagesLib;
@@ -114,6 +119,8 @@ export default function App() {
     }
     setView(next);
   }, []);
+
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
 
   const openDataSettings = useCallback(() => {
     setSettingsInitialTab("data");
@@ -222,6 +229,47 @@ export default function App() {
     setFocusComposerNonce((n) => n + 1);
   }, []);
 
+  const resolveConversationTitle = useCallback(
+    (id: string) => {
+      const convo = chats.conversations.find((c) => c.id === id);
+      return convo ? conversationDisplayTitle(convo.title, convo.createdAt) : null;
+    },
+    [chats.conversations],
+  );
+
+  const openConversation = useCallback(
+    (id: string) => {
+      setConversationId(id);
+      setView("chat");
+    },
+    [setConversationId],
+  );
+
+  /**
+   * Continue the most recent chat linked to the note (or start one) with the
+   * note linked in the composer, optionally quoting a selection.
+   */
+  const discussNote = useCallback(
+    (note: { id: string; title: string }, quote?: string) => {
+      const summary = notesRef.current.find((n) => n.id === note.id);
+      const linked = [...(summary?.conversationIds ?? [])]
+        .reverse()
+        .find((id) => chats.conversations.some((c) => c.id === id));
+      setConversationId(linked ?? null);
+      setView("chat");
+      const label = note.title.replace(/[[\]]/g, "") || "Note";
+      const quoted = quote?.trim()
+        ? `${quote
+            .trim()
+            .split("\n")
+            .map((line) => `> ${line}`)
+            .join("\n")}\n\n`
+        : "";
+      setComposerDraft({ text: `${quoted}[${label}](/n/${note.id}) `, nonce: Date.now() });
+    },
+    [chats.conversations, notesRef, setConversationId],
+  );
+
   const createNew = useCallback(() => {
     setConversationId(null);
     setView("chat");
@@ -232,6 +280,11 @@ export default function App() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       const key = e.key.toLowerCase();
+      if (key === "k" && !e.shiftKey) {
+        e.preventDefault();
+        setSearchOpen((open) => !open);
+        return;
+      }
       if (key === "n") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -330,8 +383,6 @@ export default function App() {
         return "Images";
       case "tasks":
         return "Tasks";
-      case "search":
-        return "Search";
       case "settings":
         return SETTINGS_PAGE_TITLE;
     }
@@ -351,6 +402,24 @@ export default function App() {
         onTitleClick={
           view === "chat" && conversationId ? openChatTitleModal : undefined
         }
+        sidebarActions={
+          <SidebarTitlebarActions
+            view={view}
+            onViewChange={handleViewChange}
+            onNewChat={createNew}
+            onNewNote={() => {
+              void createNewNote();
+            }}
+            onNewImage={createNewImage}
+          />
+        }
+        trailingActions={
+          <TitlebarSettingsButton
+            view={view}
+            onViewChange={handleViewChange}
+            onOpenDataSettings={openDataSettings}
+          />
+        }
       />
       <div className="app-frame">
         <Sidebar
@@ -368,11 +437,6 @@ export default function App() {
           onNoteDelete={notesLib.deleteNote}
           onSelectImage={handleSelectImageFromLibrary}
           onImageDelete={imagesLib.deleteImage}
-          onNewChat={createNew}
-          onNewNote={() => {
-            void createNewNote();
-          }}
-          onNewImage={createNewImage}
           activeChatProcessing={activeChatProcessing}
           processingImageIds={imagesLib.processingImageIds}
           titleGenInFlight={titles.titleGenInFlight}
@@ -380,8 +444,6 @@ export default function App() {
           appVersion={appVersion}
           updateStatus={updateStatus}
           onUpdateClick={startUpdate}
-          onSyncComplete={refreshLibraryAfterSync}
-          onOpenDataSettings={openDataSettings}
           showDevSection={false}
           onDevViewSelect={handleDevViewSelect}
           arrivedLibraryIds={arrivals.arrivedLibraryIds}
@@ -413,11 +475,12 @@ export default function App() {
                   }}
                   onChatActivityChange={setActiveChatProcessing}
                   focusComposerNonce={focusComposerNonce}
-                  onOpenNotesView={(noteId) => openNoteInMain(noteId)}
-                  onOpenConversation={(id) => {
-                    setConversationId(id);
-                    setView("chat");
-                  }}
+                  onOpenNotesView={(noteId) =>
+                    openNoteInMain(noteId, { fromConversationId: conversationId })
+                  }
+                  onOpenConversation={openConversation}
+                  composerDraft={composerDraft}
+                  onComposerDraftConsumed={() => setComposerDraft(null)}
                   onOpenImage={(imageId) => openImageInMain(imageId)}
                   onNotesChanged={() => {
                     void loadNotesList();
@@ -442,18 +505,6 @@ export default function App() {
             />
           )}
           {view === "tasks" && <TasksView />}
-          {view === "search" && (
-            <SearchView
-              notes={notes}
-              images={images}
-              conversationId={conversationId}
-              activeNoteId={activeNoteId}
-              activeImageId={activeImageId}
-              onSelectConversation={handleConversationSelect}
-              onSelectNote={handleSelectNoteFromLibrary}
-              onSelectImage={handleSelectImageFromLibrary}
-            />
-          )}
           {view === "notes" && (
             <NotesView
               notes={notes}
@@ -466,6 +517,14 @@ export default function App() {
               pendingHotkeyText={pendingNoteHotkeyText}
               onPendingHotkeyTextConsumed={handlePendingNoteHotkeyTextConsumed}
               mirrorGlobalFnRecording={view === "notes"}
+              returnToConversationId={
+                noteReturnTo && noteReturnTo.noteId === activeNoteId
+                  ? noteReturnTo.conversationId
+                  : null
+              }
+              resolveConversationTitle={resolveConversationTitle}
+              onOpenConversation={openConversation}
+              onDiscussNote={discussNote}
             />
           )}
           {(view === "images" || imagesLib.activeImageProcessing || activeImageId != null) && (
@@ -484,6 +543,16 @@ export default function App() {
           {view === "dev-image" && <DevPlaceholderView kind="image" />}
         </main>
       </div>
+      <SearchPalette
+        open={searchOpen}
+        onClose={closeSearch}
+        conversations={chats.conversations}
+        notes={notes}
+        images={images}
+        onSelectConversation={handleConversationSelect}
+        onSelectNote={handleSelectNoteFromLibrary}
+        onSelectImage={handleSelectImageFromLibrary}
+      />
       <SetupNoticeModal
         open={setup.setupNoticeVisible}
         onSaveApiKey={setup.saveSetupApiKey}

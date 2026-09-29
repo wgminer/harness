@@ -25,6 +25,10 @@ export function useNotesLibrary({
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   /** Note id to open when entering Notes from chat message action, sidebar selection, or creation. */
   const [pendingOpenNoteRequest, setPendingOpenNoteRequest] = useState<OpenNoteRequest | null>(null);
+  /** Conversation a note was opened from, for the "back to chat" link in the note header. */
+  const [noteReturnTo, setNoteReturnTo] = useState<{ noteId: string; conversationId: string } | null>(
+    null,
+  );
 
   const notesRef = useRef(notes);
   useEffect(() => { notesRef.current = notes; }, [notes]);
@@ -39,9 +43,31 @@ export function useNotesLibrary({
     void loadNotesList();
   }, [loadNotesList]);
 
+  // Any write (chat tools, note streams, sticky windows) refreshes titles and order.
+  useEffect(() => {
+    let timer: number | null = null;
+    const unsubscribe = window.harness.notes.onChanged(() => {
+      if (timer != null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        void loadNotesList();
+      }, 250);
+    });
+    return () => {
+      if (timer != null) window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [loadNotesList]);
+
   /** Opens a note in the main pane's Notes view (from chat, sidebar, or another window). */
-  const openNoteInMain = useCallback((noteId: string, opts?: { isNew?: boolean }) => {
+  const openNoteInMain = useCallback((
+    noteId: string,
+    opts?: { isNew?: boolean; fromConversationId?: string | null },
+  ) => {
     setPendingOpenNoteRequest({ id: noteId, nonce: Date.now(), isNew: opts?.isNew ?? false });
+    setNoteReturnTo(
+      opts?.fromConversationId ? { noteId, conversationId: opts.fromConversationId } : null,
+    );
     setView("notes");
     // Chat (and other surfaces) may create notes outside App state — refresh so the row appears.
     void loadNotesList();
@@ -101,6 +127,7 @@ export function useNotesLibrary({
     notes,
     setNotes,
     notesRef,
+    noteReturnTo,
     activeNoteId,
     setActiveNoteId,
     activeNoteIdRef,

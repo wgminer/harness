@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   HEX_SCRAMBLE_REVEAL,
   createHexScrambleRevealState,
+  type HexScrambleRevealConfig,
   stepHexScrambleReveal,
 } from "./hexScrambleReveal";
 
@@ -16,6 +17,7 @@ function prefersReducedMotion(): boolean {
 export function useHexScrambleReveal(
   target: string,
   active: boolean,
+  config: HexScrambleRevealConfig = HEX_SCRAMBLE_REVEAL,
 ): { display: string; settled: boolean } {
   const [display, setDisplay] = useState(target);
   const [settled, setSettled] = useState(!active);
@@ -32,7 +34,7 @@ export function useHexScrambleReveal(
       return;
     }
 
-    let state = createHexScrambleRevealState(target, Date.now(), Math.random);
+    let state = createHexScrambleRevealState(target, Date.now(), Math.random, config);
     setDisplay(state.display);
     setSettled(false);
 
@@ -43,10 +45,10 @@ export function useHexScrambleReveal(
         setSettled(true);
         window.clearInterval(timer);
       }
-    }, HEX_SCRAMBLE_REVEAL.tickMs);
+    }, config.tickMs);
 
     return () => window.clearInterval(timer);
-  }, [active, target]);
+  }, [active, target, config]);
 
   return { display, settled };
 }

@@ -116,9 +116,11 @@ struct AssistantMessageView: View {
             if !toolCalls.isEmpty {
                 ToolCallsCardView(
                     toolCalls: toolCalls,
+                    isStreaming: isStreaming,
                     onToolConfirm: { call, action in onToolConfirm?(call, action) },
                     onOpenThread: onOpenThread
                 )
+                .transition(.opacity.combined(with: .offset(y: 8)))
             }
             if !content.isEmpty || isStreaming {
                 Group {
@@ -148,6 +150,7 @@ struct AssistantMessageView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.snappy(duration: 0.3), value: toolCalls.isEmpty)
     }
 }
 

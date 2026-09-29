@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
+  ArrowLeft,
   ArrowRightLeft,
   Briefcase,
   Check,
@@ -7,6 +8,7 @@ import {
   FolderOpen,
   Hash,
   Loader2,
+  MessageSquareText,
   Mic,
   Minimize2,
   MoreVertical,
@@ -34,8 +36,10 @@ import { transcriptCleanupSkippedMessage } from "../../shared/setupState";
 import { countWords, formatWordCount } from "../../shared/wordCount";
 import { formatMediumTimestamp } from "../../shared/formatMediumTimestamp";
 import { NotesCodeEditor, type NotesCodeEditorHandle } from "./NotesCodeEditor";
+import { NoteConflictBar } from "./NoteConflictBar";
+import { useNoteExternalSync } from "./useNoteExternalSync";
 import { getNotesEditorCaretCoordinates } from "./notesEditorExtensions";
-import { useDismissible } from "../hooks/useDismissible";
+import { Menu, MenuHeader, MenuItem, MenuSeparator } from "../ui/Menu";
 import { useScrolledHeader } from "../hooks/useScrolledHeader";
 import { formatVoiceTimer, useVoiceCapture, type VoiceTranscriptResult } from "../recording/useVoiceCapture";
 
@@ -93,6 +97,13 @@ interface NotesViewProps {
    * without starting a second local capture.
    */
   mirrorGlobalFnRecording?: boolean;
+  /** Conversation the open note was reached from; shows a back link. */
+  returnToConversationId?: string | null;
+  /** Looks up a conversation title for the linked-chat chips. */
+  resolveConversationTitle?: (conversationId: string) => string | null;
+  onOpenConversation?: (conversationId: string) => void;
+  /** Continue (or start) a chat about this note, with the note linked in the composer. */
+  onDiscussNote?: (note: { id: string; title: string }, quote?: string) => void;
 }
 
 /** Insert dictation at the caret, adding a leading space when mid-word/mid-line. */
@@ -123,6 +134,10 @@ export function NotesView({
   pendingHotkeyText,
   onPendingHotkeyTextConsumed,
   mirrorGlobalFnRecording = false,
+  returnToConversationId = null,
+  resolveConversationTitle,
+  onOpenConversation,
+  onDiscussNote,
 }: NotesViewProps) {
   const { scrollRef, onScroll } = useScrolledHeader();
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
@@ -146,13 +161,13 @@ export function NotesView({
   const [asideExpanded, setAsideExpanded] = useState(false);
   const [panelMode, setPanelMode] = useState<PanelMode>("prompt");
   const [copyFeedback, setCopyFeedback] = useState(false);
-  const [noteWidthMode, setNoteWidthMode] = useState<NoteWidthMode>("comfortable");
+  const [noteWidthMode, setNoteWidthMode] = useState<NoteWidthMode>("narrow");
   const [showLineNumbers, setShowLineNumbers] = useState(false);
   const [noteToolbarMenuOpen, setNoteToolbarMenuOpen] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
   const copyFeedbackTimerRef = useRef<number | null>(null);
-  const noteToolbarMenuRef = useRef<HTMLDivElement | null>(null);
+  const noteToolbarMenuRef = useRef<HTMLButtonElement | null>(null);
   const editorWrapRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<NotesCodeEditorHandle | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
@@ -219,6 +234,20 @@ export function NotesView({
     ? getDisplayNoteTitle(titleFromMarkdownContent(draft, activeNote.title))
     : "Note";
   const noteWordCount = countWords(draft);
+  // Chats that produced or edited this note, newest link first; the back link
+  // (if any) leads and isn't repeated as a chip.
+  const linkedConversations = useMemo(() => {
+    if (!resolveConversationTitle) return [];
+    const ids = [...(activeNote?.conversationIds ?? [])].reverse();
+    return ids
+      .filter((id) => id !== returnToConversationId)
+      .map((id) => ({ id, title: resolveConversationTitle(id) }))
+      .filter((c): c is { id: string; title: string } => c.title != null);
+  }, [activeNote?.conversationIds, resolveConversationTitle, returnToConversationId]);
+  const returnToTitle =
+    returnToConversationId && resolveConversationTitle
+      ? resolveConversationTitle(returnToConversationId)
+      : null;
   const notesApi = window.harness.notes;
   const hasSelection = selection != null;
   const showSelectionMenu = hasSelection && !asideExpanded;
@@ -278,8 +307,10 @@ export function NotesView({
     if (!view || !range) return;
     const endCoords = getNotesEditorCaretCoordinates(view, range.end);
     if (!endCoords) return;
-    const maxTop = view.dom.clientHeight - NOTES_SELECTION_MENU_H_PX - 12;
-    const aboveTop = endCoords.top - NOTES_SELECTION_MENU_H_PX - NOTES_SELECTION_MENU_GAP_PX;
+    // Measure once rendered; the item count varies, so the constant is only a first-open estimate.
+    const menuHeight = selectionMenuRef.current?.offsetHeight || NOTES_SELECTION_MENU_H_PX;
+    const maxTop = view.dom.clientHeight - menuHeight - 12;
+    const aboveTop = endCoords.top - menuHeight - NOTES_SELECTION_MENU_GAP_PX;
     const belowTop = endCoords.bottom + NOTES_SELECTION_MENU_GAP_PX;
     // Prefer above the caret so the menu does not cover the cursor; fall back below if needed.
     const top = aboveTop >= 12 ? Math.min(aboveTop, maxTop) : Math.max(12, Math.min(belowTop, maxTop));
@@ -334,20 +365,21 @@ export function NotesView({
     updateSelectionMenuPosition(range);
   }, [closeAsidePanel, draft, selection, updateAsidePosition, updateSelectionMenuPosition]);
 
-  const loadActiveNote = useCallback(async (id: string) => {
-    try {
-      const note = await notesApi.read(id);
-      if (!note) {
-        setStatus({ kind: "error", message: "Note not found" });
-        return;
-      }
+  const savedDraftRef = useRef(savedDraft);
+  savedDraftRef.current = savedDraft;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  const applyNoteSummary = useCallback(
+    (note: NoteSummary) => {
       setNotes((prev) => {
-        const summary = {
+        const summary: NoteSummary = {
           id: note.id,
           title: note.title,
           updatedAt: note.updatedAt,
           createdAt: note.createdAt,
           wordCount: note.wordCount,
+          conversationIds: note.conversationIds,
         };
         const existing = prev.find((item) => item.id === note.id);
         if (
@@ -355,7 +387,8 @@ export function NotesView({
           existing.title === summary.title &&
           existing.updatedAt === summary.updatedAt &&
           existing.createdAt === summary.createdAt &&
-          existing.wordCount === summary.wordCount
+          existing.wordCount === summary.wordCount &&
+          (existing.conversationIds ?? []).join() === (summary.conversationIds ?? []).join()
         ) {
           return prev;
         }
@@ -364,6 +397,31 @@ export function NotesView({
           : [summary, ...prev];
         return next.sort((a, b) => b.updatedAt - a.updatedAt);
       });
+    },
+    [setNotes],
+  );
+
+  const noteSync = useNoteExternalSync({
+    noteId: selectedNoteId,
+    getSavedContent: () => savedDraftRef.current,
+    isDirty: () => draftRef.current !== savedDraftRef.current,
+    applyRemote: (note) => {
+      setDraft(note.content);
+      setSavedDraft(note.content);
+      applyNoteSummary(note);
+    },
+  });
+  const { markLoaded: markNoteLoaded, saveGuarded: saveNoteGuarded } = noteSync;
+
+  const loadActiveNote = useCallback(async (id: string) => {
+    try {
+      const note = await notesApi.read(id);
+      if (!note) {
+        setStatus({ kind: "error", message: "Note not found" });
+        return;
+      }
+      applyNoteSummary(note);
+      markNoteLoaded(note);
       setSelectedNoteId(note.id);
       setDraft(note.content);
       setSavedDraft(note.content);
@@ -372,7 +430,7 @@ export function NotesView({
     } catch (e) {
       setStatus({ kind: "error", message: String(e) });
     }
-  }, [closeAsidePanel, notesApi, setNotes]);
+  }, [applyNoteSummary, closeAsidePanel, markNoteLoaded, notesApi]);
 
   useEffect(() => {
     void window.harness.settings
@@ -458,32 +516,25 @@ export function NotesView({
     });
   }, [selectedNoteId, status.kind]);
 
-  useDismissible({
-    open: noteToolbarMenuOpen,
-    onDismiss: () => setNoteToolbarMenuOpen(false),
-    refs: [noteToolbarMenuRef],
-    pointerEvent: "pointerdown",
-    capture: true,
-  });
 
   useEffect(() => {
     if (dirty) setIsFreshNote(false);
   }, [dirty]);
 
   const save = useCallback(async () => {
-    if (!dirty || !selectedNoteId) return;
+    if (!dirty || !selectedNoteId || noteSync.conflict) return;
     setStatus({ kind: "saving" });
     try {
-      const note = await notesApi.save(selectedNoteId, draft);
-      setDraft(note.content);
+      const sentDraft = draft;
+      const note = await saveNoteGuarded(sentDraft);
+      if (!note) {
+        setStatus({ kind: "idle" });
+        return;
+      }
+      // Keep typing that landed while the save was in flight.
+      if (draftRef.current === sentDraft) setDraft(note.content);
       setSavedDraft(note.content);
-      setNotes((prev) =>
-        prev
-          .map((item) =>
-            item.id === note.id ? { ...item, title: note.title, updatedAt: note.updatedAt, wordCount: note.wordCount } : item,
-          )
-          .sort((a, b) => b.updatedAt - a.updatedAt),
-      );
+      applyNoteSummary(note);
       setStatus({ kind: "saved" });
       if (savedToastTimerRef.current != null) {
         window.clearTimeout(savedToastTimerRef.current);
@@ -494,7 +545,7 @@ export function NotesView({
     } catch (e) {
       setStatus({ kind: "error", message: String(e) });
     }
-  }, [selectedNoteId, dirty, draft, notesApi, setNotes]);
+  }, [selectedNoteId, dirty, draft, noteSync.conflict, saveNoteGuarded, applyNoteSummary]);
 
   const applyTemplate = useCallback(
     (template: NoteTemplateConfig) => {
@@ -721,7 +772,13 @@ export function NotesView({
       window.clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = null;
     }
-    if (!dirty || !selectedNoteId || status.kind === "loading" || status.kind === "deleting") {
+    if (
+      !dirty ||
+      !selectedNoteId ||
+      noteSync.conflict ||
+      status.kind === "loading" ||
+      status.kind === "deleting"
+    ) {
       return;
     }
     autoSaveTimerRef.current = window.setTimeout(() => {
@@ -734,7 +791,7 @@ export function NotesView({
         autoSaveTimerRef.current = null;
       }
     };
-  }, [dirty, save, selectedNoteId, status.kind]);
+  }, [dirty, save, selectedNoteId, noteSync.conflict, status.kind]);
 
   useEffect(() => {
     if (!selection) return;
@@ -829,8 +886,24 @@ export function NotesView({
                       <X size={15} aria-hidden />
                     </button>
                   ) : null}
-                  <div className="notes-surface__toolbar-menu-wrap" ref={noteToolbarMenuRef}>
+                  {onDiscussNote ? (
                     <button
+                      type="button"
+                      className="btn btn-icon notes-surface__details-btn"
+                      onClick={() => {
+                        if (selectedNoteId) onDiscussNote({ id: selectedNoteId, title: noteTitle });
+                      }}
+                      disabled={selectedNoteId == null || status.kind === "loading"}
+                      title="Discuss in chat"
+                      aria-label="Discuss in chat"
+                      data-testid="notes-discuss"
+                    >
+                      <MessageSquareText size={15} aria-hidden />
+                    </button>
+                  ) : null}
+                  <div className="notes-surface__toolbar-menu-wrap">
+                    <button
+                      ref={noteToolbarMenuRef}
                       type="button"
                       className="btn btn-icon notes-surface__details-btn"
                       aria-expanded={noteToolbarMenuOpen}
@@ -841,122 +914,137 @@ export function NotesView({
                     >
                       <MoreVertical size={16} aria-hidden />
                     </button>
-                    {noteToolbarMenuOpen ? (
-                      <div className="notes-surface__toolbar-menu" role="menu" aria-label="Note details">
-                        <div className="notes-surface__toolbar-menu-meta">
-                          <div className="notes-surface__toolbar-menu-meta-row">
-                            <span className="notes-surface__toolbar-menu-meta-label">Title</span>
-                            <span className="notes-surface__toolbar-menu-meta-value" title={noteTitle}>
-                              {noteTitle}
-                            </span>
-                          </div>
-                          <div className="notes-surface__toolbar-menu-meta-row">
-                            <span className="notes-surface__toolbar-menu-meta-label">Words</span>
-                            <span className="notes-surface__toolbar-menu-meta-value">
-                              {formatWordCount(noteWordCount)}
-                            </span>
-                          </div>
-                          {activeNote ? (
-                            <>
-                              <div className="notes-surface__toolbar-menu-meta-row">
-                                <span className="notes-surface__toolbar-menu-meta-label">Updated</span>
-                                <span className="notes-surface__toolbar-menu-meta-value">
-                                  {formatMediumTimestamp(activeNote.updatedAt)}
-                                </span>
-                              </div>
-                              <div className="notes-surface__toolbar-menu-meta-row">
-                                <span className="notes-surface__toolbar-menu-meta-label">Created</span>
-                                <span className="notes-surface__toolbar-menu-meta-value">
-                                  {formatMediumTimestamp(activeNote.createdAt)}
-                                </span>
-                              </div>
-                            </>
-                          ) : null}
+                    <Menu
+                      open={noteToolbarMenuOpen}
+                      onClose={() => setNoteToolbarMenuOpen(false)}
+                      anchorRef={noteToolbarMenuRef}
+                      placement="bottom-end"
+                      label="Note details"
+                      className="notes-details-menu"
+                    >
+                      <MenuHeader label="Note info">
+                        <div className="notes-surface__toolbar-menu-meta-row">
+                          <span className="notes-surface__toolbar-menu-meta-label">Title</span>
+                          <span className="notes-surface__toolbar-menu-meta-value" title={noteTitle}>
+                            {noteTitle}
+                          </span>
                         </div>
-                        <button
-                          type="button"
-                          className="notes-surface__toolbar-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            cycleNoteWidthMode();
-                            setNoteToolbarMenuOpen(false);
-                          }}
-                        >
-                          <ArrowRightLeft size={16} aria-hidden />
-                          <span>Text width ({NOTE_WIDTH_LABELS[noteWidthMode]})</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="notes-surface__toolbar-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            toggleLineNumbers();
-                            setNoteToolbarMenuOpen(false);
-                          }}
-                        >
-                          <Hash size={16} aria-hidden />
-                          <span>Line numbers ({showLineNumbers ? "on" : "off"})</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="notes-surface__toolbar-menu-item"
-                          role="menuitem"
-                          disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                          onClick={() => {
-                            const html = buildNotePrintHtml(noteTitle, draft);
-                            void window.harness.notes.print(html, noteTitle);
-                            setNoteToolbarMenuOpen(false);
-                          }}
-                        >
-                          <Printer size={16} aria-hidden />
-                          <span>Print</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="notes-surface__toolbar-menu-item"
-                          role="menuitem"
-                          disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                          onClick={() => {
-                            const id = selectedNoteId;
-                            if (!id) return;
-                            void window.harness.notes.showInFolder(id);
-                            setNoteToolbarMenuOpen(false);
-                          }}
-                        >
-                          <FolderOpen size={16} aria-hidden />
-                          <span>Show file</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="notes-surface__toolbar-menu-item"
-                          role="menuitem"
-                          data-testid="notes-open-in-new-window"
-                          disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                          onClick={() => {
-                            void openInNewWindow();
-                          }}
-                        >
-                          <SquareArrowOutUpRight size={16} aria-hidden />
-                          <span>Open in new window</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="notes-surface__toolbar-menu-item notes-surface__toolbar-menu-item--danger"
-                          role="menuitem"
-                          disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
-                          onClick={() => {
-                            void deleteActiveNote();
-                            setNoteToolbarMenuOpen(false);
-                          }}
-                        >
-                          <Trash2 size={16} aria-hidden />
-                          <span>Delete note</span>
-                        </button>
-                      </div>
-                    ) : null}
+                        <div className="notes-surface__toolbar-menu-meta-row">
+                          <span className="notes-surface__toolbar-menu-meta-label">Words</span>
+                          <span className="notes-surface__toolbar-menu-meta-value">
+                            {formatWordCount(noteWordCount)}
+                          </span>
+                        </div>
+                        {activeNote ? (
+                          <>
+                            <div className="notes-surface__toolbar-menu-meta-row">
+                              <span className="notes-surface__toolbar-menu-meta-label">Updated</span>
+                              <span className="notes-surface__toolbar-menu-meta-value">
+                                {formatMediumTimestamp(activeNote.updatedAt)}
+                              </span>
+                            </div>
+                            <div className="notes-surface__toolbar-menu-meta-row">
+                              <span className="notes-surface__toolbar-menu-meta-label">Created</span>
+                              <span className="notes-surface__toolbar-menu-meta-value">
+                                {formatMediumTimestamp(activeNote.createdAt)}
+                              </span>
+                            </div>
+                          </>
+                        ) : null}
+                      </MenuHeader>
+                      <MenuItem
+                        icon={<ArrowRightLeft size={16} />}
+                        trailing={NOTE_WIDTH_LABELS[noteWidthMode]}
+                        onSelect={cycleNoteWidthMode}
+                      >
+                        Text width
+                      </MenuItem>
+                      <MenuItem
+                        icon={<Hash size={16} />}
+                        trailing={showLineNumbers ? "On" : "Off"}
+                        onSelect={toggleLineNumbers}
+                      >
+                        Line numbers
+                      </MenuItem>
+                      <MenuSeparator />
+                      <MenuItem
+                        icon={<Printer size={16} />}
+                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                        onSelect={() => {
+                          const html = buildNotePrintHtml(noteTitle, draft);
+                          void window.harness.notes.print(html, noteTitle);
+                        }}
+                      >
+                        Print
+                      </MenuItem>
+                      <MenuItem
+                        icon={<FolderOpen size={16} />}
+                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                        onSelect={() => {
+                          if (selectedNoteId) void window.harness.notes.showInFolder(selectedNoteId);
+                        }}
+                      >
+                        Show file
+                      </MenuItem>
+                      <MenuItem
+                        icon={<SquareArrowOutUpRight size={16} />}
+                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                        testId="notes-open-in-new-window"
+                        onSelect={() => void openInNewWindow()}
+                      >
+                        Open in new window
+                      </MenuItem>
+                      <MenuSeparator />
+                      <MenuItem
+                        icon={<Trash2 size={16} />}
+                        danger
+                        disabled={!selectedNoteId || status.kind === "saving" || status.kind === "deleting"}
+                        onSelect={() => void deleteActiveNote()}
+                      >
+                        Delete note
+                      </MenuItem>
+                    </Menu>
                   </div>
                 </div>
               </div>
+              {returnToTitle || linkedConversations.length > 0 ? (
+                <nav className="note-links" aria-label="Linked conversations">
+                  {returnToTitle && returnToConversationId ? (
+                    <button
+                      type="button"
+                      className="note-links__back"
+                      onClick={() => onOpenConversation?.(returnToConversationId)}
+                      title="Back to conversation"
+                    >
+                      <ArrowLeft size={13} aria-hidden />
+                      <span className="note-links__title">{returnToTitle}</span>
+                    </button>
+                  ) : null}
+                  {linkedConversations.length > 0 ? (
+                    <span className="note-links__label">From</span>
+                  ) : null}
+                  {linkedConversations.slice(0, 3).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="note-links__chip"
+                      onClick={() => onOpenConversation?.(c.id)}
+                      title={`Open “${c.title}”`}
+                    >
+                      <span className="note-links__title">{c.title}</span>
+                    </button>
+                  ))}
+                  {linkedConversations.length > 3 ? (
+                    <span className="note-links__label">+{linkedConversations.length - 3}</span>
+                  ) : null}
+                </nav>
+              ) : null}
+              {noteSync.conflict ? (
+                <NoteConflictBar
+                  onReload={noteSync.reloadFromConflict}
+                  onKeepMine={noteSync.keepMine}
+                />
+              ) : null}
               <div
                 ref={editorWrapRef}
                 className={`notes-surface__editor-wrap notes-surface__editor-wrap--${noteWidthMode}`}
@@ -1013,7 +1101,7 @@ export function NotesView({
                 {showSelectionMenu ? (
                   <div
                     ref={selectionMenuRef}
-                    className="notes-selection-menu notes-surface__toolbar-menu"
+                    className="notes-selection-menu"
                     role="menu"
                     aria-label="Selection actions"
                     style={{
@@ -1051,6 +1139,21 @@ export function NotesView({
                       <Sparkles size={16} aria-hidden />
                       <span>Ask AI…</span>
                     </button>
+                    {onDiscussNote ? (
+                      <button
+                        type="button"
+                        className="notes-surface__toolbar-menu-item"
+                        role="menuitem"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          if (!selectedNoteId || !selection) return;
+                          onDiscussNote({ id: selectedNoteId, title: noteTitle }, selection.text);
+                        }}
+                      >
+                        <MessageSquareText size={16} aria-hidden />
+                        <span>Ask in chat</span>
+                      </button>
+                    ) : null}
                     {QUICK_REWRITE_PROMPTS.map((item) => {
                       const Icon = item.icon;
                       return (

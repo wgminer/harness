@@ -116,7 +116,7 @@ function DevDictationTest({
         composerRef={composerRef}
         displayMessages={messages}
         copiedId={copiedId}
-        savedToNotesId={null}
+        savedNoteIds={{}}
         onCopied={setCopiedId}
         onSaveToNotes={() => {}}
         streamingContent={hasAssistant ? streamContent : ""}
@@ -283,7 +283,7 @@ function DevChatStreamTest({
         composerRef={composerRef}
         displayMessages={messages}
         copiedId={copiedId}
-        savedToNotesId={null}
+        savedNoteIds={{}}
         onCopied={setCopiedId}
         onSaveToNotes={() => {}}
         streamingContent={streamingContent}

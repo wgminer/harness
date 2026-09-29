@@ -9,7 +9,6 @@ export type View =
   | "chat"
   | "settings"
   | "tasks"
-  | "search"
   | "notes"
   | "images"
   | "dev-chat"
@@ -58,7 +57,15 @@ export function libraryRowMatchesFilter(row: LibraryRow, filter: SidebarLibraryF
 }
 
 /** Rows shown initially in the sidebar, and added per "More" click. */
-export const SIDEBAR_PAGE_SIZE = 10;
+export const SIDEBAR_PAGE_SIZE = 30;
+
+/** New notes start as "# Note"; show that (or an empty title) as untitled. */
+export const UNTITLED_NOTE_LABEL = "Untitled note";
+
+export function isUntitledNoteTitle(displayTitle: string): boolean {
+  const t = displayTitle.trim();
+  return t === "" || t === "Note";
+}
 
 /**
  * Newest N rows; always includes the active item when it falls outside the window.

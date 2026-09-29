@@ -2,9 +2,17 @@ import SwiftUI
 
 struct ToolCallsCardView: View {
     let toolCalls: [ToolCallRecord]
+    /// Live turn: older calls fold into the summary while the newest one stays visible.
+    var isStreaming = false
     var onToolConfirm: (ToolCallRecord, GatedToolAction) -> Void
     var onOpenThread: ((String) -> Void)?
     @State private var expanded = false
+
+    private static let stackAnimation = Animation.snappy(duration: 0.3)
+    private static let rowTransition = AnyTransition.asymmetric(
+        insertion: .opacity.combined(with: .offset(y: 8)),
+        removal: .opacity
+    )
 
     private var hasPending: Bool {
         toolCalls.contains(where: \.isPending)
@@ -18,6 +26,11 @@ struct ToolCallsCardView: View {
         canCompress && !expanded && !hasPending
     }
 
+    /// Stable per-position ids so a streamed call that updates in place keeps its row.
+    private var identifiedCalls: [(id: String, call: ToolCallRecord)] {
+        toolCalls.enumerated().map { index, call in ("\(index)-\(call.toolName)", call) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if compressed {
@@ -25,23 +38,38 @@ struct ToolCallsCardView: View {
                     label: ToolCallLabels.summarize(toolCalls),
                     chevron: "chevron.down",
                     expanded: false,
-                    action: { expanded = true }
+                    action: { withAnimation(Self.stackAnimation) { expanded = true } }
                 )
+                if isStreaming, let latest = identifiedCalls.last {
+                    toolRow(latest.call)
+                        .id(latest.id)
+                        .transition(Self.rowTransition)
+                }
             } else {
                 if canCompress {
-                    summaryRow(label: "Hide", chevron: "chevron.up", expanded: true, action: { expanded = false })
+                    summaryRow(
+                        label: "Hide",
+                        chevron: "chevron.up",
+                        expanded: true,
+                        action: { withAnimation(Self.stackAnimation) { expanded = false } }
+                    )
                 }
-                ForEach(Array(toolCalls.enumerated()), id: \.offset) { _, call in
-                    toolRow(call)
+                ForEach(identifiedCalls, id: \.id) { item in
+                    toolRow(item.call)
+                        .transition(Self.rowTransition)
                 }
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(HarnessPalette.hairline, lineWidth: 1)
         )
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .animation(Self.stackAnimation, value: toolCalls.count)
+        .animation(Self.stackAnimation, value: compressed)
     }
 
     private func summaryRow(label: String, chevron: String, expanded: Bool, action: @escaping () -> Void) -> some View {
@@ -53,11 +81,13 @@ struct ToolCallsCardView: View {
                 Text(label)
                     .font(.subheadline)
                     .foregroundStyle(HarnessPalette.text)
+                    .contentTransition(.numericText())
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: chevron)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(HarnessPalette.textMuted)
             }
+            .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(expanded ? "Hide tool actions" : "Show tool actions")

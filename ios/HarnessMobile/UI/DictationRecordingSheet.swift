@@ -323,6 +323,8 @@ struct DictationRecordingSheet: View {
         }
         isStopping = true
         isMicLive = false
+        recordingSession.beginStopBackgroundWork()
+        defer { recordingSession.endStopBackgroundWork() }
         let generation = operationGeneration
         let peakLevel = recorder.peakLevelDuringSession
         let elapsedSeconds = TimeInterval(recorder.elapsedMs) / 1000.0

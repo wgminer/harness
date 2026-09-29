@@ -31,7 +31,7 @@ function isAwaitingToolConfirmation(call: ToolCallDisplay): boolean {
 interface ChatMessageListProps {
   displayMessages: Message[];
   copiedId: string | null;
-  savedToNotesId: string | null;
+  savedNoteIds: Record<string, string>;
   onCopied: (id: string | null) => void;
   onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   streamingContent: string;
@@ -53,7 +53,7 @@ interface ChatMessageListProps {
 export function ChatMessageList({
   displayMessages,
   copiedId,
-  savedToNotesId,
+  savedNoteIds,
   onCopied,
   onSaveToNotes,
   streamingContent,
@@ -172,7 +172,7 @@ export function ChatMessageList({
                   messageId={m.id}
                   messageTimestamp={m.timestamp}
                   copiedId={copiedId}
-                  savedToNotesId={savedToNotesId}
+                  savedNoteIds={savedNoteIds}
                   onCopied={onCopied}
                   onSaveToNotes={onSaveToNotes}
                   {...libraryLinkActions}
@@ -185,7 +185,7 @@ export function ChatMessageList({
                   messageId={m.id}
                   messageTimestamp={m.timestamp}
                   copiedId={copiedId}
-                  savedToNotesId={savedToNotesId}
+                  savedNoteIds={savedNoteIds}
                   onCopied={onCopied}
                   onSaveToNotes={onSaveToNotes}
                   {...libraryLinkActions}
@@ -198,7 +198,7 @@ export function ChatMessageList({
             messageId: m.id,
             messageTimestamp: m.timestamp,
             copiedId,
-            savedToNotesId,
+            savedNoteIds,
             onCopied,
             onSaveToNotes,
           };
@@ -276,6 +276,7 @@ export function ChatMessageList({
                         liveStream={liveNoteStream}
                         streaming={isStreamingWriteup}
                         onOpenInEditor={onOpenNoteInEditor}
+                        onOpenInWindow={openNoteInWindow}
                         onBodyLoaded={handleNoteBodyLoaded}
                       />
                     )}
@@ -313,7 +314,7 @@ export function ChatMessageList({
                       content={saveCopyContent}
                       messageId={m.id}
                       messageTimestamp={m.timestamp}
-                      savedNoteId={savedToNotesId}
+                      savedNoteIds={savedNoteIds}
                       onSaveToNotes={onSaveToNotes}
                     />
                   ) : null}
@@ -341,4 +342,8 @@ export function ChatMessageList({
       )}
     </>
   );
+}
+
+function openNoteInWindow(noteId: string) {
+  void window.harness.notes.openSticky(noteId).catch(() => {});
 }

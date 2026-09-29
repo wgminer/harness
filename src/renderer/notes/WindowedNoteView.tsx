@@ -6,6 +6,8 @@ import {
   UNTITLED_NOTE_TITLE,
 } from "../../shared/writing";
 import { NotesCodeEditor } from "./NotesCodeEditor";
+import { NoteConflictBar } from "./NoteConflictBar";
+import { useNoteExternalSync } from "./useNoteExternalSync";
 
 const AUTO_SAVE_DEBOUNCE_MS = 800;
 
@@ -28,6 +30,23 @@ export function WindowedNoteView({ noteId }: WindowedNoteViewProps) {
   draftRef.current = draft;
   savedContentRef.current = savedContent;
   fallbackTitleRef.current = fallbackTitle;
+
+  const noteSync = useNoteExternalSync({
+    noteId,
+    getSavedContent: () => savedContentRef.current,
+    isDirty: () => draftRef.current !== savedContentRef.current,
+    applyRemote: (note) => {
+      setDraft(note.content);
+      setSavedContent(note.content);
+      savedContentRef.current = note.content;
+      const displayTitle = displayNoteTitle(note.title);
+      setFallbackTitle(displayTitle);
+      void window.harness.notes.setStickyTitle(noteId, displayTitle);
+    },
+  });
+  const { markLoaded, saveGuarded } = noteSync;
+  const conflictRef = useRef(noteSync.conflict);
+  conflictRef.current = noteSync.conflict;
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +77,7 @@ export function WindowedNoteView({ noteId }: WindowedNoteViewProps) {
           setLoading(false);
           return;
         }
+        markLoaded(note);
         setDraft(note.content);
         setSavedContent(note.content);
         setFallbackTitle(displayNoteTitle(note.title));
@@ -73,13 +93,14 @@ export function WindowedNoteView({ noteId }: WindowedNoteViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [noteId]);
+  }, [noteId, markLoaded]);
 
   const persist = useCallback(
     async (content: string) => {
-      if (content === savedContentRef.current) return;
+      if (content === savedContentRef.current || conflictRef.current) return;
       try {
-        const note = await window.harness.notes.save(noteId, content);
+        const note = await saveGuarded(content);
+        if (!note) return;
         setSavedContent(note.content);
         savedContentRef.current = note.content;
         const displayTitle = displayNoteTitle(note.title);
@@ -90,7 +111,7 @@ export function WindowedNoteView({ noteId }: WindowedNoteViewProps) {
         setError(String(e));
       }
     },
-    [noteId],
+    [noteId, saveGuarded],
   );
 
   const flushSave = useCallback(async () => {
@@ -175,6 +196,15 @@ export function WindowedNoteView({ noteId }: WindowedNoteViewProps) {
 
   return (
     <div className="windowed-note" data-testid="windowed-note">
+      {noteSync.conflict ? (
+        <NoteConflictBar
+          onReload={noteSync.reloadFromConflict}
+          onKeepMine={() => {
+            noteSync.keepMine();
+            scheduleSave(draftRef.current);
+          }}
+        />
+      ) : null}
       <div className="windowed-note__editor-wrap">
         <NotesCodeEditor
           className="windowed-note__editor notes-code-editor"

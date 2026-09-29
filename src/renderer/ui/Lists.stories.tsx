@@ -4,14 +4,13 @@ import {
   Circle,
   Image as ImageIcon,
   Loader2,
-  MessageCircle,
   Search,
-  StickyNote,
 } from "lucide-react";
 import { useState } from "react";
 import { WorkspaceListSearch } from "./WorkspaceListSearch";
 import { Skeleton } from "./Skeleton";
 import { Section } from "./storyHelpers";
+import { SidebarKindGlyph } from "../sidebar/SidebarKindGlyph";
 
 function ListsGallery() {
   const [query, setQuery] = useState("");
@@ -30,23 +29,33 @@ function ListsGallery() {
       </Section>
 
       <Section title="Sidebar conversation rows" stack>
-        <div className="sidebar" style={{ width: 280, background: "var(--bg)", padding: "var(--space-2)" }}>
+        <div className="sidebar" style={{ width: 280, background: "var(--bg)" }}>
           <div className="sidebar-list">
-            <div className="sidebar-item active">
-              <MessageCircle size={12} className="sidebar-item-icon" aria-hidden />
+            <div className="sidebar-item active" data-kind="chat">
+              <SidebarKindGlyph kind="chat" />
               <span className="sidebar-item-title">Active conversation</span>
             </div>
-            <div className="sidebar-item">
-              <Loader2 size={12} className="sidebar-item-spinner" aria-hidden />
+            <div className="sidebar-item" data-kind="chat">
+              <span className="sidebar-item-spinner" aria-hidden>
+                <Loader2 size={12} className="voice-spinner" />
+              </span>
               <span className="sidebar-item-title">Processing…</span>
             </div>
-            <div className="sidebar-item">
-              <MessageCircle size={12} className="sidebar-item-icon" aria-hidden />
+            <div className="sidebar-item" data-kind="chat">
+              <SidebarKindGlyph kind="chat" />
               <Skeleton className="ui-skeleton--sidebar-title" title="ui-skeleton--sidebar-title" />
             </div>
-            <div className="sidebar-item">
-              <StickyNote size={12} className="sidebar-item-icon" aria-hidden />
+            <div className="sidebar-item" data-kind="dictation">
+              <SidebarKindGlyph kind="dictation" />
+              <span className="sidebar-item-title">Morning dictation</span>
+            </div>
+            <div className="sidebar-item" data-kind="note">
+              <SidebarKindGlyph kind="note" />
               <span className="sidebar-item-title">Pinned note draft</span>
+            </div>
+            <div className="sidebar-item" data-kind="image">
+              <SidebarKindGlyph kind="image" />
+              <span className="sidebar-item-title">Moodboard exploration</span>
             </div>
           </div>
         </div>

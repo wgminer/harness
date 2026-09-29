@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import { FileText, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, FileText, Loader2, SquareArrowOutUpRight } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { countWords, formatWordCount } from "../../shared/wordCount";
 import type { InlineWriteupPayload, LiveNoteStream } from "./chatHelpers";
 
@@ -12,6 +14,7 @@ interface DocumentCardProps {
   error?: string | null;
   streaming?: boolean;
   onOpenInEditor?: (noteId: string) => void;
+  onOpenInWindow?: (noteId: string) => void;
 }
 
 function documentPillMeta({
@@ -55,44 +58,93 @@ export function DocumentCard({
   error = null,
   streaming = false,
   onOpenInEditor,
+  onOpenInWindow,
 }: DocumentCardProps) {
-  const canOpenInEditor = !!noteId && !!onOpenInEditor && !error;
+  // Review happens in the thread: the card expands to the rendered note, and
+  // editing is an explicit hop to the Notes view or a standalone window.
+  const [expanded, setExpanded] = useState(false);
+  const canOpen = !!noteId && !error;
+  const canExpand = !error && !streaming && !!body.trim();
+  const showBody = canExpand && expanded;
   const pillTitle = error ? "Couldn't open note" : loading ? "Loading note…" : title;
   const pillMeta = documentPillMeta({ summary, body, loading, error, streaming });
   const pillBusy = loading || streaming;
-
-  const handlePillClick = () => {
-    if (!canOpenInEditor) return;
-    onOpenInEditor!(noteId!);
-  };
+  const reviewBody = useMemo(() => stripLeadingH1(body), [body]);
 
   return (
-    <div className="document-card">
-      <button
-        type="button"
-        className={[
-          "document-card__pill",
-          error ? "document-card__pill--error" : null,
-          streaming ? "document-card__pill--streaming" : null,
-        ]
-          .filter(Boolean)
-          .join(" ")}
-        onClick={handlePillClick}
-        disabled={!canOpenInEditor}
-        title={error ?? (canOpenInEditor ? `Open “${title}”` : title)}
-      >
-        {pillBusy ? (
-          <Loader2 size={18} className="document-card__pill-spinner" aria-hidden />
-        ) : (
-          <FileText size={18} aria-hidden />
-        )}
-        <span className="document-card__pill-text">
-          <span className="document-card__pill-title">{pillTitle}</span>
-          <span className="document-card__pill-meta">{pillMeta}</span>
-        </span>
-      </button>
+    <div className={["document-card", showBody ? "document-card--expanded" : null].filter(Boolean).join(" ")}>
+      <div className="document-card__header">
+        <button
+          type="button"
+          className={[
+            "document-card__pill",
+            error ? "document-card__pill--error" : null,
+            streaming ? "document-card__pill--streaming" : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          onClick={() => setExpanded((v) => !v)}
+          disabled={!canExpand}
+          aria-expanded={canExpand ? showBody : undefined}
+          title={error ?? (canExpand ? (showBody ? "Collapse" : `Review “${title}”`) : title)}
+        >
+          {pillBusy ? (
+            <Loader2 size={18} className="document-card__pill-spinner" aria-hidden />
+          ) : (
+            <FileText size={18} aria-hidden />
+          )}
+          <span className="document-card__pill-text">
+            <span className="document-card__pill-title">{pillTitle}</span>
+            <span className="document-card__pill-meta">{pillMeta}</span>
+          </span>
+          {canExpand ? (
+            <ChevronDown
+              size={16}
+              className={["document-card__chevron", showBody ? "document-card__chevron--open" : null]
+                .filter(Boolean)
+                .join(" ")}
+              aria-hidden
+            />
+          ) : null}
+        </button>
+        {canOpen && !streaming && (onOpenInEditor || onOpenInWindow) ? (
+          <div className="document-card__actions">
+            {onOpenInEditor ? (
+              <button
+                type="button"
+                className="btn btn-sm document-card__action"
+                onClick={() => onOpenInEditor(noteId!)}
+                title="Open in Notes"
+              >
+                Open
+              </button>
+            ) : null}
+            {onOpenInWindow ? (
+              <button
+                type="button"
+                className="btn btn-icon-sm document-card__action"
+                onClick={() => onOpenInWindow(noteId!)}
+                aria-label="Edit in its own window"
+                title="Edit in its own window"
+              >
+                <SquareArrowOutUpRight size={14} aria-hidden />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {showBody ? (
+        <div className="document-card__body" data-testid="document-card-body">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{reviewBody}</ReactMarkdown>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+/** The card header already shows the title, so drop the note's leading `# H1`. */
+function stripLeadingH1(markdown: string): string {
+  return markdown.replace(/^\s*#\s+[^\n]*\n?/, "");
 }
 
 export function InlineWriteupCard({
@@ -100,12 +152,14 @@ export function InlineWriteupCard({
   liveStream,
   streaming = false,
   onOpenInEditor,
+  onOpenInWindow,
   onBodyLoaded,
 }: {
   writeup: InlineWriteupPayload;
   liveStream?: LiveNoteStream | null;
   streaming?: boolean;
   onOpenInEditor?: (noteId: string) => void;
+  onOpenInWindow?: (noteId: string) => void;
   onBodyLoaded?: (noteId: string, body: string) => void;
 }) {
   const [fetchedBody, setFetchedBody] = useState<string | null>(null);
@@ -161,6 +215,7 @@ export function InlineWriteupCard({
       error={error}
       streaming={isLive}
       onOpenInEditor={onOpenInEditor}
+      onOpenInWindow={onOpenInWindow}
     />
   );
 }

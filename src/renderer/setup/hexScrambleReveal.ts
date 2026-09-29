@@ -13,6 +13,13 @@ export const HEX_SCRAMBLE_REVEAL: HexScrambleRevealConfig = {
   maxSpinMs: 4_000,
 };
 
+/** Short burst for hover affordances (e.g. the sidebar list title). */
+export const HEX_SCRAMBLE_HOVER: HexScrambleRevealConfig = {
+  tickMs: 48,
+  minSpinMs: 360,
+  maxSpinMs: 360,
+};
+
 export interface HexScrambleRevealState {
   display: string;
   target: string;

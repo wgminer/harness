@@ -3,13 +3,18 @@ import UIKit
 
 @main
 struct HarnessMobileApp: App {
+    /// Process-lifetime, not scene-lifetime: a Live Activity intent can reopen the app into a
+    /// fresh scene, which must land back in the same thread and recording session.
+    @StateObject private var app = AppModel()
+    @StateObject private var chatRouter = ChatRouter()
+
     init() {
         Self.configureNavigationBarAppearance()
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(app: app, chatRouter: chatRouter)
                 .preferredColorScheme(.dark)
                 .tint(HarnessPalette.accent)
         }

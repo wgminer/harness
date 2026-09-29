@@ -8,6 +8,7 @@ import type {
   SystemPromptPreview,
 } from "../shared/types";
 import type {
+  NoteChangedEvent,
   NoteEditProposalInput,
   NoteSpellCheckInput,
 } from "../shared/writing";
@@ -71,6 +72,13 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("credentials:setTavilyApiKey"), { value }),
       setR2SecretAccessKey: (value: string) =>
         invoke(cmd("credentials:setR2SecretAccessKey"), { value }),
+    },
+    gmail: {
+      getStatus: () => invoke(cmd("gmail:getStatus")),
+      setClient: (clientId: string, clientSecret: string) =>
+        invoke(cmd("gmail:setClient"), { clientId, clientSecret }),
+      connect: () => invoke(cmd("gmail:connect")),
+      disconnect: () => invoke(cmd("gmail:disconnect")),
     },
     memory: {
       createConversation: (chatMode?: string) =>
@@ -239,11 +247,15 @@ export function createHarnessAdapter(): HarnessAPI {
     },
     notes: {
       list: () => invoke(cmd("notes:list")),
-      create: (title?: string, content?: string) =>
-        invoke(cmd("notes:create"), { title, content }),
+      create: (title?: string, content?: string, options?: { conversationId?: string }) =>
+        invoke(cmd("notes:create"), { title, content, conversationId: options?.conversationId }),
       read: (id: string) => invoke(cmd("notes:read"), { id }),
-      save: (id: string, content: string) =>
-        invoke(cmd("notes:save"), { id, content }),
+      save: (id: string, content: string, options?: { expectedUpdatedAt?: number }) =>
+        invoke(cmd("notes:save"), {
+          id,
+          content,
+          expectedUpdatedAt: options?.expectedUpdatedAt,
+        }),
       delete: (id: string) => invoke(cmd("notes:delete"), { id }),
       showInFolder: (id: string) => invoke(cmd("notes:showInFolder"), { id }),
       proposeEdit: (input: NoteEditProposalInput) =>
@@ -262,6 +274,23 @@ export function createHarnessAdapter(): HarnessAPI {
         subscribeToWire<{ noteId: string }>(evt("notes:openInMain"), (payload) => {
           if (payload?.noteId) cb(payload.noteId);
         }),
+      onChanged: (cb) =>
+        subscribeToWire<NoteChangedEvent>(evt("notes:changed"), (payload) => {
+          if (payload?.id) cb(payload);
+        }),
+    },
+    files: {
+      readText: (path: string) => invoke(cmd("files:readText"), { path }),
+      stat: (path: string) => invoke(cmd("files:stat"), { path }),
+      saveText: (path: string, content: string, options?: { expectedModifiedMs?: number }) =>
+        invoke(cmd("files:saveText"), {
+          path,
+          content,
+          expectedModifiedMs: options?.expectedModifiedMs,
+        }),
+      importAsNote: (path: string) => invoke(cmd("files:importAsNote"), { path }),
+      openWindow: (path: string) => invoke(cmd("files:openWindow"), { path }),
+      installCli: () => invoke(cmd("files:installCli")),
     },
     images: {
       list: () => invoke(cmd("images:list")),

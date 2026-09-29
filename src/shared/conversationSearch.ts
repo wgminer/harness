@@ -179,17 +179,36 @@ export function extractSnippet(
   let snippetEnd = Math.min(content.length, matchEndInContent + cfg.snippetCharsAfter);
   let snippetStart = windowStart;
 
+  let startOnLine = false;
+  let endOnLine = false;
   const before = content.slice(0, matchIndex);
   const lastNl = before.lastIndexOf("\n");
-  if (lastNl >= windowStart) snippetStart = lastNl + 1;
+  if (lastNl >= windowStart) {
+    snippetStart = lastNl + 1;
+    startOnLine = true;
+  }
 
   if (matchEndInContent < content.length) {
     const after = content.slice(matchEndInContent);
     const nextNl = after.indexOf("\n");
     if (nextNl >= 0) {
       const end = matchEndInContent + nextNl + 1;
-      if (end <= snippetEnd) snippetEnd = end;
+      if (end <= snippetEnd) {
+        snippetEnd = end;
+        endOnLine = true;
+      }
     }
+  }
+
+  // Char windows can land mid-word; snap outward cuts to whitespace.
+  if (!startOnLine && snippetStart > 0) {
+    const ws = content.slice(snippetStart, matchIndex).search(/\s/);
+    if (ws >= 0) snippetStart += ws + 1;
+  }
+  if (!endOnLine && snippetEnd < content.length) {
+    const tail = content.slice(matchEndInContent, snippetEnd);
+    const ws = Math.max(tail.lastIndexOf(" "), tail.lastIndexOf("\t"));
+    if (ws >= 0) snippetEnd = matchEndInContent + ws;
   }
 
   let lineCount = 1;

@@ -86,3 +86,47 @@
   font-size: var(--font-size-ui);
   color: var(--danger, #e55);
 }
+
+/* File window: path header over the shared windowed editor. */
+.file-window__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-edge);
+  font-size: var(--font-size-caption);
+}
+
+.file-window__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-window__folder {
+  color: var(--fg-muted);
+}
+
+.file-window__name {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.file-window__status {
+  flex-shrink: 0;
+  color: var(--fg-muted);
+}
+
+.file-window__save-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.file-window .note-conflict-bar {
+  margin: var(--space-2) var(--space-3) 0;
+}

@@ -116,4 +116,14 @@ describe("conversationSearch", () => {
     expect(snippet).toContain("def");
     expect(snippetMatchRange).toEqual([4, 7]);
   });
+
+  it("extractSnippet does not cut words at the window edges", () => {
+    const content = `${"lorem ipsum ".repeat(10)}checked her phone intervening hour${" tail".repeat(40)}`;
+    const idx = content.indexOf("intervening");
+    const { snippet, snippetMatchRange } = extractSnippet(content, idx, 6);
+    expect(snippet.slice(...snippetMatchRange)).toBe("interv");
+    const start = content.indexOf(snippet);
+    expect(/\s/.test(content[start - 1])).toBe(true);
+    expect(snippet.endsWith("tail")).toBe(true);
+  });
 });

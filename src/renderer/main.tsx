@@ -12,6 +12,7 @@ import { setCachedSettings } from "./settings/settingsSessionCache";
 import { isCurrentStickyWindow } from "./notes/stickyWindow";
 import "./base.css";
 import "./ui/modal.css";
+import "./ui/menu.css";
 import "./setup/setupNotice.css";
 import "./sidebar/sidebar.css";
 import "./chat/chat.css";

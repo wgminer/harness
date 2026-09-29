@@ -4,6 +4,8 @@ pub mod app;
 pub mod chat;
 pub mod coding;
 pub mod credentials;
+pub mod files;
+pub mod gmail;
 pub mod images;
 pub mod memory;
 pub mod notes;

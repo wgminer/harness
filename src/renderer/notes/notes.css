@@ -314,29 +314,6 @@
   border-color: transparent;
 }
 
-.notes-surface__toolbar-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  min-width: 240px;
-  max-width: min(320px, calc(100vw - 24px));
-  padding: 4px;
-  border-radius: 1px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-input);
-  box-shadow: 0 var(--space-4) var(--space-8) var(--shadow-drop);
-  z-index: 60;
-}
-
-.notes-surface__toolbar-menu-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-2) var(--space-3) var(--space-3);
-  margin-bottom: 2px;
-  border-bottom: 1px solid var(--border-edge);
-}
-
 .notes-surface__toolbar-menu-meta-row {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
@@ -362,30 +339,50 @@
   text-overflow: ellipsis;
 }
 
+/*
+ * Selection menu: styled like ui/Menu but rendered inline so the editor keeps focus
+ * and the text selection.
+ */
+.notes-selection-menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+  border: 1px solid var(--menu-border);
+  border-radius: var(--menu-radius);
+  background: var(--menu-bg);
+  box-shadow: var(--menu-shadow);
+  transform-origin: bottom left;
+  animation: ui-menu-in var(--menu-enter-duration) var(--menu-ease-enter) both;
+}
+
 .notes-surface__toolbar-menu-item {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   width: 100%;
+  min-height: 30px;
   border: none;
   background: transparent;
   color: var(--fg);
-  font: inherit;
-  font-size: var(--font-size);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sidebar);
+  line-height: 20px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--menu-item-radius);
   cursor: pointer;
   text-align: left;
+  transition: background-color 60ms var(--motion-ease-out);
+}
+
+.notes-surface__toolbar-menu-item > svg {
+  flex-shrink: 0;
+  color: var(--fg-muted);
 }
 
 .notes-surface__toolbar-menu-item:hover:not(:disabled),
 .notes-surface__toolbar-menu-item:focus-visible:not(:disabled) {
-  background: var(--accent-tint);
-}
-
-.notes-surface__toolbar-menu-item:focus-visible:not(:disabled) {
-  outline: var(--focus-ring);
-  outline-offset: -2px;
+  background: var(--menu-item-hover);
+  outline: none;
 }
 
 .notes-surface__toolbar-menu-item:disabled {
@@ -393,8 +390,10 @@
   cursor: not-allowed;
 }
 
-.notes-surface__toolbar-menu-item--danger:not(:disabled) {
-  color: var(--danger);
+@media (prefers-reduced-motion: reduce) {
+  .notes-selection-menu {
+    animation: none;
+  }
 }
 
 .notes-surface__editor {
@@ -563,7 +562,6 @@
   z-index: 5;
   width: 220px;
   min-width: 220px;
-  border-radius: var(--radius-lg);
 }
 
 .notes-aside-panel {
@@ -708,4 +706,76 @@
     left: 8px !important;
     max-height: min(60%, calc(100% - var(--space-4)));
   }
+}
+
+/* Open note was rewritten elsewhere (chat, another window) while dirty. */
+.note-conflict-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 auto var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  background: var(--overlay-subtle);
+  font-size: var(--font-size-ui);
+}
+
+.note-conflict-bar__text {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-muted);
+}
+
+/* Back link + chats linked to the open note, above the editor. */
+.note-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  /* Leave room for the floating toolbar on the right. */
+  padding: var(--space-2) 160px var(--space-1) var(--space-3);
+  font-size: var(--font-size-caption);
+  color: var(--fg-muted);
+}
+
+.note-links__back,
+.note-links__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 220px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.note-links__chip {
+  background: var(--overlay-subtle);
+}
+
+.note-links__back:hover,
+.note-links__chip:hover {
+  background: var(--overlay);
+  color: var(--fg);
+}
+
+.note-links__back {
+  margin-right: var(--space-2);
+}
+
+.note-links__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-links__label {
+  flex-shrink: 0;
 }

@@ -19,7 +19,7 @@ interface ChatSurfaceProps {
   composerRef: RefObject<HTMLDivElement>;
   displayMessages: Message[];
   copiedId: string | null;
-  savedToNotesId: string | null;
+  savedNoteIds: Record<string, string>;
   onCopied: (id: string | null) => void;
   onSaveToNotes: (id: string, content: string, messageTimestamp?: number) => void | Promise<void>;
   streamingContent: string;
@@ -76,7 +76,7 @@ export function ChatSurface({
   composerRef,
   displayMessages,
   copiedId,
-  savedToNotesId,
+  savedNoteIds,
   onCopied,
   onSaveToNotes,
   streamingContent,
@@ -165,7 +165,7 @@ export function ChatSurface({
           <ChatMessageList
             displayMessages={displayMessages}
             copiedId={copiedId}
-            savedToNotesId={savedToNotesId}
+            savedNoteIds={savedNoteIds}
             onCopied={onCopied}
             onSaveToNotes={onSaveToNotes}
             streamingContent={streamingContent}

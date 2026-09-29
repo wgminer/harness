@@ -1,13 +1,11 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type MutableRefObject,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   Mic,
   Check,
@@ -27,12 +25,7 @@ import {
   pickAudioAttachFile,
   pickAudioAttachPath,
 } from "../recording/audioAttach";
-import {
-  CHAT_MODE_MENU_FALLBACK_HEIGHT_PX,
-  CHAT_MODE_MENU_FALLBACK_WIDTH_PX,
-  placeChatModeMenu,
-  type ChatModeMenuPosition,
-} from "./chatModeMenuPosition";
+import { Menu, MenuCheckItem, MenuItem } from "../ui/Menu";
 import { useTypedPlaceholder } from "./useTypedPlaceholder";
 import { formatVoiceTimer } from "../recording/useVoiceCapture";
 
@@ -116,13 +109,11 @@ export function ChatComposer({
   const inputRef = useRef<HTMLTextAreaElement | null>(null) as MutableRefObject<HTMLTextAreaElement | null>;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const plusRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const dragDepthRef = useRef(0);
   const attachDisabledRef = useRef(false);
   const [dropTargetActive, setDropTargetActive] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [plusBusy, setPlusBusy] = useState(false);
-  const [menuPos, setMenuPos] = useState<ChatModeMenuPosition | null>(null);
   const typedPlaceholder = useTypedPlaceholder(placeholder);
 
   const attachDisabled =
@@ -145,53 +136,6 @@ export function ChatComposer({
     if (focusComposerNonce == null || focusComposerNonce < 1) return;
     inputRef.current?.focus();
   }, [focusComposerNonce]);
-
-  useLayoutEffect(() => {
-    if (!plusOpen) {
-      setMenuPos(null);
-      return;
-    }
-    const trigger = plusRef.current;
-    if (!trigger) return;
-    const update = () => {
-      const rect = trigger.getBoundingClientRect();
-      setMenuPos(
-        placeChatModeMenu(
-          rect,
-          {
-            width: menuRef.current?.offsetWidth || CHAT_MODE_MENU_FALLBACK_WIDTH_PX,
-            height: menuRef.current?.offsetHeight || CHAT_MODE_MENU_FALLBACK_HEIGHT_PX,
-          },
-          { width: window.innerWidth, height: window.innerHeight },
-        ),
-      );
-    };
-    update();
-    const frame = requestAnimationFrame(update);
-    window.addEventListener("resize", update);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("resize", update);
-    };
-  }, [plusOpen]);
-
-  useEffect(() => {
-    if (!plusOpen) return;
-    const onPointer = (event: MouseEvent) => {
-      const t = event.target as Node;
-      if (plusRef.current?.contains(t) || menuRef.current?.contains(t)) return;
-      setPlusOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPlusOpen(false);
-    };
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [plusOpen]);
 
   const clearDropTarget = useCallback(() => {
     dragDepthRef.current = 0;
@@ -444,61 +388,43 @@ export function ChatComposer({
           >
             <Plus size={15} />
           </button>
-          {plusOpen && menuPos
-            ? createPortal(
-                <div
-                  ref={menuRef}
-                  className="chat-plus-menu chat-mode-picker__menu chat-mode-picker__menu--portal"
-                  role="menu"
-                  style={{ top: menuPos.top, left: menuPos.left }}
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="chat-mode-picker__menu-item"
-                    onClick={() =>
-                      void runPlusAction(async () => {
-                        fileInputRef.current?.click();
-                      })
-                    }
-                  >
-                    Attach audio…
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="chat-mode-picker__menu-item"
-                    onClick={() => void runPlusAction(async () => onPickProjectFolder?.())}
-                  >
-                    Choose project folder…
-                  </button>
-                  {selfScopeAvailable ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="chat-mode-picker__menu-item"
-                      onClick={() => void runPlusAction(async () => onUseSelfScope?.())}
-                    >
-                      <span>Harness UI</span>
-                      {codingScope?.kind === "self" ? (
-                        <Check size={14} className="chat-mode-picker__menu-check" />
-                      ) : null}
-                    </button>
-                  ) : null}
-                  {codingScope ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="chat-mode-picker__menu-item"
-                      onClick={() => void runPlusAction(async () => onClearCodingScope?.())}
-                    >
-                      Remove workspace scope
-                    </button>
-                  ) : null}
-                </div>,
-                document.body,
-              )
-            : null}
+          <Menu
+            open={plusOpen}
+            onClose={() => setPlusOpen(false)}
+            anchorRef={plusRef}
+            placement="bottom-end"
+            gap={8}
+            label="Attach or set project folder"
+          >
+            <MenuItem
+              keepOpen
+              onSelect={() =>
+                void runPlusAction(async () => {
+                  fileInputRef.current?.click();
+                })
+              }
+            >
+              Attach audio…
+            </MenuItem>
+            <MenuItem keepOpen onSelect={() => void runPlusAction(async () => onPickProjectFolder?.())}>
+              Choose project folder…
+            </MenuItem>
+            {selfScopeAvailable ? (
+              <MenuCheckItem
+                kind="checkbox"
+                checked={codingScope?.kind === "self"}
+                onSelect={() => void runPlusAction(async () => onUseSelfScope?.())}
+                onClose={() => {}}
+              >
+                Harness UI
+              </MenuCheckItem>
+            ) : null}
+            {codingScope ? (
+              <MenuItem keepOpen onSelect={() => void runPlusAction(async () => onClearCodingScope?.())}>
+                Remove workspace scope
+              </MenuItem>
+            ) : null}
+          </Menu>
           {voiceState !== "processing" && (
             <button
               type="button"

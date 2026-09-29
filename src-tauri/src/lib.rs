@@ -5,8 +5,10 @@ pub mod commands;
 pub mod credentials;
 pub mod customization;
 pub mod env_util;
+pub mod gmail;
 pub mod memory;
 pub mod images;
+pub mod files;
 pub mod notes;
 pub mod openai;
 pub mod paths;
@@ -38,13 +40,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.show();
-                let _ = win.set_focus();
-            }
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            // `harness <path>` from a second launch: argv[0] is the binary.
+            files::open_paths_from_args(app, args.iter().skip(1), std::path::Path::new(&cwd));
         }))
         .setup(|app| {
+            notes::init_events(app.handle());
             if let Some(win) = app.get_webview_window("main") {
                 let _ = win.set_min_size(Some(LogicalSize::new(800.0, 600.0)));
             }
@@ -70,6 +71,12 @@ pub fn run() {
             });
 
             let handle = app.handle().clone();
+            if let Ok(cwd) = std::env::current_dir() {
+                let launch_args: Vec<String> = std::env::args().skip(1).collect();
+                if launch_args.iter().any(|a| !a.starts_with('-')) {
+                    files::open_paths_from_args(&handle, launch_args, &cwd);
+                }
+            }
             let chat_controller = ChatController::new(handle.clone(), app_state.clone());
 
             app.manage(app_state);
@@ -99,6 +106,10 @@ pub fn run() {
             commands::credentials::credentials_set_open_ai_api_key,
             commands::credentials::credentials_set_tavily_api_key,
             commands::credentials::credentials_set_r2_secret_access_key,
+            commands::gmail::gmail_get_status,
+            commands::gmail::gmail_set_client,
+            commands::gmail::gmail_connect,
+            commands::gmail::gmail_disconnect,
             commands::memory::memory_create_conversation,
             commands::memory::memory_set_conversation_chat_mode,
             commands::memory::memory_get_conversation,
@@ -202,12 +213,26 @@ pub fn run() {
             commands::notes::notes_set_sticky_pinned,
             commands::notes::notes_set_sticky_title,
             commands::notes::notes_pop_in_sticky,
+            commands::files::files_read_text,
+            commands::files::files_stat,
+            commands::files::files_save_text,
+            commands::files::files_import_as_note,
+            commands::files::files_open_window,
+            commands::files::files_install_cli,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            if matches!(event, RunEvent::Exit) {
-                persist_open_sticky_windows(app);
+        .run(|app, event| match event {
+            RunEvent::Exit => persist_open_sticky_windows(app),
+            // Finder "Open With" / dropping files on the Dock icon.
+            #[cfg(target_os = "macos")]
+            RunEvent::Opened { urls } => {
+                for url in urls {
+                    if let Ok(path) = url.to_file_path() {
+                        files::open_path(app, &path);
+                    }
+                }
             }
+            _ => {}
         });
 }

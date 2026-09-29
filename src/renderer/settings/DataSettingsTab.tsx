@@ -3,6 +3,7 @@ import { ExternalLink, Loader2 } from "lucide-react";
 import { appDataFolderButtonLabel } from "../../shared/dataStorageLayout";
 import { Tooltip } from "../ui/Tooltip";
 import { ClaudeImportModal } from "./ClaudeImportModal";
+import { GmailSettingsSection } from "./GmailSettingsSection";
 import { SecretField } from "./SecretField";
 import { SettingsActions } from "./SettingsActions";
 import { SettingsField } from "./SettingsField";
@@ -203,6 +204,10 @@ export function DataSettingsTab({
               </div>
             </SettingsActions>
           </SettingsSubsection>
+        </SettingsGroup>
+
+        <SettingsGroup title="Connections" collapsible defaultOpen={false}>
+          <GmailSettingsSection />
         </SettingsGroup>
 
         <SettingsGroup

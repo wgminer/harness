@@ -1,4 +1,4 @@
-import { useCallback, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { PanelLeft } from "lucide-react";
 import { Skeleton } from "./ui/Skeleton";
 
@@ -10,6 +10,10 @@ type AppTitlebarProps = {
   titlePending?: boolean;
   /** Opens conversation details when the title is clicked (chat thread only). */
   onTitleClick?: () => void;
+  /** Drawn over the sidebar's column while open; sits beside the toggle while closed. */
+  sidebarActions?: ReactNode;
+  /** Pinned to the far right of the titlebar, whether or not the sidebar is open. */
+  trailingActions?: ReactNode;
 };
 
 export function AppTitlebar({
@@ -18,6 +22,8 @@ export function AppTitlebar({
   title,
   titlePending = false,
   onTitleClick,
+  sidebarActions,
+  trailingActions,
 }: AppTitlebarProps) {
   const onTitlebarMouseDown = useCallback((event: ReactMouseEvent<HTMLElement>) => {
     if (event.button !== 0) return;
@@ -52,6 +58,8 @@ export function AppTitlebar({
       >
         <PanelLeft size={16} strokeWidth={1.75} aria-hidden />
       </button>
+      {sidebarActions}
+      {trailingActions}
       {onTitleClick ? (
         <button
           type="button"

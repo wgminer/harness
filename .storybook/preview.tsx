@@ -1,6 +1,7 @@
 import type { Preview } from "@storybook/react-vite";
 import "../src/renderer/base.css";
 import "../src/renderer/ui/modal.css";
+import "../src/renderer/ui/menu.css";
 import "../src/renderer/setup/setupNotice.css";
 import "../src/renderer/sidebar/sidebar.css";
 import "../src/renderer/chat/chat.css";

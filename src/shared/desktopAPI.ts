@@ -8,8 +8,10 @@ import type {
   Settings,
   SystemPromptPreview,
 } from "./types";
+import type { TextFile } from "./files";
 import type {
   Note,
+  NoteChangedEvent,
   NoteEditProposal,
   NoteEditProposalInput,
   NoteSpellCheckInput,
@@ -50,6 +52,12 @@ export interface GlobalRecordingStatus {
   sessionMode: string;
   captureBackend: string;
   microphonePermission: "granted" | "denied" | "undetermined" | "unsupported";
+}
+
+export interface GmailStatus {
+  clientConfigured: boolean;
+  connected: boolean;
+  email: string | null;
 }
 
 export interface HarnessAPI {
@@ -97,6 +105,13 @@ export interface HarnessAPI {
     setOpenAIApiKey: (value: string) => Promise<void>;
     setTavilyApiKey: (value: string) => Promise<void>;
     setR2SecretAccessKey: (value: string) => Promise<void>;
+  };
+  gmail: {
+    getStatus: () => Promise<GmailStatus>;
+    setClient: (clientId: string, clientSecret: string) => Promise<GmailStatus>;
+    /** Opens Google consent in the browser; resolves once the account is connected. */
+    connect: () => Promise<GmailStatus>;
+    disconnect: () => Promise<GmailStatus>;
   };
   memory: {
     createConversation: (chatMode?: string) => Promise<string>;
@@ -256,9 +271,14 @@ export interface HarnessAPI {
   /** Multi-note Notes surface, separate from chat conversations. */
   notes: {
     list: () => Promise<NoteSummary[]>;
-    create: (title?: string, content?: string) => Promise<Note>;
+    create: (
+      title?: string,
+      content?: string,
+      options?: { conversationId?: string }
+    ) => Promise<Note>;
     read: (id: string) => Promise<Note | null>;
-    save: (id: string, content: string) => Promise<Note>;
+    /** With `expectedUpdatedAt`, rejects with `note_conflict` if the note changed since. */
+    save: (id: string, content: string, options?: { expectedUpdatedAt?: number }) => Promise<Note>;
     delete: (id: string) => Promise<NoteSummary[]>;
     showInFolder: (id: string) => Promise<void>;
     proposeEdit: (input: NoteEditProposalInput) => Promise<NoteEditProposal>;
@@ -276,6 +296,22 @@ export interface HarnessAPI {
     setStickyTitle: (noteId: string, title: string) => Promise<void>;
     popInSticky: (noteId: string) => Promise<void>;
     onOpenInMain: (cb: (noteId: string) => void) => () => void;
+    onChanged: (cb: (event: NoteChangedEvent) => void) => () => void;
+  };
+  /** Plain text files on disk, edited in place (`harness <path>`, Finder Open With). */
+  files: {
+    readText: (path: string) => Promise<TextFile>;
+    /** Modification time in ms, or null when the file no longer exists. */
+    stat: (path: string) => Promise<number | null>;
+    /** With `expectedModifiedMs`, rejects with `file_conflict` if the file changed on disk. */
+    saveText: (
+      path: string,
+      content: string,
+      options?: { expectedModifiedMs?: number },
+    ) => Promise<number>;
+    importAsNote: (path: string) => Promise<Note>;
+    openWindow: (path: string) => Promise<void>;
+    installCli: () => Promise<{ path: string; onPath: boolean }>;
   };
   /** Generated image library objects (peer to notes/chats). */
   images: {

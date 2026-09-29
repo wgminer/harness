@@ -179,10 +179,13 @@ pub fn extract_snippet(content: &str, match_index: usize, match_len: usize) -> (
     let match_end_in_content = match_index + match_len;
     let mut snippet_end = (match_end_in_content + cfg.snippet_chars_after).min(content.len());
     let mut snippet_start = window_start;
+    let mut start_on_line = false;
+    let mut end_on_line = false;
 
     if let Some(last_newline_before) = content[..match_index.min(content.len())].rfind('\n') {
         if last_newline_before >= window_start {
             snippet_start = last_newline_before + 1;
+            start_on_line = true;
         }
     }
     if match_end_in_content < content.len() {
@@ -190,7 +193,26 @@ pub fn extract_snippet(content: &str, match_index: usize, match_len: usize) -> (
             let idx = match_end_in_content + next_newline_after;
             if idx <= snippet_end {
                 snippet_end = idx + 1;
+                end_on_line = true;
             }
+        }
+    }
+    // Byte windows can land mid-word or mid-codepoint; snap outward cuts to whitespace.
+    while snippet_start < match_index && !content.is_char_boundary(snippet_start) {
+        snippet_start += 1;
+    }
+    while snippet_end > match_end_in_content && !content.is_char_boundary(snippet_end) {
+        snippet_end -= 1;
+    }
+    if !start_on_line && snippet_start > 0 {
+        if let Some(ws) = content[snippet_start..match_index].find(char::is_whitespace) {
+            snippet_start += ws;
+            snippet_start += content[snippet_start..].chars().next().map_or(0, char::len_utf8);
+        }
+    }
+    if !end_on_line && snippet_end < content.len() {
+        if let Some(ws) = content[match_end_in_content..snippet_end].rfind(char::is_whitespace) {
+            snippet_end = match_end_in_content + ws;
         }
     }
 
@@ -519,6 +541,16 @@ pub fn build_memory_search_hits(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extract_snippet_snaps_to_words_and_char_boundaries() {
+        let content = format!("{}checked the clock\u{2014}intervening hour{}", "\u{2014}x".repeat(40), " tail".repeat(40));
+        let idx = content.find("intervening").unwrap();
+        let (snippet, [start, end]) = extract_snippet(&content, idx, "interv".len());
+        assert_eq!(&snippet[start..end], "interv");
+        assert!(!snippet.starts_with("hecked"));
+        assert!(!snippet.ends_with("tai"));
+    }
 
     #[test]
     fn tokenize_drops_stopwords() {

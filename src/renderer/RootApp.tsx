@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import App from "./App";
 import { WindowedNoteView } from "./notes/WindowedNoteView";
+import { FileWindowView } from "./notes/FileWindowView";
 import { getCurrentWindowLabel, noteIdFromStickyWindowLabel } from "./notes/stickyWindow";
 import { useTimeOfDayBackground } from "./hooks/useTimeOfDayBackground";
 
 type RootRoute =
   | { kind: "loading" }
   | { kind: "main" }
-  | { kind: "sticky"; noteId: string };
+  | { kind: "sticky"; noteId: string }
+  | { kind: "file"; path: string };
 
 export function RootApp() {
   useTimeOfDayBackground();
@@ -17,6 +19,11 @@ export function RootApp() {
     let cancelled = false;
     void (async () => {
       const label = await getCurrentWindowLabel();
+      const filePath = new URLSearchParams(window.location.search).get("file");
+      if (!cancelled && label?.startsWith("file-") && filePath) {
+        setRoute({ kind: "file", path: filePath });
+        return;
+      }
       const noteId = label ? noteIdFromStickyWindowLabel(label) : null;
       if (!cancelled && noteId) {
         setRoute({ kind: "sticky", noteId });
@@ -40,6 +47,9 @@ export function RootApp() {
   }
   if (route.kind === "sticky") {
     return <WindowedNoteView noteId={route.noteId} />;
+  }
+  if (route.kind === "file") {
+    return <FileWindowView path={route.path} />;
   }
   return <App />;
 }

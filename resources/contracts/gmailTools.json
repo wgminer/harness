@@ -1,0 +1,154 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "gmail_search",
+      "description": "Search the user's Gmail and list matching threads (subject, sender, date, snippet, labels). Uses Gmail search syntax, e.g. 'from:alice newer_than:7d', 'is:unread in:inbox', 'subject:invoice has:attachment'. Use gmail_read_thread to read full messages.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Gmail search query. Empty lists recent inbox threads."
+          },
+          "max_results": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25,
+            "description": "Maximum threads to return (default 10)."
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmail_read_thread",
+      "description": "Read every message in a Gmail thread: headers, plain-text body, and attachment names. Message ids in the result can be passed as reply_to_message_id when drafting or sending a reply.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "description": "Thread id from gmail_search."
+          }
+        },
+        "required": ["thread_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmail_list_labels",
+      "description": "List the user's Gmail labels (system labels like INBOX, UNREAD, STARRED, IMPORTANT, plus user labels).",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmail_create_draft",
+      "description": "Create a Gmail draft (plain text). The user reviews it before it is created. Set reply_to_message_id to draft a reply in an existing thread; subject then defaults to 'Re: <original>'. Prefer drafting over sending unless the user explicitly asks to send.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Comma-separated recipient addresses."
+          },
+          "cc": {
+            "type": "string",
+            "description": "Optional comma-separated Cc addresses."
+          },
+          "bcc": {
+            "type": "string",
+            "description": "Optional comma-separated Bcc addresses."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject line. Optional when replying."
+          },
+          "body": {
+            "type": "string",
+            "description": "Plain-text message body."
+          },
+          "reply_to_message_id": {
+            "type": "string",
+            "description": "Optional Gmail message id (from gmail_read_thread) this draft replies to."
+          }
+        },
+        "required": ["to", "body"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmail_send",
+      "description": "Send an email (plain text) from the user's Gmail. The user must approve before it is sent. Only use when the user explicitly asks to send; otherwise use gmail_create_draft. Set reply_to_message_id to reply within an existing thread.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Comma-separated recipient addresses."
+          },
+          "cc": {
+            "type": "string",
+            "description": "Optional comma-separated Cc addresses."
+          },
+          "bcc": {
+            "type": "string",
+            "description": "Optional comma-separated Bcc addresses."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject line. Optional when replying."
+          },
+          "body": {
+            "type": "string",
+            "description": "Plain-text message body."
+          },
+          "reply_to_message_id": {
+            "type": "string",
+            "description": "Optional Gmail message id (from gmail_read_thread) this message replies to."
+          }
+        },
+        "required": ["to", "body"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "gmail_modify_threads",
+      "description": "Add or remove labels on Gmail threads. The user approves first. Archive = remove INBOX; mark read = remove UNREAD; mark unread = add UNREAD; star = add STARRED. Labels may be given by name or id.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Thread ids from gmail_search (max 50)."
+          },
+          "add_labels": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Label names or ids to add."
+          },
+          "remove_labels": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Label names or ids to remove."
+          }
+        },
+        "required": ["thread_ids"]
+      }
+    }
+  }
+]

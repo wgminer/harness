@@ -13,12 +13,20 @@ pub const SERVICE: &str = "com.harness.credentials";
 pub const KEY_OPENAI_API_KEY: &str = "openai.apiKey";
 pub const KEY_TAVILY_API_KEY: &str = "search.tavilyApiKey";
 pub const KEY_R2_SECRET_ACCESS_KEY: &str = "r2.secretAccessKey";
+pub const KEY_GOOGLE_CLIENT_ID: &str = "google.clientId";
+pub const KEY_GOOGLE_CLIENT_SECRET: &str = "google.clientSecret";
+pub const KEY_GMAIL_REFRESH_TOKEN: &str = "gmail.refreshToken";
+pub const KEY_GMAIL_ACCOUNT_EMAIL: &str = "gmail.accountEmail";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CredentialKey {
     OpenAiApiKey,
     TavilyApiKey,
     R2SecretAccessKey,
+    GoogleClientId,
+    GoogleClientSecret,
+    GmailRefreshToken,
+    GmailAccountEmail,
 }
 
 impl CredentialKey {
@@ -27,6 +35,10 @@ impl CredentialKey {
             Self::OpenAiApiKey => KEY_OPENAI_API_KEY,
             Self::TavilyApiKey => KEY_TAVILY_API_KEY,
             Self::R2SecretAccessKey => KEY_R2_SECRET_ACCESS_KEY,
+            Self::GoogleClientId => KEY_GOOGLE_CLIENT_ID,
+            Self::GoogleClientSecret => KEY_GOOGLE_CLIENT_SECRET,
+            Self::GmailRefreshToken => KEY_GMAIL_REFRESH_TOKEN,
+            Self::GmailAccountEmail => KEY_GMAIL_ACCOUNT_EMAIL,
         }
     }
 
@@ -35,6 +47,10 @@ impl CredentialKey {
             KEY_OPENAI_API_KEY => Some(Self::OpenAiApiKey),
             KEY_TAVILY_API_KEY => Some(Self::TavilyApiKey),
             KEY_R2_SECRET_ACCESS_KEY => Some(Self::R2SecretAccessKey),
+            KEY_GOOGLE_CLIENT_ID => Some(Self::GoogleClientId),
+            KEY_GOOGLE_CLIENT_SECRET => Some(Self::GoogleClientSecret),
+            KEY_GMAIL_REFRESH_TOKEN => Some(Self::GmailRefreshToken),
+            KEY_GMAIL_ACCOUNT_EMAIL => Some(Self::GmailAccountEmail),
             _ => None,
         }
     }
@@ -110,6 +126,10 @@ fn migrate_keyring_to_file_once() {
             CredentialKey::OpenAiApiKey,
             CredentialKey::TavilyApiKey,
             CredentialKey::R2SecretAccessKey,
+            CredentialKey::GoogleClientId,
+            CredentialKey::GoogleClientSecret,
+            CredentialKey::GmailRefreshToken,
+            CredentialKey::GmailAccountEmail,
         ] {
             let Ok(entry) = entry_for(key) else {
                 continue;
