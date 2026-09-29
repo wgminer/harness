@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { SETTINGS_PAGE_TITLE } from "../../shared/settingsPage";
 import { sidebarSyncStatusTooltip, type SyncStatus } from "../../shared/sync";
-import { useDismissible } from "../hooks/useDismissible";
+import { Menu, MenuItem } from "../ui/Menu";
 import type { View } from "./sidebarUtils";
 
 interface SidebarTitlebarActionsProps {
@@ -30,15 +30,8 @@ export function SidebarTitlebarActions({
   onNewImage,
 }: SidebarTitlebarActionsProps) {
   const [newMenuOpen, setNewMenuOpen] = useState(false);
-  const newMenuRef = useRef<HTMLDivElement | null>(null);
+  const newMenuRef = useRef<HTMLButtonElement | null>(null);
   const modKey = navigator.platform.startsWith("Mac") ? "⌘" : "Ctrl+";
-
-  useDismissible({
-    open: newMenuOpen,
-    onDismiss: () => setNewMenuOpen(false),
-    refs: [newMenuRef],
-    pointerEvent: "mousedown",
-  });
 
   const items = [
     { label: "New chat", Icon: Circle, shortcut: `${modKey}N`, testId: "sidebar-new-chat", run: onNewChat },
@@ -62,8 +55,9 @@ export function SidebarTitlebarActions({
 
   return (
     <div className="app-titlebar__sidebar-actions" data-tauri-drag-region={false}>
-      <div className="sidebar-new-menu-wrap" ref={newMenuRef}>
+      <div className="sidebar-new-menu-wrap">
         <button
+          ref={newMenuRef}
           type="button"
           className="app-titlebar__action"
           data-testid="sidebar-new-menu"
@@ -75,31 +69,19 @@ export function SidebarTitlebarActions({
         >
           <Plus size={16} strokeWidth={1.75} aria-hidden />
         </button>
-        {newMenuOpen ? (
-          <div className="sidebar-new-menu" role="menu" aria-label="Create new">
-            {items.map(({ label, Icon, shortcut, testId, run }) => (
-              <button
-                key={testId}
-                type="button"
-                className="sidebar-new-menu-item"
-                role="menuitem"
-                data-testid={testId}
-                onClick={() => {
-                  setNewMenuOpen(false);
-                  run();
-                }}
-              >
-                <span className="sidebar-new-menu-item__main">
-                  <Icon size={16} className="sidebar-new-menu-item__icon" aria-hidden />
-                  <span>{label}</span>
-                </span>
-                <span className="sidebar-new-menu-item__shortcut" aria-hidden>
-                  {shortcut}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : null}
+        <Menu
+          open={newMenuOpen}
+          onClose={() => setNewMenuOpen(false)}
+          anchorRef={newMenuRef}
+          label="Create new"
+          className="sidebar-new-menu"
+        >
+          {items.map(({ label, Icon, shortcut, testId, run }) => (
+            <MenuItem key={testId} icon={<Icon size={16} />} trailing={shortcut} testId={testId} onSelect={run}>
+              {label}
+            </MenuItem>
+          ))}
+        </Menu>
       </div>
       {renderNavButton("tasks", "Tasks", CheckLine, "library-tasks")}
     </div>

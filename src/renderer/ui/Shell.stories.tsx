@@ -79,23 +79,20 @@ function ShellGallery() {
       </Section>
 
       <Section title="Sidebar new menu" stack>
-        <div
-          className="sidebar-new-menu"
-          style={{ position: "relative", width: 220, background: "var(--bg-elevated)" }}
-        >
-          <button type="button" className="sidebar-new-menu-item">
-            <span className="sidebar-new-menu-item__main">
-              <MessageCircle size={14} className="sidebar-new-menu-item__icon" aria-hidden />
-              New Chat
+        <div className="ui-menu" role="menu" aria-label="Create new" style={{ position: "relative" }}>
+          <button type="button" role="menuitem" className="ui-menu__item">
+            <span className="ui-menu__icon" aria-hidden>
+              <MessageCircle size={16} />
             </span>
-            <span className="sidebar-new-menu-item__shortcut">⌘N</span>
+            <span className="ui-menu__label">New chat</span>
+            <span className="ui-menu__trailing">⌘N</span>
           </button>
-          <button type="button" className="sidebar-new-menu-item">
-            <span className="sidebar-new-menu-item__main">
-              <ImageIcon size={14} className="sidebar-new-menu-item__icon" aria-hidden />
-              New Image
+          <button type="button" role="menuitem" className="ui-menu__item">
+            <span className="ui-menu__icon" aria-hidden>
+              <ImageIcon size={16} />
             </span>
-            <span className="sidebar-new-menu-item__shortcut">⇧⌘I</span>
+            <span className="ui-menu__label">New image</span>
+            <span className="ui-menu__trailing">⇧⌘I</span>
           </button>
         </div>
       </Section>

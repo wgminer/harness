@@ -56,6 +56,8 @@ export interface MenuProps {
   /** Nested flyout: ArrowLeft closes it and returns focus to its row. */
   submenu?: boolean;
   testId?: string;
+  /** E.g. to cancel a pending flyout switch once the pointer reaches this flyout. */
+  onMouseEnter?: () => void;
   children: ReactNode;
 }
 
@@ -73,6 +75,7 @@ export function Menu({
   className,
   submenu = false,
   testId,
+  onMouseEnter,
   children,
 }: MenuProps) {
   const [mounted, setMounted] = useState(open);
@@ -268,6 +271,7 @@ export function Menu({
         }
         onKeyDown={onKeyDown}
         onMouseMove={onMouseMove}
+        onMouseEnter={onMouseEnter}
       >
         {children}
       </div>
