@@ -155,6 +155,6 @@ describe("sidebarSyncStatusTooltip", () => {
         lastError: "R2 unavailable",
         lastSuccessAt: null,
       }),
-    ).toBe("R2 unavailable");
+    ).toBe("Sync failed: R2 unavailable\nClick to open System → Data.");
   });
 });

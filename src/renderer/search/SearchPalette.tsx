@@ -2,12 +2,17 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type R
 import { Image as ImageIcon, MessageCircle, Mic, Search, StickyNote } from "lucide-react";
 import type { SearchResult } from "../../shared/types";
 import { searchTitleOnly, tokenizeQuery } from "../../shared/conversationSearch";
-import { conversationDisplayTitle, type ConversationListRow } from "../../shared/conversationSession";
+import {
+  conversationDisplayTitle,
+  isSidebarVisibleConversation,
+  type ConversationListRow,
+} from "../../shared/conversationSession";
 import { getDisplayNoteTitle, type NoteSummary } from "../../shared/writing";
 import { getDisplayImageTitle, type GeneratedImage } from "../../shared/images";
 
 const SEARCH_DEBOUNCE_MS = 120;
 const RESULTS_PER_GROUP = 6;
+const RECENT_LIMIT = 8;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface SearchPaletteProps {
@@ -35,11 +40,18 @@ interface PaletteItem {
 
 const ICON_PROPS = { size: 16, strokeWidth: 1.75 } as const;
 
-const GROUPS: { key: PaletteGroupKey; label: string; icon: ReactNode }[] = [
-  { key: "chat", label: "Chats", icon: <MessageCircle {...ICON_PROPS} /> },
-  { key: "dictation", label: "Dictations", icon: <Mic {...ICON_PROPS} /> },
-  { key: "note", label: "Notes", icon: <StickyNote {...ICON_PROPS} /> },
-  { key: "image", label: "Images", icon: <ImageIcon {...ICON_PROPS} /> },
+const GROUP_ICONS: Record<PaletteGroupKey, ReactNode> = {
+  chat: <MessageCircle {...ICON_PROPS} />,
+  dictation: <Mic {...ICON_PROPS} />,
+  note: <StickyNote {...ICON_PROPS} />,
+  image: <ImageIcon {...ICON_PROPS} />,
+};
+
+const GROUPS: { key: PaletteGroupKey; label: string }[] = [
+  { key: "chat", label: "Chats" },
+  { key: "dictation", label: "Dictations" },
+  { key: "note", label: "Notes" },
+  { key: "image", label: "Images" },
 ];
 
 /** Every occurrence of every query token, merged into non-overlapping ranges. */
@@ -128,6 +140,18 @@ function conversationItem(r: SearchResult, row: ConversationListRow | undefined)
     snippet: snippet && snippet !== "No message content" ? snippet : undefined,
     at: r.createdAt,
     meta,
+  };
+}
+
+function conversationRowItem(row: ConversationListRow): PaletteItem {
+  const group = row.sessionKind === "dictation" ? "dictation" : "chat";
+  return {
+    key: `${group}:${row.id}`,
+    group,
+    id: row.id,
+    title: conversationDisplayTitle(row.title, row.createdAt),
+    at: row.createdAt,
+    meta: [group === "dictation" ? "Dictation" : row.chatMode === "qa" ? "Q&A" : "Chat"],
   };
 }
 
@@ -224,7 +248,17 @@ export function SearchPalette({
     return () => clearTimeout(t);
   }, [open, trimmed, hasTokens]);
 
-  const groups = useMemo(() => {
+  const groups = useMemo((): { key: string; label: string; items: PaletteItem[] }[] => {
+    if (!trimmed) {
+      const recent = [
+        ...conversations.filter(isSidebarVisibleConversation).map(conversationRowItem),
+        ...notes.map(noteItem),
+        ...images.map(imageItem),
+      ]
+        .sort((a, b) => b.at - a.at)
+        .slice(0, RECENT_LIMIT);
+      return recent.length > 0 ? [{ key: "recent", label: "Recent", items: recent }] : [];
+    }
     if (!hasTokens) return [];
     const byGroup: Record<PaletteGroupKey, PaletteItem[]> = {
       chat: [],
@@ -319,6 +353,7 @@ export function SearchPalette({
   let status: string | null = null;
   if (trimmed && !hasTokens) status = "Keep typing…";
   else if (hasTokens && flatItems.length === 0) status = loading ? "Searching…" : "No results";
+  else if (!trimmed && flatItems.length === 0) status = "Nothing yet. Start a chat, note, or image to see it here.";
 
   let itemIndex = -1;
 
@@ -382,7 +417,7 @@ export function SearchPalette({
                       onClick={() => choose(item)}
                     >
                       <span className="search-palette__item-icon" aria-hidden>
-                        {g.icon}
+                        {GROUP_ICONS[item.group]}
                       </span>
                       <span className="search-palette__item-body">
                         <span className="search-palette__item-head">
@@ -413,6 +448,25 @@ export function SearchPalette({
         ) : status ? (
           <p className="search-palette__status">{status}</p>
         ) : null}
+
+        <div className="search-palette__footer" aria-hidden>
+          <span className="search-palette__hint">
+            <kbd>↑</kbd>
+            <kbd>↓</kbd>
+            Navigate
+          </span>
+          <span className="search-palette__hint">
+            <kbd>↵</kbd>
+            Open
+          </span>
+          <span className="search-palette__hint">
+            <kbd>Esc</kbd>
+            Close
+          </span>
+          {hasTokens && flatItems.length > 0 ? (
+            <span className="search-palette__footer-count">{plural(flatItems.length, "result")}</span>
+          ) : null}
+        </div>
       </div>
     </div>
   );

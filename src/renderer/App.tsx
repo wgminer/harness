@@ -562,13 +562,40 @@ export default function App() {
         phase={hotkey.phase}
         error={hotkey.error}
         recordingPath={hotkey.recordingPath}
+        needsAccessibility={hotkey.needsAccessibility}
         onRetry={hotkey.retry}
+        onOpenAccessibilitySettings={hotkey.openAccessibilitySettings}
         onShowInFinder={hotkey.showInFinder}
         onDismiss={hotkey.dismiss}
       />
       {hotkey.error && hotkey.phase === "idle" ? (
-        <div className="hotkey-recording-overlay__error" data-testid="hotkey-recording-error" role="status">
+        <div
+          className="hotkey-recording-overlay__error"
+          data-testid="hotkey-recording-error"
+          data-retryable={hotkey.recordingPath ? "true" : "false"}
+          role="status"
+        >
           {hotkey.error}
+          {hotkey.recordingPath ? (
+            <div className="hotkey-recording-overlay__error-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                data-testid="hotkey-recording-error-retry"
+                onClick={hotkey.retry}
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                data-testid="hotkey-recording-error-dismiss"
+                onClick={hotkey.dismiss}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

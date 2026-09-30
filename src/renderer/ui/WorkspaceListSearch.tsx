@@ -8,6 +8,7 @@ interface WorkspaceListSearchProps {
   "aria-label": string;
   autoFocus?: boolean;
   inputRef?: Ref<HTMLInputElement>;
+  className?: string;
 }
 
 export function WorkspaceListSearch({
@@ -17,9 +18,10 @@ export function WorkspaceListSearch({
   "aria-label": ariaLabel,
   autoFocus = false,
   inputRef,
+  className,
 }: WorkspaceListSearchProps) {
   return (
-    <div className="workspace-list-search">
+    <div className={className ? `workspace-list-search ${className}` : "workspace-list-search"}>
       <Search size={14} strokeWidth={2} className="workspace-list-search__icon" aria-hidden />
       <input
         ref={inputRef}

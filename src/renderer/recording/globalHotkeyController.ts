@@ -7,7 +7,11 @@ export type GlobalHotkeyActions = {
   /** True while this Fn take uses the full-screen overlay (unfocused start). */
   setGlobalHotkeyOverlaySession: (active: boolean) => void;
   setGlobalHotkeyOverlayPhase: (phase: GlobalHotkeyOverlayPhase) => void;
-  setGlobalHotkeyError: (message: string | null, recordingPath?: string | null) => void;
+  setGlobalHotkeyError: (
+    message: string | null,
+    recordingPath?: string | null,
+    needsAccessibility?: boolean,
+  ) => void;
   setView: (view: "chat" | "notes") => void;
   setConversationId: (id: string | null) => void;
   setFocusComposerNonce: (updater: (n: number) => number) => void;
@@ -130,16 +134,23 @@ export function createGlobalHotkeyController(): () => void {
     void playCancelChime();
   });
 
-  const unsubError = window.harness.recording.onGlobalRecordingError(({ message, recordingPath }) => {
+  const unsubRetrying = window.harness.recording.onGlobalRecordingRetrying(() => {
+    if (actions?.getOverlaySession()) return;
+    actions?.setGlobalHotkeyError(null, null);
+    actions?.setGlobalHotkeyOverlayPhase("transcribing");
+  });
+
+  const unsubError = window.harness.recording.onGlobalRecordingError((info) => {
+    const { message, recordingPath, needsAccessibility } = info;
     clearFocusedLanding();
     if (actions?.getOverlaySession()) {
-      actions.setGlobalHotkeyError(message, recordingPath ?? null);
+      actions.setGlobalHotkeyError(message, recordingPath ?? null, needsAccessibility === true);
       actions.setGlobalHotkeyOverlayPhase("failed");
       return;
     }
-    // Focused path: lightweight chip (App auto-clears).
+    // Focused path: lightweight chip (App auto-clears unless it can retry).
     actions?.setGlobalHotkeyOverlayPhase("idle");
-    actions?.setGlobalHotkeyError(message, null);
+    actions?.setGlobalHotkeyError(message, recordingPath ?? null);
   });
 
   const unsubTranscriptReady = window.harness.recording.onGlobalTranscriptReady((text) => {
@@ -185,6 +196,7 @@ export function createGlobalHotkeyController(): () => void {
     unsubStopped();
     unsubTranscribing();
     unsubCancelled();
+    unsubRetrying();
     unsubError();
     unsubTranscriptReady();
     unsubTranscriptDelivered();

@@ -7,19 +7,42 @@
   background: var(--bg);
 }
 
+.workspace-header-sentinel {
+  height: 0;
+}
+
+/* Sticky inside .workspace-scroll; divider appears once content scrolls under it.
+   Top pad + row height center the title 28px below the titlebar, on the same line as
+   the sidebar list header (.sidebar-list-header: space-4 pad + 24px line). */
 .workspace-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding-block: var(--space-8) var(--space-5);
+  padding-block: var(--space-3);
+  background: var(--bg);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.workspace-header--stuck {
+  border-bottom-color: var(--border-edge);
+}
+
+/* With a sub-row (tabs), the row sits on the divider and the divider is always shown. */
+.workspace-header--with-sub {
+  padding-bottom: 0;
+  border-bottom-color: var(--border-edge);
 }
 
 .workspace-header-inner {
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
-  min-height: var(--line-height-page);
+  min-height: var(--space-8);
   padding: 0 var(--shell-pad-inline);
   display: flex;
   align-items: center;
@@ -34,19 +57,28 @@
   min-width: 0;
 }
 
-.workspace-header-title-row > svg {
-  flex-shrink: 0;
-  width: var(--icon-size-page);
-  height: var(--icon-size-page);
-  color: var(--fg-muted);
+.workspace-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  min-width: 0;
+}
+
+.workspace-header-sub {
+  max-width: var(--content-width);
+  margin: var(--space-1) auto 0;
+  width: 100%;
+  padding: 0 var(--shell-pad-inline);
+  box-sizing: border-box;
 }
 
 .workspace-title {
   font-family: var(--font-family);
-  font-size: var(--font-size-page);
+  font-size: var(--font-size-title);
   font-weight: 600;
-  line-height: var(--line-height-page);
-  letter-spacing: -0.02em;
+  line-height: var(--line-height-title);
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
@@ -59,7 +91,7 @@
 .workspace-content {
   max-width: var(--content-width);
   margin: 0 auto;
-  padding: var(--space-2) var(--shell-pad-inline) var(--space-12);
+  padding: var(--space-4) var(--shell-pad-inline) var(--space-12);
 }
 
 /** Vertical stack for list pages (Tasks, Editor) — one gap token, no sibling margins. */
@@ -101,6 +133,17 @@
 
 .workspace-list-search:focus-within {
   border-color: var(--border-input-focus);
+}
+
+/* Header-sized search (sits in WorkspaceHeader actions next to .btn-compact). */
+.workspace-list-search--compact {
+  width: calc(var(--grid) * 60);
+  max-width: 100%;
+  height: calc(var(--grid) * 8 - var(--space-1));
+}
+
+.workspace-list-search--compact .workspace-list-search__input {
+  font-size: 14px;
 }
 
 .workspace-list-search__icon {

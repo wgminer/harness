@@ -334,8 +334,11 @@ export function createHarnessAdapter(): HarnessAPI {
       pasteText: (text: string) => invoke(cmd("recording:pasteText"), { text }),
       getGlobalStatus: () =>
         invoke<GlobalRecordingStatus>(cmd("recording:getGlobalStatus")),
-      retryGlobalTranscription: (path: string) =>
-        invoke(cmd("recording:retryGlobalTranscription"), { path }),
+      retryGlobalTranscription: (path: string, options?: { focused?: boolean }) =>
+        invoke(cmd("recording:retryGlobalTranscription"), {
+          path,
+          focused: options?.focused === true,
+        }),
       cancelGlobalTranscription: () =>
         invoke(cmd("recording:cancelGlobalTranscription")),
       cancelGlobalSession: () => invoke(cmd("recording:cancelGlobalSession")),
@@ -357,8 +360,10 @@ export function createHarnessAdapter(): HarnessAPI {
         ),
       onGlobalRecordingCancelled: (cb) =>
         subscribeToWire<Record<string, never>>("global-recording-cancelled", () => cb()),
+      onGlobalRecordingRetrying: (cb) =>
+        subscribeToWire<Record<string, never>>("global-recording-retrying", () => cb()),
       onGlobalRecordingError: (cb) =>
-        subscribeToWire<{ message?: string; recordingPath?: string }>(
+        subscribeToWire<{ message?: string; recordingPath?: string; needsAccessibility?: boolean }>(
           "global-recording-error",
           (p) =>
             cb({
@@ -367,6 +372,7 @@ export function createHarnessAdapter(): HarnessAPI {
                 typeof p?.recordingPath === "string" && p.recordingPath.length > 0
                   ? p.recordingPath
                   : undefined,
+              needsAccessibility: p?.needsAccessibility === true,
             }),
         ),
       onGlobalRecordingLevel: (cb) =>

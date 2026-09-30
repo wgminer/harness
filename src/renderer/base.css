@@ -979,6 +979,17 @@ hr {
   pointer-events: none;
 }
 
+.hotkey-recording-overlay__error[data-retryable="true"] {
+  pointer-events: auto;
+}
+
+.hotkey-recording-overlay__error-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
 /* Shared skeleton bars — use with <Skeleton /> and size modifiers. */
 .ui-skeleton {
   display: inline-block;

@@ -38,7 +38,7 @@ import {
 } from "../../shared/dictationSuggestedPrompts";
 import type { ConversationSessionKind } from "../../shared/conversationSession";
 import { ComposeCornerMeta, ComposeHeaderQuote } from "./ComposeHome";
-import { ComposerRimJig, useComposerRim } from "./composerRim/ComposerRimJig";
+import "./composerRim/composerRim.css";
 import { useChatModeState } from "./useChatModeState";
 import { useConversationTitleModal } from "./useConversationTitleModal";
 
@@ -1209,12 +1209,9 @@ export function ChatView({
     onCycleMode: handleCycleMode,
   };
 
-  const composerRim = useComposerRim();
-
   if (isComposeMode) {
     return (
-      <>
-        <div className="new-chat-pane">
+      <div className="new-chat-pane">
         <ComposeCornerMeta />
         <div className="new-chat-center">
           <div className="new-chat-center-stack">
@@ -1224,16 +1221,13 @@ export function ChatView({
               data-testid="chat-composer"
               role="group"
               aria-label="Message composer"
-              {...composerRim.hostProps}
             >
               <ChatComposer {...composerProps} />
             </div>
             <ComposeHeaderQuote />
           </div>
         </div>
-        </div>
-        <ComposerRimJig settings={composerRim.settings} onChange={composerRim.setSettings} />
-      </>
+      </div>
     );
   }
 

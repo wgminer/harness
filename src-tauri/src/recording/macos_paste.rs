@@ -155,14 +155,16 @@ pub async fn paste_text(
     text: &str,
     target_pid: Option<i32>,
 ) -> Result<(), String> {
+    // Clipboard first so the transcript is still one Cmd+V away if paste is blocked.
+    let clipboard_text = text.to_string();
+    run_on_main(app, move || set_clipboard(clipboard_text))??;
+
     if !crate::system::macos_accessibility_is_trusted() {
         return Err(
-            "Accessibility access is required to paste into other apps. Enable Harness in System Settings → Privacy & Security → Accessibility, then quit and reopen.".into(),
+            "Transcript copied to the clipboard. To paste automatically, turn on Harness in Accessibility settings, then quit and reopen Harness.".into(),
         );
     }
 
-    let clipboard_text = text.to_string();
-    run_on_main(app, move || set_clipboard(clipboard_text))??;
     tokio::time::sleep(CLIPBOARD_SETTLE).await;
 
     let pid = target_pid.or_else(|| frontmost_foreign_pid(app));

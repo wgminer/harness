@@ -108,7 +108,9 @@ export function sidebarSyncStatusTooltip(input: {
 }): string {
   if (!input.configured) return `Set up sync in ${settingsSection("Data")}`;
   if (input.busy) return "Syncing…";
-  if (input.lastError) return input.lastError;
+  if (input.lastError) {
+    return `Sync failed: ${input.lastError}\nClick to open ${settingsSection("Data")}.`;
+  }
   return syncInlineStatusLine({ lastSuccessAt: input.lastSuccessAt }) ?? "Synced";
 }
 

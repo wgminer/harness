@@ -1,6 +1,6 @@
 import { snapToGrid } from "../../shared/grid";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CheckLine, ChevronRight, Circle, CircleCheck, Trash2, X } from "lucide-react";
+import { ChevronRight, Circle, CircleCheck, Plus, Trash2, X } from "lucide-react";
 import type { TaskItem, TasksPayload } from "../../shared/desktopAPI";
 import { normalizeTags } from "../../shared/tags";
 import {
@@ -351,14 +351,29 @@ export function TasksView() {
   return (
     <div ref={tasksPaneRef} className="workspace-page tasks-page">
       <div className="workspace-scroll tasks-scroll">
-        <WorkspaceHeader title="Tasks" icon={<CheckLine size={24} />} />
+        <WorkspaceHeader
+          title="Tasks"
+          actions={
+            <>
+              <WorkspaceListSearch
+                className="workspace-list-search--compact"
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search tasks…"
+                aria-label="Search tasks"
+              />
+              <button
+                type="button"
+                className="btn btn-compact"
+                onClick={() => composer.inputRef.current?.focus()}
+              >
+                <Plus size={14} strokeWidth={2} aria-hidden />
+                New task
+              </button>
+            </>
+          }
+        />
         <div className="workspace-content workspace-stack tasks-content">
-          <WorkspaceListSearch
-            value={searchQuery}
-            onChange={setSearchQuery}
-            placeholder="Search tasks…"
-            aria-label="Search tasks"
-          />
           <div className="tasks-section">
             <button
               type="button"
@@ -375,6 +390,7 @@ export function TasksView() {
                 aria-hidden
               />
               <span>Active</span>
+              {!loading && <span className="tasks-section-count">{activeTasks.length}</span>}
             </button>
             <div id="tasks-active-panel" role="region" aria-labelledby="tasks-active-heading" hidden={!activeOpen}>
               {loading ? (
@@ -421,6 +437,7 @@ export function TasksView() {
                   aria-hidden
                 />
                 <span>Completed</span>
+                <span className="tasks-section-count">{completedTasks.length}</span>
               </button>
               <div
                 id="tasks-completed-panel"

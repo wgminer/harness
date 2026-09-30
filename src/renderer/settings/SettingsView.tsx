@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { ExternalLink, Settings2 as SettingsIcon } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { SETTINGS_PAGE_TITLE } from "../../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import type { Settings } from "../../shared/types";
@@ -758,37 +758,33 @@ export function SettingsView({
   return (
     <div className="workspace-page settings-page">
       <div ref={scrollRef} className="workspace-scroll settings-scroll">
-        <WorkspaceHeader
-          title={SETTINGS_PAGE_TITLE}
-          icon={<SettingsIcon size={24} />}
-          actions={
-            <div
-              className="settings-tabs settings-tabs--header"
-              role="tablist"
-              aria-label={`${SETTINGS_PAGE_TITLE} sections`}
-            >
-              {SETTINGS_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  ref={(el) => {
-                    tabButtonRefs.current[tab.id] = el;
-                  }}
-                  id={`settings-tab-${tab.id}`}
-                  type="button"
-                  role="tab"
-                  className={`settings-tab${activeTab === tab.id ? " settings-tab--active" : ""}`}
-                  aria-selected={activeTab === tab.id}
-                  aria-controls={`settings-panel-${tab.id}`}
-                  tabIndex={activeTab === tab.id ? 0 : -1}
-                  onClick={() => switchTab(tab.id)}
-                  onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          }
-        />
+        <WorkspaceHeader title={SETTINGS_PAGE_TITLE}>
+          <div
+            className="settings-tabs settings-tabs--header"
+            role="tablist"
+            aria-label={`${SETTINGS_PAGE_TITLE} sections`}
+          >
+            {SETTINGS_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                ref={(el) => {
+                  tabButtonRefs.current[tab.id] = el;
+                }}
+                id={`settings-tab-${tab.id}`}
+                type="button"
+                role="tab"
+                className={`settings-tab${activeTab === tab.id ? " settings-tab--active" : ""}`}
+                aria-selected={activeTab === tab.id}
+                aria-controls={`settings-panel-${tab.id}`}
+                tabIndex={activeTab === tab.id ? 0 : -1}
+                onClick={() => switchTab(tab.id)}
+                onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </WorkspaceHeader>
         <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
           {activeTab === "general" && <SettingsTabPanel id="general">

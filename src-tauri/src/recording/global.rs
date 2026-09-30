@@ -1,12 +1,13 @@
 //! Owns global Fn hotkey session + menu bar tray + native capture pipeline.
 
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use tauri::{
     image::Image,
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, State,
+    AppHandle, Emitter, Manager, State,
 };
 use tokio::sync::Mutex;
 
@@ -53,6 +54,16 @@ pub struct GlobalRecordingRuntime {
     pub(crate) started_focused: Mutex<bool>,
     /// Frontmost foreign app when an unfocused take began — paste target after transcribe.
     pub(crate) paste_target_pid: Mutex<Option<i32>>,
+    /// Most recent saved take (including Escape-cancelled ones) — tray "Retry Last Recording".
+    last_recording: StdMutex<Option<PathBuf>>,
+    /// Most recent successful transcript — tray "Copy Last Transcript".
+    last_transcript: StdMutex<Option<String>>,
+    tray_recovery_items: StdMutex<Option<TrayRecoveryItems>>,
+}
+
+struct TrayRecoveryItems {
+    copy_transcript: MenuItem<tauri::Wry>,
+    retry_recording: MenuItem<tauri::Wry>,
 }
 
 impl GlobalRecordingRuntime {
@@ -73,6 +84,28 @@ impl GlobalRecordingRuntime {
             capture: StdMutex::new(None),
             started_focused: Mutex::new(true),
             paste_target_pid: Mutex::new(None),
+            last_recording: StdMutex::new(None),
+            last_transcript: StdMutex::new(None),
+            tray_recovery_items: StdMutex::new(None),
+        }
+    }
+
+    pub(crate) fn remember_recording(&self, path: PathBuf) {
+        *self.last_recording.lock().unwrap() = Some(path);
+        self.refresh_tray_recovery_items();
+    }
+
+    pub(crate) fn remember_transcript(&self, text: String) {
+        *self.last_transcript.lock().unwrap() = Some(text);
+        self.refresh_tray_recovery_items();
+    }
+
+    fn refresh_tray_recovery_items(&self) {
+        let has_transcript = self.last_transcript.lock().unwrap().is_some();
+        let has_recording = self.last_recording.lock().unwrap().is_some();
+        if let Some(items) = self.tray_recovery_items.lock().unwrap().as_ref() {
+            let _ = items.copy_transcript.set_enabled(has_transcript);
+            let _ = items.retry_recording.set_enabled(has_recording);
         }
     }
 
@@ -237,17 +270,36 @@ async fn start_tray_and_monitor(app: AppHandle, runtime: Arc<GlobalRecordingRunt
 
     let show_item = MenuItem::with_id(&app, "show", "Show Harness", true, None::<&str>)
         .expect("show menu item");
-    let menu = Menu::with_items(&app, &[&show_item]).expect("tray menu");
+    let copy_item =
+        MenuItem::with_id(&app, "copy-last-transcript", "Copy Last Transcript", false, None::<&str>)
+            .expect("copy menu item");
+    let retry_item =
+        MenuItem::with_id(&app, "retry-last-recording", "Retry Last Recording", false, None::<&str>)
+            .expect("retry menu item");
+    let separator = PredefinedMenuItem::separator(&app).expect("menu separator");
+    let menu = Menu::with_items(&app, &[&copy_item, &retry_item, &separator, &show_item])
+        .expect("tray menu");
+    *runtime.tray_recovery_items.lock().unwrap() = Some(TrayRecoveryItems {
+        copy_transcript: copy_item,
+        retry_recording: retry_item,
+    });
+    runtime.refresh_tray_recovery_items();
 
     let tray_id = "harness-global-recording".to_string();
     let _tray = TrayIconBuilder::with_id(&tray_id)
         .icon(tray_icon)
         .tooltip(app_display_name())
         .menu(&menu)
-        .on_menu_event(|app, event| {
-            if event.id.as_ref() == "show" {
-                show_and_focus_main(&app);
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => show_and_focus_main(app),
+            "copy-last-transcript" => copy_last_transcript(app),
+            "retry-last-recording" => {
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    retry_last_recording(&app).await;
+                });
             }
+            _ => {}
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -356,12 +408,14 @@ pub async fn recording_signal_frontend_ready(
     Ok(())
 }
 
-/// Re-run transcription on a saved wav from the failed overlay (unfocused delivery).
-#[tauri::command(rename_all = "camelCase")]
-pub async fn recording_retry_global_transcription(
+/// Re-run transcription on a saved wav. `focused` lands in the composer; otherwise
+/// the transcript pastes back into `paste_target_pid`.
+async fn retry_recording(
     app: AppHandle,
-    runtime: State<'_, Arc<GlobalRecordingRuntime>>,
-    path: String,
+    runtime: Arc<GlobalRecordingRuntime>,
+    path: PathBuf,
+    focused: bool,
+    paste_target_pid: Option<i32>,
 ) -> Result<(), String> {
     if *runtime.transcribing.lock().await {
         return Err("Transcription already in progress.".into());
@@ -369,14 +423,68 @@ pub async fn recording_retry_global_transcription(
     let wav = tokio::fs::read(&path)
         .await
         .map_err(|e| format!("Could not read recording: {e}"))?;
-    let path_buf = std::path::PathBuf::from(path);
-    let runtime = runtime.inner().clone();
     tauri::async_runtime::spawn(async move {
-        let paste_target_pid = *runtime.paste_target_pid.lock().await;
-        run_stop_pipeline_from_path(app, runtime, false, wav, Some(path_buf), paste_target_pid)
+        run_stop_pipeline_from_path(app, runtime, focused, wav, Some(path), paste_target_pid)
             .await;
     });
     Ok(())
+}
+
+/// Retry from the failed overlay / focused error chip.
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_retry_global_transcription(
+    app: AppHandle,
+    runtime: State<'_, Arc<GlobalRecordingRuntime>>,
+    path: String,
+    focused: Option<bool>,
+) -> Result<(), String> {
+    let runtime = runtime.inner().clone();
+    let focused = focused.unwrap_or(false);
+    let paste_target_pid = if focused {
+        None
+    } else {
+        *runtime.paste_target_pid.lock().await
+    };
+    retry_recording(app, runtime, PathBuf::from(path), focused, paste_target_pid).await
+}
+
+fn copy_last_transcript(app: &AppHandle) {
+    let Some(runtime) = app.try_state::<Arc<GlobalRecordingRuntime>>() else {
+        return;
+    };
+    let Some(text) = runtime.last_transcript.lock().unwrap().clone() else {
+        return;
+    };
+    if let Err(err) = arboard::Clipboard::new().and_then(|mut c| c.set_text(text)) {
+        eprintln!("[Harness:recording] copy last transcript failed: {err}");
+    }
+}
+
+/// Tray retry: deliver wherever the user is now (composer if Harness is focused,
+/// else paste into the frontmost app).
+async fn retry_last_recording(app: &AppHandle) {
+    let Some(runtime) = app.try_state::<Arc<GlobalRecordingRuntime>>() else {
+        return;
+    };
+    let runtime = runtime.inner().clone();
+    let Some(path) = runtime.last_recording.lock().unwrap().clone() else {
+        return;
+    };
+    let focused = crate::recording::global_effects::is_main_window_focused(app);
+    #[cfg(target_os = "macos")]
+    let paste_target_pid = if focused {
+        None
+    } else {
+        crate::recording::macos_paste::frontmost_foreign_pid(app)
+    };
+    #[cfg(not(target_os = "macos"))]
+    let paste_target_pid = None;
+    if focused {
+        let _ = app.emit("global-recording-retrying", serde_json::json!({}));
+    }
+    if let Err(err) = retry_recording(app.clone(), runtime, path, focused, paste_target_pid).await {
+        eprintln!("[Harness:recording] retry last recording failed: {err}");
+    }
 }
 
 /// Cancel in-flight global transcription (also triggered by Escape).

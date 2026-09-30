@@ -353,7 +353,8 @@ export interface HarnessAPI {
     cancelTranscription: (requestId: string) => Promise<void>;
     pasteText: (text: string) => Promise<void>;
     getGlobalStatus: () => Promise<GlobalRecordingStatus>;
-    retryGlobalTranscription: (path: string) => Promise<void>;
+    /** `focused` lands the transcript in the composer instead of pasting it back. */
+    retryGlobalTranscription: (path: string, options?: { focused?: boolean }) => Promise<void>;
     cancelGlobalTranscription: () => Promise<void>;
     cancelGlobalSession: () => Promise<void>;
     stopGlobalRecording: () => Promise<void>;
@@ -363,8 +364,10 @@ export interface HarnessAPI {
       cb: (info: { recordingPath?: string }) => void,
     ) => () => void;
     onGlobalRecordingCancelled: (cb: () => void) => () => void;
+    /** Menu bar "Retry Last Recording" started while Harness is focused. */
+    onGlobalRecordingRetrying: (cb: () => void) => () => void;
     onGlobalRecordingError: (
-      cb: (info: { message: string; recordingPath?: string }) => void,
+      cb: (info: { message: string; recordingPath?: string; needsAccessibility?: boolean }) => void,
     ) => () => void;
     onGlobalRecordingLevel: (cb: (level: number) => void) => () => void;
     onGlobalTranscriptReady: (cb: (text: string) => void) => () => void;

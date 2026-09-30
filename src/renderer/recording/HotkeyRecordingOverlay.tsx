@@ -7,7 +7,10 @@ interface HotkeyRecordingOverlayProps {
   phase: GlobalHotkeyOverlayPhase;
   error?: string | null;
   recordingPath?: string | null;
+  /** Transcript was saved and copied, but paste needs Accessibility access. */
+  needsAccessibility?: boolean;
   onRetry?: () => void;
+  onOpenAccessibilitySettings?: () => void;
   onShowInFinder?: () => void;
   onDismiss?: () => void;
 }
@@ -28,7 +31,9 @@ export function HotkeyRecordingOverlay({
   phase,
   error,
   recordingPath,
+  needsAccessibility = false,
   onRetry,
+  onOpenAccessibilitySettings,
   onShowInFinder,
   onDismiss,
 }: HotkeyRecordingOverlayProps) {
@@ -111,16 +116,27 @@ export function HotkeyRecordingOverlay({
         <div className="hotkey-recording-overlay__failed" data-testid="hotkey-recording-failed">
           <p className="hotkey-recording-overlay__error-text">{error ?? "Something went wrong."}</p>
           <div className="hotkey-recording-overlay__actions">
-            <button
-              type="button"
-              className="btn btn-primary"
-              data-testid="hotkey-recording-retry"
-              onClick={() => onRetry?.()}
-              disabled={!recordingPath}
-            >
-              Retry
-            </button>
-            {recordingPath ? (
+            {needsAccessibility ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="hotkey-recording-open-accessibility"
+                onClick={() => onOpenAccessibilitySettings?.()}
+              >
+                Open Accessibility Settings
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="hotkey-recording-retry"
+                onClick={() => onRetry?.()}
+                disabled={!recordingPath}
+              >
+                Retry
+              </button>
+            )}
+            {recordingPath && !needsAccessibility ? (
               <button
                 type="button"
                 className="btn"

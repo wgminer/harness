@@ -22,6 +22,7 @@ describe("globalHotkeyController", () => {
   let stoppedCb: (() => void) | null = null;
   let transcribingCb: ((info: { recordingPath?: string }) => void) | null = null;
   let cancelledCb: (() => void) | null = null;
+  let retryingCb: (() => void) | null = null;
   let errorCb: ((info: { message: string; recordingPath?: string }) => void) | null = null;
   let transcriptReadyCb: ((text: string) => void) | null = null;
   let transcriptDeliveredCb: ((conversationId: string) => void) | null = null;
@@ -68,6 +69,12 @@ describe("globalHotkeyController", () => {
           cancelledCb = cb;
           return () => {
             cancelledCb = null;
+          };
+        }),
+        onGlobalRecordingRetrying: vi.fn((cb: () => void) => {
+          retryingCb = cb;
+          return () => {
+            retryingCb = null;
           };
         }),
         onGlobalRecordingError: vi.fn(
@@ -162,7 +169,13 @@ describe("globalHotkeyController", () => {
     startedCb?.({ focused: false });
     errorCb?.({ message: "no speech", recordingPath: "/tmp/rec.wav" });
     expect(actions.setGlobalHotkeyOverlayPhase).toHaveBeenCalledWith("failed");
-    expect(actions.setGlobalHotkeyError).toHaveBeenCalledWith("no speech", "/tmp/rec.wav");
+    expect(actions.setGlobalHotkeyError).toHaveBeenCalledWith("no speech", "/tmp/rec.wav", false);
+  });
+
+  it("flags overlay errors that need Accessibility access", () => {
+    startedCb?.({ focused: false });
+    errorCb?.({ message: "copied", recordingPath: "/tmp/rec.wav", needsAccessibility: true });
+    expect(actions.setGlobalHotkeyError).toHaveBeenCalledWith("copied", "/tmp/rec.wav", true);
   });
 
   it("uses lightweight error for focused path", () => {
@@ -170,6 +183,18 @@ describe("globalHotkeyController", () => {
     errorCb?.({ message: "mic denied" });
     expect(actions.setGlobalHotkeyOverlayPhase).toHaveBeenCalledWith("idle");
     expect(actions.setGlobalHotkeyError).toHaveBeenCalledWith("mic denied", null);
+  });
+
+  it("keeps the recording path on focused errors so the chip can retry", () => {
+    startedCb?.({ focused: true });
+    errorCb?.({ message: "no speech", recordingPath: "/tmp/rec.wav" });
+    expect(actions.setGlobalHotkeyOverlayPhase).toHaveBeenCalledWith("idle");
+    expect(actions.setGlobalHotkeyError).toHaveBeenCalledWith("no speech", "/tmp/rec.wav");
+  });
+
+  it("shows the transcribing spinner for a focused menu bar retry", () => {
+    retryingCb?.();
+    expect(actions.setGlobalHotkeyOverlayPhase).toHaveBeenCalledWith("transcribing");
   });
 
   it("delivers focused transcripts into the composer", () => {

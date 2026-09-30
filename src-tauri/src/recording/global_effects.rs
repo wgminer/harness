@@ -9,7 +9,7 @@ use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use crate::memory::title::finalize_voice_dictation_session;
 use crate::recording::dictation_index;
 use crate::env_util::is_harness_e2e;
-use crate::recording::global_capture::NativeCapture;
+use crate::recording::global_capture::{NativeCapture, TARGET_SAMPLE_RATE};
 use crate::recording::global_session::GlobalRecordingEffect;
 use crate::memory::{append_message, create_conversation, AppendMessageMeta};
 use crate::paths::{get_recordings_dir, resolve_bundled_resource};
@@ -86,9 +86,21 @@ pub fn show_and_focus_main(app: &AppHandle) {
 }
 
 fn emit_recording_error(app: &AppHandle, message: &str, recording_path: Option<&Path>) {
+    emit_recording_error_payload(app, message, recording_path, false);
+}
+
+fn emit_recording_error_payload(
+    app: &AppHandle,
+    message: &str,
+    recording_path: Option<&Path>,
+    needs_accessibility: bool,
+) {
     let mut payload = serde_json::json!({ "message": message });
     if let Some(path) = recording_path {
         payload["recordingPath"] = serde_json::json!(path.to_string_lossy());
+    }
+    if needs_accessibility {
+        payload["needsAccessibility"] = serde_json::json!(true);
     }
     let _ = app.emit("global-recording-error", payload);
 }
@@ -134,6 +146,32 @@ async fn save_wav(wav: &[u8]) -> Option<PathBuf> {
     Some(path)
 }
 
+/// Shorter Escape-cancelled takes are treated as misfires and dropped.
+const MIN_KEPT_CANCELLED_TAKE_SECS: u32 = 2;
+
+/// Escape during recording still archives the audio so an accidental cancel can be
+/// recovered from the tray ("Retry Last Recording").
+fn keep_cancelled_take(runtime: &Arc<GlobalRecordingRuntime>, cap: NativeCapture) {
+    if is_harness_e2e() {
+        cap.cancel();
+        return;
+    }
+    let Ok(wav) = cap.stop() else {
+        return;
+    };
+    // 16-bit mono WAV after a 44-byte header.
+    let min_bytes = 44 + (TARGET_SAMPLE_RATE * 2 * MIN_KEPT_CANCELLED_TAKE_SECS) as usize;
+    if wav.len() < min_bytes {
+        return;
+    }
+    let runtime = runtime.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Some(path) = save_wav(&wav).await {
+            runtime.remember_recording(path);
+        }
+    });
+}
+
 async fn bring_to_front_setting(runtime: &GlobalRecordingRuntime) -> bool {
     let settings = get_settings(&runtime.app_state.write_chains).await;
     settings
@@ -150,7 +188,7 @@ async fn deliver_unfocused(
     recording_path: Option<&Path>,
     paste_target_pid: Option<i32>,
 ) -> Result<String, String> {
-    paste_text_impl(app, text, paste_target_pid).await?;
+    // Save before pasting so a blocked paste (no Accessibility) never loses the transcript.
     let conversation_id = create_conversation(app_state)
         .await
         .map_err(|e| e.to_string())?;
@@ -173,6 +211,7 @@ async fn deliver_unfocused(
     if let Some(path) = recording_path {
         let _ = dictation_index::link(&conversation_id, path);
     }
+    paste_text_impl(app, text, paste_target_pid).await?;
     Ok(conversation_id)
 }
 
@@ -193,6 +232,9 @@ pub async fn run_stop_pipeline_from_path(
         Some(path) => Some(path),
         None => save_wav(&wav).await,
     };
+    if let Some(ref path) = recording_path {
+        runtime.remember_recording(path.clone());
+    }
 
     let mut payload = serde_json::json!({});
     if let Some(ref path) = recording_path {
@@ -244,6 +286,8 @@ pub async fn run_stop_pipeline_from_path(
         return;
     }
 
+    runtime.remember_transcript(text.clone());
+
     if was_focused {
         let _ = app.emit("global-transcript-ready", serde_json::json!({ "text": text }));
     } else {
@@ -262,7 +306,14 @@ pub async fn run_stop_pipeline_from_path(
                 );
             }
             Err(err) => {
-                emit_recording_error(&app, &err, recording_path.as_deref());
+                let needs_accessibility = cfg!(target_os = "macos")
+                    && !crate::system::macos_accessibility_is_trusted();
+                emit_recording_error_payload(
+                    &app,
+                    &err,
+                    recording_path.as_deref(),
+                    needs_accessibility,
+                );
                 *runtime.transcribing.lock().await = false;
                 unregister_escape(&app, &runtime);
                 set_tray_state(&app, &runtime, TrayIconState::Ready).await;
@@ -392,8 +443,9 @@ pub async fn run_recording_effects(
             }
             GlobalRecordingEffect::CancelRecording => {
                 unregister_escape(app, runtime);
-                if let Some(cap) = runtime.capture.lock().unwrap().take() {
-                    cap.cancel();
+                let cancelled = runtime.capture.lock().unwrap().take();
+                if let Some(cap) = cancelled {
+                    keep_cancelled_take(runtime, cap);
                 }
                 let _ = app.emit("global-recording-cancelled", serde_json::json!({}));
                 set_tray_state(app, runtime, TrayIconState::Ready).await;

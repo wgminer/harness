@@ -1,15 +1,9 @@
 /*
- * Animated rim + glow around the compose-mode composer.
- * Host: `.new-chat-composer[data-rim]`. Tuning values come from `composerRimVars()`.
+ * Aurora rim + glow around the compose-mode composer, keyed to the app accent.
  *   ::before — thin gradient ring, masked to the border band.
  *   ::after  — blurred copy of the gradient behind the glass for the halo.
+ * Bands drift sideways on an 8s loop; opacity breathes on a 7s loop.
  */
-
-@property --rim-angle {
-  syntax: "<angle>";
-  inherits: true;
-  initial-value: 0deg;
-}
 
 @property --rim-drift {
   syntax: "<percentage>";
@@ -17,59 +11,55 @@
   initial-value: 0%;
 }
 
-/* 0 = exhale (dim, base width), 1 = inhale (bright, swollen). */
+/* 0 = exhale (dim), 1 = inhale (bright). */
 @property --rim-breath {
   syntax: "<number>";
   inherits: true;
   initial-value: 0;
 }
 
-@property --rim-visible {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 1;
-}
-
-.new-chat-composer[data-rim] {
+.new-chat-composer {
+  --rim-width: 1px;
   --rim-radius: var(--radius-lg);
-  --rim-c1: oklch(var(--rim-lightness) var(--rim-chroma) var(--rim-hue));
-  --rim-c2: oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + var(--rim-hue-spread)));
-  --rim-c3: oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + var(--rim-hue-spread) / 2));
+  --rim-hue-spread: 24;
+  --rim-opacity: 0.85;
+  --rim-pulse-floor: 0.35;
+  --rim-glow-blur: 20px;
+  --rim-glow-opacity: 0.3;
+  --rim-glow-spread: 2px;
+  --rim-c1: var(--accent);
+  --rim-c2: oklch(from var(--accent) l c calc(h + var(--rim-hue-spread)));
+  --rim-c3: oklch(from var(--accent) l c calc(h + var(--rim-hue-spread) / 2));
   --rim-level: calc(var(--rim-pulse-floor) + (1 - var(--rim-pulse-floor)) * var(--rim-breath));
-  --rim-live-width: calc(var(--rim-width) + var(--rim-swell) * var(--rim-breath));
   position: relative;
   isolation: isolate;
   animation:
-    composer-rim-spin var(--rim-spin-duration) linear infinite var(--rim-spin-state),
-    composer-rim-pulse var(--rim-pulse-duration) ease-in-out infinite var(--rim-pulse-state);
-  transition: --rim-visible 400ms ease;
+    composer-rim-drift 8s linear infinite,
+    composer-rim-pulse 7s ease-in-out infinite;
 }
 
-.new-chat-composer[data-rim="off"] {
-  animation: none;
+.new-chat-composer .chat-composer-inner {
+  background: color-mix(in oklab, var(--bg) 60%, transparent);
 }
 
-.new-chat-composer[data-rim]:not([data-rim="off"]) .chat-composer-inner {
-  background: color-mix(in oklab, var(--bg) var(--rim-glass-fill), transparent);
-}
-
-.new-chat-composer[data-rim]:not([data-rim="off"])::before,
-.new-chat-composer[data-rim]:not([data-rim="off"])::after {
+.new-chat-composer::before,
+.new-chat-composer::after {
   content: "";
   position: absolute;
   pointer-events: none;
-  background: var(--rim-fill);
-  background-size: var(--rim-fill-size, auto);
-  background-position: var(--rim-fill-position, 0 0);
+  /* 200% size + 200% drift = one seamless loop. */
+  background: linear-gradient(90deg, var(--rim-c1), var(--rim-c3), var(--rim-c2), var(--rim-c3), var(--rim-c1));
+  background-size: 200% 100%;
+  background-position: var(--rim-drift) 0;
 }
 
-/* Ring: sits over the 1px border and grows outward as it breathes. */
-.new-chat-composer[data-rim]:not([data-rim="off"])::before {
+/* Ring: sits over the 1px border. */
+.new-chat-composer::before {
   z-index: 1;
-  inset: calc(1px - var(--rim-live-width));
-  padding: var(--rim-live-width);
-  border-radius: calc(var(--rim-radius) + var(--rim-live-width) - 1px);
-  opacity: calc(var(--rim-opacity) * var(--rim-level) * var(--rim-visible));
+  inset: calc(1px - var(--rim-width));
+  padding: var(--rim-width);
+  border-radius: calc(var(--rim-radius) + var(--rim-width) - 1px);
+  opacity: calc(var(--rim-opacity) * var(--rim-level));
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -79,93 +69,17 @@
     linear-gradient(#000 0 0);
 }
 
-/* Halo: behind the composer; glass fill controls how much bleeds through. */
-.new-chat-composer[data-rim]:not([data-rim="off"])::after {
+/* Halo: behind the composer; the glass fill keeps it from bleeding through. */
+.new-chat-composer::after {
   z-index: -1;
   inset: calc(var(--rim-glow-spread) * -1);
   border-radius: calc(var(--rim-radius) + var(--rim-glow-spread));
   filter: blur(var(--rim-glow-blur));
-  opacity: calc(var(--rim-glow-opacity) * var(--rim-level) * var(--rim-visible));
+  opacity: calc(var(--rim-glow-opacity) * var(--rim-level));
 }
 
-/* Accent-keyed palette: follows the app accent, hue spread fans out around it. */
-.new-chat-composer[data-rim-color="accent"] {
-  --rim-c1: var(--accent);
-  --rim-c2: oklch(from var(--accent) l c calc(h + var(--rim-hue-spread)));
-  --rim-c3: oklch(from var(--accent) l c calc(h + var(--rim-hue-spread) / 2));
-}
-
-/* ---- Patterns ---- */
-
-.new-chat-composer[data-rim="rainbow"] {
-  --rim-fill: conic-gradient(
-    from var(--rim-angle),
-    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 0)),
-    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 60)),
-    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 120)),
-    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 180)),
-    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 240)),
-    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 300)),
-    oklch(var(--rim-lightness) var(--rim-chroma) calc(var(--rim-hue) + 360))
-  );
-}
-
-/* A bright head sweeping around a dark track. */
-.new-chat-composer[data-rim="comet"] {
-  --rim-fill: conic-gradient(
-    from var(--rim-angle),
-    transparent 0turn,
-    transparent 0.55turn,
-    color-mix(in oklab, var(--rim-c1) 40%, transparent) 0.8turn,
-    var(--rim-c2) 0.97turn,
-    transparent 1turn
-  );
-}
-
-/* Two hues chasing each other. */
-.new-chat-composer[data-rim="duo"] {
-  --rim-fill: conic-gradient(
-    from var(--rim-angle),
-    var(--rim-c1),
-    var(--rim-c2),
-    var(--rim-c1),
-    var(--rim-c2),
-    var(--rim-c1)
-  );
-}
-
-/* Static wash; motion comes from the pulse only. */
-.new-chat-composer[data-rim="breathe"] {
-  --rim-fill: linear-gradient(135deg, var(--rim-c1), var(--rim-c3), var(--rim-c2));
-}
-
-/* Soft bands drifting sideways on the spin clock; 200% position = one full seamless loop. */
-.new-chat-composer[data-rim="aurora"] {
-  --rim-fill: linear-gradient(
-    90deg,
-    var(--rim-c1),
-    var(--rim-c3),
-    var(--rim-c2),
-    var(--rim-c3),
-    var(--rim-c1)
-  );
-  --rim-fill-size: 200% 100%;
-  --rim-fill-position: var(--rim-drift) 0;
-}
-
-/* ---- When ---- */
-
-.new-chat-composer[data-rim-when="focus"]:not(:focus-within) {
-  --rim-visible: 0;
-}
-
-.new-chat-composer[data-rim-when="idle"]:focus-within {
-  --rim-visible: 0;
-}
-
-@keyframes composer-rim-spin {
+@keyframes composer-rim-drift {
   to {
-    --rim-angle: 360deg;
     --rim-drift: 200%;
   }
 }
@@ -181,7 +95,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .new-chat-composer[data-rim] {
+  .new-chat-composer {
     animation: none;
   }
 }

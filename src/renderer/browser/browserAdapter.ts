@@ -368,6 +368,7 @@ export function createBrowserAdapter(): HarnessAPI {
       onGlobalRecordingStopped: () => () => {},
       onGlobalRecordingTranscribing: () => () => {},
       onGlobalRecordingCancelled: () => () => {},
+      onGlobalRecordingRetrying: () => () => {},
       onGlobalRecordingError: () => () => {},
       onGlobalRecordingLevel: () => () => {},
       onGlobalTranscriptReady: () => () => {},

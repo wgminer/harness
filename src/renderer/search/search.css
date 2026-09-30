@@ -14,7 +14,7 @@
 .search-palette {
   width: 100%;
   max-width: 560px;
-  max-height: min(60vh, 480px);
+  height: min(60vh, 480px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -59,6 +59,8 @@
 }
 
 .search-palette__results {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-1) var(--space-2) var(--space-2);
   border-top: 1px solid var(--border-input);
@@ -81,7 +83,7 @@
 }
 
 .search-palette__item--active {
-  background: var(--overlay-subtle);
+  background: var(--overlay-strong);
 }
 
 /* Box matches the title line so the glyph centers on the first line of text. */
@@ -99,6 +101,11 @@
 }
 
 .search-palette__item--active .search-palette__item-icon {
+  color: var(--fg);
+}
+
+.search-palette__item--active .search-palette__item-snippet,
+.search-palette__item--active .search-palette__item-date {
   color: var(--fg);
 }
 
@@ -154,11 +161,48 @@
 }
 
 .search-palette__status {
+  flex: 1;
   margin: 0;
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border-input);
   color: var(--fg-muted);
   font-size: var(--font-size-ui);
+}
+
+.search-palette__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border-input);
+  color: var(--fg-muted);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+}
+
+.search-palette__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.search-palette__hint kbd {
+  min-width: 18px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-xs);
+  background: var(--bg-secondary);
+  color: var(--fg);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  line-height: 16px;
+  text-align: center;
+}
+
+.search-palette__footer-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .search-highlight {
