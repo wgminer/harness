@@ -4,6 +4,8 @@ import { SettingsGroupContent } from "./SettingsGroupContent";
 
 export interface SettingsGroupProps {
   title: string;
+  /** Anchor for deep links into this group. */
+  id?: string;
   description?: ReactNode;
   descriptionClassName?: string;
   children: ReactNode;
@@ -15,6 +17,7 @@ export interface SettingsGroupProps {
 
 export function SettingsGroup({
   title,
+  id,
   description,
   descriptionClassName,
   children,
@@ -51,7 +54,7 @@ export function SettingsGroup({
   );
 
   return (
-    <section className={`settings-group${collapsible ? " settings-group--collapsible" : ""}`}>
+    <section id={id} className={`settings-group${collapsible ? " settings-group--collapsible" : ""}`}>
       {titleNode}
       <div
         id={collapsible ? panelId : undefined}

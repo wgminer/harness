@@ -259,7 +259,7 @@ export function ChatSelectionImagePopover({ containerRef }: ChatSelectionImagePo
         {state.kind === "error" ? (
           <div className="chat-selection-image__status">
             {state.message.includes("Tavily API key")
-              ? `Add a Tavily key in ${settingsSection("Data")}`
+              ? `Add a Tavily key in ${settingsSection("Accounts")}`
               : state.message}
           </div>
         ) : null}

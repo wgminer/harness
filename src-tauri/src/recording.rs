@@ -543,6 +543,11 @@ pub fn recording_archive_stats() -> Result<dictation_index::ArchiveStats, String
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub fn recording_list_recent(limit: Option<usize>) -> Result<Vec<dictation_index::RecentRecording>, String> {
+    Ok(dictation_index::recent(limit.unwrap_or(3)))
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub async fn recording_cancel_transcription(
     runtime: State<'_, Arc<RecordingRuntime>>,
     request_id: String,

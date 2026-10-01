@@ -3,6 +3,7 @@ import { audioFileToWav } from "../recording/audioFileToWav";
 import { transcriptCleanupSkippedMessage } from "../../shared/setupState";
 import type { Settings } from "../../shared/types";
 import { useVoiceCapture, type VoiceTranscriptResult } from "../recording/useVoiceCapture";
+import { composeMessageWithPastes, type PastedTextBlock } from "./pastedText";
 
 export interface UseChatComposerOptions {
   onSubmit: (
@@ -50,6 +51,7 @@ export function useChatComposer({
 }: UseChatComposerOptions) {
   const [input, setInput] = useState("");
   const [attachedAudioFile, setAttachedAudioFile] = useState<File | null>(null);
+  const [pastedBlocks, setPastedBlocks] = useState<PastedTextBlock[]>([]);
   const [attachmentTranscribing, setAttachmentTranscribing] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -96,7 +98,8 @@ export function useChatComposer({
 
     const text = input.trim();
     const attached = attachedAudioFile;
-    if (!text && !attached) return;
+    const pastes = pastedBlocks;
+    if (!text && !attached && pastes.length === 0) return;
 
     setAttachmentError(null);
     let transcript = "";
@@ -122,19 +125,50 @@ export function useChatComposer({
       }
     }
 
-    const messageText = text && transcript ? `${text}\n\n${transcript}` : text || transcript;
+    const typed = text && transcript ? `${text}\n\n${transcript}` : text || transcript;
+    const messageText = composeMessageWithPastes(typed, pastes);
     if (!messageText) return;
 
     const previousInput = input;
     const previousAttached = attachedAudioFile;
     setInput("");
     setAttachedAudioFile(null);
+    setPastedBlocks([]);
     const sent = await submitMessage(messageText);
     if (!sent) {
       setInput(previousInput);
       setAttachedAudioFile(previousAttached);
+      setPastedBlocks(pastes);
     }
-  }, [attachedAudioFile, attachmentTranscribing, input, submitDisabled, submitMessage, submitting]);
+  }, [
+    attachedAudioFile,
+    attachmentTranscribing,
+    input,
+    pastedBlocks,
+    submitDisabled,
+    submitMessage,
+    submitting,
+  ]);
+
+  const addPastedBlock = useCallback((text: string, name?: string) => {
+    const id = `paste-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setPastedBlocks((prev) => [...prev, name ? { id, text, name } : { id, text }]);
+  }, []);
+
+  const removePastedBlock = useCallback((id: string) => {
+    setPastedBlocks((prev) => prev.filter((b) => b.id !== id));
+  }, []);
+
+  /** Moves a pasted block back into the draft as plain text. */
+  const inlinePastedBlock = useCallback(
+    (id: string) => {
+      const block = pastedBlocks.find((b) => b.id === id);
+      if (!block) return;
+      setPastedBlocks((prev) => prev.filter((b) => b.id !== id));
+      setInput((cur) => (cur.trim() ? `${cur.replace(/\s+$/, "")}\n\n${block.text}` : block.text));
+    },
+    [pastedBlocks],
+  );
 
   const submitMessageRef = useRef(submitMessage);
   useEffect(() => {
@@ -218,6 +252,7 @@ export function useChatComposer({
     setInput("");
     resetVoiceCapture();
     setAttachedAudioFile(null);
+    setPastedBlocks([]);
     setAttachmentTranscribing(false);
     setAttachmentError(null);
   }, [resetVoiceCapture]);
@@ -232,6 +267,10 @@ export function useChatComposer({
     recordingMs,
     attachedAudioFile,
     setAttachedAudioFile,
+    pastedBlocks,
+    addPastedBlock,
+    removePastedBlock,
+    inlinePastedBlock,
     attachmentTranscribing,
     attachmentError,
     setAttachmentError,

@@ -42,7 +42,7 @@ describe("chatModes contract", () => {
     const chat = chatModePlaceholders("chat");
     const qa = chatModePlaceholders("qa");
     expect(chat[0]).toBe("Write a message…");
-    expect(qa[0]).toBe("Name what you want to work through…");
+    expect(qa[0]).toBe("What should I grill you on…");
     expect(chatModePlaceholder("chat", chat.length)).toBe(chat[0]);
     expect(chatModePlaceholder("qa", -1)).toBe(qa[qa.length - 1]);
   });
@@ -56,14 +56,14 @@ describe("chatModes contract", () => {
 
     cycle = placeholderCycleForMode(cycle, "qa");
     expect(chatModePlaceholder(cycle.mode, cycle.index)).toBe(
-      "Name what you want to work through…",
+      "What should I grill you on…",
     );
 
     cycle = placeholderCycleForMode(cycle, "chat");
     expect(chatModePlaceholder(cycle.mode, cycle.index)).toBe("What's on your mind…");
 
     cycle = placeholderCycleForMode(cycle, "qa");
-    expect(chatModePlaceholder(cycle.mode, cycle.index)).toBe("What decision is stuck…");
+    expect(chatModePlaceholder(cycle.mode, cycle.index)).toBe("Pitch the plan. I'll poke holes…");
   });
 
   it("restarts the series when opening a thread, and keeps it when compose is saved", () => {
@@ -73,7 +73,7 @@ describe("chatModes contract", () => {
 
     const openedQa = placeholderCycleOnConversationChange(onCompose, null, "conv-qa", "qa");
     expect(chatModePlaceholder(openedQa.mode, openedQa.index)).toBe(
-      "Name what you want to work through…",
+      "What should I grill you on…",
     );
     const firstChatAfterOpen = placeholderCycleForMode(openedQa, "chat");
     expect(chatModePlaceholder(firstChatAfterOpen.mode, firstChatAfterOpen.index)).toBe(

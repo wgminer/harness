@@ -6,7 +6,7 @@ Native SwiftUI chat companion for Harness desktop. It syncs through the **same C
 
 ## Prerequisites
 
-1. **Desktop Harness** configured with Cloudflare R2 (Settings → Data).
+1. **Desktop Harness** configured with Cloudflare R2 (System → Accounts).
 2. At least one successful **Sync now** on the Mac so `manifest.json` and a content-addressed `bundle-<hash>.json.gz` exist in the bucket (older builds also wrote a legacy `bundle.json.gz` mirror).
 3. An **OpenAI API key** (same as desktop Settings, or enter it only on the phone).
 
@@ -61,7 +61,7 @@ To import a memo recorded in Voice Memos: open the memo → **Share** → **Save
 |------|--------|
 | Chat on phone | Harness Mobile |
 | Cold launch, pull-to-refresh, Settings **Sync now**, or return from background | Phone pulls/pushes content-addressed `bundle-<hash>.json.gz` + `manifest.json` via R2 |
-| **Sync now** | Desktop Harness → Settings → Data |
+| **Sync now** | Desktop Harness → System → Accounts |
 
 Backgrounding the app **flushes composer drafts** and allows an in-flight sync to finish via a short background task. It does **not** start a new sync by itself. Dictation uses the `audio` background mode so lock/home during a take can keep capture alive.
 

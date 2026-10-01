@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 interface WorkspaceHeaderProps {
+  /** Accessible name only; the app titlebar already names the page. */
   title: string;
   className?: string;
   innerClassName?: string;
-  titleRowClassName?: string;
-  titleClassName?: string;
   actions?: ReactNode;
-  /** Second row under the title (e.g. a tab bar); spans the content width. */
+  /** Centered row (e.g. a tab bar); spans the content width. */
   children?: ReactNode;
 }
 
@@ -20,8 +19,6 @@ export function WorkspaceHeader({
   title,
   className,
   innerClassName,
-  titleRowClassName,
-  titleClassName,
   actions,
   children,
 }: WorkspaceHeaderProps) {
@@ -40,19 +37,18 @@ export function WorkspaceHeader({
     <>
       <div ref={sentinelRef} className="workspace-header-sentinel" aria-hidden />
       <header
+        aria-label={title}
         className={joinClassNames(
           "workspace-header",
           stuck && "workspace-header--stuck",
-          children != null && "workspace-header--with-sub",
           className,
         )}
       >
-        <div className={joinClassNames("workspace-header-inner", innerClassName)}>
-          <div className={joinClassNames("workspace-header-title-row", titleRowClassName)}>
-            <h1 className={joinClassNames("workspace-title", titleClassName)}>{title}</h1>
+        {actions != null && (
+          <div className={joinClassNames("workspace-header-inner", innerClassName)}>
+            <div className="workspace-header-actions">{actions}</div>
           </div>
-          {actions != null && <div className="workspace-header-actions">{actions}</div>}
-        </div>
+        )}
         {children != null && <div className="workspace-header-sub">{children}</div>}
       </header>
     </>

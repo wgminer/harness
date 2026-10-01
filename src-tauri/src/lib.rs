@@ -194,6 +194,7 @@ pub fn run() {
             recording::recording_open_folder,
             recording::recording_count_files,
             recording::recording_archive_stats,
+            recording::recording_list_recent,
             recording::recording_cancel_transcription,
             recording::recording_transcribe,
             recording::recording_paste_text,

@@ -12,7 +12,7 @@
 }
 
 /* Sticky inside .workspace-scroll; divider appears once content scrolls under it.
-   Top pad + row height center the title 28px below the titlebar, on the same line as
+   Top pad + row height center the row 28px below the titlebar, on the same line as
    the sidebar list header (.sidebar-list-header: space-4 pad + 24px line). */
 .workspace-header {
   position: sticky;
@@ -32,12 +32,6 @@
   border-bottom-color: var(--border-edge);
 }
 
-/* With a sub-row (tabs), the row sits on the divider and the divider is always shown. */
-.workspace-header--with-sub {
-  padding-bottom: 0;
-  border-bottom-color: var(--border-edge);
-}
-
 .workspace-header-inner {
   max-width: var(--content-width);
   margin: 0 auto;
@@ -50,13 +44,6 @@
   box-sizing: border-box;
 }
 
-.workspace-header-title-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
 .workspace-header-actions {
   display: flex;
   align-items: center;
@@ -67,9 +54,13 @@
 
 .workspace-header-sub {
   max-width: var(--content-width);
-  margin: var(--space-1) auto 0;
+  margin: 0 auto;
   width: 100%;
+  min-height: var(--space-8);
   padding: 0 var(--shell-pad-inline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-sizing: border-box;
 }
 

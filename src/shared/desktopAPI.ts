@@ -45,6 +45,14 @@ export interface TasksPayload {
   error?: string;
 }
 
+/** A saved take under audio-recordings/ (`rec_<ms>.wav`). */
+export interface RecentRecording {
+  path: string;
+  /** Epoch ms. */
+  recordedAt: number;
+  durationMs: number | null;
+}
+
 export interface GlobalRecordingStatus {
   monitorHealth: "stopped" | "running" | "accessibility_denied";
   frontendReady: boolean;
@@ -346,6 +354,8 @@ export interface HarnessAPI {
     countFiles: () => Promise<number>;
     /** File count + summed WAV duration under audio-recordings/. */
     archiveStats: () => Promise<{ fileCount: number; durationMs: number }>;
+    /** Newest saved takes (default 3) for the Settings retry list. */
+    listRecent: (limit?: number) => Promise<RecentRecording[]>;
     transcribe: (
       data: ArrayBuffer,
       options?: { requestId?: string }

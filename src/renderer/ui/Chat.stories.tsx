@@ -4,12 +4,14 @@ import {
   Check,
   Copy,
   FileAudio,
+  FileText,
   Loader2,
   Mic,
   SquarePen,
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { AttachmentCard } from "../chat/AttachmentCard";
 import { ChatComposer } from "../chat/ChatComposer";
 import { ChatModePicker } from "../chat/ChatModePicker";
 import type { ChatModeId } from "../../shared/chatModes";
@@ -55,13 +57,15 @@ function ComposerIdle() {
 function ComposerRecording() {
   return (
     <div className="chat-composer-inner" style={{ maxWidth: 640 }}>
-      <textarea className="chat-input" rows={2} disabled placeholder="Recording…" />
-      <div className="input-actions">
-        <span className="voice-timer">0:12.4</span>
-        <div className="input-actions-spacer" />
-        <button type="button" className="btn btn-icon btn-primary chat-pane-btn chat-pane-btn--icon" aria-label="Stop">
-          <Mic size={15} />
-        </button>
+      <div className="chat-composer-row">
+        <textarea className="chat-input" rows={1} disabled placeholder="Recording…" />
+        <div className="input-actions">
+          <span className="voice-timer">0:12.4</span>
+          <div className="input-actions-spacer" />
+          <button type="button" className="btn btn-icon btn-primary chat-pane-btn chat-pane-btn--icon" aria-label="Stop">
+            <Mic size={15} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -70,13 +74,15 @@ function ComposerRecording() {
 function ComposerProcessing() {
   return (
     <div className="chat-composer-inner" style={{ maxWidth: 640 }}>
-      <textarea className="chat-input" rows={2} disabled />
-      <div className="input-actions">
-        <span className="voice-status">
-          <Loader2 size={13} className="voice-spinner" />
-          Transcribing…
-        </span>
-        <div className="input-actions-spacer" />
+      <div className="chat-composer-row">
+        <textarea className="chat-input" rows={1} disabled />
+        <div className="input-actions">
+          <span className="voice-status">
+            <Loader2 size={13} className="voice-spinner" />
+            Transcribing…
+          </span>
+          <div className="input-actions-spacer" />
+        </div>
       </div>
     </div>
   );
@@ -85,12 +91,14 @@ function ComposerProcessing() {
 function ComposerSending() {
   return (
     <div className="chat-composer-inner" style={{ maxWidth: 640 }}>
-      <textarea className="chat-input" rows={2} defaultValue="Summarize the notes above" />
-      <div className="input-actions">
-        <div className="input-actions-spacer" />
-        <button type="button" className="btn chat-pane-btn input-actions-stop">
-          Stop
-        </button>
+      <div className="chat-composer-row">
+        <textarea className="chat-input" rows={1} defaultValue="Summarize the notes above" />
+        <div className="input-actions">
+          <div className="input-actions-spacer" />
+          <button type="button" className="btn chat-pane-btn input-actions-stop">
+            Stop
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -117,13 +125,30 @@ function ChatGallery() {
 
       <Section title="Attachment strip" stack>
         <div className="chat-attachment-strip" style={{ maxWidth: 640 }}>
-          <span className="chat-attachment-chip">
-            <FileAudio size={11} strokeWidth={1.75} />
-            <span className="chat-attachment-name">interview.m4a</span>
-            <button type="button" className="chat-attachment-remove" aria-label="Remove">
-              <X size={11} strokeWidth={1.75} />
-            </button>
-          </span>
+          <AttachmentCard
+            icon={<FileAudio size={12} strokeWidth={1.75} />}
+            title="interview.m4a"
+            meta="Audio · transcribed on send"
+            onRemove={() => {}}
+            removeLabel="Remove"
+          />
+          <AttachmentCard
+            icon={<FileText size={12} strokeWidth={1.75} />}
+            title="notes.md"
+            meta="MD · 42 lines"
+            onRemove={() => {}}
+            removeLabel="Remove"
+          />
+          <AttachmentCard
+            variant="paste"
+            icon={<FileText size={12} strokeWidth={1.75} />}
+            title="Skip to content Skip to site index Section Navigation"
+            meta="Pasted · 103 lines"
+            onOpen={() => {}}
+            openLabel="Move into the message"
+            onRemove={() => {}}
+            removeLabel="Remove"
+          />
         </div>
       </Section>
 
@@ -195,17 +220,8 @@ function ChatGallery() {
 
       <Section title="New chat empty state" stack>
         <div className="new-chat-pane" style={{ minHeight: 220 }}>
-          <p className="new-chat-corner new-chat-corner--top-left" aria-hidden="true">
-            8:24 PM
-          </p>
-          <p className="new-chat-corner new-chat-corner--top-right" aria-hidden="true">
-            Monday, Aug 10
-          </p>
-          <p className="new-chat-corner new-chat-corner--bottom-left" aria-hidden="true">
-            3h 12m
-          </p>
           <p className="new-chat-corner new-chat-corner--bottom-right" aria-hidden="true">
-            72° · Highland
+            v0.10.1 · dev
           </p>
           <div className="new-chat-center">
             <div className="new-chat-center-stack">

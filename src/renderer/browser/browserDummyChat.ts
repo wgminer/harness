@@ -108,7 +108,7 @@ export function dummyAssistantReply(userContent: string, chatMode?: string): str
   const echo = dummyEcho(userContent);
   if (chatMode === "qa") {
     return [
-      "Dummy Q&A turn from the browser shell.",
+      "Dummy Grill turn from the browser shell.",
       "",
       echo,
       "",

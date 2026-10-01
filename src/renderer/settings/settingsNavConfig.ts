@@ -1,11 +1,12 @@
 import { SETTINGS_NOTES_TAB_LABEL } from "../../shared/settingsPage";
 
-export type SettingsTabId = "general" | "notes" | "voice" | "data";
+export type SettingsTabId = "general" | "notes" | "voice" | "accounts" | "data";
 
 export type SettingsNavIconId =
   | "SlidersHorizontal"
   | "StickyNote"
   | "Mic"
+  | "KeyRound"
   | "Database";
 
 export const SETTINGS_NAV: Array<{
@@ -31,27 +32,21 @@ export const SETTINGS_NAV: Array<{
       "hex",
       "launch",
       "compose",
-      "auto-send",
       "behavior",
-      "notes",
-      "window",
-      "sticky",
-      "fn",
-      "menu bar",
-      "accessibility",
-      "microphone",
       "selection",
       "image",
-      "tavily",
       "weather",
       "zip",
       "temperature",
+      "cli",
+      "command line",
+      "terminal",
     ],
   },
   {
     id: "notes",
     label: SETTINGS_NOTES_TAB_LABEL,
-    subtitle: "Templates",
+    subtitle: "Windows & templates",
     icon: "StickyNote",
     keywords: [
       "notes",
@@ -60,38 +55,68 @@ export const SETTINGS_NAV: Array<{
       "template",
       "grid",
       "overlay",
+      "window",
+      "sticky",
     ],
   },
   {
     id: "voice",
     label: "Voice",
-    subtitle: "Cleanup & spellings",
+    subtitle: "Dictation & cleanup",
     icon: "Mic",
-    keywords: ["transcription", "dictation", "cleanup", "spelling", "glossary", "names"],
+    keywords: [
+      "transcription",
+      "dictation",
+      "cleanup",
+      "spelling",
+      "glossary",
+      "names",
+      "auto-send",
+      "fn",
+      "menu bar",
+      "shortcut",
+      "accessibility",
+      "microphone",
+      "recordings",
+      "retry",
+    ],
   },
   {
-    id: "data",
-    label: "Data",
-    subtitle: "Keys, memory, sync",
-    icon: "Database",
+    id: "accounts",
+    label: "Accounts",
+    subtitle: "Sync, keys, connections",
+    icon: "KeyRound",
     keywords: [
+      "sync",
+      "backup",
+      "r2",
+      "cloudflare",
+      "qr",
       "openai",
       "api",
       "key",
       "tavily",
       "web search",
+      "gmail",
+      "google",
+      "connection",
+    ],
+  },
+  {
+    id: "data",
+    label: "Data",
+    subtitle: "Memory, import, storage",
+    icon: "Database",
+    keywords: [
       "memory",
       "memories",
-      "sync",
-      "backup",
-      "icloud",
       "import",
       "chatgpt",
       "claude",
       "storage",
       "paths",
       "finder",
-      "recordings",
+      "folder",
       "system prompt",
       "prompt",
     ],
@@ -107,7 +132,13 @@ export function normalizeSettingsTab(tab: string | undefined): SettingsTabId {
   if (tab === "tools") return "general";
   if (tab === "appearance") return "general";
   if (tab === "memory") return "data";
-  if (tab === "general" || tab === "notes" || tab === "voice" || tab === "data") {
+  if (
+    tab === "general" ||
+    tab === "notes" ||
+    tab === "voice" ||
+    tab === "accounts" ||
+    tab === "data"
+  ) {
     return tab;
   }
   return "general";

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckLine,
   Circle,
@@ -9,7 +9,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SETTINGS_PAGE_TITLE } from "../../shared/settingsPage";
-import { sidebarSyncStatusTooltip, type SyncStatus } from "../../shared/sync";
+import { sidebarSyncStatusTooltip } from "../../shared/sync";
+import { useSyncStatus } from "../hooks/useSyncStatus";
 import { Menu, MenuItem } from "../ui/Menu";
 import type { View } from "./sidebarUtils";
 
@@ -91,31 +92,24 @@ export function SidebarTitlebarActions({
 interface TitlebarSettingsButtonProps {
   view: View;
   onViewChange: (v: View) => void;
-  onOpenDataSettings: () => void;
 }
 
 /** Settings, pinned to the far right of the titlebar. Shows a dot when sync has an error. */
-export function TitlebarSettingsButton({ view, onViewChange, onOpenDataSettings }: TitlebarSettingsButtonProps) {
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+export function TitlebarSettingsButton({ view, onViewChange }: TitlebarSettingsButtonProps) {
+  const { status: syncStatus, refresh: refreshSyncStatus } = useSyncStatus();
   const syncHasError = Boolean(syncStatus?.lastError);
-
-  const refreshSyncStatus = useCallback(() => {
-    void window.harness.sync.getStatus().then(setSyncStatus);
-  }, []);
 
   useEffect(() => {
     if (view === "settings") return;
     refreshSyncStatus();
   }, [view, refreshSyncStatus]);
 
-  useEffect(() => window.harness.sync.onChanged(refreshSyncStatus), [refreshSyncStatus]);
-
   return (
     <div className="app-titlebar__trailing-actions" data-tauri-drag-region={false}>
       <button
         type="button"
         className={`app-titlebar__action${view === "settings" ? " app-titlebar__action--active" : ""}`}
-        onClick={() => (syncHasError ? onOpenDataSettings() : onViewChange("settings"))}
+        onClick={() => onViewChange("settings")}
         aria-label={SETTINGS_PAGE_TITLE}
         aria-pressed={view === "settings"}
         title={

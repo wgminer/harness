@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { HarnessAPI } from "../shared/desktopAPI";
-import type { CodingScopeMeta, GlobalRecordingStatus } from "../shared/desktopAPI";
+import type { CodingScopeMeta, GlobalRecordingStatus, RecentRecording } from "../shared/desktopAPI";
 import type {
   AppendMessageMeta,
   ContextPreview,
@@ -327,6 +327,8 @@ export function createHarnessAdapter(): HarnessAPI {
       countFiles: () => invoke<number>(cmd("recording:countFiles")),
       archiveStats: () =>
         invoke<{ fileCount: number; durationMs: number }>(cmd("recording:archiveStats")),
+      listRecent: (limit?: number) =>
+        invoke<RecentRecording[]>(cmd("recording:listRecent"), { limit }),
       transcribe: (data: ArrayBuffer, options?: { requestId?: string }) =>
         invoke(cmd("recording:transcribe"), { data, requestId: options?.requestId }),
       cancelTranscription: (requestId: string) =>

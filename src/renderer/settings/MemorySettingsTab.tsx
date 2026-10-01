@@ -148,9 +148,7 @@ export function MemorySettingsSections({ memory }: { memory: MemorySettingsContr
     <>
       <SettingsGroup
         title="Memory"
-        description="Synced with backup."
-        collapsible
-        defaultOpen={false}
+        description="What Harness remembers about you. Synced with backup."
       >
         <MemoriesList memory={memory} />
       </SettingsGroup>

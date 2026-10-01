@@ -7,16 +7,16 @@ export interface SetupGap {
   title: string;
   detail: string;
   /** Settings tab to open when the user chooses "Set up". */
-  settingsTab: "general" | "data" | "voice";
+  settingsTab: "general" | "voice" | "accounts";
   severity: "required" | "recommended";
 }
 
 export function transcriptCleanupSkippedMessage(): string {
-  return `Transcript cleanup needs an OpenAI API key (${settingsSection("Data")}). Using the raw transcription.`;
+  return `Transcript cleanup needs an OpenAI API key (${settingsSection("Accounts")}). Using the raw transcription.`;
 }
 
 export function chatRequiresApiKeyMessage(): string {
-  return `Chat needs an OpenAI API key in ${settingsSection("Data")}.`;
+  return `Chat needs an OpenAI API key in ${settingsSection("Accounts")}.`;
 }
 
 export function collectSetupGaps(input: {
@@ -33,7 +33,7 @@ export function collectSetupGaps(input: {
       title: "OpenAI API key",
       detail:
         "Chat, polish, and optional transcript cleanup need an API key. Voice transcription runs locally on your Mac without one.",
-      settingsTab: "data",
+      settingsTab: "accounts",
       severity: "required",
     });
   }
@@ -44,7 +44,7 @@ export function collectSetupGaps(input: {
       title: "Cloud sync (R2)",
       detail:
         "Connect a Cloudflare R2 bucket to sync conversations and settings across devices.",
-      settingsTab: "general",
+      settingsTab: "accounts",
       severity: "recommended",
     });
   }
@@ -55,7 +55,7 @@ export function collectSetupGaps(input: {
       title: "Accessibility permission",
       detail:
         "Required for the global Fn dictation shortcut when Harness is in the background.",
-      settingsTab: "general",
+      settingsTab: "voice",
       severity: "recommended",
     });
   }

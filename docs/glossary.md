@@ -38,7 +38,7 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 
 | Term | Meaning |
 |---|---|
-| **Chat mode** | Desktop-only stance on an open conversation: **Chat** or **Q&A**. Same thread; mode changes the system overlay + composer placeholder (and Q&A’s multiple-choice dock). Not Agent mode (frozen). |
+| **Chat mode** | Desktop-only stance on an open conversation: **Chat** or **Grill**. Same thread; mode changes the system overlay + composer placeholder (and Grill’s multiple-choice dock). Grill interviews the user one question at a time to pressure-test a plan or decision; its stored id is still `qa`. Not Agent mode (frozen). |
 | **System prompt** | Assembled instructions for a request: shared contract + platform overlay + mode overlay + memory/recent/temporal blocks. |
 | **Context / context preview** | What actually goes to the model for a turn (prompt layers, selected memories, messages, tools) — the legible surface of a request. |
 | **Tools** | Model-callable functions from the tools contract. Schemas sit beside the prompt, not inside it. |

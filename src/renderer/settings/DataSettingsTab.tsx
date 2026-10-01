@@ -1,12 +1,7 @@
-import { useEffect } from "react";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { appDataFolderButtonLabel } from "../../shared/dataStorageLayout";
-import { Tooltip } from "../ui/Tooltip";
 import { ClaudeImportModal } from "./ClaudeImportModal";
-import { GmailSettingsSection } from "./GmailSettingsSection";
-import { SecretField } from "./SecretField";
 import { SettingsActions } from "./SettingsActions";
-import { SettingsField } from "./SettingsField";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";
 import { SettingsSubsection } from "./SettingsSubsection";
@@ -20,201 +15,19 @@ import { useDataSettings } from "./useDataSettings";
 
 export interface DataSettingsTabProps {
   platform: NodeJS.Platform;
-  apiKey: string;
-  setApiKey: (value: string) => void;
-  tavilyApiKey: string;
-  setTavilyApiKey: (value: string) => void;
-  r2AccountId: string;
-  setR2AccountId: (value: string) => void;
-  r2Bucket: string;
-  setR2Bucket: (value: string) => void;
-  r2Prefix: string;
-  setR2Prefix: (value: string) => void;
-  r2AccessKeyId: string;
-  setR2AccessKeyId: (value: string) => void;
-  r2SecretAccessKey: string;
-  setR2SecretAccessKey: (value: string) => void;
-  persistSettings: () => Promise<boolean>;
-  onSyncComplete?: () => void;
   onImportComplete?: () => void;
-  onRegisterRefresh?: (refresh: () => Promise<void>) => void;
 }
 
-export function DataSettingsTab({
-  platform,
-  apiKey,
-  setApiKey,
-  tavilyApiKey,
-  setTavilyApiKey,
-  r2AccountId,
-  setR2AccountId,
-  r2Bucket,
-  setR2Bucket,
-  r2Prefix,
-  setR2Prefix,
-  r2AccessKeyId,
-  setR2AccessKeyId,
-  r2SecretAccessKey,
-  setR2SecretAccessKey,
-  persistSettings,
-  onSyncComplete,
-  onImportComplete,
-  onRegisterRefresh,
-}: DataSettingsTabProps) {
-  const data = useDataSettings({ onSyncComplete, onImportComplete });
+export function DataSettingsTab({ platform, onImportComplete }: DataSettingsTabProps) {
+  const data = useDataSettings({ onImportComplete });
   const memory = useMemorySettings();
-
-  useEffect(() => {
-    onRegisterRefresh?.(data.refreshDataStatus);
-  }, [data.refreshDataStatus, onRegisterRefresh]);
 
   return (
     <>
       <SettingsTabPanel id="data">
         <MemorySettingsSections memory={memory} />
 
-        <SettingsGroup title="API keys" collapsible defaultOpen={false}>
-          <SettingsSubsection title="OpenAI">
-            <SettingsField label="API key" htmlFor="settings-api-key">
-              <SecretField
-                id="settings-api-key"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                onBlur={() => void persistSettings()}
-                ariaLabel="OpenAI API key"
-              />
-            </SettingsField>
-          </SettingsSubsection>
-
-          <SettingsSubsection
-            title="Tavily"
-            description={
-              <>
-                Optional. Get a key at{" "}
-                <a href="https://tavily.com" target="_blank" rel="noreferrer noopener">
-                  tavily.com
-                </a>
-                .
-              </>
-            }
-          >
-            <SettingsField label="API key" htmlFor="settings-tavily-key">
-              <SecretField
-                id="settings-tavily-key"
-                testId="settings-tavily-key"
-                value={tavilyApiKey}
-                onChange={(e) => setTavilyApiKey(e.target.value)}
-                onBlur={() => void persistSettings()}
-                ariaLabel="Tavily API key"
-              />
-            </SettingsField>
-          </SettingsSubsection>
-
-          <SettingsSubsection
-            title="Cloudflare R2"
-            description="Optional backup sync."
-          >
-            <SettingsField label="Account ID" htmlFor="settings-r2-account">
-              <input
-                id="settings-r2-account"
-                type="text"
-                value={r2AccountId}
-                onChange={(e) => setR2AccountId(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </SettingsField>
-            <SettingsField label="Bucket" htmlFor="settings-r2-bucket">
-              <input
-                id="settings-r2-bucket"
-                type="text"
-                value={r2Bucket}
-                onChange={(e) => setR2Bucket(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </SettingsField>
-            <SettingsField label="Prefix" htmlFor="settings-r2-prefix">
-              <input
-                id="settings-r2-prefix"
-                type="text"
-                value={r2Prefix}
-                onChange={(e) => setR2Prefix(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </SettingsField>
-            <SettingsField label="Access key ID" htmlFor="settings-r2-access-key-id">
-              <input
-                id="settings-r2-access-key-id"
-                type="text"
-                value={r2AccessKeyId}
-                onChange={(e) => setR2AccessKeyId(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </SettingsField>
-            <SettingsField label="Secret access key" htmlFor="settings-r2-secret">
-              <SecretField
-                id="settings-r2-secret"
-                value={r2SecretAccessKey}
-                onChange={(e) => setR2SecretAccessKey(e.target.value)}
-                onBlur={() => void persistSettings()}
-                ariaLabel="R2 secret access key"
-              />
-            </SettingsField>
-            {(data.dataStatus?.sync.lastError || data.r2TestError) && (
-              <p className="settings-import-status__errors">
-                {data.dataStatus?.sync.lastError ?? data.r2TestError}
-              </p>
-            )}
-            <SettingsActions>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => void data.testR2Connection()}
-                disabled={data.syncTestBusy}
-              >
-                {data.syncTestBusy ? "Testing…" : "Test"}
-              </button>
-              <div className="settings-sync-control">
-                <Tooltip label={data.syncTooltip}>
-                  <button
-                    type="button"
-                    className="btn btn-primary settings-sync-now"
-                    onClick={() => void data.runSyncNow()}
-                    disabled={data.syncBusy || !data.dataStatus?.sync.configured}
-                    aria-busy={data.syncBusy}
-                  >
-                    {data.syncBusy ? (
-                      <>
-                        <Loader2 size={14} className="voice-spinner" aria-hidden />
-                        Syncing…
-                      </>
-                    ) : (
-                      "Sync"
-                    )}
-                  </button>
-                </Tooltip>
-                {data.syncInlineStatus ? (
-                  <span className="settings-sync-status" role="status">
-                    {data.syncInlineStatus}
-                  </span>
-                ) : null}
-              </div>
-            </SettingsActions>
-          </SettingsSubsection>
-        </SettingsGroup>
-
-        <SettingsGroup title="Connections" collapsible defaultOpen={false}>
-          <GmailSettingsSection />
-        </SettingsGroup>
-
-        <SettingsGroup
-          title="Import"
-          collapsible
-          defaultOpen={false}
-        >
+        <SettingsGroup title="Import">
           <SettingsSubsection title="Chat history">
             <SettingsActions>
               <button
@@ -299,7 +112,7 @@ export function DataSettingsTab({
           </SettingsSubsection>
         </SettingsGroup>
 
-        <SettingsGroup title="Paths" collapsible defaultOpen={false}>
+        <SettingsGroup title="Storage">
           <SettingsActions>
             <button type="button" className="btn" onClick={() => window.harness.memory.openAppDataFolder()}>
               {appDataFolderButtonLabel(platform)} <ExternalLink size={14} aria-hidden />

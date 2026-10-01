@@ -1,7 +1,8 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { settingsSection } from "../../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { Modal } from "../ui/Modal";
+import { RecentRecordingsSection } from "./RecentRecordingsSection";
 import { SettingsActions } from "./SettingsActions";
 import { SettingsEntryRow } from "./SettingsEntryRow";
 import { SettingsGroup } from "./SettingsGroup";
@@ -23,6 +24,8 @@ export interface VoiceSettingsTabProps {
   openAIConfigured: boolean;
   secretsLoaded: boolean;
   apiKey: string;
+  /** Dictation behavior group, rendered above Cleanup. */
+  children?: ReactNode;
 }
 
 export function VoiceSettingsTab({
@@ -35,6 +38,7 @@ export function VoiceSettingsTab({
   openAIConfigured,
   secretsLoaded,
   apiKey,
+  children,
 }: VoiceSettingsTabProps) {
   const [cleanupPromptDraft, setCleanupPromptDraft] = useState(cleanupPrompt);
   const [cleanupPromptModalOpen, setCleanupPromptModalOpen] = useState(false);
@@ -99,6 +103,7 @@ export function VoiceSettingsTab({
   return (
     <>
       <SettingsTabPanel id="voice">
+        {children}
         <SettingsGroup title="Cleanup">
           <SettingsSwitch
             id="transcriptCleanupToggle"
@@ -120,7 +125,7 @@ export function VoiceSettingsTab({
           {cleanupEnabled &&
           !(secretsLoaded ? apiKey.trim().length > 0 : openAIConfigured) ? (
             <SettingsHint>
-              Cleanup needs an OpenAI API key in {settingsSection("Data")}.
+              Cleanup needs an OpenAI API key in {settingsSection("Accounts")}.
             </SettingsHint>
           ) : null}
 
@@ -155,6 +160,8 @@ export function VoiceSettingsTab({
             </SettingsActions>
           </SettingsSubsection>
         </SettingsGroup>
+
+        <RecentRecordingsSection />
       </SettingsTabPanel>
 
       <Modal

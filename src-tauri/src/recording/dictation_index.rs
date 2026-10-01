@@ -206,9 +206,71 @@ pub fn archive_stats() -> ArchiveStats {
     archive_stats_in(&get_recordings_dir())
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentRecording {
+    pub path: String,
+    /// Epoch ms from the `rec_<ms>.wav` name.
+    pub recorded_at: i64,
+    pub duration_ms: Option<u64>,
+}
+
+/// Newest `rec_<ms>.wav` takes first — Settings "Recent recordings" retry list.
+pub fn recent_in(recordings_dir: &Path, limit: usize) -> Vec<RecentRecording> {
+    let Ok(entries) = std::fs::read_dir(recordings_dir) else {
+        return Vec::new();
+    };
+    let mut takes: Vec<(i64, PathBuf)> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            let ms = name
+                .to_str()?
+                .strip_prefix("rec_")?
+                .strip_suffix(".wav")?
+                .parse::<i64>()
+                .ok()?;
+            entry.file_type().ok()?.is_file().then(|| (ms, entry.path()))
+        })
+        .collect();
+    takes.sort_by(|a, b| b.0.cmp(&a.0));
+    takes
+        .into_iter()
+        .take(limit)
+        .map(|(recorded_at, path)| {
+            let duration_ms = std::fs::metadata(&path)
+                .ok()
+                .and_then(|m| wav_duration_ms(&path, m.len()));
+            RecentRecording {
+                path: path.display().to_string(),
+                recorded_at,
+                duration_ms,
+            }
+        })
+        .collect()
+}
+
+pub fn recent(limit: usize) -> Vec<RecentRecording> {
+    recent_in(&get_recordings_dir(), limit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recent_lists_newest_takes_only() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let recordings = tmp.path().join("audio-recordings");
+        std::fs::create_dir_all(&recordings).expect("mkdir");
+        for name in ["rec_100.wav", "rec_300.wav", "rec_200.wav", "notes.wav", INDEX_FILE_NAME] {
+            std::fs::write(recordings.join(name), b"x").expect("write");
+        }
+        std::fs::create_dir_all(recordings.join("drop-cache")).expect("subdir");
+        let recent = recent_in(&recordings, 2);
+        let stamps: Vec<i64> = recent.iter().map(|r| r.recorded_at).collect();
+        assert_eq!(stamps, vec![300, 200]);
+    }
 
     #[test]
     fn link_list_unlink_round_trip() {

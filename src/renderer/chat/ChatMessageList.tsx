@@ -17,6 +17,8 @@ import {
 import { InlineWriteupCard } from "./DocumentCard";
 import { ToolCallsCard } from "./ToolCallsCard";
 import { StreamingAssistantContent } from "./StreamingAssistantContent";
+import { PastedTextCard } from "./PastedTextCard";
+import { splitPastedSegments } from "./pastedText";
 import {
   shouldUseStreamingAssistantRenderer,
   useStreamedAssistantIds,
@@ -151,6 +153,12 @@ export function ChatMessageList({
             m.content;
           const hideSaveToNotes = !!inlineWriteup?.noteId && !inlineWriteup.body;
 
+          const userSegments = m.role === "user" ? splitPastedSegments(m.content) : [];
+          const userText = userSegments
+            .flatMap((seg) => (seg.kind === "text" ? [seg.text] : []))
+            .join("\n\n");
+          const userPastes = userSegments.flatMap((seg) => (seg.kind === "pasted" ? [seg] : []));
+
           const libraryHits = hasToolCalls
             ? m.toolCalls!.flatMap(memorySearchHitsFromToolCall)
             : [];
@@ -213,32 +221,43 @@ export function ChatMessageList({
             >
               <div className="content">
                 {m.role === "user" ? (
-                  <div
-                    className={`message-user-card${expandedUserCards.has(m.id) ? " message-user-card--expanded" : ""}${
-                      overflowedUserCards.has(m.id) && !expandedUserCards.has(m.id)
-                        ? " message-user-card--overlay-toggle"
-                        : ""
-                    }`}
-                  >
-                    {overflowedUserCards.has(m.id) && !expandedUserCards.has(m.id) ? (
-                      <div className="message-user-card__fade" aria-hidden />
+                  <>
+                    {userPastes.length > 0 ? (
+                      <div className="message-pasted-list">
+                        {userPastes.map((paste, i) => (
+                          <PastedTextCard key={i} text={paste.text} name={paste.name} />
+                        ))}
+                      </div>
                     ) : null}
-                    <div className="message-user-card__content" ref={(el) => { userCardContentRefs.current[m.id] = el; }}>
-                      {m.content ? <MarkdownContent content={m.content} {...markdownActions} /> : null}
-                    </div>
-                    {overflowedUserCards.has(m.id) && !expandedUserCards.has(m.id) && (
-                      <button
-                        type="button"
-                        className="message-user-card__toggle"
-                        onClick={() => expandUserCard(m.id)}
-                        aria-expanded={false}
-                        aria-label="Show more"
-                        title="Show more"
+                    {userText || userPastes.length === 0 ? (
+                      <div
+                        className={`message-user-card${expandedUserCards.has(m.id) ? " message-user-card--expanded" : ""}${
+                          overflowedUserCards.has(m.id) && !expandedUserCards.has(m.id)
+                            ? " message-user-card--overlay-toggle"
+                            : ""
+                        }`}
                       >
-                        <ChevronDown strokeWidth={2} size={16} aria-hidden />
-                      </button>
-                    )}
-                  </div>
+                        {overflowedUserCards.has(m.id) && !expandedUserCards.has(m.id) ? (
+                          <div className="message-user-card__fade" aria-hidden />
+                        ) : null}
+                        <div className="message-user-card__content" ref={(el) => { userCardContentRefs.current[m.id] = el; }}>
+                          {userText ? <MarkdownContent content={userText} {...markdownActions} /> : null}
+                        </div>
+                        {overflowedUserCards.has(m.id) && !expandedUserCards.has(m.id) && (
+                          <button
+                            type="button"
+                            className="message-user-card__toggle"
+                            onClick={() => expandUserCard(m.id)}
+                            aria-expanded={false}
+                            aria-label="Show more"
+                            title="Show more"
+                          >
+                            <ChevronDown strokeWidth={2} size={16} aria-hidden />
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
                   <>
                     {hasToolCalls && (

@@ -28,7 +28,7 @@ export const DEFAULT_CHAT_MODE: ChatModeId = "chat";
 
 const byId = new Map(CHAT_MODES.map((m) => [m.id, m]));
 
-/** Map stored / incoming mode strings onto Chat | Q&A. */
+/** Map stored / incoming mode strings onto Chat | Grill (`qa`). */
 export function normalizeChatMode(value: unknown): ChatModeId {
   if (typeof value !== "string") return DEFAULT_CHAT_MODE;
   const trimmed = value.trim();
@@ -120,7 +120,7 @@ export function placeholderCycleOnConversationChange(
   return initialPlaceholderCycle(mode);
 }
 
-/** Toggle Chat ↔ Q&A. */
+/** Toggle Chat ↔ Grill. */
 export function nextChatMode(current: ChatModeId | string | null | undefined): ChatModeId {
   const id = getChatMode(current).id;
   const index = CHAT_MODES.findIndex((m) => m.id === id);

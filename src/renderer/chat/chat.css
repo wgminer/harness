@@ -42,28 +42,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-ui);
+  font-variant-numeric: tabular-nums;
   line-height: 1.3;
   color: var(--fg-muted);
   opacity: 0.45;
   pointer-events: none;
   user-select: none;
-}
-
-.new-chat-corner--top-left {
-  top: var(--space-4);
-  left: var(--shell-pad-inline);
-}
-
-.new-chat-corner--top-right {
-  top: var(--space-4);
-  right: var(--shell-pad-inline);
-  text-align: right;
-}
-
-.new-chat-corner--bottom-left {
-  bottom: var(--space-4);
-  left: var(--shell-pad-inline);
 }
 
 .new-chat-corner--bottom-right {
@@ -317,6 +303,88 @@
 }
 
 /* Bottom fade when user message is line-clamped (collapsed + overflow). */
+.message-pasted-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.message-pasted-card {
+  width: min(100%, 28rem);
+  border: 1px solid var(--border-edge);
+  border-radius: var(--radius-control-sm);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.message-pasted-card--open {
+  width: 100%;
+}
+
+.message-pasted-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: none;
+  color: var(--fg-muted);
+  background: transparent;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  text-align: left;
+  cursor: pointer;
+}
+
+.message-pasted-card__header:hover,
+.message-pasted-card__header:focus-visible {
+  color: var(--fg);
+}
+
+.message-pasted-card__header > svg {
+  flex-shrink: 0;
+}
+
+.message-pasted-card__title {
+  flex-shrink: 0;
+  color: var(--fg);
+}
+
+.message-pasted-card__preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-pasted-card__meta {
+  flex-shrink: 0;
+}
+
+.message-pasted-card__chevron {
+  transition: transform var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.message-pasted-card--open .message-pasted-card__chevron {
+  transform: rotate(180deg);
+}
+
+.message-pasted-card__body {
+  max-height: 24rem;
+  margin: 0;
+  padding: var(--space-2);
+  overflow: auto;
+  border-top: 1px solid var(--border-edge);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .message-user-card__fade {
   position: absolute;
   left: 0;
@@ -1021,6 +1089,16 @@
 }
 
 .chat-composer-inner {
+  /*
+   * Attachments (scope pill, cards) share one inset and radius. Remove buttons are
+   * 16px hit areas around a 12px glyph, offset so the glyph lands on the inset.
+   */
+  --attach-inset: var(--space-2);
+  /* Space between the composer edge and the attachment rows, top and sides alike. */
+  --attach-gutter: var(--space-4);
+  --attach-radius: var(--radius-control-sm);
+  --attach-remove-size: var(--space-4);
+  --attach-remove-offset: calc(var(--attach-inset) - (var(--attach-remove-size) - 12px) / 2);
   width: 100%;
   max-width: min(700px, var(--content-width));
   margin: 0 auto;
@@ -1279,129 +1357,218 @@
     inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
 }
 
-.chat-audio-file-input {
+.chat-file-input {
   display: none;
 }
 
-.chat-scope-banner {
+.chat-scope-row {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border-edge);
-  color: var(--fg-muted);
-  background: var(--overlay-subtle);
+  padding: var(--attach-gutter) var(--attach-gutter) 0;
 }
 
-.chat-scope-banner > svg {
-  flex-shrink: 0;
-  color: var(--accent);
-}
-
-.chat-scope-banner__label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-caption);
-  color: var(--fg);
-}
-
-.chat-scope-banner__dismiss {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--space-5);
-  height: var(--space-5);
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--fg-muted);
-  background: transparent;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.chat-scope-banner__dismiss:hover:not(:disabled) {
-  color: var(--fg);
-  background: var(--overlay);
-}
-
-.chat-scope-banner__dismiss:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.chat-attachment-strip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4) 0;
-}
-
-.chat-attachment-chip {
+.chat-scope-pill {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
-  max-width: min(100%, 14rem);
-  height: var(--space-5);
-  padding: 0 var(--space-1) 0 var(--space-2);
-  border: 1px solid var(--border-edge);
-  border-radius: var(--radius-control-sm);
+  max-width: 100%;
+  height: var(--space-6);
+  padding: 0 var(--attach-remove-offset) 0 var(--attach-inset);
+  border: 1px solid var(--border-input);
+  border-radius: var(--attach-radius);
   color: var(--fg-muted);
-  background: transparent;
-}
-
-.chat-attachment-chip > svg {
-  flex-shrink: 0;
-}
-
-.chat-attachment-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
 }
 
-.chat-attachment-remove {
+.chat-scope-pill > svg {
+  flex-shrink: 0;
+}
+
+.chat-scope-pill__label {
+  flex-shrink: 0;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.chat-scope-pill__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.chat-scope-pill__dismiss {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--space-4);
-  height: var(--space-4);
+  flex-shrink: 0;
+  width: var(--attach-remove-size);
+  height: var(--attach-remove-size);
+  margin-left: var(--space-1);
   padding: 0;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   color: inherit;
   background: transparent;
   cursor: pointer;
-  flex-shrink: 0;
   opacity: 0.65;
 }
 
-.chat-attachment-remove:hover:not(:disabled) {
+.chat-scope-pill__dismiss:hover:not(:disabled) {
   opacity: 1;
   color: var(--fg);
   background: var(--overlay-subtle);
 }
 
-.chat-attachment-remove:disabled {
-  opacity: 0.4;
+.chat-scope-pill__dismiss:disabled {
+  opacity: 0.3;
   cursor: not-allowed;
+}
+
+.chat-attachment-strip {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--attach-gutter) var(--attach-gutter) 0;
+}
+
+.chat-scope-row + .chat-attachment-strip {
+  padding-top: var(--space-2);
+}
+
+/* Files size to their name within a range; pastes are a fixed tile with a two-line preview. */
+.chat-attach-card {
+  position: relative;
+  flex-shrink: 0;
+  min-width: 9rem;
+  max-width: 14rem;
+}
+
+.chat-attach-card--paste {
+  width: 10rem;
+}
+
+.chat-attach-card__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--attach-inset);
+  border: 1px solid var(--border-input);
+  border-radius: var(--attach-radius);
+  color: var(--fg-muted);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+button.chat-attach-card__main {
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+button.chat-attach-card__main:hover:not(:disabled) {
+  border-color: var(--border-light);
+}
+
+button.chat-attach-card__main:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+button.chat-attach-card__main:disabled {
+  cursor: default;
+}
+
+.chat-attach-card__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  /* Clear the remove button; the meta row runs the full width. */
+  padding-right: calc(var(--attach-remove-size) + var(--space-1));
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--fg);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+}
+
+.chat-attach-card--paste .chat-attach-card__title {
+  -webkit-line-clamp: 2;
+}
+
+.chat-attach-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+}
+
+.chat-attach-card__meta > svg {
+  flex-shrink: 0;
+}
+
+.chat-attach-card__meta-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-attach-card__remove {
+  position: absolute;
+  top: var(--attach-remove-offset);
+  right: var(--attach-remove-offset);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--attach-remove-size);
+  height: var(--attach-remove-size);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--fg-muted);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+.chat-attach-card__remove:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--fg);
+  background: var(--overlay-subtle);
+}
+
+.chat-attach-card__remove:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/*
+ * Composer body. Stacked (default): textarea above the action row. Inline
+ * (`--inline`): one row with compact controls while the draft fits on one line;
+ * ChatComposer switches to stacked once it wraps. Text inset stays at --space-5
+ * in both so the draft does not jump sideways.
+ */
+.chat-composer-row {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .chat-input {
   width: 100%;
   font-family: var(--font-family);
   font-size: var(--font-size);
+  line-height: var(--line-height-body);
   background: transparent;
   color: var(--fg);
   border: none;
@@ -1422,10 +1589,57 @@
 
 .input-actions {
   display: flex;
+  flex-shrink: 0;
   align-items: end;
   justify-content: end;
   gap: var(--space-2);
   padding: var(--space-4);
+}
+
+.chat-composer-inner--inline {
+  --composer-control: var(--space-7);
+}
+
+.chat-composer-inner--inline .chat-composer-row {
+  flex-direction: row;
+  align-items: center;
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
+}
+
+.chat-composer-inner--inline .chat-input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  overflow: hidden;
+  /* One line + padding = --input-height. */
+  min-height: var(--input-height);
+  padding: calc((var(--input-height) - var(--line-height-body)) / 2) var(--space-3) calc((var(--input-height) - var(--line-height-body)) / 2) var(--space-5);
+}
+
+.chat-composer-inner--inline .chat-input::placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-composer-inner--inline .input-actions {
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+}
+
+.chat-composer-inner--inline .input-actions .btn {
+  --control-size: var(--composer-control);
+}
+
+.chat-composer-inner--inline .chat-mode-picker--segment.chat-mode-picker--quiet {
+  height: var(--composer-control);
+  margin: 0 var(--space-1);
+}
+
+.chat-composer-inner--inline .chat-mode-picker__seg {
+  min-width: var(--space-10);
+  padding: 0 var(--space-2);
 }
 
 .coding-scope-plus--active {
@@ -1977,7 +2191,6 @@
 .chat-selection-image__spin {
   animation: motion-spin 0.8s linear infinite;
 }
-
 
 /* Note card: one bordered header (pill + actions), optional inline review body. */
 .document-card__header {

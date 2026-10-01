@@ -9,7 +9,7 @@ interface ChatModePickerProps {
   disabled?: boolean;
 }
 
-/** Two-way Chat | Q&A segmented control. */
+/** Two-way Chat | Grill segmented control. */
 export function ChatModePicker({
   value,
   onChange,
@@ -21,14 +21,22 @@ export function ChatModePicker({
   const [thumbReady, setThumbReady] = useState(false);
 
   // Slide the thumb under the active segment; first placement is instant.
+  // Re-measure on resize so the thumb follows the compact composer size.
   useLayoutEffect(() => {
     if (variant !== "quiet") return;
     const group = groupRef.current;
-    const active = group?.querySelector<HTMLElement>(".chat-mode-picker__seg--active");
-    if (!group || !active) return;
-    group.style.setProperty("--seg-thumb-x", `${active.offsetLeft}px`);
-    group.style.setProperty("--seg-thumb-w", `${active.offsetWidth}px`);
+    if (!group) return;
+    const place = () => {
+      const active = group.querySelector<HTMLElement>(".chat-mode-picker__seg--active");
+      if (!active) return;
+      group.style.setProperty("--seg-thumb-x", `${active.offsetLeft}px`);
+      group.style.setProperty("--seg-thumb-w", `${active.offsetWidth}px`);
+    };
+    place();
     if (!thumbReady) requestAnimationFrame(() => setThumbReady(true));
+    const observer = new ResizeObserver(place);
+    observer.observe(group);
+    return () => observer.disconnect();
   }, [activeMode.id, variant, thumbReady]);
 
   return (

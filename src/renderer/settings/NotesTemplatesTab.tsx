@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Plus, Square, SquareCheck } from "lucide-react";
 import {
   DEFAULT_NOTE_TEMPLATE_ID,
@@ -20,12 +20,15 @@ export interface NotesTemplatesTabProps {
     nextTemplates: NoteTemplateConfig[],
     nextDefaultId: string,
   ) => void | Promise<void>;
+  /** Groups rendered above the templates (e.g. window behavior). */
+  children?: ReactNode;
 }
 
 export function NotesTemplatesTab({
   noteTemplates,
   defaultNoteTemplateId,
   onTemplatesChange,
+  children,
 }: NotesTemplatesTabProps) {
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -108,6 +111,7 @@ export function NotesTemplatesTab({
   return (
     <>
       <SettingsTabPanel id="notes">
+        {children}
         <SettingsGroup title="Editor templates">
           <div className="settings-template-grid">
             {noteTemplates.map((template) => {

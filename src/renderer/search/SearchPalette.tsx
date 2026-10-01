@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Image as ImageIcon, MessageCircle, Mic, Search, StickyNote } from "lucide-react";
 import type { SearchResult } from "../../shared/types";
+import { getChatMode } from "../../shared/chatModes";
 import { searchTitleOnly, tokenizeQuery } from "../../shared/conversationSearch";
 import {
   conversationDisplayTitle,
@@ -129,7 +130,7 @@ function plural(n: number, word: string): string {
 
 function conversationItem(r: SearchResult, row: ConversationListRow | undefined): PaletteItem {
   const group = r.kind === "dictation" ? "dictation" : "chat";
-  const meta = [group === "dictation" ? "Dictation" : row?.chatMode === "qa" ? "Q&A" : "Chat"];
+  const meta = [group === "dictation" ? "Dictation" : getChatMode(row?.chatMode).label];
   if (r.titleMatched) meta.push("Title match");
   const snippet = oneLine(r.snippet);
   return {
@@ -151,7 +152,7 @@ function conversationRowItem(row: ConversationListRow): PaletteItem {
     id: row.id,
     title: conversationDisplayTitle(row.title, row.createdAt),
     at: row.createdAt,
-    meta: [group === "dictation" ? "Dictation" : row.chatMode === "qa" ? "Q&A" : "Chat"],
+    meta: [group === "dictation" ? "Dictation" : getChatMode(row.chatMode).label],
   };
 }
 

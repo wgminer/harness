@@ -5,7 +5,6 @@ import {
   nextHomeHeaderQuote,
   type HomeHeaderQuote,
 } from "../../shared/headerQuote";
-import { formatDictateDurationLabel } from "../../shared/dictateDurationLabel";
 
 /** Mounts only on empty compose — draws once per visit from the shuffle bag. */
 export function ComposeHeaderQuote() {
@@ -23,83 +22,29 @@ export function ComposeHeaderQuote() {
   );
 }
 
-function formatComposeClock(now: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(now);
+const WEB_VERSION_SUFFIX = "-web";
+
+/** `v0.10.1 · dev` under the Vite dev server, `v0.10.1 · web` in the browser shell, bare when installed. */
+function formatComposeVersion(version: string | null): string {
+  if (!version) return "";
+  if (version.endsWith(WEB_VERSION_SUFFIX)) {
+    return `v${version.slice(0, -WEB_VERSION_SUFFIX.length)} · web`;
+  }
+  const isDev = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
+  return isDev ? `v${version} · dev` : `v${version}`;
 }
 
-function formatComposeDate(now: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  }).format(now);
-}
-
-/** Quiet ambient facts in the four corners of the compose splash. */
+/** App version in the bottom-right corner of the compose splash. */
 export function ComposeCornerMeta() {
-  const [now, setNow] = useState(() => new Date());
-  const [durationLabel, setDurationLabel] = useState(() => formatDictateDurationLabel(0));
-  const [weatherLabel, setWeatherLabel] = useState("—");
+  const [appVersion, setAppVersion] = useState<string | null>(null);
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const refreshMeta = async () => {
-      try {
-        const stats = await window.harness.recording.archiveStats();
-        if (!cancelled) {
-          setDurationLabel(formatDictateDurationLabel(stats?.durationMs ?? 0));
-        }
-      } catch {
-        // Keep last known label if IPC is unavailable.
-      }
-      try {
-        const weather = await window.harness.weather.getCurrent();
-        if (!cancelled) {
-          setWeatherLabel(
-            typeof weather?.label === "string" && weather.label.trim().length > 0
-              ? weather.label
-              : "—",
-          );
-        }
-      } catch {
-        if (!cancelled) setWeatherLabel("—");
-      }
-    };
-
-    void refreshMeta();
-    const onFocus = () => {
-      void refreshMeta();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("focus", onFocus);
-    };
+    window.harness.app.getVersion().then(setAppVersion).catch(() => setAppVersion(null));
   }, []);
 
   return (
-    <>
-      <p className="new-chat-corner new-chat-corner--top-left" aria-hidden="true">
-        {formatComposeClock(now)}
-      </p>
-      <p className="new-chat-corner new-chat-corner--top-right" aria-hidden="true">
-        {formatComposeDate(now)}
-      </p>
-      <p className="new-chat-corner new-chat-corner--bottom-left" aria-hidden="true">
-        {durationLabel}
-      </p>
-      <p className="new-chat-corner new-chat-corner--bottom-right" aria-hidden="true">
-        {weatherLabel}
-      </p>
-    </>
+    <p className="new-chat-corner new-chat-corner--bottom-right" aria-hidden="true">
+      {formatComposeVersion(appVersion)}
+    </p>
   );
 }

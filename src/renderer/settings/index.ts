@@ -11,6 +11,7 @@ export { SecretField, type SecretFieldProps } from "./SecretField";
 export { SettingsTabPanel, type SettingsTabPanelProps } from "./SettingsTabPanel";
 export { SystemPromptPreviewPanel } from "./SystemPromptPreviewPanel";
 export { DataSettingsTab } from "./DataSettingsTab";
+export { AccountsSettingsTab, SETTINGS_SYNC_SECTION_ID } from "./AccountsSettingsTab";
 export {
   MemorySettingsSections,
   MemoryImportSection,

@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { MutableRefObject, ReactNode, RefObject } from "react";
 import type { CodingScopeMeta } from "../../shared/desktopAPI";
 import { ChatComposer } from "./ChatComposer";
+import type { PastedTextBlock } from "./pastedText";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatSelectionImagePopover } from "./ChatSelectionImagePopover";
 import {
@@ -50,6 +51,11 @@ interface ChatSurfaceProps {
   onAttachAudio: (file: File | null) => void;
   onRemoveAttachedAudio: () => void;
   onAttachmentError?: (message: string | null) => void;
+  onAttachText?: (text: string, name: string) => void;
+  pastedBlocks?: PastedTextBlock[];
+  onPasteLarge?: (text: string) => void;
+  onRemovePastedBlock?: (id: string) => void;
+  onInlinePastedBlock?: (id: string) => void;
   focusComposerNonce?: number;
   messagesTestId: string;
   composerTestId: string;
@@ -106,6 +112,11 @@ export function ChatSurface({
   onAttachAudio,
   onRemoveAttachedAudio,
   onAttachmentError,
+  onAttachText,
+  pastedBlocks,
+  onPasteLarge,
+  onRemovePastedBlock,
+  onInlinePastedBlock,
   focusComposerNonce,
   messagesTestId,
   composerTestId,
@@ -231,6 +242,11 @@ export function ChatSurface({
             onAttachAudio={onAttachAudio}
             onRemoveAttachedAudio={onRemoveAttachedAudio}
             onAttachmentError={onAttachmentError}
+            onAttachText={onAttachText}
+            pastedBlocks={pastedBlocks}
+            onPasteLarge={onPasteLarge}
+            onRemovePastedBlock={onRemovePastedBlock}
+            onInlinePastedBlock={onInlinePastedBlock}
             focusComposerNonce={focusComposerNonce}
             inputRef={inputRef}
             placeholder={placeholder}

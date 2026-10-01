@@ -1186,6 +1186,11 @@ export function ChatView({
     onAttachmentError: (message: string | null) => {
       composer.setAttachmentError(message);
     },
+    pastedBlocks: composer.pastedBlocks,
+    onPasteLarge: (text: string) => composer.addPastedBlock(text),
+    onAttachText: composer.addPastedBlock,
+    onRemovePastedBlock: composer.removePastedBlock,
+    onInlinePastedBlock: composer.inlinePastedBlock,
     focusComposerNonce,
     inputRef: composer.inputRef,
     placeholder: composerPlaceholder,
@@ -1222,7 +1227,7 @@ export function ChatView({
               role="group"
               aria-label="Message composer"
             >
-              <ChatComposer {...composerProps} />
+              <ChatComposer {...composerProps} layout="stacked" />
             </div>
             <ComposeHeaderQuote />
           </div>

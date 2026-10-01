@@ -122,11 +122,6 @@ export default function App() {
 
   const closeSearch = useCallback(() => setSearchOpen(false), []);
 
-  const openDataSettings = useCallback(() => {
-    setSettingsInitialTab("data");
-    setView("settings");
-  }, []);
-
   const handleConversationSelect = useCallback((id: string) => {
     consumeArrival(id);
     setConversationId(id);
@@ -417,7 +412,6 @@ export default function App() {
           <TitlebarSettingsButton
             view={view}
             onViewChange={handleViewChange}
-            onOpenDataSettings={openDataSettings}
           />
         }
       />

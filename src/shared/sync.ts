@@ -80,11 +80,11 @@ export {
 /** Native tooltip text for Sync now controls (sidebar icon and settings button). */
 export function syncNowButtonTooltip(input: { busy: boolean; configured: boolean }): string {
   if (input.busy) return "Syncing…";
-  if (!input.configured) return `Set up backup in ${settingsSection("Data")}`;
+  if (!input.configured) return `Set up backup in ${settingsSection("Accounts")}`;
   return "Sync now";
 }
 
-/** Compact sync hint shown beside Sync now in System → Data. */
+/** Compact sync hint shown beside Sync now in System → Accounts. */
 export function syncInlineStatusLine(input: {
   lastSuccessAt: number | null;
 }): string | null {
@@ -106,10 +106,10 @@ export function sidebarSyncStatusTooltip(input: {
   lastError: string | null;
   lastSuccessAt: number | null;
 }): string {
-  if (!input.configured) return `Set up sync in ${settingsSection("Data")}`;
+  if (!input.configured) return `Set up sync in ${settingsSection("Accounts")}`;
   if (input.busy) return "Syncing…";
   if (input.lastError) {
-    return `Sync failed: ${input.lastError}\nClick to open ${settingsSection("Data")}.`;
+    return `Sync failed: ${input.lastError}\nClick to open ${settingsSection("Accounts")}.`;
   }
   return syncInlineStatusLine({ lastSuccessAt: input.lastSuccessAt }) ?? "Synced";
 }
@@ -121,7 +121,7 @@ export function formatSyncStatusLine(input: {
   lastError: string | null;
   configured: boolean;
 }): string | null {
-  if (!input.configured) return `Connect R2 in ${settingsSection("Data")} to enable sync.`;
+  if (!input.configured) return `Connect R2 in ${settingsSection("Accounts")} to enable sync.`;
   if (input.isSyncing) return "Syncing…";
   if (input.lastError) return input.lastError;
   if (input.lastSuccessAt) {

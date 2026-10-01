@@ -187,7 +187,7 @@ pub struct DecideSyncActionParams<'a> {
 
 pub fn format_sync_status_line(input: FormatSyncStatusLineInput) -> Option<String> {
     if !input.configured {
-        return Some("Connect R2 in Settings → Data to enable sync.".into());
+        return Some("Connect R2 in System → Accounts to enable sync.".into());
     }
     if input.is_syncing {
         return Some("Syncing…".into());

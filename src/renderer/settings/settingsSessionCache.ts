@@ -93,7 +93,7 @@ export function shouldLoadSettingsSecrets(
   alreadyLoaded: boolean,
 ): boolean {
   if (alreadyLoaded) return false;
-  return activeTab === "data" || syncQrOpen;
+  return activeTab === "accounts" || syncQrOpen;
 }
 
 /**
