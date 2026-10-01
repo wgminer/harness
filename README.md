@@ -50,7 +50,7 @@ npm run capture:hero      # refresh media/hero.png and site/assets/hero.png
 npm run capture:site      # home + Q&A screenshots for the download site
 ```
 
-`capture:hero` uses macOS `screencapture` against a throwaway demo profile (real chats are never in the frame). Pass `--launch` to start the app if it isn’t open. `npm run release` runs this against the signed build so the download site screenshot matches the shipping UI.
+`capture:hero` uses macOS `screencapture` against a throwaway demo profile (real chats are never in the frame). Pass `--launch` to start the app if it isn’t open.
 
 ## Surfaces
 

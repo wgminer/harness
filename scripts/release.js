@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require("node:child_process");
-const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.join(__dirname, "..");
@@ -13,7 +12,6 @@ const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const noTag = args.includes("--no-tag");
 const noBump = args.includes("--no-bump");
-const skipHero = args.includes("--skip-hero");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -69,50 +67,6 @@ function tagExists(tag) {
   return result.status === 0;
 }
 
-function builtHarnessBinary() {
-  return path.join(
-    root,
-    "src-tauri",
-    "target",
-    "release",
-    "bundle",
-    "macos",
-    "Harness.app",
-    "Contents",
-    "MacOS",
-    "harness"
-  );
-}
-
-function captureAndCommitHero(version) {
-  const bin = builtHarnessBinary();
-  if (!fs.existsSync(bin)) {
-    console.error(`Hero capture: built binary not found at ${bin}`);
-    process.exit(1);
-  }
-
-  console.log("Capturing landing-page screenshot from the signed build...");
-  run("bash", [path.join(root, "scripts", "capture-hero.sh"), "--launch", "--shot", "both"], {
-    env: { ...process.env, HARNESS_HERO_BIN: bin },
-  });
-
-  const heroPaths = [
-    "media/hero.png",
-    "site/assets/hero.png",
-    "media/thread.png",
-    "site/assets/thread.png",
-  ];
-  run("git", ["add", "--", ...heroPaths]);
-  const staged = capture("git", ["diff", "--cached", "--name-only", "--", ...heroPaths], {
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  if (!staged) {
-    console.log("Hero screenshot unchanged.");
-    return;
-  }
-  run("git", ["commit", "-m", `Refresh landing-page hero for v${version}.`]);
-}
-
 function main() {
   ensureCleanWorkingTree();
 
@@ -162,10 +116,17 @@ function main() {
     return;
   }
 
-  if (!skipHero) {
-    captureAndCommitHero(version);
-  } else {
-    console.log("Skipped landing-page screenshot (--skip-hero).");
+  // Push main and the tag before publishing. If the tag is missing on the
+  // remote, `gh release create` makes one at origin's default branch, which
+  // may not be the commit that was just built.
+  if (!noTag) {
+    if (!tagExists(tag)) {
+      run("git", ["tag", tag]);
+    } else {
+      console.log(`Git tag ${tag} already exists locally.`);
+    }
+    run("git", ["push", "origin", "main"]);
+    run("git", ["push", "origin", tag]);
   }
 
   const { publishGithubRelease } = require("./publish-github-release");
@@ -176,14 +137,6 @@ function main() {
     return;
   }
 
-  if (!tagExists(tag)) {
-    run("git", ["tag", tag]);
-  } else {
-    console.log(`Git tag ${tag} already exists locally.`);
-  }
-
-  run("git", ["push", "origin", tag]);
-  run("git", ["push", "origin", "main"]);
   console.log(`Release ${tag} is live. Installed apps will see the Update button on next launch.`);
 }
 

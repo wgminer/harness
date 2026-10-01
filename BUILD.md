@@ -242,18 +242,18 @@ This command:
 2. Bumps the patch version in `package.json` (and syncs Cargo / tauri.conf).
 3. Builds `dist:mac` with `REQUIRE_NOTARIZE=1` (signed + notarized).
 4. Runs `verify:mac-trust`.
-5. Captures demo screenshots from the signed app into `media/hero.png`, `media/thread.png`, and `site/assets/`, then commits if they changed (so GitHub Pages picks them up).
+5. Creates git tag `vX.Y.Z` and pushes `main` + tag (before publishing, so the release points at the built commit).
 6. Collects DMG, ZIP, updater bundle, and `latest.json`, then publishes them to GitHub Releases with install notes (**download the `.dmg`**).
-7. Creates git tag `vX.Y.Z` and pushes tag + `main`.
+
+Site screenshots are not part of the release; refresh them separately with `npm run capture:site`.
 
 Installed copies of Harness check GitHub on launch and show an **Update** button in the sidebar when a newer release exists.
 
 Optional flags:
 
-- `npm run release -- --dry-run` — build and verify the **current** version only; skip bump, screenshot, publish, and git tag.
+- `npm run release -- --dry-run` — build and verify the **current** version only; skip bump, publish, and git tag.
 - `npm run release -- --no-bump` — publish the already-committed version (use after a manual minor/major bump); still publishes and tags.
 - `npm run release -- --no-tag` — publish to GitHub but skip git tag push.
-- `npm run release -- --skip-hero` — skip the landing-page screenshot (use only if Screen Recording is unavailable).
 
 Local dist without releasing:
 
