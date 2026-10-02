@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="media/hero.png" alt="Harness desktop app — compose home" width="920" />
+  <img src="site/assets/library.png" alt="Harness desktop app: the library sidebar beside a chat" width="920" />
 </p>
 
 ---
@@ -46,11 +46,11 @@ Opens `http://localhost:5173`. Chat works without a key (dummy streamed replies)
 
 ```bash
 npm run dist:mac          # signed DMG — see BUILD.md
-npm run capture:hero      # refresh media/hero.png and site/assets/hero.png
-npm run capture:site      # home + Q&A screenshots for the download site
+npm run demo              # watch the site's demo scenes live (player at /demo-player.html)
+npm run capture:site      # render every scene into site/assets/ (PNG stills, MP4 clips)
 ```
 
-`capture:hero` uses macOS `screencapture` against a throwaway demo profile (real chats are never in the frame). Pass `--launch` to start the app if it isn’t open.
+Site screenshots and clips come from **demo scenes** in `src/renderer/demo/scenes.ts`: the real app on a scripted backend (`demoAdapter.ts`) with seeded data, a drawn cursor, scripted replies, and simulated Fn dictation. `npm run demo` plays them with hot reload; `capture:site` steps each one frame by frame on a paused clock in headless Chromium, so takes are identical and need no permissions. `--only <scene>` renders one; `--gif` also writes GIFs.
 
 ## Surfaces
 

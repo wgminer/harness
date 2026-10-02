@@ -30,11 +30,9 @@ describe("accent", () => {
     }
   });
 
-  it("matches --accent in base.css and site/styles.css", () => {
+  it("matches --accent in base.css", () => {
     const exact = new RegExp(`--accent:\\s*${DEFAULT_ACCENT}`, "i");
     const base = readFileSync(join(root, "src/renderer/base.css"), "utf8");
-    const site = readFileSync(join(root, "site/styles.css"), "utf8");
     expect(base).toMatch(exact);
-    expect(site).toMatch(exact);
   });
 });

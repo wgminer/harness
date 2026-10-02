@@ -6,90 +6,213 @@
     <title>Harness</title>
     <meta
       name="description"
-      content="A personal, voice-first app for macOS — dictation, chat without the persona, notes, and tasks. Offline-first. Open source."
+      content="A personal, voice-first app for macOS: dictation, chat without the persona, notes, and tasks. Local-first and open source."
     />
+    <meta property="og:title" content="Harness" />
+    <meta property="og:description" content="Think out loud on your Mac. Dictation, chat, notes, and tasks in one local app." />
+    <meta property="og:image" content="https://williamminer.com/harness/assets/library.png" />
+    <meta property="og:url" content="https://williamminer.com/harness/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/png" href="./assets/icon.png" />
+    <link rel="apple-touch-icon" href="./assets/icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="page">
-      <div class="stack">
-        <header class="stack__header">
-          <img
-            class="stack__icon"
-            src="./assets/icon.png"
-            alt=""
-            width="80"
-            height="80"
-          />
-          <p class="lede">
-            The app I actually use instead of a chat tab. Dictation, chat
-            without the persona, notes, and tasks — a local thinking partner,
-            not an answer engine.
-          </p>
-          <p class="tagline">
-            Commercial tools optimize for a mainstream audience and lock-in.
-            This one is personal: data on disk I can leave with, context I can
-            inspect, voice when typing is the wrong interface.
-          </p>
-        </header>
-
-        <figure class="shot">
-          <img
-            class="shot__img"
-            src="./assets/hero.png"
-            alt="Harness home screen — a quote, a compose box, and quiet corner facts. The library is closed."
-            width="2940"
-            height="1846"
-          />
-          <figcaption>
-            It opens to a quote and a box. Time, the date, and how much I’ve
-            dictated sit in the corners. The library stays out of the way until
-            I want it.
-          </figcaption>
-        </figure>
-
-        <figure class="shot">
-          <img
-            class="shot__img"
-            src="./assets/thread.png"
-            alt="Harness Q&amp;A mode — a short question in the thread and lettered choices in the composer."
-            width="2940"
-            height="1846"
-          />
-          <figcaption>
-            Q&amp;A asks one question at a time and puts the choices in the
-            composer. Chat stays short; longer writing goes into a note.
-          </figcaption>
-        </figure>
-
-        <div class="download">
+    <header class="intro">
+      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" aria-hidden="true" focusable="false">
+        <g data-mark-scale="0.82" transform="translate(512,512) scale(0.82) translate(-512,-512)">
+          <g transform="translate(162,150) scale(1.129221,1.124891)">
+            <g transform="translate(-40.246384,686.003556) scale(0.100000,-0.100000)">
+              <path pathLength="1"
+                d="M3157 6842 c-26 -29 -37 -70 -37 -140 0 -111 -37 -391 -55 -418 -47 -72 -424 -63 -485 11 -8 10 -78 69 -155 130 -78 61 -172 147 -210 190 -151 170 -173 185 -223 148 -125 -93 -137 -445 -24 -713 34 -81 36 -91 40 -223 5 -187 14 -171 -279 -550 -333 -431 -329 -421 -329 -736 0 -228 7 -203 -157 -561 -99 -218 -138 -314 -149 -369 -17 -88 -29 -104 -97 -128 -111 -39 -174 -150 -187 -326 -4 -62 -13 -125 -19 -141 -22 -56 -137 -243 -218 -353 -205 -282 -218 -391 -78 -692 42 -90 60 -144 78 -237 65 -324 244 -454 627 -454 l146 0 80 -41 79 -41 125 5 c272 11 407 112 490 372 63 200 94 228 253 234 169 5 197 -16 197 -156 1 -166 22 -241 81 -285 63 -47 415 -88 764 -88 321 0 335 -5 335 -133 1 -393 53 -644 149 -712 183 -128 942 183 1459 598 577 464 1076 1267 1101 1772 l8 150 46 90 c64 123 111 507 77 635 -6 25 -15 119 -19 210 -9 198 -16 218 -145 434 -113 188 -152 240 -218 285 -64 45 -78 69 -78 142 0 118 -36 182 -189 341 -178 186 -380 349 -456 369 -90 23 -125 53 -125 106 0 103 -60 161 -311 301 -266 149 -517 248 -656 262 -80 7 -101 13 -151 44 -69 42 -176 73 -294 85 -108 10 -126 22 -185 114 -189 297 -526 558 -606 469z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="280.79"
+                stroke-linejoin="round"
+                stroke-linecap="round"
+              />
+            </g>
+          </g>
+        </g>
+      </svg>
+      <div class="intro__text">
+        <h1 class="intro__name">Harness</h1>
+        <p class="intro__deck">Think out loud on your Mac.</p>
+        <p class="intro__lede">
+          The app I actually use instead of a chat tab. Dictation, chat without
+          the persona, notes, and tasks: a local thinking partner, not an answer
+          engine.
+        </p>
+        <div class="get">
           <a
-            class="cta"
+            class="get__button"
+            id="download"
             href="https://github.com/wgminer/harness/releases/latest"
           >
             Download for macOS
           </a>
-          <p class="download-hint">
-            On the next page, get the file ending in <code>.dmg</code>.
+          <p class="get__meta">
+            <span id="release">Free and open source.</span>
+            For Apple silicon Macs on macOS 12 or later.
             <a href="https://github.com/wgminer/harness">Source on GitHub</a>
           </p>
         </div>
-
-        <p class="colophon">
-          macOS 12 Monterey or later · Apple silicon · Microphone access for
-          dictation · Tauri (Rust, React), Swift UI, OpenAI, Apple Speech,
-          Cloudflare R2, IBM Plex Sans &amp; Mono
-        </p>
-        <p class="site-credit">
-          <a href="https://williamminer.com">williamminer.com</a>
-        </p>
       </div>
+    </header>
+
+    <main>
+      <figure class="lead-shot">
+        <img
+          src="./assets/library.png"
+          alt="Harness with the library open: chats and notes grouped by day beside a conversation about what a personal LLM app should optimize for."
+          width="2880"
+          height="1800"
+        />
+        <figcaption>
+          Chats and notes share one library, grouped by day. It stays closed
+          until I want it.
+        </figcaption>
+      </figure>
+
+      <section class="feature">
+        <div class="feature__text">
+          <h2>Talk instead of type</h2>
+          <p>
+            Press Fn from any app and say what you're thinking. Apple Speech
+            transcribes it on the Mac, it lands in a conversation, and the reply
+            streams back.
+          </p>
+        </div>
+        <video
+          class="feature__shot"
+          src="./assets/dictation.mp4"
+          poster="./assets/dictation-poster.jpg"
+          width="1560"
+          height="1170"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          aria-label="Pressing Fn opens a full-screen sound field while a question is spoken. After a moment of transcribing, the question appears in a new chat and an answer citing a note streams in."
+        ></video>
+      </section>
+
+      <section class="feature">
+        <div class="feature__text">
+          <h2>Grill mode</h2>
+          <p>
+            Switch a conversation to Grill and it interviews you instead of
+            answering. One question at a time, with the choices in the composer.
+            Useful when the hard part is knowing what you think.
+          </p>
+        </div>
+        <video
+          class="feature__shot"
+          src="./assets/grill.mp4"
+          poster="./assets/grill-poster.jpg"
+          width="1560"
+          height="1170"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          aria-label="Switching to Grill, typing a question about a job offer, and picking one of three suggested answers. The next question follows."
+        ></video>
+      </section>
+
+      <section class="feature">
+        <div class="feature__text">
+          <h2>Notes for the long version</h2>
+          <p>
+            Chat stays short. Longer writing goes into a Markdown note that the
+            model can draft into or suggest edits to, and that I can keep
+            editing by hand.
+          </p>
+        </div>
+        <img
+          class="feature__shot"
+          src="./assets/notes.png"
+          alt="A Markdown note titled Week of September 14, with decisions and open questions, beside the library."
+          width="2080"
+          height="1560"
+          loading="lazy"
+        />
+      </section>
+
+      <section class="feature">
+        <div class="feature__text">
+          <h2>Tasks you can say out loud</h2>
+          <p>
+            Ask in chat or dictate, and tasks land in a plain list with tags.
+            Nothing to set up and no project hierarchy.
+          </p>
+        </div>
+        <img
+          class="feature__shot"
+          src="./assets/tasks.png"
+          alt="The task list: four active tasks tagged errands and harness, and two completed."
+          width="2080"
+          height="1560"
+          loading="lazy"
+        />
+      </section>
+
+      <section class="why">
+        <h2>Why I built it</h2>
+        <p>
+          Commercial tools optimize for a mainstream audience and lock-in. This
+          one is personal, and makes three promises:
+        </p>
+        <dl class="why__list">
+          <dt>Data I can leave with</dt>
+          <dd>Conversations, notes, and tasks live on my Mac. Sync to the phone is optional.</dd>
+          <dt>Context I can inspect</dt>
+          <dd>Each reply can show exactly what went to the model: prompt, memories, and messages.</dd>
+          <dt>Voice when typing is wrong</dt>
+          <dd>Press Fn anywhere to dictate. Speech is transcribed on the Mac by Apple Speech.</dd>
+        </dl>
+      </section>
     </main>
+
+    <footer class="colophon">
+      <p>
+        Needs macOS 12 Monterey or later on Apple silicon, microphone access for
+        dictation, and an OpenAI API key or a local model through Ollama. Built
+        with Tauri, Rust, React, and Swift.
+      </p>
+      <p><a href="https://williamminer.com">williamminer.com</a></p>
+    </footer>
+
+    <script>
+      // Link straight to the latest DMG; keep the releases page if this fails.
+      fetch("https://api.github.com/repos/wgminer/harness/releases/latest")
+        .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+        .then((release) => {
+          const dmg = (release.assets || []).find((a) => a.name.endsWith(".dmg"));
+          if (dmg) document.getElementById("download").href = dmg.browser_download_url;
+          const version = String(release.tag_name || "").replace(/^v/, "");
+          if (version) {
+            document.getElementById("release").textContent = `Version ${version}, free and open source.`;
+          }
+        })
+        .catch(() => {});
+
+      // Clips autoplay like GIFs; with reduced motion they wait for a click instead.
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        for (const video of document.querySelectorAll("video")) {
+          video.removeAttribute("autoplay");
+          video.pause();
+          video.controls = true;
+        }
+      }
+    </script>
   </body>
 </html>

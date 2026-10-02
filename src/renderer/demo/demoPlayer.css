@@ -1,0 +1,104 @@
+/* Dev-only player chrome; deliberately plain so the frame is the only thing to look at. */
+
+body {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  height: 100vh;
+  background: #1c1c1e;
+  color: #ccc;
+  font: 13px/1.4 -apple-system, system-ui, sans-serif;
+}
+
+.player__scenes {
+  padding: 16px 12px;
+  border-right: 1px solid #2c2c2e;
+  overflow: auto;
+}
+
+.player__scenes h1 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.player__scenes h2 {
+  margin: 16px 0 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #888;
+}
+
+.player__scenes button {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.player__scenes button:hover {
+  background: #2c2c2e;
+}
+
+.player__scenes button[aria-current="true"] {
+  background: #3a3a3c;
+  color: #fff;
+}
+
+.player__stage {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+}
+
+.player__bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #2c2c2e;
+}
+
+.player__name {
+  color: #fff;
+  font-weight: 500;
+}
+
+.player__status {
+  flex: 1;
+  color: #888;
+}
+
+.player__restart {
+  padding: 4px 12px;
+  border: 1px solid #48484a;
+  border-radius: 4px;
+  background: #2c2c2e;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.player__fit {
+  position: relative;
+  margin: 24px;
+  min-height: 0;
+}
+
+.player__fit iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px #3a3a3c, 0 20px 60px rgb(0 0 0 / 0.5);
+  transform-origin: 0 0;
+  background: #111;
+}

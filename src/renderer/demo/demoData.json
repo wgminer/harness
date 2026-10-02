@@ -1,0 +1,154 @@
+{
+  "conversations": [
+    {
+      "id": "conv_demo_qa",
+      "title": "Stay here or use the browser",
+      "ageMinutes": 30,
+      "chatMode": "qa",
+      "messages": [
+        {
+          "role": "user",
+          "content": "I keep bouncing between ChatGPT in the browser and this. When should I stay here?"
+        },
+        {
+          "role": "assistant",
+          "content": "Stay here when you want the reply to be yours to inspect — context, tools, and the transcript on disk. Use the browser when you just need a quick answer you won't keep.\n\nWhat do you want this next hour to produce?\n\n::::options\n:::option{title=\"A decision I can stand behind\"}\n:::\n:::option{title=\"Notes I can edit later\"}\n:::\n:::option{title=\"A short answer, then done\"}\n:::\n::::"
+        }
+      ]
+    },
+    {
+      "id": "conv_demo_harness",
+      "title": "Voice-first capture notes",
+      "ageMinutes": 60,
+      "messages": [
+        {
+          "role": "user",
+          "content": "What should a personal LLM harness optimize for if it is not engagement?"
+        },
+        {
+          "role": "assistant",
+          "content": "Control and legibility.\n\n- Keep data on disk you can leave with.\n- Show how context was assembled for each reply.\n- Prefer tools you can inspect over a persona you cannot.\n\nVoice-first capture helps when the keyboard is the wrong interface; the transcript should stay yours."
+        }
+      ]
+    },
+    {
+      "id": "conv_demo_memory",
+      "title": "Memory and context assembly",
+      "ageMinutes": 120,
+      "messages": [
+        {
+          "role": "user",
+          "content": "How does context get assembled for a reply?"
+        },
+        {
+          "role": "assistant",
+          "content": "Memories, temporal notes, and the system prompt — then the visible thread."
+        }
+      ]
+    },
+    {
+      "id": "conv_demo_sync",
+      "title": "Desktop to phone sync",
+      "ageMinutes": 1440,
+      "messages": [
+        {
+          "role": "user",
+          "content": "How do I pair the phone?"
+        },
+        {
+          "role": "assistant",
+          "content": "On Mac: System → Show Sync QR. On iOS: Set up sync. Credentials stay short-lived."
+        }
+      ]
+    },
+    {
+      "id": "conv_demo_tasks",
+      "title": "Weekend task triage",
+      "ageMinutes": 4320,
+      "messages": [
+        {
+          "role": "user",
+          "content": "Add buy groceries and call the dentist."
+        },
+        {
+          "role": "assistant",
+          "content": "Added both to Tasks."
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "id": "note_demo_week",
+      "title": "Week of September 14",
+      "ageMinutes": 20,
+      "content": "# Week of September 14\n\nThe theme this week is fewer, longer blocks. Mornings stay for writing; meetings move after lunch.\n\n## Decisions\n\n- Ship the notes merge before touching the sidebar again.\n- Keep Grill mode to one question at a time. Lists of five questions read like a form.\n- Dictation stays the default on the phone. Typing is the fallback, not the other way round.\n\n## Open questions\n\n- Does memory need an expiry, or is a weekly review enough?\n- Where should long replies land when there is no note open?\n\n## Reading\n\n- *The Mythical Man-Month*, chapter 2\n- Notes from Tuesday's walk, transcribed and cleaned up\n"
+    },
+    {
+      "id": "note_demo_ideas",
+      "title": "Ideas for the phone app",
+      "ageMinutes": 300,
+      "content": "# Ideas for the phone app\n\n- Widget that starts dictation in one tap\n- Share sheet into a note\n"
+    },
+    {
+      "id": "note_demo_reading",
+      "title": "Reading list",
+      "ageMinutes": 2880,
+      "content": "# Reading list\n\n- How to Take Smart Notes\n- A Pattern Language\n"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task_1",
+      "title": "Call the dentist about Thursday",
+      "status": "pending",
+      "tags": [
+        "errands"
+      ],
+      "ageMinutes": 40
+    },
+    {
+      "id": "task_2",
+      "title": "Buy groceries for the weekend",
+      "status": "pending",
+      "tags": [
+        "errands"
+      ],
+      "ageMinutes": 45
+    },
+    {
+      "id": "task_3",
+      "title": "Draft the release notes for 0.10.2",
+      "status": "in_progress",
+      "tags": [
+        "harness"
+      ],
+      "ageMinutes": 90
+    },
+    {
+      "id": "task_4",
+      "title": "Review the sync merge fixtures",
+      "status": "pending",
+      "tags": [
+        "harness"
+      ],
+      "ageMinutes": 200
+    },
+    {
+      "id": "task_5",
+      "title": "Renew library books",
+      "status": "completed",
+      "tags": [],
+      "ageMinutes": 1500
+    },
+    {
+      "id": "task_6",
+      "title": "Book train tickets for October",
+      "status": "completed",
+      "tags": [
+        "travel"
+      ],
+      "ageMinutes": 3000
+    }
+  ]
+}
