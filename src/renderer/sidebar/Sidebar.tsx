@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useCallback, useMemo, type ReactNode } from "react";
 import { X, Loader2 } from "lucide-react";
 import {
   conversationDisplayTitle,
@@ -24,12 +24,10 @@ import {
   type SidebarGroup,
   type SidebarLibraryFilter,
   type SidebarListSortMode,
-  SIDEBAR_PAGE_SIZE,
   UNTITLED_NOTE_LABEL,
   groupConversations,
   isUntitledNoteTitle,
   libraryRowMatchesFilter,
-  pickSidebarLibraryRows,
   sidebarLibraryFilterLabel,
 } from "./sidebarUtils";
 import { SidebarListMenu } from "./SidebarListMenu";
@@ -94,7 +92,6 @@ export function Sidebar({
   const showUpdateButton = shouldShowUpdateButton(updateStatus);
   const updateButtonDisabled = isUpdateButtonDisabled(updateStatus);
 
-  const [sidebarVisibleLimit, setSidebarVisibleLimit] = useState(SIDEBAR_PAGE_SIZE);
   const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("date");
   const [libraryFilter, setLibraryFilter] = useState<SidebarLibraryFilter>("all");
 
@@ -129,47 +126,10 @@ export function Sidebar({
     [libraryRows, libraryFilter]
   );
 
-  const onLibraryFilterChange = useCallback((filter: SidebarLibraryFilter) => {
-    setLibraryFilter(filter);
-    setSidebarVisibleLimit(SIDEBAR_PAGE_SIZE);
-  }, []);
-
-  const sidebarListItems = useMemo(
-    () =>
-      pickSidebarLibraryRows(
-        filteredLibraryRows,
-        conversationId ?? activeNoteId ?? activeImageId,
-        sidebarVisibleLimit
-      ),
-    [filteredLibraryRows, conversationId, activeNoteId, activeImageId, sidebarVisibleLimit]
-  );
-
   const { groups: sidebarGroups } = useMemo(
-    () => groupConversations(sidebarListItems, listSortMode),
-    [sidebarListItems, listSortMode]
+    () => groupConversations(filteredLibraryRows, listSortMode),
+    [filteredLibraryRows, listSortMode]
   );
-
-  const showSidebarMoreControl = sidebarListItems.length < filteredLibraryRows.length;
-
-  const onSidebarShowMore = useCallback(() => {
-    setSidebarVisibleLimit((n) => Math.min(filteredLibraryRows.length, n + SIDEBAR_PAGE_SIZE));
-  }, [filteredLibraryRows.length]);
-
-  // Load the next page as the list nears its end, and keep filling until it can scroll.
-  const loadMoreIfNearEnd = useCallback(() => {
-    const el = sidebarListRef.current;
-    if (!el || !showSidebarMoreControl) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) onSidebarShowMore();
-  }, [sidebarListRef, showSidebarMoreControl, onSidebarShowMore]);
-
-  useEffect(() => {
-    loadMoreIfNearEnd();
-  }, [loadMoreIfNearEnd, sidebarListItems.length]);
-
-  const onListScroll = useCallback(() => {
-    onSidebarListScroll();
-    loadMoreIfNearEnd();
-  }, [onSidebarListScroll, loadMoreIfNearEnd]);
 
   const filterLabel = sidebarLibraryFilterLabel(libraryFilter);
   const renderListMenu = (label: ReactNode, title?: string) => (
@@ -177,7 +137,7 @@ export function Sidebar({
       label={label}
       title={title}
       filter={libraryFilter}
-      onFilterChange={onLibraryFilterChange}
+      onFilterChange={setLibraryFilter}
       sortMode={listSortMode}
       onSortModeChange={setListSortMode}
     />
@@ -381,7 +341,7 @@ export function Sidebar({
             .filter(Boolean)
             .join(" ")}
         >
-          <ul ref={sidebarListRef} className="sidebar-list" onScroll={onListScroll}>
+          <ul ref={sidebarListRef} className="sidebar-list" onScroll={onSidebarListScroll}>
             {showDevSection ? (
               <li className="sidebar-group">
                 <span className="sidebar-group-label">Dev</span>

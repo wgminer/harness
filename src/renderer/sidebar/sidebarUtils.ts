@@ -56,32 +56,12 @@ export function libraryRowMatchesFilter(row: LibraryRow, filter: SidebarLibraryF
   return conversationSidebarIconKind(row) === filter;
 }
 
-/** Rows shown initially in the sidebar, and added per "More" click. */
-export const SIDEBAR_PAGE_SIZE = 30;
-
 /** New notes start as "# Note"; show that (or an empty title) as untitled. */
 export const UNTITLED_NOTE_LABEL = "Untitled note";
 
 export function isUntitledNoteTitle(displayTitle: string): boolean {
   const t = displayTitle.trim();
   return t === "" || t === "Note";
-}
-
-/**
- * Newest N rows; always includes the active item when it falls outside the window.
- */
-export function pickSidebarLibraryRows(
-  rows: LibraryRow[],
-  activeId: string | null,
-  limit: number = SIDEBAR_PAGE_SIZE,
-): LibraryRow[] {
-  if (rows.length <= limit) return rows;
-  const sorted = [...rows].sort((a, b) => b.createdAt - a.createdAt);
-  const top = sorted.slice(0, limit);
-  if (!activeId || top.some((r) => r.id === activeId)) return top;
-  const active = rows.find((r) => r.id === activeId);
-  if (!active) return top;
-  return [...sorted.slice(0, limit - 1), active];
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

@@ -58,6 +58,17 @@
   text-align: right;
 }
 
+.new-chat-corner--link {
+  text-decoration: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.new-chat-corner--link:hover,
+.new-chat-corner--link:focus-visible {
+  opacity: 0.8;
+}
+
 .new-chat-center {
   flex: 1;
   min-height: 0;

@@ -43,6 +43,7 @@ import/
 import_v2/
 backlog/
 resources/mark/_preview/
+resources/mark/_lab/
 
 # Legacy v1 web app (ignore if a stray file remains locally)
 firebase.js

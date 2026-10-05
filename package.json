@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "private": false,
   "license": "MIT",
   "author": "Will Miner",
@@ -28,6 +28,7 @@
     "demo": "vite --open /demo-player.html",
     "icons": "node scripts/generate-app-icons.js",
     "icons:trace": "python3 scripts/trace-horse-head-mark.py",
+    "icons:lab": "node scripts/icon-lab.mjs",
     "icon:icns": "npm run icons",
     "build:speech-helper": "bash scripts/build-speech-helper.sh",
     "ios:device": "bash scripts/ios-device.sh",

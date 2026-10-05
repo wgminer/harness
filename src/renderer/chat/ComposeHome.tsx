@@ -23,6 +23,7 @@ export function ComposeHeaderQuote() {
 }
 
 const WEB_VERSION_SUFFIX = "-web";
+const HARNESS_GITHUB_URL = "https://github.com/wgminer/harness";
 
 /** `v0.10.1 · dev` under the Vite dev server, `v0.10.1 · web` in the browser shell, bare when installed. */
 function formatComposeVersion(version: string | null): string {
@@ -34,7 +35,7 @@ function formatComposeVersion(version: string | null): string {
   return isDev ? `v${version} · dev` : `v${version}`;
 }
 
-/** App version in the bottom-right corner of the compose splash. */
+/** App version in the bottom-right corner of the compose splash; links to the repo. */
 export function ComposeCornerMeta() {
   const [appVersion, setAppVersion] = useState<string | null>(null);
 
@@ -43,8 +44,14 @@ export function ComposeCornerMeta() {
   }, []);
 
   return (
-    <p className="new-chat-corner new-chat-corner--bottom-right" aria-hidden="true">
+    <a
+      className="new-chat-corner new-chat-corner--bottom-right new-chat-corner--link"
+      href={HARNESS_GITHUB_URL}
+      target="_blank"
+      rel="noreferrer noopener"
+      title="Harness on GitHub"
+    >
       {formatComposeVersion(appVersion)}
-    </p>
+    </a>
   );
 }
