@@ -14,7 +14,7 @@
 | `npm run dist:mac`         | Same as `dist` on macOS. Use for the main Mac build and with `--replace`.                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:quick`   | Adhoc-signed local build (`APPLE_SIGNING_IDENTITY=-`, no version bump). Not for distribution.                                                                                                                                                                                                                                                               |
 | `npm run dist:mac:replace` | `dist:mac` with `--replace`: copy the built `.app` into `/Applications`.                                                                                                                                                                                                                                                                                              |
-| `npm run release`          | Bumps patch version, signed+notarized `dist:mac`, verify trust, publish GitHub Release + `latest.json`, push tag. |
+| `npm run release`          | One command from any repo state: bump if needed, test, commit everything, signed+notarized `dist:mac`, verify trust, push tag, publish GitHub Release + `latest.json`. Re-runnable after a failure. |
 | `npm run icon:icns`        | Alias of `npm run icons` (SVG mark → PNGs + icns + iOS AppIcon).                                                                                                                                                                                                                                                                                                     |
 | `npm run build:speech-helper` | **(macOS)** Build `native/HarnessSpeech` and copy the CLI into `resources/HarnessSpeech`. Needs Xcode Command Line Tools and Swift. |
 | `npm run storybook`        | Local-only UI catalog (buttons and other controls against real CSS tokens). Not part of dist/release. |
@@ -230,7 +230,7 @@ npx tauri signer generate -w ~/.tauri/harness.key
 
 Copy the printed public key into `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.
 
-3. On a clean `main` working tree:
+3. From `main`, in whatever state the working tree is in:
 
 ```bash
 npm run release
@@ -238,22 +238,20 @@ npm run release
 
 This command:
 
-1. Verifies your git working tree is clean.
-2. Bumps the patch version in `package.json` (and syncs Cargo / tauri.conf).
-3. Builds `dist:mac` with `REQUIRE_NOTARIZE=1` (signed + notarized).
-4. Runs `verify:mac-trust`.
-5. Creates git tag `vX.Y.Z` and pushes `main` + tag (before publishing, so the release points at the built commit).
+1. Checks you are on `main`, `GH_TOKEN` and `gh` are available, and pulls (rebase) if `origin/main` moved.
+2. Picks the version: if `v<current>` is already published on GitHub it bumps the patch (syncing Cargo / tauri.conf / lockfile); otherwise it ships `<current>` as-is.
+3. Runs `npm test`, then commits **everything** pending (work + version files) as `Release vX.Y.Z`.
+4. Builds `dist:mac` with `REQUIRE_NOTARIZE=1` (signed + notarized) and runs `verify:mac-trust`.
+5. Tags `vX.Y.Z` at HEAD and pushes `main` + tag (before publishing, so the release points at the built commit).
 6. Collects DMG, ZIP, updater bundle, and `latest.json`, then publishes them to GitHub Releases with install notes (**download the `.dmg`**).
+
+**If it fails partway, just re-run it.** The version only bumps once a release is actually published, so a retry ships the same version, and a leftover unpublished tag is moved to the new HEAD. For a minor/major bump, set the version in `package.json` by hand and run `npm run release`; it syncs Cargo / tauri.conf to match.
 
 Site screenshots are not part of the release; refresh them separately with `npm run capture:site`.
 
-Installed copies of Harness check GitHub on launch and show an **Update** button in the sidebar when a newer release exists.
+Installed copies of Harness check GitHub on launch and every 30 minutes after, and show an **Update** button in the sidebar when a newer release exists.
 
-Optional flags:
-
-- `npm run release -- --dry-run` — build and verify the **current** version only; skip bump, publish, and git tag.
-- `npm run release -- --no-bump` — publish the already-committed version (use after a manual minor/major bump); still publishes and tags.
-- `npm run release -- --no-tag` — publish to GitHub but skip git tag push.
+`npm run release -- --dry-run` builds and verifies the current tree only: no bump, commit, push, or publish.
 
 Local dist without releasing:
 

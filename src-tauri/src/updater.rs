@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -54,17 +55,33 @@ fn download_percent(downloaded: u64, total: Option<u64>) -> Option<u32> {
     Some(((downloaded as f64 / total as f64) * 100.0).min(100.0) as u32)
 }
 
-async fn run_update_check(app: &AppHandle, runtime: &UpdaterRuntime) {
+/// How often a running app re-checks GitHub for a newer release.
+const RECHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+/// `quiet` is the periodic background recheck: no "Checking…" flash, failures
+/// keep the current status, and it never interrupts an install.
+async fn run_update_check(app: &AppHandle, runtime: &UpdaterRuntime, quiet: bool) {
+    if quiet && runtime.is_install_in_progress() {
+        return;
+    }
     let updater = match app.updater() {
         Ok(u) => u,
         Err(_) => {
-            runtime.broadcast_status(app, UpdateStatus::Idle);
+            if !quiet {
+                runtime.broadcast_status(app, UpdateStatus::Idle);
+            }
             return;
         }
     };
 
-    runtime.broadcast_status(app, UpdateStatus::Checking);
-    match updater.check().await {
+    if !quiet {
+        runtime.broadcast_status(app, UpdateStatus::Checking);
+    }
+    let result = updater.check().await;
+    if quiet && runtime.is_install_in_progress() {
+        return;
+    }
+    match result {
         Ok(Some(update)) => {
             runtime.broadcast_status(
                 app,
@@ -78,7 +95,9 @@ async fn run_update_check(app: &AppHandle, runtime: &UpdaterRuntime) {
         }
         Err(_) => {
             // Background probe failed — stay quiet so the footer does not alarm.
-            runtime.broadcast_status(app, UpdateStatus::Idle);
+            if !quiet {
+                runtime.broadcast_status(app, UpdateStatus::Idle);
+            }
         }
     }
 }
@@ -91,7 +110,7 @@ pub async fn updater_check(
     if !is_updater_enabled() {
         return Ok(());
     }
-    run_update_check(&app, &runtime).await;
+    run_update_check(&app, &runtime, false).await;
     Ok(())
 }
 
@@ -176,7 +195,11 @@ pub fn register_updater(app: &AppHandle, runtime: Arc<UpdaterRuntime>) {
 
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        run_update_check(&app_handle, &runtime).await;
+        run_update_check(&app_handle, &runtime, false).await;
+        loop {
+            tokio::time::sleep(RECHECK_INTERVAL).await;
+            run_update_check(&app_handle, &runtime, true).await;
+        }
     });
 }
 

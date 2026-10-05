@@ -368,6 +368,7 @@ if (require.main === module) {
 
 module.exports = {
   shouldBumpVersion,
+  syncTauriVersion,
   bumpPatchVersion,
   fmtDuration,
   makeBar,
