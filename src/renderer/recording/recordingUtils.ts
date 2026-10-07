@@ -1,3 +1,5 @@
+import type { RecordingChime } from "../../shared/desktopAPI";
+
 export function encodeWav(buffers: Float32Array[], sampleRate: number): ArrayBuffer {
   const totalSamples = buffers.reduce((n, b) => n + b.length, 0);
   const dataBytes = totalSamples * 2;
@@ -52,17 +54,37 @@ export function playTone(
   });
 }
 
-export async function playStartChime(): Promise<void> {
-  await playTone(660, 0.08);
-  await playTone(880, 0.12);
+const WEB_CHIME_NOTES: Record<RecordingChime, [number, number][]> = {
+  start: [[660, 0.08], [880, 0.12]],
+  stop: [[550, 0.08], [440, 0.15]],
+  done: [[784, 0.07], [988, 0.07], [1319, 0.16]],
+  cancel: [[330, 0.06], [220, 0.18]],
+};
+
+/** Web Audio fallback for the browser debug shell; desktop plays cues natively. */
+export async function playWebChime(kind: RecordingChime): Promise<void> {
+  for (const [frequency, duration] of WEB_CHIME_NOTES[kind]) {
+    await playTone(frequency, duration);
+  }
 }
 
-export async function playStopChime(): Promise<void> {
-  await playTone(550, 0.08);
-  await playTone(440, 0.15);
+/** Resolves once the cue has played; errors are swallowed so a cue never blocks recording. */
+function playChime(kind: RecordingChime): Promise<void> {
+  return window.harness.recording.playChime(kind).catch(() => {});
 }
 
-export async function playCancelChime(): Promise<void> {
-  await playTone(330, 0.06);
-  await playTone(220, 0.18);
+export function playStartChime(): Promise<void> {
+  return playChime("start");
+}
+
+export function playStopChime(): Promise<void> {
+  return playChime("stop");
+}
+
+export function playDoneChime(): Promise<void> {
+  return playChime("done");
+}
+
+export function playCancelChime(): Promise<void> {
+  return playChime("cancel");
 }

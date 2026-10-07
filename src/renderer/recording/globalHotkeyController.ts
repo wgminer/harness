@@ -1,4 +1,3 @@
-import { playCancelChime, playStartChime, playStopChime } from "./recordingUtils";
 import type { Conversation } from "../sidebar/sidebarUtils";
 
 export type GlobalHotkeyOverlayPhase = "idle" | "recording" | "transcribing" | "failed";
@@ -101,6 +100,7 @@ function clearOverlay(): void {
 }
 
 export function createGlobalHotkeyController(): () => void {
+  // Start / stop / done / cancel cues play natively in Rust alongside these events.
   const unsubStarted = window.harness.recording.onGlobalRecordingStarted(({ focused }) => {
     actions?.setGlobalHotkeyError(null, null);
     if (focused) {
@@ -112,12 +112,6 @@ export function createGlobalHotkeyController(): () => void {
       actions?.setGlobalHotkeyOverlaySession(true);
       actions?.setGlobalHotkeyOverlayPhase("recording");
     }
-    void playStartChime();
-  });
-
-  const unsubStopped = window.harness.recording.onGlobalRecordingStopped(() => {
-    // Overlay stays up until transcribing / ready / error; only chime here.
-    void playStopChime();
   });
 
   const unsubTranscribing = window.harness.recording.onGlobalRecordingTranscribing(({ recordingPath }) => {
@@ -131,7 +125,6 @@ export function createGlobalHotkeyController(): () => void {
   const unsubCancelled = window.harness.recording.onGlobalRecordingCancelled(() => {
     clearFocusedLanding();
     clearOverlay();
-    void playCancelChime();
   });
 
   const unsubRetrying = window.harness.recording.onGlobalRecordingRetrying(() => {
@@ -193,7 +186,6 @@ export function createGlobalHotkeyController(): () => void {
 
   return () => {
     unsubStarted();
-    unsubStopped();
     unsubTranscribing();
     unsubCancelled();
     unsubRetrying();

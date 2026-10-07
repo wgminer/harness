@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { HarnessAPI } from "../shared/desktopAPI";
-import type { CodingScopeMeta, GlobalRecordingStatus, RecentRecording } from "../shared/desktopAPI";
+import type {
+  CodingScopeMeta,
+  GlobalRecordingStatus,
+  RecentRecording,
+  RecordingChime,
+} from "../shared/desktopAPI";
 import type {
   AppendMessageMeta,
   ContextPreview,
@@ -333,6 +338,7 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("recording:transcribe"), { data, requestId: options?.requestId }),
       cancelTranscription: (requestId: string) =>
         invoke(cmd("recording:cancelTranscription"), { requestId }),
+      playChime: (kind: RecordingChime) => invoke(cmd("recording:playChime"), { kind }),
       pasteText: (text: string) => invoke(cmd("recording:pasteText"), { text }),
       getGlobalStatus: () =>
         invoke<GlobalRecordingStatus>(cmd("recording:getGlobalStatus")),

@@ -216,6 +216,32 @@
   color: var(--fg-muted);
 }
 
+.sidebar-list-more {
+  list-style: none;
+  padding: var(--space-1) var(--sidebar-text-inset) var(--space-2);
+}
+
+.sidebar-list-more-btn {
+  appearance: none;
+  padding: var(--space-1) 0;
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  cursor: pointer;
+}
+
+.sidebar-list-more-btn:hover,
+.sidebar-list-more-btn:focus-visible {
+  color: var(--fg);
+}
+
+.sidebar-list-more-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .sidebar-group-items {
   list-style: none;
   margin: 0;

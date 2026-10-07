@@ -153,8 +153,13 @@ export function ChatSurface({
   });
 
   useLayoutEffect(() => {
-    if (hideComposer) return;
     if (focusComposerNonce == null || focusComposerNonce < 1) return;
+    if (hideComposer) {
+      chatPaneRef.current
+        ?.querySelector<HTMLButtonElement>(".dictation-suggested-prompts__chip:not(:disabled)")
+        ?.focus();
+      return;
+    }
     composerRef.current?.querySelector<HTMLTextAreaElement>(".chat-input")?.focus();
   }, [composerRef, focusComposerNonce, hideComposer]);
 

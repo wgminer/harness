@@ -224,6 +224,25 @@ export default function App() {
     setFocusComposerNonce((n) => n + 1);
   }, []);
 
+  /**
+   * Refocus the chat composer when the app window regains focus, unless the
+   * user was last typing in some other field (note editor, settings, a modal).
+   */
+  useEffect(() => {
+    if (view !== "chat") return;
+    const onWindowFocus = () => {
+      const active = document.activeElement as HTMLElement | null;
+      const editingElsewhere =
+        active != null &&
+        active !== document.body &&
+        !active.classList.contains("chat-input") &&
+        (active.isContentEditable || active.matches("input, textarea, select"));
+      if (!editingElsewhere) setFocusComposerNonce((n) => n + 1);
+    };
+    window.addEventListener("focus", onWindowFocus);
+    return () => window.removeEventListener("focus", onWindowFocus);
+  }, [view]);
+
   const resolveConversationTitle = useCallback(
     (id: string) => {
       const convo = chats.conversations.find((c) => c.id === id);

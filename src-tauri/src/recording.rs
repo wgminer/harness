@@ -1,3 +1,4 @@
+pub mod chime;
 pub mod dictation_index;
 #[cfg(target_os = "macos")]
 pub mod fn_tap;
@@ -557,6 +558,15 @@ pub async fn recording_cancel_transcription(
         let _ = tx.send(true);
     }
     Ok(())
+}
+
+/// Play a recording cue natively ("start" | "stop" | "done" | "cancel"); resolves once it ends.
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_play_chime(kind: String) -> Result<(), String> {
+    let chime = chime::Chime::parse(&kind).ok_or_else(|| format!("Unknown chime: {kind}"))?;
+    tauri::async_runtime::spawn_blocking(move || chime::play_blocking(chime))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Transcribe WAV bytes for global Fn hotkey (supports cancellation via `cancel`).

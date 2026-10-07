@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { Flame, MessageCircle, type LucideIcon } from "lucide-react";
 import { CHAT_MODES, getChatMode, type ChatModeId } from "../../shared/chatModes";
 
 interface ChatModePickerProps {
@@ -9,7 +10,12 @@ interface ChatModePickerProps {
   disabled?: boolean;
 }
 
-/** Two-way Chat | Grill segmented control. */
+const MODE_ICONS: Record<ChatModeId, LucideIcon> = {
+  chat: MessageCircle,
+  qa: Flame,
+};
+
+/** Two-way Chat | Grill segmented control. Icon-only; mode name is the aria-label / title. */
 export function ChatModePicker({
   value,
   onChange,
@@ -51,6 +57,7 @@ export function ChatModePicker({
       {variant === "quiet" && <span className="chat-mode-picker__thumb" aria-hidden />}
       {CHAT_MODES.map((mode) => {
         const active = mode.id === activeMode.id;
+        const Icon = MODE_ICONS[mode.id];
         return (
           <button
             key={mode.id}
@@ -64,11 +71,18 @@ export function ChatModePicker({
             disabled={disabled}
             tabIndex={-1}
             data-testid={`chat-mode-${mode.id}`}
+            data-mode={mode.id}
+            aria-label={mode.label}
+            title={mode.label}
             onClick={() => {
               if (mode.id !== activeMode.id) onChange(mode.id);
             }}
           >
-            {mode.label}
+            {variant === "quiet" ? (
+              <Icon className="chat-mode-picker__icon" size={14} strokeWidth={2} aria-hidden />
+            ) : (
+              mode.label
+            )}
           </button>
         );
       })}

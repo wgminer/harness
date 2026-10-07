@@ -18,8 +18,8 @@ use crate::env_util::{app_display_name, is_global_hotkey_disabled, is_harness_e2
 use crate::recording::fn_tap::{FnTapCallbacks, FnTapMonitor};
 use crate::recording::global_capture::NativeCapture;
 use crate::recording::global_effects::{
-    load_tray_image, run_recording_effects, run_stop_pipeline_from_path, set_tray_state,
-    show_and_focus_main, unregister_escape, TrayIconState,
+    emit_recording_cancelled, load_tray_image, run_recording_effects, run_stop_pipeline_from_path,
+    set_tray_state, show_and_focus_main, unregister_escape, TrayIconState,
 };
 use crate::recording::global_session::{
     create_initial_fn_recording_state, reduce_escape, reduce_fn_edge, FnEdge, FnRecordingState,
@@ -180,7 +180,7 @@ async fn cancel_global_transcription_inner(app: &AppHandle, runtime: &GlobalReco
     }
     *runtime.transcribing.lock().await = false;
     unregister_escape(app, runtime);
-    let _ = app.emit("global-recording-cancelled", serde_json::json!({}));
+    emit_recording_cancelled(app);
     set_tray_state(app, runtime, TrayIconState::Ready).await;
 }
 

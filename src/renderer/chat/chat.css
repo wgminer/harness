@@ -1056,6 +1056,13 @@
   text-align: center;
 }
 
+/* Matches the composer's focus border; the chip is auto-focused so Enter runs it. */
+.dictation-suggested-prompts__chip:focus,
+.dictation-suggested-prompts__chip:focus-visible {
+  outline: none;
+  border-color: var(--border-input-focus);
+}
+
 .dictation-suggested-prompts__chip--loading {
   color: transparent;
   pointer-events: none;
@@ -1152,6 +1159,9 @@
   transform: translateX(var(--seg-thumb-x, 0));
   border-radius: calc(min(var(--radius-lg), calc(var(--input-height) / 4)) - var(--seg-inset));
   background: var(--btn-bg);
+  box-shadow:
+    0 0 0 1px var(--border-input),
+    0 1px 2px var(--shadow-drop);
   pointer-events: none;
 }
 
@@ -1168,8 +1178,9 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  min-width: var(--space-12);
-  padding: 0 var(--space-3);
+  /* Square icon segment: track height minus 1px borders and inset. */
+  width: calc(var(--input-height) - 2px - var(--seg-inset) * 2);
+  padding: 0;
   border: none;
   border-radius: calc(min(var(--radius-lg), calc(var(--input-height) / 4)) - var(--seg-inset));
   background: transparent;
@@ -1196,6 +1207,15 @@
 .chat-mode-picker__seg--active {
   color: var(--fg);
   font-weight: 600;
+}
+
+.chat-mode-picker__icon {
+  flex-shrink: 0;
+  transition: color var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.chat-mode-picker__seg--active[data-mode="qa"] .chat-mode-picker__icon {
+  color: var(--warning-fg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1643,14 +1663,31 @@ button.chat-attach-card__main:disabled {
   --control-size: var(--composer-control);
 }
 
+/*
+ * Collapsed composer: two borderless icon buttons at the action-button size,
+ * side by side, with the thumb sliding between them. Label stays as aria-label / title.
+ */
 .chat-composer-inner--inline .chat-mode-picker--segment.chat-mode-picker--quiet {
+  --seg-inset: 0px;
+  --seg-radius: min(var(--radius-lg), calc(var(--composer-control) / 4));
   height: var(--composer-control);
   margin: 0 var(--space-1);
+  padding: 0;
+  gap: var(--space-1);
+  border: none;
+  border-radius: var(--seg-radius);
+  background: var(--overlay-subtle);
+}
+
+.chat-composer-inner--inline .chat-mode-picker__thumb {
+  border-radius: var(--seg-radius);
+  box-shadow: none;
 }
 
 .chat-composer-inner--inline .chat-mode-picker__seg {
-  min-width: var(--space-10);
-  padding: 0 var(--space-2);
+  width: var(--composer-control);
+  padding: 0;
+  border-radius: var(--seg-radius);
 }
 
 .coding-scope-plus--active {

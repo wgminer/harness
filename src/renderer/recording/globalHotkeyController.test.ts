@@ -137,17 +137,18 @@ describe("globalHotkeyController", () => {
     startedCb?.({ focused: false });
     expect(actions.setGlobalHotkeyOverlaySession).toHaveBeenCalledWith(true);
     expect(actions.setGlobalHotkeyOverlayPhase).toHaveBeenCalledWith("recording");
-    expect(mockedPlayStartChime).toHaveBeenCalled();
+    // Cues play natively in Rust; the renderer must not double them.
+    expect(mockedPlayStartChime).not.toHaveBeenCalled();
 
     startedCb?.({ focused: true });
     expect(actions.setGlobalHotkeyOverlaySession).toHaveBeenCalledWith(false);
     expect(actions.setGlobalHotkeyOverlayPhase).toHaveBeenCalledWith("idle");
   });
 
-  it("plays stop chime without clearing overlay on stopped", () => {
+  it("keeps the overlay up and stays silent on stopped", () => {
     startedCb?.({ focused: false });
     stoppedCb?.();
-    expect(mockedPlayStopChime).toHaveBeenCalled();
+    expect(mockedPlayStopChime).not.toHaveBeenCalled();
     expect(actions.setGlobalHotkeyOverlayPhase).not.toHaveBeenCalledWith("idle");
   });
 
@@ -158,11 +159,11 @@ describe("globalHotkeyController", () => {
     expect(actions.setGlobalHotkeyError).toHaveBeenCalledWith(null, "/tmp/rec.wav");
   });
 
-  it("plays cancel chime and clears overlay on cancelled", () => {
+  it("clears overlay on cancelled without a renderer chime", () => {
     startedCb?.({ focused: false });
     cancelledCb?.();
     expect(actions.setGlobalHotkeyOverlayPhase).toHaveBeenCalledWith("idle");
-    expect(mockedPlayCancelChime).toHaveBeenCalled();
+    expect(mockedPlayCancelChime).not.toHaveBeenCalled();
   });
 
   it("shows failed phase for overlay-session errors", () => {

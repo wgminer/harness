@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { VoiceState } from "../chat/chatHelpers";
 import { MICROPHONE_PERMISSION_DENIED_MESSAGE } from "./recordingAudioUtils";
 import { transcribeWav } from "./recordingPipeline";
-import { playCancelChime } from "./recordingUtils";
+import { playCancelChime, playDoneChime } from "./recordingUtils";
 import { useRecorder } from "./useRecorder";
 
 const MAX_RECORDING_MS = 5 * 60 * 1000;
@@ -157,6 +157,7 @@ export function useVoiceCapture({
       if ("error" in result) {
         setVoiceError(result.error);
       } else {
+        void playDoneChime();
         await onTranscriptRef.current(result.text, {
           cleanupSkipped: result.cleanupSkipped === "no_api_key" ? "no_api_key" : undefined,
           recordingPath: result.path,

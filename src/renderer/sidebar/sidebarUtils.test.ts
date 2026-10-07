@@ -3,6 +3,7 @@ import {
   groupConversations,
   libraryRowMatchesFilter,
   isUntitledNoteTitle,
+  pickSidebarLibraryRows,
 } from "./sidebarUtils";
 
 describe("sidebarUtils", () => {
@@ -10,6 +11,16 @@ describe("sidebarUtils", () => {
     expect(isUntitledNoteTitle("")).toBe(true);
     expect(isUntitledNoteTitle("Note")).toBe(true);
     expect(isUntitledNoteTitle("Notes on the shed")).toBe(false);
+  });
+
+  it("always includes the active row in the preview window", () => {
+    const list = [
+      { id: "a", title: "a", createdAt: 300 },
+      { id: "b", title: "b", createdAt: 200 },
+      { id: "c", title: "c", createdAt: 100 },
+    ];
+    const picked = pickSidebarLibraryRows(list, "c", 2);
+    expect(picked.map((r) => r.id)).toEqual(["a", "c"]);
   });
 
   it("groups conversations into a flat Recent list when requested", () => {

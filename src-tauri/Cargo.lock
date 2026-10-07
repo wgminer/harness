@@ -1764,7 +1764,7 @@ dependencies = [
 
 [[package]]
 name = "harness"
-version = "0.10.3"
+version = "0.10.5"
 dependencies = [
  "arboard",
  "async-trait",

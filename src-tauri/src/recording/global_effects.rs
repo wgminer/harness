@@ -7,6 +7,7 @@ use tauri::{image::Image, AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 use crate::memory::title::finalize_voice_dictation_session;
+use crate::recording::chime::{self, Chime};
 use crate::recording::dictation_index;
 use crate::env_util::is_harness_e2e;
 use crate::recording::global_capture::{NativeCapture, TARGET_SAMPLE_RATE};
@@ -103,6 +104,12 @@ fn emit_recording_error_payload(
         payload["needsAccessibility"] = serde_json::json!(true);
     }
     let _ = app.emit("global-recording-error", payload);
+}
+
+/// Cancel cue + event; every path that ends a take without a transcript goes through here.
+pub(crate) fn emit_recording_cancelled(app: &AppHandle) {
+    chime::play(Chime::Cancel);
+    let _ = app.emit("global-recording-cancelled", serde_json::json!({}));
 }
 
 fn is_transcription_cancelled(err: &str) -> bool {
@@ -262,7 +269,7 @@ pub async fn run_stop_pipeline_from_path(
             if is_transcription_cancelled(&err) {
                 *runtime.transcribing.lock().await = false;
                 unregister_escape(&app, &runtime);
-                let _ = app.emit("global-recording-cancelled", serde_json::json!({}));
+                emit_recording_cancelled(&app);
                 set_tray_state(&app, &runtime, TrayIconState::Ready).await;
                 return;
             }
@@ -289,6 +296,7 @@ pub async fn run_stop_pipeline_from_path(
     runtime.remember_transcript(text.clone());
 
     if was_focused {
+        chime::play(Chime::Done);
         let _ = app.emit("global-transcript-ready", serde_json::json!({ "text": text }));
     } else {
         match deliver_unfocused(
@@ -300,6 +308,7 @@ pub async fn run_stop_pipeline_from_path(
         )
         .await {
             Ok(conversation_id) => {
+                chime::play(Chime::Done);
                 let _ = app.emit(
                     "global-transcript-delivered",
                     serde_json::json!({ "conversationId": conversation_id }),
@@ -379,6 +388,7 @@ pub async fn run_recording_effects(
                             show_and_focus_main(app);
                         }
                         register_escape_cancel(app, runtime);
+                        chime::play(Chime::Start);
                         let _ = app.emit(
                             "global-recording-started",
                             serde_json::json!({ "focused": focused }),
@@ -403,6 +413,7 @@ pub async fn run_recording_effects(
                     "[Harness:recording] stop started_focused={} paste_pid={:?}",
                     was_focused, paste_target_pid
                 );
+                chime::play(Chime::Stop);
                 let _ = app.emit("global-recording-stopped", serde_json::json!({}));
                 set_tray_state(app, runtime, TrayIconState::Processing).await;
                 if was_focused {
@@ -447,7 +458,7 @@ pub async fn run_recording_effects(
                 if let Some(cap) = cancelled {
                     keep_cancelled_take(runtime, cap);
                 }
-                let _ = app.emit("global-recording-cancelled", serde_json::json!({}));
+                emit_recording_cancelled(app);
                 set_tray_state(app, runtime, TrayIconState::Ready).await;
             }
         }

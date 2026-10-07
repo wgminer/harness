@@ -5,6 +5,7 @@ import { IDLE_UPDATE_STATUS } from "../../shared/updateStatus";
 import type { SyncResult, SyncStatus } from "../../shared/sync";
 import type { NoteSummary } from "../../shared/writing";
 import pkg from "../../../package.json";
+import { playWebChime } from "../recording/recordingUtils";
 import { createBrowserChat } from "./browserChat";
 import { emitBrowserEvent, onBrowserEvent } from "./browserEvents";
 import { browserContextPreview, browserSystemPromptPreview } from "./browserPrompt";
@@ -352,6 +353,9 @@ export function createBrowserAdapter(): HarnessAPI {
       listRecent: async () => [],
       transcribe: async () => ({ error: WEB_UNSUPPORTED }),
       cancelTranscription: async () => {},
+      playChime: async (kind) => {
+        await playWebChime(kind);
+      },
       pasteText: async () => {},
       getGlobalStatus: async () => ({
         monitorHealth: "stopped",

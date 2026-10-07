@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 interface DictationSuggestedPromptChipsProps {
   prompts: string[];
   onSelect: (prompt: string) => void;
@@ -12,6 +14,20 @@ export function DictationSuggestedPromptChips({
   disabled,
   loading,
 }: DictationSuggestedPromptChipsProps) {
+  const firstChipRef = useRef<HTMLButtonElement>(null);
+  const ready = !loading && !disabled && prompts.length > 0;
+
+  /** Focus the first chip once it is actionable so Enter runs it. */
+  useEffect(() => {
+    if (!ready) return;
+    const active = document.activeElement as HTMLElement | null;
+    const editingElsewhere =
+      active != null &&
+      active !== document.body &&
+      (active.isContentEditable || active.matches("input, textarea, select"));
+    if (!editingElsewhere) firstChipRef.current?.focus();
+  }, [ready]);
+
   if (loading && prompts.length === 0) {
     return (
       <div
@@ -43,9 +59,10 @@ export function DictationSuggestedPromptChips({
       aria-label="Suggested prompts"
       data-testid="dictation-suggested-prompts"
     >
-      {prompts.map((prompt) => (
+      {prompts.map((prompt, i) => (
         <button
           key={prompt}
+          ref={i === 0 ? firstChipRef : undefined}
           type="button"
           className="btn btn-outline btn-compact chat-pane-btn dictation-suggested-prompts__chip"
           disabled={disabled}

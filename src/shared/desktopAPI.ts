@@ -45,6 +45,8 @@ export interface TasksPayload {
   error?: string;
 }
 
+export type RecordingChime = "start" | "stop" | "done" | "cancel";
+
 /** A saved take under audio-recordings/ (`rec_<ms>.wav`). */
 export interface RecentRecording {
   path: string;
@@ -361,6 +363,8 @@ export interface HarnessAPI {
       options?: { requestId?: string }
     ) => Promise<{ text: string; cleanupSkipped?: "no_api_key" } | { error: string }>;
     cancelTranscription: (requestId: string) => Promise<void>;
+    /** Play a recording cue natively (not throttled with the webview). */
+    playChime: (kind: RecordingChime) => Promise<void>;
     pasteText: (text: string) => Promise<void>;
     getGlobalStatus: () => Promise<GlobalRecordingStatus>;
     /** `focused` lands the transcript in the composer instead of pasting it back. */

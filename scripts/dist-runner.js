@@ -145,6 +145,15 @@ function syncTauriVersion(next) {
     conf.version = next;
     fs.writeFileSync(confPath, `${JSON.stringify(conf, null, 2)}\n`);
   }
+  // Cargo rewrites this on build; sync it now so it lands in the release commit.
+  const lockPath = path.join(root, "src-tauri", "Cargo.lock");
+  if (fs.existsSync(lockPath)) {
+    const lock = fs.readFileSync(lockPath, "utf8");
+    fs.writeFileSync(
+      lockPath,
+      lock.replace(/(\[\[package\]\]\nname = "harness"\nversion = )"[^"]*"/, `$1"${next}"`)
+    );
+  }
 }
 
 function bumpPatchVersion() {

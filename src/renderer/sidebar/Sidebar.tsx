@@ -20,6 +20,8 @@ import {
   type Conversation,
   type LibraryRow,
   type View,
+  SIDEBAR_PAGE_SIZE,
+  pickSidebarLibraryRows,
   type DevView,
   type SidebarGroup,
   type SidebarLibraryFilter,
@@ -94,6 +96,7 @@ export function Sidebar({
 
   const [listSortMode, setListSortMode] = useState<SidebarListSortMode>("date");
   const [libraryFilter, setLibraryFilter] = useState<SidebarLibraryFilter>("all");
+  const [visibleLimit, setVisibleLimit] = useState(SIDEBAR_PAGE_SIZE);
 
   const { scrollRef: sidebarListRef, fadeTop, fadeBottom, onScroll: onSidebarListScroll } =
     useScrollFadeEdges();
@@ -126,9 +129,25 @@ export function Sidebar({
     [libraryRows, libraryFilter]
   );
 
+  const onLibraryFilterChange = useCallback((filter: SidebarLibraryFilter) => {
+    setLibraryFilter(filter);
+    setVisibleLimit(SIDEBAR_PAGE_SIZE);
+  }, []);
+
+  const visibleRows = useMemo(
+    () =>
+      pickSidebarLibraryRows(
+        filteredLibraryRows,
+        conversationId ?? activeNoteId ?? activeImageId,
+        visibleLimit
+      ),
+    [filteredLibraryRows, conversationId, activeNoteId, activeImageId, visibleLimit]
+  );
+  const hiddenCount = filteredLibraryRows.length - visibleRows.length;
+
   const { groups: sidebarGroups } = useMemo(
-    () => groupConversations(filteredLibraryRows, listSortMode),
-    [filteredLibraryRows, listSortMode]
+    () => groupConversations(visibleRows, listSortMode),
+    [visibleRows, listSortMode]
   );
 
   const filterLabel = sidebarLibraryFilterLabel(libraryFilter);
@@ -137,7 +156,7 @@ export function Sidebar({
       label={label}
       title={title}
       filter={libraryFilter}
-      onFilterChange={setLibraryFilter}
+      onFilterChange={onLibraryFilterChange}
       sortMode={listSortMode}
       onSortModeChange={setListSortMode}
     />
@@ -379,6 +398,18 @@ export function Sidebar({
                 </ul>
               </li>
             ))}
+            {hiddenCount > 0 ? (
+              <li className="sidebar-list-more">
+                <button
+                  type="button"
+                  className="sidebar-list-more-btn"
+                  data-testid="sidebar-show-more"
+                  onClick={() => setVisibleLimit((n) => n + SIDEBAR_PAGE_SIZE)}
+                >
+                  Show more
+                </button>
+              </li>
+            ) : null}
           </ul>
         </div>
         {showUpdateButton ? (
