@@ -18,6 +18,7 @@ import type {
   NoteSpellCheckInput,
 } from "../shared/writing";
 import type { ImageCreateInput, ImageGenerateInput } from "../shared/images";
+import type { InboxProcessAction } from "../shared/inbox";
 import type { SyncResult, SyncStatus } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
 import { tauriCommandName, tauriEventName } from "../shared/ipcNames";
@@ -155,6 +156,17 @@ export function createHarnessAdapter(): HarnessAPI {
       delete: (id: string) => invoke(cmd("tasks:delete"), { id }),
       clearCompleted: () => invoke(cmd("tasks:clearCompleted")),
       breakdown: (id: string) => invoke(cmd("tasks:breakdown"), { id }),
+    },
+    inbox: {
+      list: () => invoke(cmd("inbox:list")),
+      refresh: () => invoke(cmd("inbox:refresh")),
+      updateText: (id: string, text: string) => invoke(cmd("inbox:updateText"), { id, text }),
+      process: (id: string, action: InboxProcessAction) =>
+        invoke(cmd("inbox:process"), { id, action }),
+      restore: (id: string) => invoke(cmd("inbox:restore"), { id }),
+      clearProcessed: () => invoke(cmd("inbox:clearProcessed")),
+      onChanged: (cb: () => void) =>
+        subscribe<Record<string, never>>("inbox:changed", () => cb()),
     },
     chat: {
       send: (conversationId: string, userContent: string) =>

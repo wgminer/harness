@@ -36,6 +36,7 @@ import { WorkspaceListSearch } from "../ui/WorkspaceListSearch";
 import { TASK_COMPLETE_HOLD_MS, TASK_COMPLETE_EXIT_MS } from "../../shared/motion";
 import { ChatComposer } from "../chat/ChatComposer";
 import { useChatComposer } from "../chat/useChatComposer";
+import type { TakeLanding } from "../recording/dictationTake";
 
 function CheckButton({
   done,
@@ -192,6 +193,8 @@ function TaskRow({
   );
 }
 
+const TASKS_VOICE_LANDING: TakeLanding = { surface: "tasks" };
+
 export function TasksView() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -238,6 +241,7 @@ export function TasksView() {
       refreshFromPayload(payload);
     },
     composerRef,
+    voiceLanding: TASKS_VOICE_LANDING,
   });
 
   useEffect(() => {

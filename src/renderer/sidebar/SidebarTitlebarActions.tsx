@@ -3,6 +3,7 @@ import {
   CheckLine,
   Circle,
   Image as ImageIcon,
+  Inbox as InboxIcon,
   Plus,
   Settings2 as SettingsIcon,
   StickyNote,
@@ -20,15 +21,18 @@ interface SidebarTitlebarActionsProps {
   onNewChat: () => void;
   onNewNote: () => void;
   onNewImage: () => void;
+  /** Unprocessed captures; shown as a count on the Inbox button. */
+  inboxCount: number;
 }
 
-/** New menu plus Tasks, drawn in the titlebar above the sidebar. */
+/** New menu plus Tasks and Inbox, drawn in the titlebar above the sidebar. */
 export function SidebarTitlebarActions({
   view,
   onViewChange,
   onNewChat,
   onNewNote,
   onNewImage,
+  inboxCount,
 }: SidebarTitlebarActionsProps) {
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLButtonElement | null>(null);
@@ -40,17 +44,28 @@ export function SidebarTitlebarActions({
     { label: "New image", Icon: ImageIcon, shortcut: `⇧${modKey}I`, testId: "sidebar-new-image", run: onNewImage },
   ];
 
-  const renderNavButton = (target: View, label: string, Icon: LucideIcon, testId: string) => (
+  const renderNavButton = (
+    target: View,
+    label: string,
+    Icon: LucideIcon,
+    testId: string,
+    count = 0,
+  ) => (
     <button
       type="button"
       className={`app-titlebar__action${view === target ? " app-titlebar__action--active" : ""}`}
       onClick={() => onViewChange(target)}
-      aria-label={label}
+      aria-label={count > 0 ? `${label}, ${count} to process` : label}
       aria-pressed={view === target}
       title={label}
       data-testid={testId}
     >
       <Icon size={16} strokeWidth={1.75} aria-hidden />
+      {count > 0 ? (
+        <span className="app-titlebar__action-count" aria-hidden>
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : null}
     </button>
   );
 
@@ -85,6 +100,7 @@ export function SidebarTitlebarActions({
         </Menu>
       </div>
       {renderNavButton("tasks", "Tasks", CheckLine, "library-tasks")}
+      {renderNavButton("inbox", "Inbox", InboxIcon, "library-inbox", inboxCount)}
     </div>
   );
 }

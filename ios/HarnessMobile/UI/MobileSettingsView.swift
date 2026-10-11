@@ -24,6 +24,9 @@ struct MobileSettingsView: View {
         }
         .harnessListBackground()
         .navigationTitle("Settings")
+        .task(id: app.showsPendingUploadAttention) {
+            await app.refreshPendingChangesDetail()
+        }
         .onAppear {
             reloadDictationToggles()
             reloadRecordings()

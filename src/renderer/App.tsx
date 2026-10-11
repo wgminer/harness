@@ -7,13 +7,15 @@ import { SidebarTitlebarActions, TitlebarSettingsButton } from "./sidebar/Sideba
 import { SettingsView } from "./settings/SettingsView";
 import { setCachedSettings } from "./settings/settingsSessionCache";
 import { TasksView } from "./tasks/TasksView";
+import { InboxView } from "./inbox/InboxView";
+import { useInbox } from "./inbox/useInbox";
 import { SearchPalette } from "./search/SearchPalette";
 import { NotesView } from "./notes/WritingSurfaceView";
 import { ImageCanvasView } from "./images/ImageCanvasView";
 import { Sidebar } from "./sidebar/Sidebar";
 import { DevChatView, DevDictationView, DevPlaceholderView } from "./dev/devPlayground";
 import { SetupNoticeModal } from "./setup/SetupNoticeModal";
-import { HotkeyRecordingOverlay } from "./recording/HotkeyRecordingOverlay";
+import { DictationPill } from "./recording/DictationPill";
 import { wireGlobalHotkeyActions } from "./recording/globalHotkeyController";
 import { useGlobalHotkeyOverlay } from "./recording/useGlobalHotkeyOverlay";
 import { useConversationTitles } from "./chat/useConversationTitles";
@@ -28,6 +30,7 @@ import { useBackgroundSync } from "./hooks/useBackgroundSync";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import { DEFAULT_UI_SESSION } from "../shared/uiSession";
 import type {} from "../shared/desktopAPI";
+import { inboxChatDraft, type InboxItem } from "../shared/inbox";
 import { getDisplayNoteTitle } from "../shared/writing";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chat/chatDisplayTitle";
 import type { View, DevView } from "./sidebar/sidebarUtils";
@@ -68,6 +71,9 @@ export default function App() {
   const setup = useSetupState({ uiSessionReady });
   const arrivals = useLibraryArrivals();
   const hotkey = useGlobalHotkeyOverlay();
+  const inbox = useInbox();
+  // A failed unfocused take stays up until dismissed; other errors clear on their own.
+  const hotkeyErrorActions = hotkey.phase === "failed" || hotkey.recordingPath != null;
 
   const {
     conversationId,
@@ -284,6 +290,15 @@ export default function App() {
     [chats.conversations, notesRef, setConversationId],
   );
 
+  const startChatFromCapture = useCallback(
+    (item: InboxItem) => {
+      setConversationId(null);
+      setView("chat");
+      setComposerDraft({ text: inboxChatDraft(item), nonce: Date.now() });
+    },
+    [setConversationId],
+  );
+
   const createNew = useCallback(() => {
     setConversationId(null);
     setView("chat");
@@ -397,6 +412,8 @@ export default function App() {
         return "Images";
       case "tasks":
         return "Tasks";
+      case "inbox":
+        return "Inbox";
       case "settings":
         return SETTINGS_PAGE_TITLE;
     }
@@ -425,6 +442,7 @@ export default function App() {
               void createNewNote();
             }}
             onNewImage={createNewImage}
+            inboxCount={inbox.pendingCount}
           />
         }
         trailingActions={
@@ -518,6 +536,7 @@ export default function App() {
             />
           )}
           {view === "tasks" && <TasksView />}
+          {view === "inbox" && <InboxView inbox={inbox} onStartChat={startChatFromCapture} />}
           {view === "notes" && (
             <NotesView
               notes={notes}
@@ -529,7 +548,6 @@ export default function App() {
               onActiveNoteChange={setActiveNoteId}
               pendingHotkeyText={pendingNoteHotkeyText}
               onPendingHotkeyTextConsumed={handlePendingNoteHotkeyTextConsumed}
-              mirrorGlobalFnRecording={view === "notes"}
               returnToConversationId={
                 noteReturnTo && noteReturnTo.noteId === activeNoteId
                   ? noteReturnTo.conversationId
@@ -571,34 +589,56 @@ export default function App() {
         onSaveApiKey={setup.saveSetupApiKey}
         onDismiss={setup.dismissSetupNotice}
       />
-      <HotkeyRecordingOverlay
-        phase={hotkey.phase}
-        error={hotkey.error}
-        recordingPath={hotkey.recordingPath}
-        needsAccessibility={hotkey.needsAccessibility}
-        onRetry={hotkey.retry}
-        onOpenAccessibilitySettings={hotkey.openAccessibilitySettings}
-        onShowInFinder={hotkey.showInFinder}
-        onDismiss={hotkey.dismiss}
+      <DictationPill
+        currentLanding={
+          view === "chat"
+            ? { surface: "chat", conversationId }
+            : view === "notes" && activeNoteId
+              ? { surface: "note", noteId: activeNoteId }
+              : view === "tasks"
+                ? { surface: "tasks" }
+                : null
+        }
       />
-      {hotkey.error && hotkey.phase === "idle" ? (
+      {hotkey.error && hotkey.phase !== "recording" && hotkey.phase !== "transcribing" ? (
         <div
           className="hotkey-recording-overlay__error"
           data-testid="hotkey-recording-error"
-          data-retryable={hotkey.recordingPath ? "true" : "false"}
+          data-retryable={hotkeyErrorActions ? "true" : "false"}
           role="status"
         >
           {hotkey.error}
-          {hotkey.recordingPath ? (
+          {hotkeyErrorActions ? (
             <div className="hotkey-recording-overlay__error-actions">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                data-testid="hotkey-recording-error-retry"
-                onClick={hotkey.retry}
-              >
-                Retry
-              </button>
+              {hotkey.needsAccessibility ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  data-testid="hotkey-recording-open-accessibility"
+                  onClick={hotkey.openAccessibilitySettings}
+                >
+                  Open Accessibility Settings
+                </button>
+              ) : hotkey.recordingPath ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    data-testid="hotkey-recording-error-retry"
+                    onClick={hotkey.retry}
+                  >
+                    Retry
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    data-testid="hotkey-recording-show-in-finder"
+                    onClick={hotkey.showInFinder}
+                  >
+                    Show in Finder
+                  </button>
+                </>
+              ) : null}
               <button
                 type="button"
                 className="btn btn-sm"

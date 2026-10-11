@@ -42,4 +42,19 @@ final class ChatStreamBatchTests: XCTestCase {
         XCTAssertEqual(batcher.flush(), "partial")
         XCTAssertNil(batcher.flush())
     }
+
+    func testReleasesFirstFlushEarlyThenBatchesCoarsely() {
+        let policy = ChatStreamBatchPolicy(minChars: 150, maxHoldMs: 350, newlineMinChars: 40, firstFlushMinChars: 10)
+        var batcher = StreamTextBatcher(policy: policy)
+        XCTAssertNil(batcher.push("hello "))
+        XCTAssertEqual(batcher.push("world"), "hello world")
+        XCTAssertNil(batcher.push(String(repeating: "a", count: 20)))
+        XCTAssertEqual(batcher.pending, String(repeating: "a", count: 20))
+    }
+
+    func testBundledContractSetsFirstFlush() {
+        let first = ChatStreamBatchPolicy.defaults.firstFlushMinChars
+        XCTAssertNotNil(first)
+        XCTAssertLessThan(first ?? .max, ChatStreamBatchPolicy.defaults.newlineMinChars)
+    }
 }

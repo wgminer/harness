@@ -168,20 +168,6 @@ function ShellGallery() {
           </aside>
         </div>
       </Section>
-
-      <Section title="Hotkey recording overlay chrome" stack>
-        <div className="hotkey-recording-overlay" style={{ position: "relative", minHeight: 160 }}>
-          <div className="hotkey-recording-overlay__field" aria-hidden />
-          <div className="hotkey-recording-overlay__actions">
-            <button type="button" className="btn btn-primary">
-              Stop
-            </button>
-            <button type="button" className="btn">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Section>
     </div>
   );
 }

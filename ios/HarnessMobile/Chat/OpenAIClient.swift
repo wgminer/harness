@@ -2,6 +2,7 @@ import Foundation
 
 enum OpenAIEndpoint {
     static let chatCompletions = URL(string: "https://api.openai.com/v1/chat/completions")!
+    static let responses = URL(string: "https://api.openai.com/v1/responses")!
     static let audioTranscriptions = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
     static let titleTimeout: TimeInterval = 10
     static let whisperTimeout: TimeInterval = 120
@@ -10,15 +11,17 @@ enum OpenAIEndpoint {
 
 enum OpenAIModel {
     /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_CHAT_MODEL`).
-    static let chat = "gpt-5.4"
+    static let chat = "gpt-6.1-sol"
+    /// Keep in sync with Rust `openai::CHAT_REASONING_EFFORT`.
+    static let chatReasoningEffort = "low"
     /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_TITLE_MODEL`).
-    static let title = "gpt-5.4-nano"
+    static let title = "gpt-6-luna"
     /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_DICTATION_SUGGEST_MODEL` / title).
     static let dictationSuggest = title
     /// Keep in sync with `src/shared/openaiModels.ts` (`OPENAI_TRANSCRIPT_CLEANUP_MODEL`).
-    static let transcriptCleanup = "gpt-5.4-mini"
-    /// OpenAI Whisper transcription (cloud fallback).
-    static let whisper = "whisper-1"
+    static let transcriptCleanup = "gpt-6-luna"
+    /// OpenAI cloud transcription (fallback when on-device speech is unavailable).
+    static let whisper = "gpt-transcribe"
 }
 
 struct ChatCompletionContentPart {
@@ -40,13 +43,10 @@ struct ChatCompletionContentPart {
     func toRequestBody() -> [String: Any] {
         switch kind {
         case .text(let text):
-            return ["type": "text", "text": text]
+            return ["type": "input_text", "text": text]
         case .imageJPEG(let data):
             let url = "data:image/jpeg;base64,\(data.base64EncodedString())"
-            return [
-                "type": "image_url",
-                "image_url": ["url": url],
-            ]
+            return ["type": "input_image", "image_url": url]
         }
     }
 }
@@ -58,48 +58,61 @@ struct ChatCompletionMessage {
     var contentParts: [ChatCompletionContentPart]?
     var toolCalls: [AccumulatedToolCall]?
     var toolCallId: String?
+    /// Raw Responses API output items for an assistant tool round (reasoning, text,
+    /// function calls), replayed verbatim so the model keeps its reasoning.
+    var responseItems: [[String: Any]]?
 
     init(
         role: String,
         content: String? = nil,
         contentParts: [ChatCompletionContentPart]? = nil,
         toolCalls: [AccumulatedToolCall]? = nil,
-        toolCallId: String? = nil
+        toolCallId: String? = nil,
+        responseItems: [[String: Any]]? = nil
     ) {
         self.role = role
         self.content = content
         self.contentParts = contentParts
         self.toolCalls = toolCalls
         self.toolCallId = toolCallId
+        self.responseItems = responseItems
     }
 
-    func toRequestBody() -> [String: Any] {
-        var body: [String: Any] = ["role": role]
+    /// Responses API `input` items for this message.
+    func toInputItems() -> [[String: Any]] {
         if role == "tool" {
-            body["tool_call_id"] = toolCallId ?? ""
-            body["content"] = content ?? ""
-            return body
+            return [[
+                "type": "function_call_output",
+                "call_id": toolCallId ?? "",
+                "output": content ?? "",
+            ]]
         }
-        if let toolCalls, !toolCalls.isEmpty {
-            body["content"] = content
-            body["tool_calls"] = toolCalls.map { call in
-                [
-                    "id": call.id,
-                    "type": "function",
-                    "function": [
-                        "name": call.name,
-                        "arguments": call.arguments,
-                    ],
-                ] as [String: Any]
-            }
-            return body
+        if let responseItems {
+            return responseItems
         }
-        if let contentParts, !contentParts.isEmpty {
-            body["content"] = contentParts.map { $0.toRequestBody() }
+        var items: [[String: Any]] = []
+        if let contentParts, !contentParts.isEmpty, role != "assistant" {
+            items.append(["role": role, "content": contentParts.map { $0.toRequestBody() }])
         } else {
-            body["content"] = content ?? ""
+            let partsText = (contentParts ?? []).compactMap { part -> String? in
+                if case .text(let value) = part.kind { return value }
+                return nil
+            }.joined(separator: "\n")
+            let text = content ?? partsText
+            let calls = toolCalls ?? []
+            if !text.isEmpty || (role != "assistant" && calls.isEmpty) {
+                items.append(["role": role, "content": text])
+            }
         }
-        return body
+        for call in toolCalls ?? [] {
+            items.append([
+                "type": "function_call",
+                "call_id": call.id,
+                "name": call.name,
+                "arguments": call.arguments,
+            ])
+        }
+        return items
     }
 }
 
@@ -160,7 +173,8 @@ final class OpenAIClient {
                     ChatCompletionMessage(
                         role: "assistant",
                         content: streamIteration.content.isEmpty ? nil : streamIteration.content,
-                        toolCalls: toolCalls
+                        toolCalls: toolCalls,
+                        responseItems: streamIteration.items
                     )
                 )
 
@@ -195,6 +209,27 @@ final class OpenAIClient {
     private struct StreamIteration {
         let content: String
         let toolCalls: [AccumulatedToolCall]?
+        let items: [[String: Any]]
+    }
+
+    /// Chat Completions-style definitions (the shape of `resources/contracts/tools.json`)
+    /// flattened into the Responses API shape.
+    private static func responsesTools(_ tools: [[String: Any]]) -> [[String: Any]] {
+        tools.compactMap { def in
+            guard let function = def["function"] as? [String: Any],
+                  let name = function["name"] as? String
+            else { return nil }
+            var tool: [String: Any] = [
+                "type": "function",
+                "name": name,
+                "parameters": function["parameters"] ?? ["type": "object", "properties": [String: Any]()],
+                "strict": false,
+            ]
+            if let description = function["description"] {
+                tool["description"] = description
+            }
+            return tool
+        }
     }
 
     private func makeChatRequest(timeout: TimeInterval? = nil) -> URLRequest {
@@ -214,14 +249,18 @@ final class OpenAIClient {
         onChunk: @escaping (String) -> Void
     ) async throws -> StreamIteration {
         var request = makeChatRequest()
+        request.url = OpenAIEndpoint.responses
 
         var body: [String: Any] = [
             "model": OpenAIModel.chat,
-            "messages": messages.map { $0.toRequestBody() },
+            "input": messages.flatMap { $0.toInputItems() },
             "stream": true,
+            "store": false,
+            "include": ["reasoning.encrypted_content"],
+            "reasoning": ["effort": OpenAIModel.chatReasoningEffort],
         ]
         if let tools, !tools.isEmpty {
-            body["tools"] = tools
+            body["tools"] = Self.responsesTools(tools)
             body["tool_choice"] = "auto"
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -231,34 +270,33 @@ final class OpenAIClient {
             throw OpenAIError.httpFailure
         }
 
-        var accumulated = PartialAssistantMessage()
-        var content = ""
+        var accumulated = ResponseStreamState()
         var batcher = StreamTextBatcher()
 
         for try await line in bytes.lines {
             try Task.checkCancellation()
-            guard line.hasPrefix("data: ") else { continue }
-            let payload = String(line.dropFirst(6))
-            if payload == "[DONE]" { break }
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
             guard let data = payload.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let choices = json["choices"] as? [[String: Any]],
-                  let delta = choices.first?["delta"] as? [String: Any]
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { continue }
 
-            accumulated.merge(delta: delta)
-            if let chunk = delta["content"] as? String, !chunk.isEmpty {
-                content += chunk
-                if let toSend = batcher.push(chunk) {
-                    await MainActor.run { onChunk(toSend) }
-                }
+            if let chunk = accumulated.apply(event: json), let toSend = batcher.push(chunk) {
+                await MainActor.run { onChunk(toSend) }
             }
         }
         if let toSend = batcher.flush() {
             await MainActor.run { onChunk(toSend) }
         }
+        if accumulated.failed {
+            throw OpenAIError.httpFailure
+        }
 
-        return StreamIteration(content: content, toolCalls: accumulated.toolCalls)
+        return StreamIteration(
+            content: accumulated.text,
+            toolCalls: accumulated.toolCalls,
+            items: accumulated.items
+        )
     }
 
     func generateThreadTitle(previousTitle: String?, context: String) async throws -> String? {
@@ -385,6 +423,7 @@ final class OpenAIClient {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userMessage],
             ],
+            "reasoning_effort": "none",
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -473,38 +512,47 @@ final class OpenAIClient {
     }
 }
 
-private struct PartialAssistantMessage {
-    private var content: String?
-    private var toolCallParts: [Int: (id: String?, name: String?, arguments: String?)] = [:]
+/// Accumulates one streamed Responses API response.
+struct ResponseStreamState {
+    private(set) var text = ""
+    private(set) var items: [[String: Any]] = []
+    private(set) var failed = false
 
-    mutating func merge(delta: [String: Any]) {
-        if let chunk = delta["content"] as? String {
-            content = (content ?? "") + chunk
-        }
-        guard let toolCalls = delta["tool_calls"] as? [[String: Any]] else { return }
-        for part in toolCalls {
-            let index = part["index"] as? Int ?? toolCallParts.count
-            var existing = toolCallParts[index] ?? (id: nil, name: nil, arguments: nil)
-            if let id = part["id"] as? String { existing.id = id }
-            if let function = part["function"] as? [String: Any] {
-                if let name = function["name"] as? String { existing.name = (existing.name ?? "") + name }
-                if let args = function["arguments"] as? String {
-                    existing.arguments = (existing.arguments ?? "") + args
-                }
+    /// Apply one SSE event; returns visible text to emit, if any.
+    mutating func apply(event: [String: Any]) -> String? {
+        switch event["type"] as? String {
+        case "response.output_text.delta", "response.refusal.delta":
+            guard let delta = event["delta"] as? String, !delta.isEmpty else { return nil }
+            text += delta
+            return delta
+        case "response.output_item.done":
+            if let item = event["item"] as? [String: Any] {
+                items.append(item)
             }
-            toolCallParts[index] = existing
+        case "response.completed":
+            if let response = event["response"] as? [String: Any],
+               let output = response["output"] as? [[String: Any]],
+               !output.isEmpty {
+                items = output
+            }
+        case "response.failed", "error":
+            failed = true
+        default:
+            break
         }
+        return nil
     }
 
     var toolCalls: [AccumulatedToolCall]? {
-        let sorted = toolCallParts.keys.sorted().compactMap { index -> AccumulatedToolCall? in
-            guard let part = toolCallParts[index],
-                  let id = part.id,
-                  let name = part.name
+        let calls = items.compactMap { item -> AccumulatedToolCall? in
+            guard item["type"] as? String == "function_call",
+                  let callId = item["call_id"] as? String,
+                  let name = item["name"] as? String
             else { return nil }
-            return AccumulatedToolCall(id: id, name: name, arguments: part.arguments ?? "{}")
+            let arguments = item["arguments"] as? String ?? ""
+            return AccumulatedToolCall(id: callId, name: name, arguments: arguments.isEmpty ? "{}" : arguments)
         }
-        return sorted.isEmpty ? nil : sorted
+        return calls.isEmpty ? nil : calls
     }
 }
 

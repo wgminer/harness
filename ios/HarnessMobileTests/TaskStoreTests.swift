@@ -82,4 +82,45 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(TaskOrdering.sortIndex(for: ordered[1]), 1)
         XCTAssertEqual(TaskOrdering.sortIndex(for: ordered[2]), 2)
     }
+
+    @MainActor
+    func testTaskToolsNestSubtasksOneLevel() throws {
+        let store = TasksStore(localDataDir: tempDir)
+        let parentId = try XCTUnwrap(store.executeTool(name: "task_create", args: ["title": "Parent"]).affectedIds?.first)
+        let child = try store.executeTool(name: "task_create", args: ["title": "Child", "parentId": parentId])
+        let childId = try XCTUnwrap(child.affectedIds?.first)
+        XCTAssertEqual(child.tasks.first { $0.id == childId }?.parentId, parentId)
+
+        let grandchild = try store.executeTool(name: "task_create", args: ["title": "Grandchild", "parentId": childId])
+        XCTAssertNotNil(grandchild.error)
+        let nestParent = try store.executeTool(name: "task_update", args: ["id": parentId, "parentId": childId])
+        XCTAssertNotNil(nestParent.error)
+
+        let promoted = try store.executeTool(name: "task_update", args: ["id": childId, "parentId": NSNull()])
+        XCTAssertNil(promoted.error)
+        XCTAssertNil(promoted.tasks.first { $0.id == childId }?.parentId)
+    }
+
+    @MainActor
+    func testDeletingParentDeletesSubtasks() throws {
+        let store = TasksStore(localDataDir: tempDir)
+        let parentId = try XCTUnwrap(store.executeTool(name: "task_create", args: ["title": "Parent"]).affectedIds?.first)
+        _ = try store.executeTool(name: "task_create", args: ["title": "Child", "parentId": parentId])
+        _ = try store.executeTool(name: "task_create", args: ["title": "Other"])
+
+        let deleted = try store.delete(id: parentId)
+        XCTAssertEqual(deleted.tasks.map(\.title), ["Other"])
+    }
+
+    @MainActor
+    func testClearCompletedPromotesOpenSubtasks() throws {
+        let store = TasksStore(localDataDir: tempDir)
+        let parentId = try XCTUnwrap(store.executeTool(name: "task_create", args: ["title": "Parent"]).affectedIds?.first)
+        _ = try store.executeTool(name: "task_create", args: ["title": "Child", "parentId": parentId])
+        _ = try store.update(id: parentId, status: .completed)
+
+        let cleared = try store.executeTool(name: "task_clear_completed", args: [:])
+        XCTAssertEqual(cleared.tasks.map(\.title), ["Child"])
+        XCTAssertNil(cleared.tasks.first?.parentId)
+    }
 }

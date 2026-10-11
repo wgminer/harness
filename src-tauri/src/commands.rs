@@ -7,6 +7,7 @@ pub mod credentials;
 pub mod files;
 pub mod gmail;
 pub mod images;
+pub mod inbox;
 pub mod memory;
 pub mod notes;
 pub mod settings;

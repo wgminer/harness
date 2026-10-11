@@ -9,6 +9,7 @@ export type View =
   | "chat"
   | "settings"
   | "tasks"
+  | "inbox"
   | "notes"
   | "images"
   | "dev-chat"

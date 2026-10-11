@@ -30,7 +30,7 @@ Use product terms from the glossary. Highlights:
 
 **Do not hand-copy cross-language contracts.** Shared values live under [`resources/contracts/`](resources/contracts/); wire TS / Rust / Swift to the same file.
 
-- **Today:** `tools.json`, `codingTools.json`, `systemPrompt.json`, `chatModes.json`, `chatStreamBatch.json`, `conversationSearch.json`, `dictationSuggestedPrompts.json`, `gmailTools.json`, `homeHeaderQuotes.json`, `imageMarkerPrompt.json`, `recentConversations.json`, `selfModifyScopes.json`, `transcriptCleanup.json`.
+- **Today:** `capture.json`, `tools.json`, `codingTools.json`, `systemPrompt.json`, `chatModes.json`, `chatStreamBatch.json`, `conversationSearch.json`, `dictationSuggestedPrompts.json`, `gmailTools.json`, `homeHeaderQuotes.json`, `imageMarkerPrompt.json`, `recentConversations.json`, `selfModifyScopes.json`, `transcriptCleanup.json`.
 - **iOS:** the checked-in `ios/HarnessMobile.xcodeproj` lists each contract file under `SharedContracts`; register new ones there (CI regenerates via xcodegen, local Xcode does not).
 - **Planned:** model names, sync scopes, gated tool names, and other shared value contracts.
 

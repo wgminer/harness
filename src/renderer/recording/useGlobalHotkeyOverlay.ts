@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GlobalHotkeyOverlayPhase } from "./globalHotkeyController";
 
-/** State for the global Fn-hotkey recording overlay and its error chip. */
+/** Fn-hotkey take state the app shell needs: unfocused-session phase and the error chip. */
 export function useGlobalHotkeyOverlay() {
   const [overlaySession, setOverlaySession] = useState(false);
   const [phase, setPhase] = useState<GlobalHotkeyOverlayPhase>("idle");
@@ -22,7 +22,7 @@ export function useGlobalHotkeyOverlay() {
   }, []);
 
   useEffect(() => {
-    // Auto-clear focused-path error chips only (overlay failed stays until dismiss;
+    // Auto-clear focused-path error chips only (a failed unfocused take stays until dismiss;
     // retryable chips stay until Retry / Dismiss).
     if (!error || phase === "failed" || recordingPath) return;
     const timer = window.setTimeout(() => setError(null, null), 8000);

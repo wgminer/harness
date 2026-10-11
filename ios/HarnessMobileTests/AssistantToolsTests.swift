@@ -43,7 +43,7 @@ final class AssistantToolsTests: XCTestCase {
         XCTAssertEqual(object["error"] as? String, "Invalid timezone: Not/A/Timezone")
     }
 
-    func testMemorySetAndListPersist() async throws {
+    func testMemorySetPersists() async throws {
         let store = ConversationStore(localDataDir: tempDir)
         let setRaw = try await AssistantTools.execute(
             name: "memory_set",
@@ -53,11 +53,7 @@ final class AssistantToolsTests: XCTestCase {
         let setObject = try decodeJSONObject(setRaw)
         XCTAssertEqual(setObject["lastAction"] as? String, "set_memory")
         XCTAssertEqual((setObject["memory"] as? [String: String])?["favorite_color"], "blue")
-
-        let listRaw = try await AssistantTools.execute(name: "memory_list", args: [:], store: store)
-        let listObject = try decodeJSONObject(listRaw)
-        XCTAssertEqual(listObject["lastAction"] as? String, "list_memories")
-        XCTAssertEqual((listObject["memory"] as? [String: String])?["favorite_color"], "blue")
+        XCTAssertEqual(try store.loadUserMemory()["favorite_color"], "blue")
     }
 
     func testMemorySetWithEmptyKeyDoesNotWrite() async throws {

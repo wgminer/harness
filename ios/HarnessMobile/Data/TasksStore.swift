@@ -160,6 +160,14 @@ final class TasksStore: ObservableObject {
             if let raw = args["metadata"] as? [String: Any] {
                 metadata = raw.mapValues { JSONValue(from: $0) }
             }
+            let parentId = parentIdArg(args)
+            if let parentId, !validParent(tasks: nextTasks, parentId: parentId, childId: nil) {
+                return TasksPayload(
+                    tasks: nextTasks,
+                    lastAction: .create,
+                    error: "Parent task not found or is itself a subtask: \(parentId)"
+                )
+            }
             let task = TaskItem(
                 id: idFactory(),
                 title: title,
@@ -167,7 +175,8 @@ final class TasksStore: ObservableObject {
                 tags: tags,
                 createdAt: nowMs,
                 updatedAt: nowMs,
-                metadata: metadata
+                metadata: metadata,
+                parentId: parentId
             )
             nextTasks.append(task)
             return TasksPayload(tasks: nextTasks, lastAction: .create, affectedIds: [task.id])
@@ -192,6 +201,21 @@ final class TasksStore: ObservableObject {
             if let tagPatch = TagNormalization.applyTagPatch(existing: existing.tags, patch: args) {
                 existing.tags = tagPatch
             }
+            // `parentId`: a task id nests it, "" or null moves it back to the top level.
+            if let rawParent = args["parentId"] {
+                if let parentId = parentIdArg(args) {
+                    guard validParent(tasks: nextTasks, parentId: parentId, childId: id) else {
+                        return TasksPayload(
+                            tasks: nextTasks,
+                            lastAction: .update,
+                            error: "Cannot nest under task: \(parentId)"
+                        )
+                    }
+                    existing.parentId = parentId
+                } else if rawParent is NSNull || rawParent is String {
+                    existing.parentId = nil
+                }
+            }
             if let raw = args["metadata"] as? [String: Any] {
                 var merged = existing.metadata ?? [:]
                 for (key, value) in raw {
@@ -208,7 +232,8 @@ final class TasksStore: ObservableObject {
                 return TasksPayload(tasks: nextTasks, lastAction: .delete, error: "Task id is required")
             }
             let before = nextTasks.count
-            nextTasks.removeAll { $0.id == id }
+            // Deleting a parent deletes its subtasks (same as desktop).
+            nextTasks.removeAll { $0.id == id || $0.parentId == id }
             guard nextTasks.count < before else {
                 return TasksPayload(tasks: nextTasks, lastAction: .delete, error: "Task not found: \(id)")
             }
@@ -224,9 +249,30 @@ final class TasksStore: ObservableObject {
                     remaining.append(task)
                 }
             }
+            // Open subtasks of a cleared parent stay, promoted to the top level.
+            for index in remaining.indices {
+                if let parentId = remaining[index].parentId, removedIds.contains(parentId) {
+                    remaining[index].parentId = nil
+                }
+            }
             nextTasks = remaining
             return TasksPayload(tasks: nextTasks, lastAction: .clear_completed, affectedIds: removedIds)
         }
+    }
+
+    /// Non-empty `parentId` from tool args.
+    private static func parentIdArg(_ args: [String: Any]) -> String? {
+        guard let raw = args["parentId"] as? String else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Subtasks nest one level: a parent must exist and must not itself be a subtask.
+    private static func validParent(tasks: [TaskItem], parentId: String, childId: String?) -> Bool {
+        if childId == parentId { return false }
+        guard tasks.contains(where: { $0.id == parentId && $0.parentId == nil }) else { return false }
+        if let childId, tasks.contains(where: { $0.parentId == childId }) { return false }
+        return true
     }
 
     static func loadTasks(in localDataDir: URL) throws -> TaskState {
@@ -295,7 +341,8 @@ final class TasksStore: ObservableObject {
             tags: migrated.tags,
             createdAt: createdAt,
             updatedAt: updatedAt,
-            metadata: metadata
+            metadata: metadata,
+            parentId: (raw["parentId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         )
     }
 

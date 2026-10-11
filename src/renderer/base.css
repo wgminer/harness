@@ -903,71 +903,47 @@ hr {
   display: none !important;
 }
 
-.hotkey-recording-overlay {
+/* Floating take controls, shown when the take's own surface is off screen. */
+.dictation-pill {
+  --control-size: var(--space-7);
   position: fixed;
-  inset: 0;
+  top: calc(var(--titlebar-height) + var(--space-2));
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1500;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  background: rgba(0, 0, 0, 0.72);
-  -webkit-backdrop-filter: blur(6px) saturate(0.92);
-  backdrop-filter: blur(6px) saturate(0.92);
-  pointer-events: none;
-}
-
-.hotkey-recording-overlay[data-interactive="true"] {
-  pointer-events: auto;
-}
-
-.hotkey-recording-overlay__field {
-  display: block;
-}
-
-.hotkey-recording-overlay__transcribing {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
   font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  line-height: var(--line-height-body);
+  font-size: var(--font-size-caption);
   color: var(--fg);
-}
-
-.hotkey-recording-overlay__spinner {
-  animation: motion-spin var(--motion-duration-loading) var(--motion-ease-linear) infinite;
-}
-
-.hotkey-recording-overlay__failed {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-4);
-  max-width: min(28rem, calc(100vw - var(--space-8)));
-  padding: var(--space-4) var(--space-5);
   background: var(--bg-elevated);
   border: 1px solid var(--border-edge);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   box-shadow: var(--shadow);
 }
 
-.hotkey-recording-overlay__error-text {
-  margin: 0;
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  line-height: var(--line-height-body);
-  color: var(--fg);
-  text-align: center;
+.dictation-pill .btn {
+  border-radius: var(--radius-pill);
 }
 
-.hotkey-recording-overlay__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+.dictation-pill__wave {
+  width: calc(var(--grid) * 24);
+  height: var(--space-5);
+}
+
+.dictation-pill__timer {
+  min-width: 6ch;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.dictation-pill__status {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
+  color: var(--fg-muted);
 }
 
 .hotkey-recording-overlay__error {

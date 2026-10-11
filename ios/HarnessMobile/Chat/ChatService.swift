@@ -136,6 +136,7 @@ final class ChatService: ObservableObject {
         userContent: String,
         imageJPEG: Data? = nil,
         attachments: [MessageAttachment]? = nil,
+        userTimestamp: Int64? = nil,
         onStreamChunk: @escaping (String) -> Void,
         onToolCall: @escaping (ToolCallRecord) -> Void
     ) async throws {
@@ -158,7 +159,8 @@ final class ChatService: ObservableObject {
             conversationId: conversationId,
             role: .user,
             content: trimmed,
-            attachments: resolvedAttachments
+            attachments: resolvedAttachments,
+            timestamp: userTimestamp
         )
         let apiMessages = try await buildMessages(conversationId: conversationId)
 
@@ -264,7 +266,8 @@ final class ChatService: ObservableObject {
         content: String,
         model: String? = nil,
         toolCalls: [ToolCallRecord]? = nil,
-        attachments: [MessageAttachment]? = nil
+        attachments: [MessageAttachment]? = nil,
+        timestamp: Int64? = nil
     ) throws {
         try store.appendMessage(
             conversationId: conversationId,
@@ -272,7 +275,8 @@ final class ChatService: ObservableObject {
             content: content,
             model: model,
             toolCalls: toolCalls,
-            attachments: attachments
+            attachments: attachments,
+            timestamp: timestamp
         )
         if role == .user {
             scheduleTitleRefinement(conversationId: conversationId)

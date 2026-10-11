@@ -151,4 +151,35 @@ final class ConversationStoreComposeTests: XCTestCase {
         XCTAssertEqual(message.id, message.id)
         XCTAssertTrue(message.id.hasPrefix("assistant-42-"))
     }
+
+    func testIndexWritesKeepDesktopOnlyFields() throws {
+        let path = LocalDataLayout.fileURL(in: tempDir, relativePath: LocalDataLayout.conversationsFile)
+        let desktop: [String: Any] = [
+            "conv_grill": [
+                "title": "Plan",
+                "createdAt": 1,
+                "hasMessages": true,
+                "chatMode": "qa",
+                "codingScope": ["kind": "project", "root": "/tmp/proj"],
+                "isFromChatGPT": true,
+                "chatgptId": "abc",
+            ],
+        ]
+        try JSONSerialization.data(withJSONObject: desktop).write(to: path)
+
+        let store = ConversationStore(localDataDir: tempDir)
+        let newId = try store.createConversation()
+        try store.appendMessage(conversationId: newId, role: .user, content: "Hello")
+        try store.patchConversationMeta(conversationId: "conv_grill", title: "Renamed", titleSource: "auto")
+
+        let saved = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: [String: Any]]
+        )
+        let grill = try XCTUnwrap(saved["conv_grill"])
+        XCTAssertEqual(grill["title"] as? String, "Renamed")
+        XCTAssertEqual(grill["chatMode"] as? String, "qa")
+        XCTAssertEqual((grill["codingScope"] as? [String: Any])?["root"] as? String, "/tmp/proj")
+        XCTAssertEqual(grill["isFromChatGPT"] as? Bool, true)
+        XCTAssertEqual(grill["chatgptId"] as? String, "abc")
+    }
 }

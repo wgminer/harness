@@ -11,8 +11,6 @@ enum AssistantTools {
         switch name {
         case "memory_set":
             return try encodeMemoryTool(try store.setUserMemory(args: args))
-        case "memory_list":
-            return try encodeMemoryTool(try store.listUserMemories())
         case "memory_search_conversations":
             return try encodeSearchResult(
                 args: args,

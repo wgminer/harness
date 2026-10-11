@@ -18,6 +18,7 @@ import type {
   NoteSummary,
 } from "./writing";
 import type { GeneratedImage, ImageCreateInput, ImageGenerateInput } from "./images";
+import type { InboxItem, InboxProcessAction, InboxProcessOutcome } from "./inbox";
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
@@ -233,6 +234,16 @@ export interface HarnessAPI {
     clearCompleted: () => Promise<TasksPayload>;
     /** Ask the model for subtasks and save them under `id`. */
     breakdown: (id: string) => Promise<TasksPayload>;
+  };
+  inbox: {
+    list: () => Promise<InboxItem[]>;
+    /** Drain the remote inbox now, then list. */
+    refresh: () => Promise<InboxItem[]>;
+    updateText: (id: string, text: string) => Promise<InboxItem[]>;
+    process: (id: string, action: InboxProcessAction) => Promise<InboxProcessOutcome>;
+    restore: (id: string) => Promise<InboxItem[]>;
+    clearProcessed: () => Promise<InboxItem[]>;
+    onChanged: (cb: () => void) => () => void;
   };
   chat: {
     send: (conversationId: string, content: string) => Promise<void>;

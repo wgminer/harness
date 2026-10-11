@@ -95,7 +95,7 @@ Unit tests assert the sync **revision hash** matches desktop (`syncBundle.test.t
 
 ## Model
 
-Chat uses `gpt-5.4`—keep in sync with `src/shared/openaiModels.ts` (`OPENAI_CHAT_MODEL`).
+Chat uses `gpt-6.1-sol` over the Responses API—keep in sync with `src/shared/openaiModels.ts` (`OPENAI_CHAT_MODEL`).
 
 ## Security notes
 

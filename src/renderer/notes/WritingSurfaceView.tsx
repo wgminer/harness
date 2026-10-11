@@ -41,6 +41,7 @@ import { useNoteExternalSync } from "./useNoteExternalSync";
 import { getNotesEditorCaretCoordinates } from "./notesEditorExtensions";
 import { Menu, MenuHeader, MenuItem, MenuSeparator } from "../ui/Menu";
 import { useScrolledHeader } from "../hooks/useScrolledHeader";
+import { useInlineTakeChrome } from "../recording/dictationTake";
 import { formatVoiceTimer, useVoiceCapture, type VoiceTranscriptResult } from "../recording/useVoiceCapture";
 
 type Status =
@@ -92,11 +93,6 @@ interface NotesViewProps {
   /** Focused Fn transcript waiting to be inserted at the note cursor. */
   pendingHotkeyText?: string | null;
   onPendingHotkeyTextConsumed?: () => void;
-  /**
-   * When true, mirror focused Fn global recording into toolbar voice chrome
-   * without starting a second local capture.
-   */
-  mirrorGlobalFnRecording?: boolean;
   /** Conversation the open note was reached from; shows a back link. */
   returnToConversationId?: string | null;
   /** Looks up a conversation title for the linked-chat chips. */
@@ -133,7 +129,6 @@ export function NotesView({
   onActiveNoteChange,
   pendingHotkeyText,
   onPendingHotkeyTextConsumed,
-  mirrorGlobalFnRecording = false,
   returnToConversationId = null,
   resolveConversationTitle,
   onOpenConversation,
@@ -208,8 +203,9 @@ export function NotesView({
     cancelRecording,
   } = useVoiceCapture({
     onTranscript: (text, result) => applyNoteTranscriptRef.current(text, result),
-    mirrorGlobalFnRecording,
+    landing: { surface: "note", noteId: selectedNoteId ?? "" },
   });
+  useInlineTakeChrome(voiceState !== "idle" && selectedNoteId != null);
 
   useEffect(() => {
     setVoiceErrorRef.current = setVoiceError;

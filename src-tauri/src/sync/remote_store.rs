@@ -211,6 +211,40 @@ impl RemoteBackupStore {
         Ok(())
     }
 
+    /// Full object key for a name under the configured prefix.
+    pub fn key_for(&self, name: &str) -> String {
+        object_key(&self.prefix, name)
+    }
+
+    pub async fn list_keys(&self, key_prefix: &str) -> Result<Vec<String>, String> {
+        let pages = self
+            .bucket
+            .list(key_prefix.to_string(), None)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(pages
+            .into_iter()
+            .flat_map(|page| page.contents)
+            .map(|object| object.key)
+            .collect())
+    }
+
+    pub async fn get_object(&self, key: &str) -> Result<Vec<u8>, String> {
+        self.bucket
+            .get_object(key)
+            .await
+            .map(|data| data.to_vec())
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn delete_object(&self, key: &str) -> Result<(), String> {
+        self.bucket
+            .delete_object(key)
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
     pub async fn test_connection(&self) -> Result<(), String> {
         self.bucket
             .head_object(&self.manifest_key())

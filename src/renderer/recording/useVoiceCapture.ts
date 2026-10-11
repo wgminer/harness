@@ -1,253 +1,93 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VoiceState } from "../chat/chatHelpers";
-import { MICROPHONE_PERMISSION_DENIED_MESSAGE } from "./recordingAudioUtils";
-import { transcribeWav } from "./recordingPipeline";
-import { playCancelChime, playDoneChime, playErrorChime } from "./recordingUtils";
-import { useRecorder } from "./useRecorder";
+import {
+  cancelTake,
+  landingKey,
+  registerTakeHandler,
+  startMicTake,
+  stopTake,
+  useDictationTake,
+  type TakeLanding,
+  type TakeTranscriptResult,
+} from "./dictationTake";
 
-const MAX_RECORDING_MS = 5 * 60 * 1000;
-
-export type VoiceTranscriptResult = {
-  cleanupSkipped?: "no_api_key";
-  recordingPath?: string;
-};
+export type VoiceTranscriptResult = TakeTranscriptResult;
 
 export interface UseVoiceCaptureOptions {
   /**
-   * Called with local-mic transcripts (and optionally by callers for other
-   * delivery paths). Return false to signal the transcript was not applied.
+   * Called with transcripts of takes that land on this surface. Return false to
+   * signal the transcript was not applied.
    */
   onTranscript: (
     text: string,
     result?: VoiceTranscriptResult,
   ) => void | boolean | Promise<void | boolean>;
   /**
-   * When true, mirror focused Fn global recording into voice chrome
-   * (timer / mic / Transcribing…) without starting a second local capture.
+   * Where this surface's takes land. A take pinned here, in-app or focused Fn,
+   * drives this surface's voice chrome (timer / mic / Transcribing…).
    */
-  mirrorGlobalFnRecording?: boolean;
+  landing: TakeLanding;
 }
 
 /**
- * Shared inline + Fn-mirrored voice capture used by the chat composer and
- * writing-surface toolbar.
+ * Voice chrome for one surface (chat composer, writing-surface toolbar). The take
+ * itself lives in `dictationTake`, so it survives this surface unmounting.
  */
-export function useVoiceCapture({
-  onTranscript,
-  mirrorGlobalFnRecording = false,
-}: UseVoiceCaptureOptions) {
-  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+export function useVoiceCapture({ onTranscript, landing }: UseVoiceCaptureOptions) {
+  const take = useDictationTake();
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [recordingMs, setRecordingMs] = useState(0);
 
-  const recordingStartRef = useRef<number>(0);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const transcriptionRequestIdRef = useRef<string | null>(null);
-  const transcriptionCancelledRef = useRef(false);
-  const mirroringGlobalRef = useRef(false);
-  /** Bumped on cancel so a start still awaiting the mic does not resurrect the take. */
-  const startAttemptRef = useRef(0);
+  const key = landingKey(landing);
+  const landingRef = useRef(landing);
   const onTranscriptRef = useRef(onTranscript);
-
-  const recorder = useRecorder();
-
   useEffect(() => {
+    landingRef.current = landing;
     onTranscriptRef.current = onTranscript;
   });
 
+  useEffect(
+    () =>
+      registerTakeHandler(key, {
+        deliver: (text, result) => onTranscriptRef.current(text, result),
+        onError: setVoiceError,
+      }),
+    [key],
+  );
+
+  const mine = take?.landing != null && landingKey(take.landing) === key ? take : null;
+  const voiceState: VoiceState = mine?.phase ?? "idle";
+  const recordingSince = mine?.phase === "recording" ? mine.startedAt : null;
+
   useEffect(() => {
-    if (!mirrorGlobalFnRecording) {
-      if (mirroringGlobalRef.current) {
-        mirroringGlobalRef.current = false;
-        if (recordingTimerRef.current) {
-          clearInterval(recordingTimerRef.current);
-          recordingTimerRef.current = null;
-        }
-        setVoiceState("idle");
-        setRecordingMs(0);
-      }
+    if (recordingSince == null) {
+      setRecordingMs(0);
       return;
     }
-
-    const clearMirrorTimer = () => {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-    };
-
-    const endMirror = () => {
-      if (!mirroringGlobalRef.current) return;
-      mirroringGlobalRef.current = false;
-      clearMirrorTimer();
-      setVoiceState("idle");
-      setRecordingMs(0);
-    };
-
-    const unsubStarted = window.harness.recording.onGlobalRecordingStarted(({ focused }) => {
-      if (!focused) return;
-      mirroringGlobalRef.current = true;
-      setVoiceError(null);
-      setRecordingMs(0);
-      setVoiceState("recording");
-      recordingStartRef.current = Date.now();
-      clearMirrorTimer();
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingMs(Date.now() - recordingStartRef.current);
-      }, 33);
-    });
-
-    const unsubStopped = window.harness.recording.onGlobalRecordingStopped(() => {
-      if (!mirroringGlobalRef.current) return;
-      clearMirrorTimer();
-      setVoiceState("processing");
-    });
-
-    const unsubCancelled = window.harness.recording.onGlobalRecordingCancelled(() => {
-      endMirror();
-    });
-
-    const unsubError = window.harness.recording.onGlobalRecordingError(({ message }) => {
-      if (!mirroringGlobalRef.current) return;
-      endMirror();
-      setVoiceError(message);
-    });
-
-    const unsubReady = window.harness.recording.onGlobalTranscriptReady(() => {
-      endMirror();
-    });
-
-    const unsubDelivered = window.harness.recording.onGlobalTranscriptDelivered(() => {
-      endMirror();
-    });
-
-    return () => {
-      unsubStarted();
-      unsubStopped();
-      unsubCancelled();
-      unsubError();
-      unsubReady();
-      unsubDelivered();
-    };
-  }, [mirrorGlobalFnRecording]);
-
-  const stopAndTranscribe = useCallback(async () => {
-    if (mirroringGlobalRef.current) {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      setVoiceState("processing");
-      await window.harness.recording.stopGlobalRecording().catch(() => {});
-      return;
-    }
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    setVoiceState("processing");
-    setVoiceError(null);
-    transcriptionCancelledRef.current = false;
-    try {
-      const wav = await recorder.stop();
-      const requestId = crypto.randomUUID();
-      transcriptionRequestIdRef.current = requestId;
-      const result = await transcribeWav(wav);
-      if (transcriptionCancelledRef.current || transcriptionRequestIdRef.current !== requestId) {
-        return;
-      }
-      if ("error" in result) {
-        void playErrorChime();
-        setVoiceError(result.error);
-      } else {
-        void playDoneChime();
-        await onTranscriptRef.current(result.text, {
-          cleanupSkipped: result.cleanupSkipped === "no_api_key" ? "no_api_key" : undefined,
-          recordingPath: result.path,
-        });
-      }
-    } catch (err) {
-      void playErrorChime();
-      setVoiceError(err instanceof Error ? err.message : "Recording failed.");
-    } finally {
-      transcriptionRequestIdRef.current = null;
-      setVoiceState("idle");
-    }
-  }, [recorder]);
+    const tick = () => setRecordingMs(Date.now() - recordingSince);
+    tick();
+    const timer = setInterval(tick, 33);
+    return () => clearInterval(timer);
+  }, [recordingSince]);
 
   const startRecording = useCallback(async () => {
-    if (mirroringGlobalRef.current) return;
-    const attempt = ++startAttemptRef.current;
     setVoiceError(null);
-    setRecordingMs(0);
-    try {
-      await recorder.start();
-      if (attempt !== startAttemptRef.current) {
-        await recorder.cancel();
-        return;
-      }
-      setVoiceState("recording");
-      transcriptionCancelledRef.current = false;
-      recordingStartRef.current = Date.now();
-      recordingTimerRef.current = setInterval(() => {
-        const elapsed = Date.now() - recordingStartRef.current;
-        setRecordingMs(elapsed);
-        if (elapsed >= MAX_RECORDING_MS) {
-          if (recordingTimerRef.current) {
-            clearInterval(recordingTimerRef.current);
-            recordingTimerRef.current = null;
-          }
-          void stopAndTranscribe();
-        }
-      }, 33);
-    } catch (err) {
-      if (attempt !== startAttemptRef.current) return;
-      void playErrorChime();
-      setVoiceError(err instanceof Error ? err.message : MICROPHONE_PERMISSION_DENIED_MESSAGE);
-    }
-  }, [recorder, stopAndTranscribe]);
+    await startMicTake(landingRef.current);
+  }, []);
+
+  const stopAndTranscribe = useCallback(async () => {
+    setVoiceError(null);
+    await stopTake();
+  }, []);
 
   const cancelRecording = useCallback(async () => {
-    if (mirroringGlobalRef.current) {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      mirroringGlobalRef.current = false;
-      setVoiceState("idle");
-      setVoiceError(null);
-      setRecordingMs(0);
-      await window.harness.recording.cancelGlobalSession().catch(() => {});
-      return;
-    }
-    startAttemptRef.current += 1;
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    if (voiceState === "processing" && transcriptionRequestIdRef.current) {
-      transcriptionCancelledRef.current = true;
-      void window.harness.recording.cancelTranscription(transcriptionRequestIdRef.current).catch(() => {});
-      transcriptionRequestIdRef.current = null;
-    }
-    // Unconditional: voiceState can be stale here, so always release the mic.
-    await recorder.cancel();
-    await playCancelChime();
-    setVoiceState("idle");
     setVoiceError(null);
-    setRecordingMs(0);
-  }, [recorder, voiceState]);
+    await cancelTake();
+  }, []);
 
+  /** Clear this surface's voice error; the take, if any, keeps running. */
   const resetVoiceCapture = useCallback(() => {
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    transcriptionRequestIdRef.current = null;
-    transcriptionCancelledRef.current = false;
-    setVoiceState("idle");
     setVoiceError(null);
-    setRecordingMs(0);
   }, []);
 
   return {

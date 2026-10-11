@@ -51,6 +51,7 @@ describe("globalHotkeyController", () => {
             startedCb = null;
           };
         }),
+        onGlobalRecordingLevel: vi.fn(() => () => {}),
         onGlobalRecordingStopped: vi.fn((cb: () => void) => {
           stoppedCb = cb;
           return () => {

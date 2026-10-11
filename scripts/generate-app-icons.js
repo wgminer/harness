@@ -7,6 +7,7 @@
  *   - desktop: inset rounded plate → resources/icon.png (+ identical icon-dev.png for now)
  *     and src-tauri/icons/icon.* (+ identical icon-dev.* for now)
  *   - iOS: full-bleed black → ios/.../AppIcon.appiconset/AppIcon-1024.png
+ *   - iOS widget: mark only, transparent → ios/.../HorseMark.imageset/HorseMark.png
  *
  * Usage:  npm run icons
  * macOS:  also builds .icns via sips + iconutil
@@ -34,6 +35,15 @@ const iosAppIconPath = path.join(
   "Assets.xcassets",
   "AppIcon.appiconset",
   "AppIcon-1024.png"
+);
+
+const iosWidgetMarkPath = path.join(
+  root,
+  "ios",
+  "HarnessMobileRecordingLiveActivity",
+  "Assets.xcassets",
+  "HorseMark.imageset",
+  "HorseMark.png"
 );
 
 function readMarkSvg() {
@@ -169,6 +179,9 @@ function main() {
   // iOS: full-bleed black (system applies the mask; no transparent margin)
   const iosSvg = compositeSvg(markSvg, BG, MASTER, { fullBleed: true });
   writePng(iosAppIconPath, renderPng(iosSvg, MASTER));
+
+  // iOS widget: bare mark as a template image (the widget supplies color and background)
+  writePng(iosWidgetMarkPath, renderPng(markSvg, 512));
 
   // Keep build/icon.icns in sync for the legacy make-icns consumers
   const buildIcnsPath = path.join(root, "build", "icon.icns");

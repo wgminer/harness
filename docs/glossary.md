@@ -10,7 +10,7 @@ Shared vocabulary for product and agent conversations. Prefer these terms over n
 | **Harness Dev** | Dev build (`npm run dev`): separate Dock name + data dir; credentials, sync, and audio are not split from installed. |
 | **Desktop** | Tauri app (Rust + React) — primary client. |
 | **Browser / Harness Web** | Debug shell: the desktop React chat UI in a regular browser (`npm run dev:browser`). localStorage only; not a shipped client. |
-| **Harness Mobile / iOS** | Native companion: capture + Q&A + sync — not desktop parity. |
+| **Harness Mobile / iOS** | Native capture device: dictation first, plus photo, file, and link. Sends **captures** to the desktop **Inbox**; not a chat client and not desktop parity. |
 
 ## Surfaces
 
@@ -21,7 +21,7 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 | Term | Meaning |
 |---|---|
 | **Chat UI** | The conversation surface: message thread, composer, chat modes, streaming replies. |
-| **Dictation screen** | The voice-capture / transcription overlay (recording, “Transcribing…”, polish of spoken input). Distinct from the chat UI even when dictation lands in a conversation. |
+| **Dictation screen** | The voice-capture / transcription chrome (recording waveform, “Transcribing…”, polish of spoken input): inline in the composer, or a floating pill when the take's surface is off screen. Distinct from the chat UI even when dictation lands in a conversation. |
 
 ## Core objects
 
@@ -33,6 +33,8 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 | **Task** | Item in the tasks list (separate from chat/notes). |
 | **Memory** | Named key/value facts the model can pull into context (not the full chat history). |
 | **Image** | Image library / attachment object, distinct from notes. |
+| **Capture** | One thing sent from the phone: a dictation, text, photo, file, or link, with optional attachments. Wire format in `resources/contracts/capture.json`. |
+| **Inbox** | Desktop surface listing captures waiting to be processed into a task, note, or chat, or dismissed. Local to the desktop that drained them; not in the sync bundle. |
 
 ## Chat & cognition
 

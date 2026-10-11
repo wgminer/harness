@@ -22,7 +22,7 @@ struct MessageRowView: View, Equatable {
             switch message.messageRole {
             case .assistant:
                 AssistantMessageView(
-                    content: ChatTemporalContext.stripSentAtPrefix(message.content),
+                    content: ChatDisplayText.forDisplay(ChatTemporalContext.stripSentAtPrefix(message.content)),
                     isStreaming: isStreaming,
                     toolCalls: message.toolCalls ?? [],
                     onToolConfirm: onToolConfirm,
@@ -159,12 +159,20 @@ struct UserMessageCard: View {
     var attachmentImages: [UIImage] = []
     @Binding var isExpanded: Bool
 
+    /// Rendered height of the full body; overflow is measured, never guessed from length.
+    @State private var naturalBodyHeight: CGFloat = 0
+
     private static let collapsedLineLimit = 5
     /// ~1.45 line height for sans body; matches the markdown theme's non-prose spacing.
     static var bodyLineSpacing: CGFloat {
         UIFont.preferredFont(forTextStyle: .body).pointSize * 0.22
     }
-    private static let approxCharsPerLine = 70
+    /// Height of `collapsedLineLimit` body lines at the current Dynamic Type size.
+    static var collapsedBodyHeight: CGFloat {
+        let lines = CGFloat(collapsedLineLimit)
+        let lineHeight = UIFont.preferredFont(forTextStyle: .body).lineHeight
+        return ceil(lines * lineHeight + (lines - 1) * bodyLineSpacing)
+    }
 
     static func looksLikeMarkdown(_ content: String) -> Bool {
         content.contains("```")
@@ -177,12 +185,7 @@ struct UserMessageCard: View {
     }
 
     private var isOverflowing: Bool {
-        guard !content.isEmpty else { return false }
-        let newlineCount = content.reduce(0) { partial, char in
-            partial + (char == "\n" ? 1 : 0)
-        }
-        if newlineCount >= Self.collapsedLineLimit { return true }
-        return content.count > Self.collapsedLineLimit * Self.approxCharsPerLine
+        naturalBodyHeight > Self.collapsedBodyHeight + 1
     }
 
     var body: some View {
@@ -193,9 +196,20 @@ struct UserMessageCard: View {
 
             if !content.isEmpty {
                 ZStack(alignment: .bottom) {
+                    // Clip by height instead of lineLimit so markdown blocks clamp too.
                     userBody
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .lineLimit(isExpanded ? nil : Self.collapsedLineLimit)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: { height in
+                            naturalBodyHeight = height
+                        }
+                        .frame(
+                            maxWidth: .infinity,
+                            maxHeight: isExpanded ? nil : Self.collapsedBodyHeight,
+                            alignment: .topLeading
+                        )
+                        .clipped()
 
                     if !isExpanded && isOverflowing {
                         LinearGradient(
@@ -211,9 +225,9 @@ struct UserMessageCard: View {
                     }
                 }
 
-                if !isExpanded && isOverflowing {
-                    Button("Show more") {
-                        expand()
+                if isOverflowing {
+                    Button(isExpanded ? "Show less" : "Show more") {
+                        setExpanded(!isExpanded)
                     }
                     .font(.caption)
                     .buttonStyle(.plain)
@@ -229,7 +243,7 @@ struct UserMessageCard: View {
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture {
             guard !isExpanded && isOverflowing else { return }
-            expand()
+            setExpanded(true)
         }
         .onChange(of: content) { _, _ in
             if isExpanded { isExpanded = false }
@@ -253,10 +267,7 @@ struct UserMessageCard: View {
     @ViewBuilder
     private var userBody: some View {
         if Self.looksLikeMarkdown(content) {
-            HarnessMarkdownView(
-                content: content,
-                lineLimit: isExpanded ? nil : Self.collapsedLineLimit
-            )
+            HarnessMarkdownView(content: content)
         } else {
             Text(content)
                 .font(.body)
@@ -267,10 +278,10 @@ struct UserMessageCard: View {
         }
     }
 
-    private func expand() {
-        guard !isExpanded else { return }
+    private func setExpanded(_ expanded: Bool) {
+        guard isExpanded != expanded else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
-            isExpanded = true
+            isExpanded = expanded
         }
     }
 }

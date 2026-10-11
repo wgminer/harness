@@ -11,6 +11,16 @@ final class ConversationStore: ObservableObject {
 
     let localDataDir: URL
 
+    /// Decoded `conversations.json`, reused while the file on disk is unchanged. The library
+    /// can hold thousands of rows, so decoding it for every metadata read hitches the UI.
+    private var cachedMap: [String: ConversationMeta]?
+    private var cachedMapFingerprint: MapFingerprint?
+
+    private struct MapFingerprint: Equatable {
+        let modified: Date?
+        let size: Int
+    }
+
     init(localDataDir: URL) {
         self.localDataDir = localDataDir
     }
@@ -284,13 +294,14 @@ final class ConversationStore: ObservableObject {
         content: String,
         model: String? = nil,
         toolCalls: [ToolCallRecord]? = nil,
-        attachments: [MessageAttachment]? = nil
+        attachments: [MessageAttachment]? = nil,
+        timestamp: Int64? = nil
     ) throws {
         var messages = try loadMessages(conversationId: conversationId)
         messages.append(MessageRecord(
             role: role.rawValue,
             content: content,
-            timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+            timestamp: timestamp ?? Int64(Date().timeIntervalSince1970 * 1000),
             model: model,
             toolCalls: toolCalls,
             attachments: attachments
@@ -329,11 +340,6 @@ final class ConversationStore: ObservableObject {
         try Self.saveUserMemory(memory, in: localDataDir)
         notifyContentChanged()
         return MemoryToolPayload(lastAction: "set_memory", memory: memory, key: key)
-    }
-
-    func listUserMemories() throws -> MemoryToolPayload {
-        let memory = try Self.loadUserMemory(in: localDataDir)
-        return MemoryToolPayload(lastAction: "list_memories", memory: memory, key: nil)
     }
 
     func loadTavilyApiKey() throws -> String? {
@@ -421,7 +427,7 @@ final class ConversationStore: ObservableObject {
             try? FileManager.default.removeItem(at: messagesPath)
         }
         DictationRecordingIndex.unlink(conversationId: id)
-        try reload()
+        conversations.removeAll { $0.id == id }
     }
 
     func clearLocalEditsFlag() {
@@ -528,7 +534,25 @@ final class ConversationStore: ObservableObject {
     // MARK: - Private
 
     func loadConversationMapRaw() throws -> [String: ConversationMeta] {
-        try Self.loadConversationMapRaw(localDataDir: localDataDir)
+        // Sync pulls and the off-main bootstrap write the file directly, so trust the cache
+        // only while the file's size and modification date still match.
+        let fingerprint = conversationMapFingerprint()
+        if let cachedMap, cachedMapFingerprint == fingerprint {
+            return cachedMap
+        }
+        let map = try Self.loadConversationMapRaw(localDataDir: localDataDir)
+        cachedMap = map
+        cachedMapFingerprint = fingerprint
+        return map
+    }
+
+    private func conversationMapFingerprint() -> MapFingerprint? {
+        let path = LocalDataLayout.fileURL(in: localDataDir, relativePath: LocalDataLayout.conversationsFile)
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path.path) else { return nil }
+        return MapFingerprint(
+            modified: attributes[.modificationDate] as? Date,
+            size: (attributes[.size] as? NSNumber)?.intValue ?? 0
+        )
     }
 
     nonisolated static func loadConversationMapRaw(localDataDir: URL) throws -> [String: ConversationMeta] {
@@ -562,6 +586,8 @@ final class ConversationStore: ObservableObject {
 
     private func saveConversationMap(_ map: [String: ConversationMeta]) throws {
         try Self.saveConversationMap(map, localDataDir: localDataDir)
+        cachedMap = map
+        cachedMapFingerprint = conversationMapFingerprint()
         notifyContentChanged()
     }
 

@@ -33,6 +33,8 @@ import { Menu, MenuCheckItem, MenuItem, MenuSeparator } from "../ui/Menu";
 import { AttachmentCard } from "./AttachmentCard";
 import { attachRejectedMessage, fileExtensionLabel, readTextAttachment } from "./fileAttach";
 import { useTypedPlaceholder } from "./useTypedPlaceholder";
+import { DictationWave } from "../recording/DictationWave";
+import { useInlineTakeChrome } from "../recording/dictationTake";
 import { formatVoiceTimer } from "../recording/useVoiceCapture";
 import {
   pastedTextPreview,
@@ -169,6 +171,7 @@ export function ChatComposer({
   const expandedAtLengthRef = useRef(0);
   const growFromHeightRef = useRef<number | null>(null);
   const inline = layout === "inline" && !expanded;
+  useInlineTakeChrome(voiceState !== "idle");
 
   const attachDisabled =
     voiceState !== "idle" || sending || attachmentTranscribing;
@@ -468,32 +471,35 @@ export function ChatComposer({
           />
         ) : null}
         <div className="chat-composer-row">
-          <textarea
-            ref={(el) => {
-              inputRef.current = el;
-              if (externalInputRef) externalInputRef.current = el;
-            }}
-            className="chat-input"
-            data-testid="chat-input"
-            value={input}
-            onChange={(e) => onInputChange(e.target.value)}
-            onPaste={(e) => {
-              if (!onPasteLarge) return;
-              const text = e.clipboardData.getData("text/plain");
-              if (!text || !shouldAttachPaste(text)) return;
-              e.preventDefault();
-              onPasteLarge(text);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+          <div className={`chat-input-wrap${voiceState === "recording" ? " chat-input-wrap--recording" : ""}`}>
+            <textarea
+              ref={(el) => {
+                inputRef.current = el;
+                if (externalInputRef) externalInputRef.current = el;
+              }}
+              className="chat-input"
+              data-testid="chat-input"
+              value={input}
+              onChange={(e) => onInputChange(e.target.value)}
+              onPaste={(e) => {
+                if (!onPasteLarge) return;
+                const text = e.clipboardData.getData("text/plain");
+                if (!text || !shouldAttachPaste(text)) return;
                 e.preventDefault();
-                onSend();
-              }
-            }}
-            placeholder={typedPlaceholder}
-            disabled={voiceState === "recording" || voiceState === "processing" || attachmentTranscribing}
-            rows={1}
-          />
+                onPasteLarge(text);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  onSend();
+                }
+              }}
+              placeholder={typedPlaceholder}
+              disabled={voiceState === "recording" || voiceState === "processing" || attachmentTranscribing}
+              rows={1}
+            />
+            {voiceState === "recording" ? <DictationWave className="chat-input-wave" /> : null}
+          </div>
           <div ref={actionsRef} className="input-actions">
             {voiceState === "recording" && (
               <span className="voice-timer">
@@ -507,19 +513,21 @@ export function ChatComposer({
               </span>
             )}
             <div className="input-actions-spacer" />
-            <button
-              ref={plusRef}
-              type="button"
-              className={`btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn${codingScope ? " coding-scope-plus--active" : ""}`}
-              onClick={() => setPlusOpen((v) => !v)}
-              disabled={attachDisabled || plusBusy}
-              title="Add files or set a project folder"
-              aria-label="Add files or set a project folder"
-              aria-haspopup="menu"
-              aria-expanded={plusOpen}
-            >
-              <Plus size={15} />
-            </button>
+            {voiceState === "idle" && (
+              <button
+                ref={plusRef}
+                type="button"
+                className={`btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn${codingScope ? " coding-scope-plus--active" : ""}`}
+                onClick={() => setPlusOpen((v) => !v)}
+                disabled={attachDisabled || plusBusy}
+                title="Add files or set a project folder"
+                aria-label="Add files or set a project folder"
+                aria-haspopup="menu"
+                aria-expanded={plusOpen}
+              >
+                <Plus size={15} />
+              </button>
+            )}
             <Menu
               open={plusOpen}
               onClose={() => setPlusOpen(false)}
@@ -564,6 +572,17 @@ export function ChatComposer({
                 </MenuItem>
               ) : null}
             </Menu>
+            {voiceState !== "idle" && (
+              <button
+                type="button"
+                className="btn btn-icon chat-pane-btn chat-pane-btn--icon voice-btn"
+                onClick={onCancelRecording}
+                title="Cancel recording"
+                aria-label="Cancel recording"
+              >
+                <X size={15} />
+              </button>
+            )}
             {voiceState !== "processing" && (
               <button
                 type="button"
@@ -574,17 +593,6 @@ export function ChatComposer({
                 aria-label={voiceState === "recording" ? "Stop recording" : "Start recording"}
               >
                 {voiceState === "recording" ? <Check size={15} /> : <Mic size={15} />}
-              </button>
-            )}
-            {voiceState !== "idle" && (
-              <button
-                type="button"
-                className="btn btn-icon btn-danger chat-pane-btn chat-pane-btn--icon"
-                onClick={onCancelRecording}
-                title="Cancel recording"
-                aria-label="Cancel recording"
-              >
-                <X size={15} />
               </button>
             )}
             {modeControl}

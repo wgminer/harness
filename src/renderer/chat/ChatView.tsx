@@ -68,7 +68,7 @@ interface ChatViewProps {
   onNotesChanged?: () => void;
   /** When false, chat/polish/reply are blocked with a setup message. */
   openAIConfigured?: boolean;
-  /** Mirror focused Fn recording into the composer mic chrome. */
+  /** True while the chat view is on screen and can show focused Fn recording. */
   mirrorGlobalFnRecording?: boolean;
   /** Persisted mode for the open conversation (from list meta). */
   conversationChatMode?: string | null;
@@ -913,7 +913,7 @@ export function ChatView({
     submitDisabled: sending,
     allowHotkeyWithoutConversation: true,
     hasConversation: effectiveConversationId != null,
-    mirrorGlobalFnRecording,
+    voiceLanding: { surface: "chat", conversationId },
   });
 
   resetComposerInputRef.current = composer.resetComposerInput;

@@ -19,7 +19,7 @@ final class SharedToolDefinitionsTests: XCTestCase {
 
     func testContainsDesktopOnlyToolNames() {
         let names = toolNames(from: SharedToolDefinitions.all)
-        for name in ["set_layout",
+        for name in ["set_layout", "set_chat_mode",
                      "note_list", "note_create", "note_read", "note_save", "note_delete"] {
             XCTAssertTrue(names.contains(name), "shared tools.json is missing desktop-only tool: \(name)")
         }

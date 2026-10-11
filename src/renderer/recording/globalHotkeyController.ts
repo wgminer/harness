@@ -1,9 +1,17 @@
 import type { Conversation } from "../sidebar/sidebarUtils";
+import {
+  beginFnTake,
+  endFnTake,
+  markFnTakeProcessing,
+  setTakeLevel,
+  wireTakeHost,
+  type TakeLanding,
+} from "./dictationTake";
 
 export type GlobalHotkeyOverlayPhase = "idle" | "recording" | "transcribing" | "failed";
 
 export type GlobalHotkeyActions = {
-  /** True while this Fn take uses the full-screen overlay (unfocused start). */
+  /** True while this Fn take started unfocused (Rust lands it in a new dictation). */
   setGlobalHotkeyOverlaySession: (active: boolean) => void;
   setGlobalHotkeyOverlayPhase: (phase: GlobalHotkeyOverlayPhase) => void;
   setGlobalHotkeyError: (
@@ -11,7 +19,7 @@ export type GlobalHotkeyActions = {
     recordingPath?: string | null,
     needsAccessibility?: boolean,
   ) => void;
-  setView: (view: "chat" | "notes") => void;
+  setView: (view: "chat" | "notes" | "tasks") => void;
   setConversationId: (id: string | null) => void;
   setFocusComposerNonce: (updater: (n: number) => number) => void;
   setPendingHotkeyText: (text: string | null) => void;
@@ -32,15 +40,23 @@ export type GlobalHotkeyActions = {
   getOverlaySession: () => boolean;
 };
 
-type FocusedLanding =
-  | { surface: "note"; noteId: string }
-  | { surface: "chat"; conversationId: string | null };
-
 let actions: GlobalHotkeyActions | null = null;
-let focusedLanding: FocusedLanding | null = null;
+let focusedLanding: TakeLanding | null = null;
 
 export function wireGlobalHotkeyActions(next: GlobalHotkeyActions | null): void {
   actions = next;
+  wireTakeHost(
+    next && {
+      isLandingCurrent,
+      showLanding,
+      deliverPending: (landing, text) => {
+        if (landing.surface === "tasks") return false;
+        deliverToLanding(landing, text);
+        return true;
+      },
+      reportError: (message) => actions?.setGlobalHotkeyError(message, null),
+    },
+  );
 }
 
 /** Reset module state (tests only). */
@@ -67,9 +83,36 @@ function clearFocusedLanding(): void {
   focusedLanding = null;
 }
 
+function isLandingCurrent(landing: TakeLanding): boolean {
+  if (landing.surface === "note") {
+    return actions?.getView() === "notes" && actions.getActiveNoteId() === landing.noteId;
+  }
+  if (landing.surface === "tasks") return actions?.getView() === "tasks";
+  return actions?.getView() === "chat" && actions.getConversationId() === landing.conversationId;
+}
+
+/** Bring the surface a take was pinned to back on screen. */
+function showLanding(landing: TakeLanding): void {
+  if (landing.surface === "note") {
+    actions?.setView("notes");
+    actions?.setActiveNoteId(landing.noteId);
+    return;
+  }
+  if (landing.surface === "tasks") {
+    actions?.setView("tasks");
+    return;
+  }
+  actions?.setView("chat");
+  actions?.setConversationId(landing.conversationId);
+}
+
 function deliverFocusedTranscript(text: string): void {
   const landing = focusedLanding;
   clearFocusedLanding();
+  deliverToLanding(landing, text);
+}
+
+function deliverToLanding(landing: TakeLanding | null, text: string): void {
   const toNote =
     landing?.surface === "note"
       ? landing.noteId
@@ -112,9 +155,17 @@ export function createGlobalHotkeyController(): () => void {
       actions?.setGlobalHotkeyOverlaySession(true);
       actions?.setGlobalHotkeyOverlayPhase("recording");
     }
+    beginFnTake(focusedLanding);
   });
 
+  const unsubStopped = window.harness.recording.onGlobalRecordingStopped(() => {
+    markFnTakeProcessing();
+  });
+
+  const unsubLevel = window.harness.recording.onGlobalRecordingLevel(setTakeLevel);
+
   const unsubTranscribing = window.harness.recording.onGlobalRecordingTranscribing(({ recordingPath }) => {
+    markFnTakeProcessing();
     if (!actions?.getOverlaySession()) return;
     if (recordingPath) {
       actions.setGlobalHotkeyError(null, recordingPath);
@@ -123,11 +174,13 @@ export function createGlobalHotkeyController(): () => void {
   });
 
   const unsubCancelled = window.harness.recording.onGlobalRecordingCancelled(() => {
+    endFnTake();
     clearFocusedLanding();
     clearOverlay();
   });
 
   const unsubRetrying = window.harness.recording.onGlobalRecordingRetrying(() => {
+    markFnTakeProcessing();
     if (actions?.getOverlaySession()) return;
     actions?.setGlobalHotkeyError(null, null);
     actions?.setGlobalHotkeyOverlayPhase("transcribing");
@@ -135,6 +188,7 @@ export function createGlobalHotkeyController(): () => void {
 
   const unsubError = window.harness.recording.onGlobalRecordingError((info) => {
     const { message, recordingPath, needsAccessibility } = info;
+    endFnTake();
     clearFocusedLanding();
     if (actions?.getOverlaySession()) {
       actions.setGlobalHotkeyError(message, recordingPath ?? null, needsAccessibility === true);
@@ -147,12 +201,14 @@ export function createGlobalHotkeyController(): () => void {
   });
 
   const unsubTranscriptReady = window.harness.recording.onGlobalTranscriptReady((text) => {
+    endFnTake();
     clearOverlay();
     deliverFocusedTranscript(text);
   });
 
   const unsubTranscriptDelivered = window.harness.recording.onGlobalTranscriptDelivered(
     (conversationId) => {
+      endFnTake();
       clearFocusedLanding();
       clearOverlay();
       actions?.setView("chat");
@@ -186,6 +242,8 @@ export function createGlobalHotkeyController(): () => void {
 
   return () => {
     unsubStarted();
+    unsubStopped();
+    unsubLevel();
     unsubTranscribing();
     unsubCancelled();
     unsubRetrying();

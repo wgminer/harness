@@ -1768,6 +1768,27 @@ button.chat-attach-card__main:disabled {
   min-width: 0;
 }
 
+/* Holds the textarea; while recording, the level meter covers it at the same size. */
+.chat-input-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.chat-input-wrap--recording .chat-input {
+  visibility: hidden;
+}
+
+.chat-input-wave {
+  position: absolute;
+  top: 50%;
+  left: var(--space-5);
+  width: calc(100% - var(--space-5) - var(--space-3));
+  height: min(100% - var(--space-2), var(--space-8));
+  transform: translateY(-50%);
+  color: var(--fg);
+}
+
 .chat-input {
   width: 100%;
   font-family: var(--font-family);
@@ -1808,6 +1829,10 @@ button.chat-attach-card__main:disabled {
   flex-direction: row;
   align-items: center;
   padding: var(--space-2) var(--space-2) var(--space-2) 0;
+}
+
+.chat-composer-inner--inline .chat-input-wrap {
+  flex: 1;
 }
 
 .chat-composer-inner--inline .chat-input {
@@ -2005,6 +2030,7 @@ button.chat-attach-card__main:disabled {
   height: var(--input-height);
   line-height: var(--input-height);
   letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
   min-width: 80px;
   text-align: center;
 }

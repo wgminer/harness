@@ -22,6 +22,8 @@ struct MessageRecord: Codable, Identifiable, Equatable {
     let model: String?
     let toolCalls: [ToolCallRecord]?
     let attachments: [MessageAttachment]?
+    /// Model reasoning summary written by desktop; carried through sync unchanged.
+    let reasoning: String?
 
     init(
         role: String,
@@ -29,7 +31,8 @@ struct MessageRecord: Codable, Identifiable, Equatable {
         timestamp: Int64?,
         model: String?,
         toolCalls: [ToolCallRecord]? = nil,
-        attachments: [MessageAttachment]? = nil
+        attachments: [MessageAttachment]? = nil,
+        reasoning: String? = nil
     ) {
         self.role = role
         self.content = content
@@ -37,11 +40,12 @@ struct MessageRecord: Codable, Identifiable, Equatable {
         self.model = model
         self.toolCalls = toolCalls
         self.attachments = attachments
+        self.reasoning = reasoning
         self.cachedId = Self.makeId(role: role, timestamp: timestamp, content: content)
     }
 
     enum CodingKeys: String, CodingKey {
-        case role, content, timestamp, model, toolCalls, attachments
+        case role, content, timestamp, model, toolCalls, attachments, reasoning
     }
 
     init(from decoder: Decoder) throws {
@@ -52,6 +56,7 @@ struct MessageRecord: Codable, Identifiable, Equatable {
         model = try container.decodeIfPresent(String.self, forKey: .model)
         toolCalls = try container.decodeIfPresent([ToolCallRecord].self, forKey: .toolCalls)
         attachments = try container.decodeIfPresent([MessageAttachment].self, forKey: .attachments)
+        reasoning = try container.decodeIfPresent(String.self, forKey: .reasoning)
         cachedId = Self.makeId(role: role, timestamp: timestamp, content: content)
     }
 
@@ -63,6 +68,7 @@ struct MessageRecord: Codable, Identifiable, Equatable {
         try container.encodeIfPresent(model, forKey: .model)
         try container.encodeIfPresent(toolCalls, forKey: .toolCalls)
         try container.encodeIfPresent(attachments, forKey: .attachments)
+        try container.encodeIfPresent(reasoning, forKey: .reasoning)
     }
 
     var messageRole: MessageRole {
@@ -79,7 +85,7 @@ struct MessageRecord: Codable, Identifiable, Equatable {
     }
 }
 
-struct ConversationMeta: Codable, Equatable {
+struct ConversationMeta: Equatable {
     var title: String?
     var createdAt: Int64
     var sessionKind: String?
@@ -88,6 +94,14 @@ struct ConversationMeta: Codable, Equatable {
     var titleSource: String?
     /// `run` or a vocab word (Summarize / Distill / Breakdown / Proofread).
     var dictationReplyAction: String?
+    /// Fields this app does not model (desktop `chatMode`, `codingScope`, import flags, ...).
+    /// Kept so phone saves do not drop them.
+    var extra: [String: JSONValue] = [:]
+
+    static let knownKeys: Set<String> = [
+        "title", "createdAt", "sessionKind", "hasAssistantReply", "hasMessages",
+        "titleSource", "dictationReplyAction",
+    ]
 
     /// Parses desktop `conversations.json` entries, tolerating missing or numeric `createdAt`.
     static func fromDesktopJSONObject(_ object: Any) -> ConversationMeta? {
@@ -107,7 +121,10 @@ struct ConversationMeta: Codable, Equatable {
             hasAssistantReply: hasAssistantReply,
             hasMessages: hasMessages,
             titleSource: titleSource,
-            dictationReplyAction: dictationReplyAction
+            dictationReplyAction: dictationReplyAction,
+            extra: dict
+                .filter { !knownKeys.contains($0.key) }
+                .mapValues { JSONValue(from: $0) }
         )
     }
 
@@ -124,6 +141,46 @@ struct ConversationMeta: Codable, Equatable {
         default:
             return nil
         }
+    }
+}
+
+extension ConversationMeta: Codable {
+    private struct AnyKey: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(_ string: String) { stringValue = string }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: AnyKey.self)
+        title = try container.decodeIfPresent(String.self, forKey: AnyKey("title"))
+        createdAt = try container.decode(Int64.self, forKey: AnyKey("createdAt"))
+        sessionKind = try container.decodeIfPresent(String.self, forKey: AnyKey("sessionKind"))
+        hasAssistantReply = try container.decodeIfPresent(Bool.self, forKey: AnyKey("hasAssistantReply"))
+        hasMessages = try container.decodeIfPresent(Bool.self, forKey: AnyKey("hasMessages"))
+        titleSource = try container.decodeIfPresent(String.self, forKey: AnyKey("titleSource"))
+        dictationReplyAction = try container.decodeIfPresent(String.self, forKey: AnyKey("dictationReplyAction"))
+        var extra: [String: JSONValue] = [:]
+        for key in container.allKeys where !Self.knownKeys.contains(key.stringValue) {
+            extra[key.stringValue] = try container.decode(JSONValue.self, forKey: key)
+        }
+        self.extra = extra
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: AnyKey.self)
+        for (key, value) in extra where !Self.knownKeys.contains(key) {
+            try container.encode(value, forKey: AnyKey(key))
+        }
+        try container.encodeIfPresent(title, forKey: AnyKey("title"))
+        try container.encode(createdAt, forKey: AnyKey("createdAt"))
+        try container.encodeIfPresent(sessionKind, forKey: AnyKey("sessionKind"))
+        try container.encodeIfPresent(hasAssistantReply, forKey: AnyKey("hasAssistantReply"))
+        try container.encodeIfPresent(hasMessages, forKey: AnyKey("hasMessages"))
+        try container.encodeIfPresent(titleSource, forKey: AnyKey("titleSource"))
+        try container.encodeIfPresent(dictationReplyAction, forKey: AnyKey("dictationReplyAction"))
     }
 }
 

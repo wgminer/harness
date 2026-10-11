@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { audioFileToWav } from "../recording/audioFileToWav";
 import { transcriptCleanupSkippedMessage } from "../../shared/setupState";
 import type { Settings } from "../../shared/types";
+import type { TakeLanding } from "../recording/dictationTake";
 import { useVoiceCapture, type VoiceTranscriptResult } from "../recording/useVoiceCapture";
 import { composeMessageWithPastes, type PastedTextBlock } from "./pastedText";
 
@@ -23,11 +24,8 @@ export interface UseChatComposerOptions {
   /** Allow hotkey injection when no conversation is open (compose splash). */
   allowHotkeyWithoutConversation?: boolean;
   hasConversation?: boolean;
-  /**
-   * When true, mirror focused Fn global recording into composer voice chrome
-   * (timer / mic / Transcribing…) without starting a second local capture.
-   */
-  mirrorGlobalFnRecording?: boolean;
+  /** Where takes started from this composer land; see `useVoiceCapture`. */
+  voiceLanding: TakeLanding;
 }
 
 export interface ComposerDraft {
@@ -47,7 +45,7 @@ export function useChatComposer({
   submitDisabled = false,
   allowHotkeyWithoutConversation = false,
   hasConversation = true,
-  mirrorGlobalFnRecording = false,
+  voiceLanding,
 }: UseChatComposerOptions) {
   const [input, setInput] = useState("");
   const [attachedAudioFile, setAttachedAudioFile] = useState<File | null>(null);
@@ -213,7 +211,7 @@ export function useChatComposer({
     resetVoiceCapture,
   } = useVoiceCapture({
     onTranscript: (text, result) => applyTranscriptRef.current(text, result),
-    mirrorGlobalFnRecording,
+    landing: voiceLanding,
   });
 
   useEffect(() => {

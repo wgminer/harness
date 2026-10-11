@@ -121,6 +121,8 @@ final class AppModel: ObservableObject {
     private var syncBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var didEnterBackground = false
     @Published private(set) var hasScheduledSync = false
+    /// What is waiting to upload, in plain language. Filled by `refreshPendingChangesDetail()`.
+    @Published private(set) var pendingChangesDetail: String?
 
     private func wireContentChangeHandlers() {
         let onLocalContentChanged: () -> Void = { [weak self] in
@@ -501,16 +503,20 @@ final class AppModel: ObservableObject {
         return conversationId
     }
 
-    var pendingChangesDetail: String? {
-        guard showsPendingUploadAttention else { return nil }
-        guard let current = try? store.snapshotConversations() else {
-            return "Changes waiting to upload."
+    /// Recomputes `pendingChangesDetail`. Parses every messages file, so it runs off the main actor;
+    /// Settings calls it when the pending-upload state changes.
+    func refreshPendingChangesDetail() async {
+        guard showsPendingUploadAttention else {
+            pendingChangesDetail = nil
+            return
         }
-        if let baseline = PendingSyncTracker.loadBaseline(),
-           let detail = SyncChangeSummary.describePendingLocalChanges(baseline: baseline, current: current) {
-            return detail
-        }
-        return "Changes waiting to upload."
+        let dir = localDataDir
+        pendingChangesDetail = await Task.detached(priority: .utility) { () -> String? in
+            guard let current = try? ConversationStore.snapshotConversations(localDataDir: dir),
+                  let baseline = PendingSyncTracker.loadBaseline()
+            else { return nil }
+            return SyncChangeSummary.describePendingLocalChanges(baseline: baseline, current: current)
+        }.value
     }
 
     /// Plain-language sync line for Settings.

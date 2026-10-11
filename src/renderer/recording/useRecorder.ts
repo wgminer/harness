@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { acquireRecordingStream, createRecordingAudioContext } from "./recordingBootstrap";
 import { isSilentAudio, silenceCaptureErrorMessage } from "./recordingAudioUtils";
 import { encodeWav, playStartChime, playStopChime } from "./recordingUtils";
@@ -10,7 +9,12 @@ export type Recorder = {
   cancel: () => Promise<void>;
 };
 
-export function createRecorder(): Recorder {
+export type RecorderOptions = {
+  /** Peak amplitude (0..1) of each captured buffer, for level meters. */
+  onLevel?: (level: number) => void;
+};
+
+export function createRecorder({ onLevel }: RecorderOptions = {}): Recorder {
   let audioCtx: AudioContext | null = null;
   let mediaStream: MediaStream | null = null;
   let pcmBuffers: Float32Array[] = [];
@@ -40,7 +44,16 @@ export function createRecorder(): Recorder {
     const processor = audioCtx.createScriptProcessor(4096, 1, 1);
     const buffers: Float32Array[] = [];
     processor.onaudioprocess = (e) => {
-      buffers.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      const samples = new Float32Array(e.inputBuffer.getChannelData(0));
+      buffers.push(samples);
+      if (onLevel) {
+        let peak = 0;
+        for (let i = 0; i < samples.length; i++) {
+          const abs = Math.abs(samples[i]!);
+          if (abs > peak) peak = abs;
+        }
+        onLevel(peak);
+      }
     };
     source.connect(processor);
     processor.connect(audioCtx.destination);
@@ -78,8 +91,4 @@ export function createRecorder(): Recorder {
       await teardown();
     },
   };
-}
-
-export function useRecorder(): Recorder {
-  return useMemo(() => createRecorder(), []);
 }

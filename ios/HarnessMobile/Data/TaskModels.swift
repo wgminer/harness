@@ -17,6 +17,8 @@ struct TaskItem: Codable, Equatable, Identifiable {
     let createdAt: Int64
     var updatedAt: Int64
     var metadata: [String: JSONValue]?
+    /// Subtask parent; written by desktop. Kept so phone saves do not drop it.
+    var parentId: String? = nil
 }
 
 struct TaskState: Equatable {

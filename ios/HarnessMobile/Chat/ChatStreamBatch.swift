@@ -5,6 +5,8 @@ struct ChatStreamBatchPolicy: Equatable {
     var minChars: Int
     var maxHoldMs: Int
     var newlineMinChars: Int
+    /// The first flush of a stream goes out once this many characters arrive, so text shows early.
+    var firstFlushMinChars: Int? = nil
 
     static let defaults = ChatStreamBatchPolicy.loadContractDefaults()
 
@@ -22,7 +24,8 @@ struct ChatStreamBatchPolicy: Equatable {
         return ChatStreamBatchPolicy(
             minChars: minChars,
             maxHoldMs: maxHoldMs,
-            newlineMinChars: newlineMinChars
+            newlineMinChars: newlineMinChars,
+            firstFlushMinChars: (json["firstFlushMinChars"] as? Int).flatMap { $0 > 0 ? $0 : nil }
         )
     }
 }
@@ -31,6 +34,7 @@ struct ChatStreamBatchPolicy: Equatable {
 struct StreamTextBatcher {
     private var buffer = ""
     private var bufferStartedAt: ContinuousClock.Instant?
+    private var flushedOnce = false
     private let policy: ChatStreamBatchPolicy
     private let clock: ContinuousClock
 
@@ -64,11 +68,16 @@ struct StreamTextBatcher {
             return clock.now - started >= .milliseconds(policy.maxHoldMs)
         }()
 
+        if !flushedOnce, let firstMin = policy.firstFlushMinChars, charLen >= firstMin {
+            return takeAll()
+        }
+
         if let nl = buffer.lastIndex(of: "\n") {
             let prefix = String(buffer[...nl])
             if prefix.count >= policy.newlineMinChars {
                 buffer = String(buffer[buffer.index(after: nl)...])
                 bufferStartedAt = buffer.isEmpty ? nil : clock.now
+                flushedOnce = true
                 return prefix
             }
         }
@@ -83,6 +92,7 @@ struct StreamTextBatcher {
         let out = buffer
         buffer = ""
         bufferStartedAt = nil
+        flushedOnce = true
         return out
     }
 }

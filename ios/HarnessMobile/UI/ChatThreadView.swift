@@ -383,7 +383,9 @@ struct ChatThreadView: View {
                 content: message.content,
                 timestamp: message.timestamp,
                 model: message.model,
-                toolCalls: toolCalls
+                toolCalls: toolCalls,
+                attachments: message.attachments,
+                reasoning: message.reasoning
             )
         }
     }
@@ -400,7 +402,11 @@ struct ChatThreadView: View {
         }
     }
 
-    private func appendOptimisticUserMessage(_ text: String, attachments: [MessageAttachment]? = nil) {
+    /// Returns the timestamp to store the message under, so the saved row keeps the
+    /// optimistic row's id and SwiftUI does not rebuild it when the thread reloads.
+    /// Nil when the message is already on screen (and on disk).
+    @discardableResult
+    private func appendOptimisticUserMessage(_ text: String, attachments: [MessageAttachment]? = nil) -> Int64? {
         let record = MessageRecord(
             role: MessageRole.user.rawValue,
             content: text,
@@ -411,9 +417,10 @@ struct ChatThreadView: View {
         if messages.last?.content == text,
            messages.last?.messageRole == .user,
            messages.last?.attachments == attachments {
-            return
+            return nil
         }
         messages.append(record)
+        return record.timestamp
     }
 
     private func appendStreamingChunk(_ chunk: String) {
@@ -478,7 +485,7 @@ struct ChatThreadView: View {
             }
         }
 
-        appendOptimisticUserMessage(trimmed, attachments: attachments)
+        let userTimestamp = appendOptimisticUserMessage(trimmed, attachments: attachments)
         finishStreaming()
         scrollController.pinForTurn()
         followLiveEdgeIfPinned(animated: true)
@@ -487,7 +494,8 @@ struct ChatThreadView: View {
             try await chatService.send(
                 conversationId: conversationId,
                 userContent: trimmed,
-                attachments: attachments
+                attachments: attachments,
+                userTimestamp: userTimestamp
             ) { chunk in
                 appendStreamingChunk(chunk)
             } onToolCall: { call in

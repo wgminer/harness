@@ -3,7 +3,6 @@ import Foundation
 enum ChatToolDefinitions {
     static let baseToolNames: Set<String> = [
         "memory_set",
-        "memory_list",
         "memory_search_conversations",
         "get_datetime",
     ]

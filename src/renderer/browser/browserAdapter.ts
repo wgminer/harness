@@ -7,6 +7,7 @@ import type { NoteSummary } from "../../shared/writing";
 import pkg from "../../../package.json";
 import { playWebChime } from "../recording/recordingUtils";
 import { createBrowserChat } from "./browserChat";
+import { createBrowserInbox } from "./browserInbox";
 import { emitBrowserEvent, onBrowserEvent } from "./browserEvents";
 import { browserContextPreview, browserSystemPromptPreview } from "./browserPrompt";
 import { createBrowserStore } from "./browserStore";
@@ -211,6 +212,7 @@ export function createBrowserAdapter(): HarnessAPI {
       clearCompleted: async () => tasksPayload(store.clearCompletedTasks(), "clearCompleted"),
       breakdown: async () => ({ tasks: store.tasks(), error: WEB_UNSUPPORTED }),
     },
+    inbox: createBrowserInbox(store),
     chat: {
       send: (conversationId, content) => chat.send(conversationId, content),
       polishLastUser: (conversationId) => chat.polishLastUser(conversationId),

@@ -8,6 +8,7 @@ pub mod env_util;
 pub mod gmail;
 pub mod memory;
 pub mod images;
+pub mod inbox;
 pub mod files;
 pub mod notes;
 pub mod openai;
@@ -138,6 +139,12 @@ pub fn run() {
             commands::tasks::tasks_delete,
             commands::tasks::tasks_clear_completed,
             commands::tasks::tasks_breakdown,
+            commands::inbox::inbox_list,
+            commands::inbox::inbox_refresh,
+            commands::inbox::inbox_update_text,
+            commands::inbox::inbox_process,
+            commands::inbox::inbox_restore,
+            commands::inbox::inbox_clear_processed,
             commands::chat::chat_send,
             commands::chat::chat_polish_last_user,
             commands::chat::chat_generate_reply,
