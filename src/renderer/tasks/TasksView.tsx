@@ -205,6 +205,7 @@ export function TasksView() {
   const [modalSaving, setModalSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const tagFieldRef = useRef<HTMLInputElement>(null);
+  const titleFieldRef = useRef<HTMLTextAreaElement>(null);
   const [activeOpen, setActiveOpen] = useState(true);
   const [completedOpen, setCompletedOpen] = useState(false);
   const [completingIds, setCompletingIds] = useState<Set<string>>(() => new Set());
@@ -409,14 +410,18 @@ export function TasksView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [modalTask, closeModal]);
 
+  // Grow the title field with its content instead of showing a fixed tall box.
+  useLayoutEffect(() => {
+    const el = titleFieldRef.current;
+    if (!modalTask || !el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, [modalTask, modalTitle]);
+
+  const tagsWithPendingInput = () => normalizeTags([...modalTags, ...tagInput.split(",")]);
+
   const addModalTagFromInput = () => {
-    const next = normalizeTags([tagInput]);
-    if (next.length === 0) {
-      setTagInput("");
-      return;
-    }
-    const merged = normalizeTags([...modalTags, ...next]);
-    setModalTags(merged);
+    setModalTags(tagsWithPendingInput());
     setTagInput("");
   };
 
@@ -433,7 +438,7 @@ export function TasksView() {
       const payload = await window.harness.tasks.update({
         id: modalTask.id,
         title: trimmed,
-        tags: modalTags,
+        tags: tagsWithPendingInput(),
       });
       refreshFromPayload(payload);
       setModalTask(null);
@@ -731,7 +736,7 @@ export function TasksView() {
           <>
             <button
               type="button"
-              className="btn btn-danger"
+              className="btn btn-ghost tasks-modal-delete"
               onClick={() => void deleteFromModal()}
               disabled={modalSaving}
             >
@@ -759,46 +764,55 @@ export function TasksView() {
             <span className="app-modal-field__label">Title</span>
             <textarea
               id="tasks-modal-title-input"
+              ref={titleFieldRef}
               className="app-modal-input app-modal-input--multiline tasks-modal-title-input"
-              rows={5}
+              rows={1}
               value={modalTitle}
               onChange={(e) => setModalTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  if (!modalSaving && modalTitle.trim()) void saveModal();
+                }
+              }}
+              disabled={modalSaving}
             />
           </label>
           <div className="app-modal-field">
             <label className="app-modal-field__label" htmlFor="tasks-modal-tags-input">
               Tags
             </label>
-            <p className="app-modal-field__hint">Press Enter to add. Underscores show as spaces in the list.</p>
-            <div className="tasks-tag-field">
-              <div className="tasks-tag-editor">
-                {modalTags.map((tag) => (
-                  <span key={tag} className="tasks-tag tasks-tag--editable">
-                    {tag.replace(/_/g, " ")}
-                    <button
-                      type="button"
-                      className="tasks-tag-remove"
-                      onClick={() => removeModalTag(tag)}
-                      disabled={modalSaving}
-                      aria-label={`Remove tag ${tag}`}
-                    >
-                      <X size={12} strokeWidth={2.5} />
-                    </button>
-                  </span>
-                ))}
-              </div>
+            <div className="tasks-tag-field" onClick={() => tagFieldRef.current?.focus()}>
+              {modalTags.map((tag) => (
+                <span key={tag} className="tasks-tag tasks-tag--editable">
+                  {tag.replace(/_/g, " ")}
+                  <button
+                    type="button"
+                    className="tasks-tag-remove"
+                    onClick={() => removeModalTag(tag)}
+                    disabled={modalSaving}
+                    aria-label={`Remove tag ${tag}`}
+                  >
+                    <X size={12} strokeWidth={2.5} />
+                  </button>
+                </span>
+              ))}
               <input
                 ref={tagFieldRef}
                 id="tasks-modal-tags-input"
                 type="text"
                 className="tasks-tags-input"
                 value={tagInput}
-                placeholder="e.g. in progress, urgent"
+                placeholder="Add tag"
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  if (e.nativeEvent.isComposing) return;
+                  if (e.key === "Enter" || e.key === ",") {
                     e.preventDefault();
                     addModalTagFromInput();
+                  } else if (e.key === "Backspace" && tagInput === "" && modalTags.length > 0) {
+                    e.preventDefault();
+                    setModalTags(modalTags.slice(0, -1));
                   }
                 }}
                 disabled={modalSaving}

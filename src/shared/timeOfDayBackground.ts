@@ -1,3 +1,4 @@
+import contract from "../../resources/contracts/timeOfDayColors.json";
 import { normalizeAppearanceTheme, type AppearanceTheme } from "./types";
 
 /**
@@ -11,33 +12,11 @@ import { normalizeAppearanceTheme, type AppearanceTheme } from "./types";
  * Enabled from System → General when appearance theme is `time`.
  */
 
-/** Exact 24 hexes from world-clock ClockCard — one per local hour. */
-export const WORLD_CLOCK_HOUR_COLORS = [
-  "#1a237e", // 0  midnight
-  "#1a237e", // 1  early night
-  "#1a237e", // 2  deep night
-  "#1a237e", // 3  late night
-  "#283593", // 4  pre-dawn
-  "#3949ab", // 5  dawn
-  "#5c6bc0", // 6  early morning
-  "#7986cb", // 7  morning
-  "#9fa8da", // 8  late morning
-  "#c5cae9", // 9  mid-morning
-  "#e8eaf6", // 10 late morning
-  "#fff9c4", // 11 pre-noon
-  "#ffeb3b", // 12 noon
-  "#fff176", // 13 early afternoon
-  "#ffd54f", // 14 afternoon
-  "#ffc107", // 15 mid-afternoon
-  "#ffb300", // 16 late afternoon
-  "#ff9800", // 17 early evening
-  "#ff6f00", // 18 evening
-  "#ff5722", // 19 late evening
-  "#e64a19", // 20 dusk
-  "#bf360c", // 21 night
-  "#8d1f0f", // 22 deep night
-  "#1a237e", // 23 midnight
-] as const;
+/**
+ * Exact 24 hexes from world-clock ClockCard, one per local hour (index 0 = midnight, 12 = noon).
+ * Shared with iOS via `resources/contracts/timeOfDayColors.json`.
+ */
+export const WORLD_CLOCK_HOUR_COLORS: readonly string[] = contract.hourColors;
 
 export const WORLD_CLOCK_HOUR_PHASES = [
   "midnight",

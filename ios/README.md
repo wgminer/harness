@@ -1,8 +1,8 @@
 # Harness Mobile (iOS)
 
-Native SwiftUI chat companion for Harness desktop. It syncs through the **same Cloudflare R2 bucket** as the Mac app and calls **OpenAI** with your API key. Chat supports **task tools** (create, update, list, delete, clear completed) with confirmation for destructive actions, **chat history search** (`memory_search_conversations`) so the agent can recall prior conversations, plus a dedicated **Tasks** view synced with desktop.
+Native SwiftUI capture companion for Harness desktop: open it and it starts recording. It syncs through the **same Cloudflare R2 bucket** as the Mac app and calls **OpenAI** with your API key. Chat supports **task tools** (create, update, list, delete, clear completed) with confirmation for destructive actions, **chat history search** (`memory_search_conversations`) so the agent can recall prior conversations, plus a dedicated **Tasks** view synced with desktop.
 
-**Voice dictation** is back: tap the red mic on the home screen to record. **Import Voice Memo** lives in Settings for pulling in recordings from Apple's Voice Memos app (via Files).
+**Recording comes first:** the app starts recording when it opens (Settings → Dictation → **Record when the app opens**). The home screen is otherwise empty apart from a circle in the center: tapping the circle records (the rest of the screen does nothing), and the circle becomes a ring that vibrates with your voice. A finished take is saved as a dictation; it does not open a chat. Tap the menu button at the bottom (or swipe up) for the half-height list (captures, chats, Tasks, Settings, and **New Chat** as the pencil icon). **Import Voice Memo** lives in Settings for pulling in recordings from Apple's Voice Memos app (via Files).
 
 ## Prerequisites
 
@@ -46,10 +46,11 @@ Simulator builds often work without a paid team; device builds require your own 
 
 | Action | How |
 |--------|-----|
-| Record in-app | Home → red **mic** → speak → checkmark |
+| Record in-app | Open the app (records on launch), or tap the circle on home → speak → stop |
+| Record from the lock screen | Add the **Record** widget (microphone) to the lock screen; tapping it opens Harness already recording (`harness://record`) |
 | Import Voice Memo | Settings → Voice recordings → **Import Voice Memo** |
-| Review transcript | Opens a dictation chat with **Continue** / **Polish** (same as desktop) |
-| Manage recordings | Settings → Voice recordings (play, retranscribe; stored locally, not synced) |
+| Review transcript | Swipe up → tap the capture in the list; the thread still offers **Continue** / **Polish** (same as desktop) |
+| Manage recordings | Swipe up → Settings → Voice recordings (play, retranscribe; stored locally, not synced) |
 
 **Transcription order:** (1) Apple's embedded Voice Memos transcript (`tsrp` atom in the `.m4a`), (2) on-device `SFSpeechRecognizer`, (3) OpenAI Whisper if an API key is set.
 

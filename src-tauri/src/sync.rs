@@ -753,21 +753,7 @@ async fn run_sync_now_inner(runtime: &SyncRuntime) -> SyncResult {
     }
 }
 
-/// Pull phone captures out of the remote inbox; emits `inbox-changed` when any arrive.
-/// Independent of the bundle sync: captures are never merged.
-pub async fn drain_capture_inbox(runtime: &SyncRuntime, app: &AppHandle) -> Result<usize, String> {
-    let Some(store) = build_remote_store(&runtime.app_state).await? else {
-        return Ok(0);
-    };
-    let imported = crate::inbox::drain(&runtime.app_state, &store).await?;
-    if imported > 0 {
-        let _ = app.emit(crate::inbox::INBOX_CHANGED_EVENT, ());
-    }
-    Ok(imported)
-}
-
 pub async fn run_sync_now(runtime: &SyncRuntime, app: &AppHandle) -> SyncResult {
-    let _ = drain_capture_inbox(runtime, app).await;
     let (tx, rx) = tokio::sync::oneshot::channel();
     {
         let mut guard = runtime.in_flight.lock().await;
@@ -823,11 +809,6 @@ async fn poll_remote_manifest(runtime: &SyncRuntime, app: &AppHandle) {
     let Ok(Some(store)) = build_remote_store(&runtime.app_state).await else {
         return;
     };
-    if let Ok(imported) = crate::inbox::drain(&runtime.app_state, &store).await {
-        if imported > 0 {
-            let _ = app.emit(crate::inbox::INBOX_CHANGED_EVENT, ());
-        }
-    }
     let Ok(manifest) = store.read_manifest().await else {
         return;
     };

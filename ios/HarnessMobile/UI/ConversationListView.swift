@@ -79,6 +79,15 @@ struct ConversationListView: View {
                 .accessibilityLabel("Tasks")
             }
             ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showComposeSheet = true
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .foregroundStyle(HarnessPalette.textMuted)
+                }
+                .accessibilityLabel("New Chat")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
                     MobileSettingsView(app: app)
                 } label: {
@@ -86,14 +95,6 @@ struct ConversationListView: View {
                         .foregroundStyle(HarnessPalette.textMuted)
                 }
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            Color.clear.frame(height: BottomBarMetrics.reservedHeight)
-        }
-        .overlay(alignment: .bottom) {
-            homeBottomBar
-                .padding(.horizontal, BottomBarMetrics.horizontalInset)
-                .padding(.bottom, BottomBarMetrics.bottomInset)
         }
         .alert("Could not start chat", isPresented: .constant(createError != nil)) {
             Button("OK") { createError = nil }
@@ -151,9 +152,9 @@ struct ConversationListView: View {
             if store.conversations.isEmpty {
                 VStack(spacing: 10) {
                     Text("Nothing here yet")
-                        .font(.system(.title3, design: .serif))
+                        .font(.title3)
                         .foregroundStyle(HarnessPalette.textMuted)
-                    Text("Start a new chat, or sync from your Mac in Settings.")
+                    Text("Swipe down and tap to record. Captures sync to your Mac.")
                         .font(.footnote)
                         .foregroundStyle(HarnessPalette.textFaint)
                         .multilineTextAlignment(.center)
@@ -199,38 +200,6 @@ struct ConversationListView: View {
         }
         .listStyle(.plain)
         .harnessListBackground()
-    }
-
-    private var homeBottomBar: some View {
-        HStack(spacing: 12) {
-            Button {
-                HapticFeedback.medium()
-                showComposeSheet = true
-            } label: {
-                Label("New Chat", systemImage: "plus")
-                    .labelStyle(.titleAndIcon)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(HarnessPalette.text)
-                    .padding(.horizontal, BottomBarMetrics.collapsedInnerHorizontal)
-                    .padding(.vertical, BottomBarMetrics.collapsedInnerVertical)
-                    .frame(maxWidth: .infinity)
-                    .liquidGlassSurface(
-                        cornerRadius: BottomBarMetrics.collapsedCornerRadius,
-                        shadowOffsetY: 6
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("New Chat")
-
-            Button {
-                HapticFeedback.medium()
-                app.beginCreateSessionDictation()
-            } label: {
-                HarnessIconButtonLabel(systemName: "mic", role: .primary, size: 60, glyphSize: 20)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Dictate")
-        }
     }
 
     private func deleteConversation(id: String) {

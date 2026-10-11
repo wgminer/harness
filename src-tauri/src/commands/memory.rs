@@ -63,8 +63,10 @@ pub async fn memory_list_conversations(state: State<'_, AppState>) -> Result<Val
 #[command(rename_all = "camelCase")]
 pub async fn memory_delete_conversation(
     state: State<'_, AppState>,
+    terminals: State<'_, crate::terminal::TerminalRuntime>,
     conversation_id: String,
 ) -> Result<(), String> {
+    terminals.close(&conversation_id);
     delete_conversation(&state, &conversation_id)
         .await
         .map_err(map_err)

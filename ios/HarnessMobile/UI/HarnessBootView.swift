@@ -5,7 +5,7 @@ struct HarnessBootView: View {
         ZStack {
             HarnessPalette.background.ignoresSafeArea()
             Text("Harness")
-                .font(.system(.title2, design: .serif))
+                .font(.title2)
                 .foregroundStyle(HarnessPalette.textMuted)
         }
         .accessibilityLabel("Harness")

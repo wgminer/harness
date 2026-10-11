@@ -77,14 +77,12 @@
   cursor: pointer;
   transition:
     background-color var(--motion-duration-ui) var(--motion-ease-standard),
-    border-color var(--motion-duration-ui) var(--motion-ease-standard),
-    transform var(--motion-duration-ui) var(--motion-ease-standard);
+    border-color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .notes-surface__template-card:hover:not(:disabled) {
   background: var(--overlay-subtle);
   border-color: var(--border-light);
-  transform: translateY(-1px);
 }
 
 .notes-surface__template-card:focus-visible:not(:disabled) {
@@ -94,7 +92,6 @@
 }
 
 .notes-surface__template-card:active:not(:disabled) {
-  transform: none;
   background: var(--overlay-strong);
 }
 

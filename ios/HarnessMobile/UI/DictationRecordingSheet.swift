@@ -1,10 +1,17 @@
 import SwiftUI
 
 enum DictationRecordingMode: Equatable {
-    /// Home Dictate: create a dictation session and navigate.
+    /// Home record button or record-on-launch: save the take as a dictation session.
     case createSession
     /// Composer mic: send transcript into an existing conversation.
     case sendToConversation(conversationId: String)
+}
+
+enum DictationRecordingStyle {
+    /// Modal sheet with navigation chrome; used from a thread's composer.
+    case sheet
+    /// Chromeless, drawn straight onto the capture home so recording starts with no transition.
+    case immersive
 }
 
 private enum DictationRecordingPhase: Equatable {
@@ -19,6 +26,7 @@ struct DictationRecordingSheet: View {
     let app: AppModel
     @ObservedObject private var recordingSession: RecordingSessionManager
     let mode: DictationRecordingMode
+    let style: DictationRecordingStyle
     @Binding var isPresented: Bool
     var onConversationCreated: (String) -> Void = { _ in }
     var onTranscriptSent: (String) -> Void = { _ in }
@@ -33,10 +41,12 @@ struct DictationRecordingSheet: View {
     @State private var showFailedRecordingShareSheet = false
     /// Local mic-live latch — parent does not observe AudioRecorder for meter churn.
     @State private var isMicLive = false
+    @AppStorage(CaptureVisualizerStyle.storageKey) private var visualizerStyle: CaptureVisualizerStyle = .ring
 
     init(
         app: AppModel,
         mode: DictationRecordingMode,
+        style: DictationRecordingStyle = .sheet,
         isPresented: Binding<Bool>,
         onConversationCreated: @escaping (String) -> Void = { _ in },
         onTranscriptSent: @escaping (String) -> Void = { _ in }
@@ -44,6 +54,7 @@ struct DictationRecordingSheet: View {
         self.app = app
         self.recordingSession = app.recordingSession
         self.mode = mode
+        self.style = style
         self._isPresented = isPresented
         self.onConversationCreated = onConversationCreated
         self.onTranscriptSent = onTranscriptSent
@@ -56,53 +67,16 @@ struct DictationRecordingSheet: View {
     private var recorder: AudioRecorder { recordingSession.recorder }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                switch phase {
-                case .starting:
-                    centeredStatus { startingContent }
-                case .recording:
-                    Spacer()
-                    recordingContent
-                    DictationCaptureWatchdog(
-                        recorder: recorder,
-                        onUnexpectedEnd: {
-                            guard phase == .recording, !isStopping else { return }
-                            isMicLive = false
-                            if savedAudioURL == nil {
-                                savedAudioURL = recorder.consumePreservedRecordingURL()
-                            }
-                            phase = .failed(
-                                AudioRecorderError.interrupted.errorDescription
-                                    ?? "Recording was interrupted."
-                            )
-                            Task { await recordingSession.endRecordingSession() }
-                        }
-                    )
-                    Spacer()
-                case .processing:
-                    centeredStatus { processingContent }
-                case .failed(let message):
-                    failedContent(message: message)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .padding(.bottom, 32)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(HarnessPalette.background.ignoresSafeArea())
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        Task { await cancelAndDismiss() }
-                    }
-                    .foregroundStyle(HarnessPalette.textMuted)
-                }
+        Group {
+            switch style {
+            case .sheet:
+                sheetChrome
+                    .presentationBackground(HarnessPalette.background)
+                    .interactiveDismissDisabled(isRecordingOrProcessing)
+            case .immersive:
+                immersiveChrome
             }
         }
-        .presentationBackground(HarnessPalette.background)
-        .interactiveDismissDisabled(isRecordingOrProcessing)
         .sheet(isPresented: $showFailedRecordingShareSheet) {
             if let savedAudioURL {
                 ActivityShareSheet(items: [savedAudioURL])
@@ -125,6 +99,149 @@ struct DictationRecordingSheet: View {
                 try? FileManager.default.removeItem(at: url)
             }
         }
+    }
+
+    private var sheetChrome: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                switch phase {
+                case .starting:
+                    centeredStatus { startingContent }
+                case .recording:
+                    Spacer()
+                    recordingContent
+                    DictationCaptureWatchdog(recorder: recorder, onUnexpectedEnd: handleUnexpectedEnd)
+                    Spacer()
+                case .processing:
+                    centeredStatus { processingContent }
+                case .failed(let message):
+                    failedContent(message: message)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .padding(.bottom, 32)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(HarnessPalette.background.ignoresSafeArea())
+            .navigationTitle(navigationTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        Task { await cancelAndDismiss() }
+                    }
+                    .foregroundStyle(HarnessPalette.textMuted)
+                }
+            }
+        }
+    }
+
+    /// No navigation bar, no sheet: timer and ridgeline straight on the page background.
+    private var immersiveChrome: some View {
+        GeometryReader { proxy in
+            immersiveLayout(insets: proxy.safeAreaInsets)
+        }
+    }
+
+    private func immersiveLayout(insets: EdgeInsets) -> some View {
+        ZStack {
+            switch phase {
+            case .starting:
+                immersiveStatus("Starting microphone…")
+            case .recording:
+                // Centered on the physical screen, so the ring lands exactly on the idle circle.
+                CaptureVisualizer(recorder: recorder, style: visualizerStyle)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 380)
+                    .offset(y: CaptureRing.centerShift(insets))
+                    .background {
+                        DictationCaptureWatchdog(recorder: recorder, onUnexpectedEnd: handleUnexpectedEnd)
+                    }
+            case .processing:
+                immersiveStatus("Transcribing…")
+            case .failed(let message):
+                failedContent(message: message)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            if phase == .recording {
+                DictationElapsedLabel(
+                    recorder: recorder,
+                    font: .system(size: 52, weight: .light),
+                    onMaxDuration: {
+                        Task { await stopAndTranscribe() }
+                    }
+                )
+                .frame(height: Self.timerHeight)
+                .padding(.top, timerTopPadding(insets: insets))
+            }
+        }
+        .overlay(alignment: .bottom) {
+            // All controls share one row at the bottom, in thumb reach.
+            ZStack {
+                if phase == .recording {
+                    Button {
+                        HapticFeedback.success()
+                        Task { await stopAndTranscribe() }
+                    } label: {
+                        CaptureShutter()
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isMicLive)
+                    .opacity(isMicLive ? 1 : 0.5)
+                    .accessibilityLabel("Stop and save")
+                }
+                HStack {
+                    Button {
+                        HapticFeedback.warning()
+                        Task { await cancelAndDismiss() }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(HarnessPalette.textMuted)
+                            .frame(width: 56, height: 56)
+                            .background(Circle().fill(HarnessPalette.control))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(phase == .recording ? "Discard recording" : "Close")
+                    Spacer()
+                    if phase == .recording {
+                        CaptureVisualizerMenu(style: $visualizerStyle)
+                    }
+                }
+                .padding(.horizontal, 32)
+            }
+            .frame(height: CaptureShutter.diameter)
+            .padding(.bottom, CaptureShutter.bottomInset)
+        }
+    }
+
+    private static let timerHeight: CGFloat = 62
+
+    /// Puts the timer as far from the top of the screen as the stop control is from the bottom.
+    private func timerTopPadding(insets: EdgeInsets) -> CGFloat {
+        let footerCenter = insets.bottom + CaptureShutter.bottomInset + CaptureShutter.diameter / 2
+        return max(8, footerCenter - insets.top - Self.timerHeight / 2)
+    }
+
+    private func immersiveStatus(_ text: String) -> some View {
+        Text(text)
+            .font(.title3)
+            .foregroundStyle(HarnessPalette.textMuted)
+    }
+
+    private func handleUnexpectedEnd() {
+        guard phase == .recording, !isStopping else { return }
+        isMicLive = false
+        if savedAudioURL == nil {
+            savedAudioURL = recorder.consumePreservedRecordingURL()
+        }
+        phase = .failed(
+            AudioRecorderError.interrupted.errorDescription
+                ?? "Recording was interrupted."
+        )
+        Task { await recordingSession.endRecordingSession() }
     }
 
     private func centeredStatus<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -469,6 +586,8 @@ private struct DictationCaptureWatchdog: View {
 
 private struct DictationElapsedLabel: View {
     let recorder: AudioRecorder
+    var font: Font = .system(size: 44, weight: .light)
+    var color: Color = HarnessPalette.text
     var onMaxDuration: () -> Void
     @State private var elapsedMs = 0
     /// Elapsed keeps ticking past the limit; fire the stop exactly once.
@@ -476,9 +595,9 @@ private struct DictationElapsedLabel: View {
 
     var body: some View {
         Text(DictationElapsedFormatting.string(ms: elapsedMs))
-            .font(.system(size: 44, weight: .light))
+            .font(font)
             .monospacedDigit()
-            .foregroundStyle(HarnessPalette.text)
+            .foregroundStyle(color)
             .accessibilityLabel("Recording duration")
             .accessibilityValue(DictationElapsedFormatting.string(ms: elapsedMs))
             .onAppear { elapsedMs = recorder.elapsedMs }

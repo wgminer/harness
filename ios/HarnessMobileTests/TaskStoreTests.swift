@@ -102,6 +102,45 @@ final class TaskStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testTaskToolsSetAndClearMatrixFields() throws {
+        let store = TasksStore(localDataDir: tempDir)
+        let created = try store.executeTool(
+            name: "task_create",
+            args: ["title": "Taxes", "important": true, "dueDate": "2026-04-15", "estimateMinutes": 90]
+        )
+        let id = try XCTUnwrap(created.affectedIds?.first)
+        let task = try XCTUnwrap(created.tasks.first { $0.id == id })
+        XCTAssertEqual(task.important, true)
+        XCTAssertEqual(task.dueDate, "2026-04-15")
+        XCTAssertEqual(task.estimateMinutes, 90)
+
+        // Survives a reload from disk.
+        let reloaded = try TasksStore.loadTasks(in: tempDir).tasks.first { $0.id == id }
+        XCTAssertEqual(reloaded, task)
+
+        let renamed = try store.executeTool(name: "task_update", args: ["id": id, "title": "File taxes"])
+        XCTAssertEqual(renamed.tasks.first { $0.id == id }?.dueDate, "2026-04-15")
+
+        let cleared = try store.executeTool(
+            name: "task_update",
+            args: ["id": id, "important": false, "dueDate": NSNull(), "estimateMinutes": 0]
+        )
+        let after = try XCTUnwrap(cleared.tasks.first { $0.id == id })
+        XCTAssertNil(after.important)
+        XCTAssertNil(after.dueDate)
+        XCTAssertNil(after.estimateMinutes)
+    }
+
+    @MainActor
+    func testTaskToolsRejectDueDatesThatAreNotCalendarDays() throws {
+        let store = TasksStore(localDataDir: tempDir)
+        for bad in ["tomorrow", "2026-02-30", "04/15/2026"] {
+            let payload = try store.executeTool(name: "task_create", args: ["title": "T", "dueDate": bad])
+            XCTAssertNotNil(payload.error, bad)
+        }
+    }
+
+    @MainActor
     func testDeletingParentDeletesSubtasks() throws {
         let store = TasksStore(localDataDir: tempDir)
         let parentId = try XCTUnwrap(store.executeTool(name: "task_create", args: ["title": "Parent"]).affectedIds?.first)

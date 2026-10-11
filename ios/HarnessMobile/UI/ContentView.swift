@@ -6,28 +6,27 @@ struct ContentView: View {
     @ObservedObject private var chatRouter: ChatRouter
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSetupPairing = false
+    /// The list opens half height so a short swipe down returns to capture; threads take the full sheet.
+    @State private var listDetent: PresentationDetent = .medium
 
     init(app: AppModel, chatRouter: ChatRouter? = nil, initialChatRoute: ChatRoute? = nil) {
         self.app = app
         let router = chatRouter ?? ChatRouter()
         if let initialChatRoute {
             router.route = initialChatRoute
+            router.listOpen = true
+            _listDetent = State(initialValue: .large)
         }
         self.chatRouter = router
     }
 
     var body: some View {
-        ZStack {
-            HarnessPalette.background.ignoresSafeArea()
-            if app.hasCompletedInitialLoad {
-                mainNavigation
-                    .transition(.opacity)
-            } else {
-                HarnessBootView()
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.25), value: app.hasCompletedInitialLoad)
+        // The capture home draws immediately; it never waits on the conversation list.
+        CaptureHomeView(
+            app: app,
+            isCapturing: app.activeDictation == .createSession,
+            onOpenList: { chatRouter.listOpen = true }
+        )
         .task {
             app.chatRouter = chatRouter
             await app.bootstrap()
@@ -53,39 +52,22 @@ struct ContentView: View {
                 app.refreshSetupFlags()
             }
         }
-        .sheet(isPresented: dictationPresented) {
-            DictationRecordingSheet(
-                app: app,
-                mode: dictationMode,
-                isPresented: dictationPresented,
-                onConversationCreated: { conversationId in
-                    app.dismissDictation()
-                    app.openThread(id: conversationId)
-                },
-                onTranscriptSent: { transcript in
-                    app.finishThreadDictation(transcript: transcript)
-                }
-            )
+        .sheet(isPresented: $chatRouter.listOpen) {
+            listSheet
+                .presentationDetents([.medium, .large], selection: $listDetent)
+                .presentationDragIndicator(.visible)
+                .presentationBackground(HarnessPalette.background)
+        }
+        .onChange(of: chatRouter.listOpen) { _, open in
+            if open { listDetent = chatRouter.route == nil ? .medium : .large }
+        }
+        .onChange(of: chatRouter.route) { _, route in
+            if route != nil { listDetent = .large }
         }
     }
 
-    private var dictationPresented: Binding<Bool> {
-        Binding(
-            get: { app.activeDictation != nil },
-            set: { if !$0 { app.dismissDictation() } }
-        )
-    }
-
-    private var dictationMode: DictationRecordingMode {
-        switch app.activeDictation {
-        case .sendToConversation(let id):
-            return .sendToConversation(conversationId: id)
-        case .createSession, .none:
-            return .createSession
-        }
-    }
-
-    private var mainNavigation: some View {
+    /// Captures, chats, tasks, and settings; a thread's composer mic records in its own sheet.
+    private var listSheet: some View {
         NavigationStack {
             // Equatable isolation: chatRouter route changes must not rebuild the list.
             ConversationListIsolation(app: app)
@@ -97,6 +79,28 @@ struct ContentView: View {
                     }
                 }
         }
+        .sheet(isPresented: threadDictationPresented) {
+            if case .sendToConversation(let conversationId) = app.activeDictation {
+                DictationRecordingSheet(
+                    app: app,
+                    mode: .sendToConversation(conversationId: conversationId),
+                    isPresented: threadDictationPresented,
+                    onTranscriptSent: { transcript in
+                        app.finishThreadDictation(transcript: transcript)
+                    }
+                )
+            }
+        }
+    }
+
+    private var threadDictationPresented: Binding<Bool> {
+        Binding(
+            get: {
+                if case .sendToConversation = app.activeDictation { return true }
+                return false
+            },
+            set: { if !$0 { app.dismissDictation() } }
+        )
     }
 
     private var setupNoticeBinding: Binding<Bool> {
@@ -129,7 +133,7 @@ private struct ConversationListIsolation: View, Equatable {
     }
 }
 
-#Preview("Conversation list") {
+#Preview("Capture home") {
     ContentView(app: PreviewSupport.populatedApp())
 }
 
@@ -148,8 +152,4 @@ private struct ConversationListIsolation: View, Equatable {
             return app
         }()
     )
-}
-
-#Preview("Boot") {
-    ContentView(app: AppModel(localDataSubpath: "preview-boot-\(UUID().uuidString)"))
 }

@@ -35,13 +35,13 @@ One personal app for chat, memory, notes, tasks, and light automation — data l
 
 ### O3 — Mobile companion
 
-The phone is a capture device, dictation first; the desktop is where captures get processed. Not desktop parity, and not a chat client.
+Capture and Q&A on phone — not desktop parity.
 
 | | |
 |---|---|
-| **Success** | Capturing on the phone is fast and never loses anything; back at the desktop there is an Inbox to work through. |
+| **Success** | Voice/text capture on the go; ask a question; sync with desktop via R2. |
 | **Signals** | Harness Mobile: SwiftUI chat, streaming, dictation, Voice Memos import, Live Activity, R2 + conflict sheet, **Set up sync** QR, Keychain. See [ios/README.md](ios/README.md). |
-| **Gaps** | Desktop Inbox landed (capture contract, R2 drain, process to task / note / chat). Phone rewrite to a write-only capture app (review before send, share extension for links, drop chat and the bundle merge) is next. Photo and file captures cannot yet go to the image library or a chat attachment. Android — **Frozen**. |
+| **Gaps** | Capture-first inbox; Android — **Frozen**. |
 
 ### O4 — Learning lab for building AI tools
 
@@ -71,7 +71,7 @@ Build, ship, and switch machines without a second project.
 |---------|---------|--------|
 | **O1** UI craft | Building | Home-first shell + library drawer landed; CSS/empty-state debt remains. |
 | **O2** Subscriptions | Hardening | Core loops + sync QR shipped; feature expansion frozen. |
-| **O3** Mobile | Building | Repurposing to capture-first: desktop Inbox landed, phone rewrite next. |
+| **O3** Mobile | Building | Chat + dictation + R2 + pairing work; capture-inbox frozen. |
 | **O4** Learning lab | Hardening | Contracts/parity started; more drift guards + file splits. |
 | **O5** Dev friction | Hardening | Dev profile + release plumbing landed; bootstrap docs still thin. |
 

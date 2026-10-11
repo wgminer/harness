@@ -18,7 +18,6 @@ import type {
   NoteSummary,
 } from "./writing";
 import type { GeneratedImage, ImageCreateInput, ImageGenerateInput } from "./images";
-import type { InboxItem, InboxProcessAction, InboxProcessOutcome } from "./inbox";
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { UiSession } from "./uiSession";
@@ -33,12 +32,40 @@ export interface TaskItem {
   updatedAt?: number;
   /** Subtask parent id (one level deep). Missing or unknown parent => top level. */
   parentId?: string;
+  /** Eisenhower "important" axis. Urgency is derived from `dueDate`, never stored. */
+  important?: boolean;
+  /** Local calendar day, `YYYY-MM-DD`. */
+  dueDate?: string;
+  estimateMinutes?: number;
   metadata?: Record<string, unknown>;
+}
+
+/** Matrix fields on a task update: null clears `dueDate` / `estimateMinutes`. */
+export interface TaskMatrixPatch {
+  important?: boolean;
+  dueDate?: string | null;
+  estimateMinutes?: number | null;
 }
 
 export interface CodingScopeMeta {
   kind: "project" | "self";
   root: string;
+}
+
+/** What a terminal panel needs to catch up with a running session. */
+export interface TerminalSnapshot {
+  /** Base64 of the raw output kept so far. */
+  scrollback: string;
+  /** Output bytes produced so far; data chunks below this offset are already in `scrollback`. */
+  endOffset: number;
+  cwd: string;
+}
+
+export interface TerminalDataChunk {
+  conversationId: string;
+  offset: number;
+  /** Base64 of the raw output bytes. */
+  data: string;
 }
 
 export interface TasksPayload {
@@ -217,10 +244,21 @@ export interface HarnessAPI {
     setScope: (conversationId: string, scope: CodingScopeMeta | null) => Promise<void>;
     selfScopeAvailable: () => Promise<boolean>;
   };
+  /** One shell per conversation, started in its coding scope root. Desktop-local. */
+  terminal: {
+    /** Attach to the conversation's terminal, starting its shell on first use. */
+    open: (conversationId: string, cols: number, rows: number) => Promise<TerminalSnapshot>;
+    write: (conversationId: string, data: string) => Promise<void>;
+    resize: (conversationId: string, cols: number, rows: number) => Promise<void>;
+    /** End the conversation's shell. */
+    close: (conversationId: string) => Promise<void>;
+    onData: (cb: (chunk: TerminalDataChunk) => void) => () => void;
+    onExit: (cb: (conversationId: string) => void) => () => void;
+  };
   tasks: {
     list: () => Promise<TasksPayload>;
     create: (title: string, tags?: string[], status?: TaskStatus, parentId?: string) => Promise<TasksPayload>;
-    update: (payload: {
+    update: (payload: TaskMatrixPatch & {
       id: string;
       title?: string;
       status?: TaskStatus;
@@ -234,16 +272,6 @@ export interface HarnessAPI {
     clearCompleted: () => Promise<TasksPayload>;
     /** Ask the model for subtasks and save them under `id`. */
     breakdown: (id: string) => Promise<TasksPayload>;
-  };
-  inbox: {
-    list: () => Promise<InboxItem[]>;
-    /** Drain the remote inbox now, then list. */
-    refresh: () => Promise<InboxItem[]>;
-    updateText: (id: string, text: string) => Promise<InboxItem[]>;
-    process: (id: string, action: InboxProcessAction) => Promise<InboxProcessOutcome>;
-    restore: (id: string) => Promise<InboxItem[]>;
-    clearProcessed: () => Promise<InboxItem[]>;
-    onChanged: (cb: () => void) => () => void;
   };
   chat: {
     send: (conversationId: string, content: string) => Promise<void>;

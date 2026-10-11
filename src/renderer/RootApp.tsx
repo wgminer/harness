@@ -4,6 +4,7 @@ import { WindowedNoteView } from "./notes/WindowedNoteView";
 import { FileWindowView } from "./notes/FileWindowView";
 import { getCurrentWindowLabel, noteIdFromStickyWindowLabel } from "./notes/stickyWindow";
 import { useTimeOfDayBackground } from "./hooks/useTimeOfDayBackground";
+import { CHAT_FONT_JIG_ENABLED, ChatFontJig } from "./dev/chatFontJig";
 
 type RootRoute =
   | { kind: "loading" }
@@ -51,5 +52,10 @@ export function RootApp() {
   if (route.kind === "file") {
     return <FileWindowView path={route.path} />;
   }
-  return <App />;
+  return (
+    <>
+      <App />
+      {CHAT_FONT_JIG_ENABLED ? <ChatFontJig /> : null}
+    </>
+  );
 }

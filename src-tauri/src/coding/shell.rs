@@ -10,6 +10,15 @@ use super::scope::CodingScope;
 const OUTPUT_CAP: usize = 20 * 1024;
 const COMMAND_TIMEOUT_SECS: u64 = 120;
 
+/// Secret env vars kept out of shells the app spawns.
+pub(crate) const SCRUBBED_ENV_KEYS: &[&str] = &[
+    "OPENAI_API_KEY",
+    "VITE_OPENAI_API_KEY",
+    "TAVILY_API_KEY",
+    "AWS_SECRET_ACCESS_KEY",
+    "R2_SECRET_ACCESS_KEY",
+];
+
 /// Exact-prefix allowlist for auto-run (no user gate).
 const AUTO_RUN_PREFIXES: &[&str] = &[
     "git status",
@@ -80,14 +89,7 @@ async fn execute_shell(scope: &CodingScope, command: &str) -> String {
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    // Scrub common secret env vars from the child.
-    for key in [
-        "OPENAI_API_KEY",
-        "VITE_OPENAI_API_KEY",
-        "TAVILY_API_KEY",
-        "AWS_SECRET_ACCESS_KEY",
-        "R2_SECRET_ACCESS_KEY",
-    ] {
+    for key in SCRUBBED_ENV_KEYS {
         cmd.env_remove(key);
     }
 

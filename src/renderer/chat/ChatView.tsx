@@ -40,6 +40,8 @@ import { ComposeCornerMeta, ComposeHeaderQuote } from "./ComposeHome";
 import "./composerRim/composerRim.css";
 import { useChatModeState } from "./useChatModeState";
 import { useConversationTitleModal } from "./useConversationTitleModal";
+import { TerminalPanel } from "../terminal/TerminalPanel";
+import { isTerminalToggleKey, useTerminalOpen } from "../terminal/terminalOpenStore";
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -160,6 +162,18 @@ export function ChatView({
   });
   const { closeTitleModal } = titleModal;
 
+  const [terminalOpen, toggleTerminal, setTerminalOpen] = useTerminalOpen(effectiveConversationId);
+  useEffect(() => {
+    if (!mirrorGlobalFnRecording || !effectiveConversationId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!isTerminalToggleKey(e)) return;
+      e.preventDefault();
+      toggleTerminal();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mirrorGlobalFnRecording, effectiveConversationId, toggleTerminal]);
+
   const {
     composeChatMode,
     activeChatMode,
@@ -216,9 +230,11 @@ export function ChatView({
   }, []);
 
   const focusComposer = useCallback(() => {
-    requestAnimationFrame(() =>
-      composerRef.current?.querySelector<HTMLTextAreaElement>(".chat-input")?.focus()
-    );
+    requestAnimationFrame(() => {
+      // Typing in the terminal keeps its focus when a turn ends.
+      if (document.activeElement?.closest(".terminal-panel")) return;
+      composerRef.current?.querySelector<HTMLTextAreaElement>(".chat-input")?.focus();
+    });
   }, []);
 
   const completeTurn = useCallback((turnId: number, documentHasFocus = document.hasFocus()) => {
@@ -1223,6 +1239,8 @@ export function ChatView({
     onClearCodingScope: async () => {
       await applyCodingScope(null);
     },
+    terminalOpen,
+    onToggleTerminal: effectiveConversationId ? toggleTerminal : undefined,
   };
 
   if (isComposeMode) {
@@ -1273,6 +1291,12 @@ export function ChatView({
         hideComposer={isDictationReplyStrip}
         threadKey={effectiveConversationId ?? ""}
       />
+      {terminalOpen && effectiveConversationId ? (
+        <TerminalPanel
+          conversationId={effectiveConversationId}
+          onHide={() => setTerminalOpen(false)}
+        />
+      ) : null}
       <ChatTitleModal
         open={titleModal.open}
         onClose={closeTitleModal}

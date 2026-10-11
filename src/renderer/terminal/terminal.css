@@ -1,0 +1,48 @@
+/* Docked under the chat pane; `.main-chat-host` is the flex column that sizes both. */
+.terminal-panel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  height: 38%;
+  min-height: calc(var(--grid) * 40);
+  max-height: 60%;
+  border-top: 1px solid var(--border-edge);
+  background: var(--bg);
+}
+
+.terminal-panel__header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+}
+
+.terminal-panel__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-caption);
+  color: var(--fg-muted);
+}
+
+.terminal-panel__host {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--space-2) var(--space-2) var(--space-4);
+  overflow: hidden;
+}
+
+.terminal-panel__host[hidden] {
+  display: none;
+}
+
+.terminal-panel__error {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-caption);
+  color: var(--fg-muted);
+}

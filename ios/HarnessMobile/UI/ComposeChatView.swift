@@ -28,7 +28,7 @@ struct ComposeChatView: View {
 
                 if !headerQuote.isEmpty {
                     Text(headerQuote)
-                        .font(.system(.title3, design: .serif))
+                        .font(.title3)
                         .foregroundStyle(HarnessPalette.textMuted)
                         .multilineTextAlignment(.center)
                         .lineSpacing(Self.quoteLineSpacing)

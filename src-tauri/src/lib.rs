@@ -8,7 +8,6 @@ pub mod env_util;
 pub mod gmail;
 pub mod memory;
 pub mod images;
-pub mod inbox;
 pub mod files;
 pub mod notes;
 pub mod openai;
@@ -20,6 +19,7 @@ pub mod storage;
 pub mod sync;
 pub mod system;
 pub mod tasks;
+pub mod terminal;
 pub mod ui_session;
 pub mod updater;
 pub mod weather;
@@ -70,6 +70,10 @@ pub fn run() {
                 .await;
                 notes::sticky::restore_sticky_windows(&app.handle(), &app_state).await;
             });
+            recording::external_trigger::start(
+                app.handle().clone(),
+                global_recording_runtime.clone(),
+            );
 
             let handle = app.handle().clone();
             if let Ok(cwd) = std::env::current_dir() {
@@ -91,6 +95,7 @@ pub fn run() {
 
             let image_generation_runtime = images::init_image_generation_runtime();
             app.manage(image_generation_runtime);
+            app.manage(terminal::TerminalRuntime::new());
 
             Ok(())
         })
@@ -139,12 +144,6 @@ pub fn run() {
             commands::tasks::tasks_delete,
             commands::tasks::tasks_clear_completed,
             commands::tasks::tasks_breakdown,
-            commands::inbox::inbox_list,
-            commands::inbox::inbox_refresh,
-            commands::inbox::inbox_update_text,
-            commands::inbox::inbox_process,
-            commands::inbox::inbox_restore,
-            commands::inbox::inbox_clear_processed,
             commands::chat::chat_send,
             commands::chat::chat_polish_last_user,
             commands::chat::chat_generate_reply,
@@ -162,6 +161,10 @@ pub fn run() {
             commands::coding::coding_get_self_scope,
             commands::coding::coding_set_scope,
             commands::coding::coding_self_scope_available,
+            commands::terminal::terminal_open,
+            commands::terminal::terminal_write,
+            commands::terminal::terminal_resize,
+            commands::terminal::terminal_close,
             commands::notes::notes_list,
             commands::notes::notes_create,
             commands::notes::notes_read,
@@ -233,7 +236,12 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| match event {
-            RunEvent::Exit => persist_open_sticky_windows(app),
+            RunEvent::Exit => {
+                persist_open_sticky_windows(app);
+                if let Some(terminals) = app.try_state::<terminal::TerminalRuntime>() {
+                    terminals.kill_all();
+                }
+            }
             // Finder "Open With" / dropping files on the Dock icon.
             #[cfg(target_os = "macos")]
             RunEvent::Opened { urls } => {

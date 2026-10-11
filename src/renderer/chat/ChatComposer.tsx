@@ -20,6 +20,7 @@ import {
   FolderOpen,
   Paperclip,
   AppWindow,
+  SquareTerminal,
 } from "lucide-react";
 import type { CodingScopeMeta } from "../../shared/desktopAPI";
 import type { VoiceState } from "./chatHelpers";
@@ -100,6 +101,9 @@ interface ChatComposerProps {
   onPickProjectFolder?: () => Promise<void> | void;
   onUseSelfScope?: () => Promise<void> | void;
   onClearCodingScope?: () => Promise<void> | void;
+  terminalOpen?: boolean;
+  /** Show or hide this conversation's terminal; absent before the conversation exists. */
+  onToggleTerminal?: () => void;
   /** Shift+Tab in the composer cycles chat modes. */
   onCycleMode?: () => void;
   /**
@@ -153,6 +157,8 @@ export function ChatComposer({
   onPickProjectFolder,
   onUseSelfScope,
   onClearCodingScope,
+  terminalOpen = false,
+  onToggleTerminal,
   onCycleMode,
   layout = "inline",
 }: ChatComposerProps) {
@@ -570,6 +576,18 @@ export function ChatComposer({
                 >
                   Clear workspace
                 </MenuItem>
+              ) : null}
+              {onToggleTerminal ? (
+                <>
+                  <MenuSeparator />
+                  <MenuItem
+                    icon={<SquareTerminal size={14} strokeWidth={1.75} />}
+                    trailing="⌃`"
+                    onSelect={onToggleTerminal}
+                  >
+                    {terminalOpen ? "Hide terminal" : "Terminal"}
+                  </MenuItem>
+                </>
               ) : null}
             </Menu>
             {voiceState !== "idle" && (

@@ -345,11 +345,8 @@ button.sidebar-item {
   justify-content: center;
   width: var(--icon-size-sm);
   height: var(--icon-size-sm);
-  color: var(--fg-muted);
-  opacity: 0.6;
-  transition:
-    color var(--motion-duration-ui) var(--motion-ease-standard),
-    opacity var(--motion-duration-ui) var(--motion-ease-standard);
+  color: color-mix(in oklab, var(--fg-muted) 60%, transparent);
+  transition: color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
 .sidebar-item-glyph svg {
@@ -358,8 +355,7 @@ button.sidebar-item {
 
 .sidebar-item:hover .sidebar-item-glyph,
 .sidebar-item.active .sidebar-item-glyph {
-  color: var(--fg);
-  opacity: 0.8;
+  color: color-mix(in oklab, var(--fg) 80%, transparent);
 }
 
 .sidebar-item-title {

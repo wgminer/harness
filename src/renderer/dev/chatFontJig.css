@@ -1,0 +1,104 @@
+/* Dev-only chat font jig: a small tag on the middle of the right edge, clear of the corners. */
+
+.chat-font-jig {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.chat-font-jig__tag,
+.chat-font-jig__list {
+  pointer-events: auto;
+  border: 1px solid var(--border-edge);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+}
+
+.chat-font-jig__tag {
+  margin: 0;
+  padding: var(--space-2) var(--space-1);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  color: var(--fg-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.chat-font-jig__tag:hover,
+.chat-font-jig__tag:focus-visible,
+.chat-font-jig__tag[aria-expanded="true"] {
+  color: var(--fg);
+  opacity: 1;
+}
+
+.chat-font-jig__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0 var(--space-1) 0 0;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  list-style: none;
+}
+
+.chat-font-jig__option {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chat-font-jig__option:hover {
+  color: var(--fg);
+}
+
+.chat-font-jig__option[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.chat-font-jig__tag:focus-visible,
+.chat-font-jig__option:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Knobs the chat tokens do not cover; only live while a direction other than Current is on. */
+:root[data-chat-font-jig] .message-block.assistant .content {
+  font-style: var(--jig-chat-style, normal);
+  font-variation-settings: var(--jig-chat-variations, normal);
+  letter-spacing: var(--jig-chat-tracking, normal);
+}
+
+/* The default face underlines emphasis because it has one weight; directions with a real bold drop that. */
+:root[data-chat-font-jig] .message-block.assistant .content :is(strong, .md-heading) {
+  text-decoration: none;
+}
+
+:root[data-chat-font-jig] .message-block.assistant .content em {
+  font-style: var(--jig-chat-em-style, italic);
+}
+
+/* Code keeps its own face whatever the prose is doing. */
+:root[data-chat-font-jig] .message-block.assistant .content :is(code, pre) {
+  font-style: normal;
+  font-variation-settings: normal;
+  letter-spacing: normal;
+}

@@ -50,8 +50,20 @@ pub struct TaskItem {
     /// Subtask parent (one level deep, like Todoist `parent_id`). Missing parent => top level.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
+    /// Eisenhower "important" axis. Urgency is derived from `due_date`, never stored.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub important: bool,
+    /// Local calendar day, `YYYY-MM-DD`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimate_minutes: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,6 +223,27 @@ fn parent_id_arg(args: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
+/// A `YYYY-MM-DD` calendar day, or `None` when the value is not a real date.
+fn parse_due_date(value: &Value) -> Option<String> {
+    let s = value.as_str()?.trim();
+    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .ok()
+        .map(|d| d.format("%Y-%m-%d").to_string())
+}
+
+/// Null or an empty string clears an optional field.
+fn is_clear(value: &Value) -> bool {
+    value.is_null() || value.as_str().is_some_and(|s| s.trim().is_empty())
+}
+
+/// Whole minutes above zero.
+fn parse_estimate_minutes(value: &Value) -> Option<u32> {
+    let n = value.as_f64()?.round();
+    (n >= 1.0 && n <= u32::MAX as f64).then_some(n as u32)
+}
+
+const DUE_DATE_ERROR: &str = "dueDate must be a calendar day like 2026-03-14";
+
 /// Subtasks nest one level: a parent must exist and must not itself be a subtask.
 fn valid_parent(tasks: &[TaskItem], parent_id: &str, child_id: Option<&str>) -> bool {
     child_id != Some(parent_id)
@@ -246,6 +279,9 @@ fn migrate_raw_task(raw: &Value) -> Option<TaskItem> {
         created_at,
         updated_at,
         parent_id,
+        important: obj.get("important").and_then(|v| v.as_bool()).unwrap_or(false),
+        due_date: obj.get("dueDate").and_then(parse_due_date),
+        estimate_minutes: obj.get("estimateMinutes").and_then(parse_estimate_minutes),
         metadata,
     })
 }
@@ -348,6 +384,20 @@ pub fn apply_task_action(state: &TaskState, action: TaskAction, now_ms: i64) -> 
                 }
                 other => other,
             };
+            let due_date = match args.get("dueDate") {
+                Some(raw) if !is_clear(raw) => match parse_due_date(raw) {
+                    Some(day) => Some(day),
+                    None => {
+                        return TasksPayload {
+                            tasks: next_state.tasks,
+                            last_action: "create".into(),
+                            affected_ids: None,
+                            error: Some(DUE_DATE_ERROR.into()),
+                        };
+                    }
+                },
+                _ => None,
+            };
             let task = TaskItem {
                 id: generate_id("task"),
                 title,
@@ -356,6 +406,9 @@ pub fn apply_task_action(state: &TaskState, action: TaskAction, now_ms: i64) -> 
                 created_at: now_ms,
                 updated_at: now_ms,
                 parent_id,
+                important: args.get("important").and_then(|v| v.as_bool()).unwrap_or(false),
+                due_date,
+                estimate_minutes: args.get("estimateMinutes").and_then(parse_estimate_minutes),
                 metadata,
             };
             let id = task.id.clone();
@@ -422,6 +475,32 @@ pub fn apply_task_action(state: &TaskState, action: TaskAction, now_ms: i64) -> 
                         next.parent_id = None;
                     }
                     None => {}
+                }
+            }
+            if let Some(important) = args.get("important").and_then(|v| v.as_bool()) {
+                next.important = important;
+            }
+            // `dueDate`: a day sets it, "" or null clears it.
+            if let Some(raw) = args.get("dueDate") {
+                if is_clear(raw) {
+                    next.due_date = None;
+                } else if let Some(day) = parse_due_date(raw) {
+                    next.due_date = Some(day);
+                } else {
+                    return TasksPayload {
+                        tasks: next_state.tasks,
+                        last_action: "update".into(),
+                        affected_ids: None,
+                        error: Some(DUE_DATE_ERROR.into()),
+                    };
+                }
+            }
+            // `estimateMinutes`: a positive number sets it, 0 or null clears it.
+            if let Some(raw) = args.get("estimateMinutes") {
+                if raw.is_null() || raw.as_f64() == Some(0.0) {
+                    next.estimate_minutes = None;
+                } else if let Some(minutes) = parse_estimate_minutes(raw) {
+                    next.estimate_minutes = Some(minutes);
                 }
             }
             if let Some(meta_patch) = args.get("metadata").and_then(|v| v.as_object()) {
@@ -632,6 +711,9 @@ pub async fn breakdown_task(state: &AppState, id: &str) -> Result<TasksPayload, 
             created_at: now + i as i64,
             updated_at: now + i as i64,
             parent_id: Some(id.to_string()),
+            important: false,
+            due_date: None,
+            estimate_minutes: None,
             metadata: None,
         };
         created.push(child.id.clone());
@@ -730,6 +812,71 @@ mod tests {
         assert_eq!(raw["parentId"], json!(parent));
         assert!(serde_json::to_value(&state.tasks[0]).unwrap().get("parentId").is_none());
         assert_eq!(migrate_raw_task(&raw).unwrap().parent_id.as_deref(), Some(parent.as_str()));
+    }
+
+    #[test]
+    fn create_sets_matrix_fields_and_omits_unset_ones() {
+        let state = create(
+            &TaskState { tasks: vec![] },
+            json!({ "title": "Taxes", "important": true, "dueDate": "2026-04-15", "estimateMinutes": 90 }),
+        );
+        let raw = serde_json::to_value(&state.tasks[0]).unwrap();
+        assert_eq!(raw["important"], json!(true));
+        assert_eq!(raw["dueDate"], json!("2026-04-15"));
+        assert_eq!(raw["estimateMinutes"], json!(90));
+        let round_trip = migrate_raw_task(&raw).unwrap();
+        assert!(round_trip.important);
+        assert_eq!(round_trip.due_date.as_deref(), Some("2026-04-15"));
+        assert_eq!(round_trip.estimate_minutes, Some(90));
+
+        let plain = create(&TaskState { tasks: vec![] }, json!({ "title": "Plain" }));
+        let raw = serde_json::to_value(&plain.tasks[0]).unwrap();
+        for key in ["important", "dueDate", "estimateMinutes"] {
+            assert!(raw.get(key).is_none(), "{key} should be omitted");
+        }
+    }
+
+    #[test]
+    fn update_sets_and_clears_matrix_fields() {
+        let state = create(
+            &TaskState { tasks: vec![] },
+            json!({ "title": "Taxes", "important": true, "dueDate": "2026-04-15", "estimateMinutes": 90 }),
+        );
+        let id = state.tasks[0].id.clone();
+        let payload = apply_task_action(
+            &state,
+            TaskAction::Update {
+                args: json!({ "id": id, "important": false, "dueDate": null, "estimateMinutes": 0 }),
+            },
+            2,
+        );
+        assert!(payload.error.is_none());
+        let task = &payload.tasks[0];
+        assert!(!task.important);
+        assert!(task.due_date.is_none());
+        assert!(task.estimate_minutes.is_none());
+
+        // An update that does not mention the fields leaves them alone.
+        let payload = apply_task_action(
+            &state,
+            TaskAction::Update { args: json!({ "id": id, "title": "File taxes" }) },
+            3,
+        );
+        assert!(payload.tasks[0].important);
+        assert_eq!(payload.tasks[0].due_date.as_deref(), Some("2026-04-15"));
+    }
+
+    #[test]
+    fn rejects_due_dates_that_are_not_calendar_days() {
+        let empty = TaskState { tasks: vec![] };
+        for bad in ["tomorrow", "2026-02-30", "04/15/2026"] {
+            let payload = apply_task_action(
+                &empty,
+                TaskAction::Create { args: json!({ "title": "T", "dueDate": bad }) },
+                1,
+            );
+            assert!(payload.error.is_some(), "{bad} should be rejected");
+        }
     }
 
     #[test]

@@ -5,6 +5,6 @@ import WidgetKit
 struct HarnessMobileRecordingLiveActivityBundle: WidgetBundle {
     var body: some Widget {
         DictationRecordingLiveActivityWidget()
-        HorseMarkWidget()
+        RecordMicWidget()
     }
 }

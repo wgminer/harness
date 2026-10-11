@@ -303,6 +303,7 @@
   font-size: var(--font-size-chat);
   line-height: var(--line-height-chat);
   font-weight: var(--font-weight-chat);
+  letter-spacing: var(--letter-spacing-chat);
   font-kerning: normal;
   font-variant-ligatures: common-ligatures contextual;
   font-optical-sizing: auto;
@@ -538,10 +539,12 @@
   font-weight: 600;
 }
 
-/* Bold in a reply is emphasis within lighter serif prose, so it sits closer to the body weight. */
+/* The reply face has a single weight, so bold and headings are carried by an underline. */
 .message-block.assistant .content strong,
 .message-block.assistant .content .md-heading {
   font-weight: var(--font-weight-chat-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* Markdown headings keep the body size (see MarkdownContent); weight and space carry the hierarchy. */
@@ -1064,6 +1067,28 @@
   padding-bottom: var(--message-gap);
 }
 
+/* Back-to-back user messages read as one turn: the upper card gives up its toolbar gap
+   and only opens it (after a beat, so passing over it does not jiggle) while hovered. */
+.message-block.user:has(+ .message-block.user) {
+  padding-bottom: var(--space-2);
+  transition: padding-bottom var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.message-block.user:has(+ .message-block.user):hover,
+.message-block.user:has(+ .message-block.user):focus-within {
+  padding-bottom: var(--message-gap);
+  transition-delay: 200ms;
+}
+
+/* The toolbar waits for the gap to open, and leaves at once so it never sits on the next card. */
+.message-block.user:has(+ .message-block.user) > .message-block-footer {
+  transition-delay: 300ms;
+}
+
+.message-block.user:has(+ .message-block.user):not(:hover):not(:focus-within) > .message-block-footer {
+  transition: none;
+}
+
 .message-block-footer {
   position: absolute;
   right: 0;
@@ -1155,18 +1180,16 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  color: var(--fg-muted);
+  /* The toolbar owns show/hide; buttons only dim at rest (through color, so the icon does not shift). */
+  color: color-mix(in oklab, var(--fg-muted) 60%, transparent);
   border-radius: var(--radius-control-sm);
   cursor: pointer;
   border: 1px solid transparent;
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
-    opacity var(--motion-duration-ui) var(--motion-ease-standard),
     background var(--motion-duration-ui) var(--motion-ease-standard),
     border-color var(--motion-duration-ui) var(--motion-ease-standard);
   flex-shrink: 0;
-  /* The toolbar owns show/hide; buttons only dim at rest. */
-  opacity: 0.6;
 }
 
 .message-footer-icon-btn:hover,
@@ -1175,7 +1198,6 @@
 .message-copy-btn:hover,
 .message-copy-btn:focus-visible,
 .message-copy-btn:active {
-  opacity: 1;
   color: var(--fg);
   background: color-mix(in oklab, var(--fg) 12%, transparent);
 }

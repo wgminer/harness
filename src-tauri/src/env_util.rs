@@ -27,6 +27,11 @@ pub fn is_global_hotkey_disabled() -> bool {
     env::var("HARNESS_DISABLE_GLOBAL_HOTKEY").ok().as_deref() == Some("1")
 }
 
+/// Loopback port for an external button that stands in for Fn. Off when unset.
+pub fn external_trigger_port() -> Option<u16> {
+    env::var("HARNESS_EXTERNAL_TRIGGER_PORT").ok()?.parse().ok()
+}
+
 pub fn app_display_name() -> &'static str {
     if is_harness_dev() && !is_harness_e2e() {
         HARNESS_DEV_DISPLAY_NAME

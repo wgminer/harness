@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Mirrors the desktop palette in `src/renderer/base.css` (fixed dark, single accent).
+/// Mirrors the desktop palette in `src/renderer/base.css` (fixed dark); the accent follows the time of day.
 /// Hues match desktop; shapes stay platform-native.
 enum HarnessPalette {
     /// `--bg`: page shell behind every surface.
@@ -27,14 +27,20 @@ enum HarnessPalette {
     /// Timestamps, placeholders, quotes.
     static let textFaint = Color(hex: 0x6A6C6F)
 
-    /// `--accent`
-    static let accent = Color(hex: 0x5B9CF5)
-    /// `--accent-readable`: accent 72% toward white, for text on dark.
-    static let accentReadable = Color(hex: 0x89B8F8)
+    /// Desktop `--accent`; the fallback when the daylight palette cannot load.
+    static let staticAccent = Color(hex: 0x5B9CF5)
+    /// Accent follows the time of day, like the desktop daylight theme.
+    static var accent: Color { DaylightPalette.current.accent }
+    /// `--accent-readable`: accent toward white, for text on dark.
+    static var accentReadable: Color { mixed(accent, .white, 0.45) }
     /// `--btn-primary-bg`: accent 38% over `--bg`.
-    static let primaryFill = Color(hex: 0x2D4668)
+    static var primaryFill: Color { mixed(background, accent, 0.38) }
     /// `--accent-tint`: accent 12% over `--bg`.
-    static let accentTint = Color(hex: 0x1A222C)
+    static var accentTint: Color { mixed(background, accent, 0.12) }
+
+    private static func mixed(_ a: Color, _ b: Color, _ t: CGFloat) -> Color {
+        Color(DaylightPalette.mix(UIColor(a), UIColor(b), t))
+    }
 
     /// Recording state only.
     static let recording = Color(hex: 0xE5534B)

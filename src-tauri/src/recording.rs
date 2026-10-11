@@ -1,5 +1,6 @@
 pub mod chime;
 pub mod dictation_index;
+pub mod external_trigger;
 #[cfg(target_os = "macos")]
 pub mod fn_tap;
 pub mod global;

@@ -7,8 +7,6 @@ import { SidebarTitlebarActions, TitlebarSettingsButton } from "./sidebar/Sideba
 import { SettingsView } from "./settings/SettingsView";
 import { setCachedSettings } from "./settings/settingsSessionCache";
 import { TasksView } from "./tasks/TasksView";
-import { InboxView } from "./inbox/InboxView";
-import { useInbox } from "./inbox/useInbox";
 import { SearchPalette } from "./search/SearchPalette";
 import { NotesView } from "./notes/WritingSurfaceView";
 import { ImageCanvasView } from "./images/ImageCanvasView";
@@ -30,7 +28,6 @@ import { useBackgroundSync } from "./hooks/useBackgroundSync";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import { DEFAULT_UI_SESSION } from "../shared/uiSession";
 import type {} from "../shared/desktopAPI";
-import { inboxChatDraft, type InboxItem } from "../shared/inbox";
 import { getDisplayNoteTitle } from "../shared/writing";
 import { conversationDisplayTitle, isConversationTitlePending } from "./chat/chatDisplayTitle";
 import type { View, DevView } from "./sidebar/sidebarUtils";
@@ -71,7 +68,6 @@ export default function App() {
   const setup = useSetupState({ uiSessionReady });
   const arrivals = useLibraryArrivals();
   const hotkey = useGlobalHotkeyOverlay();
-  const inbox = useInbox();
   // A failed unfocused take stays up until dismissed; other errors clear on their own.
   const hotkeyErrorActions = hotkey.phase === "failed" || hotkey.recordingPath != null;
 
@@ -290,15 +286,6 @@ export default function App() {
     [chats.conversations, notesRef, setConversationId],
   );
 
-  const startChatFromCapture = useCallback(
-    (item: InboxItem) => {
-      setConversationId(null);
-      setView("chat");
-      setComposerDraft({ text: inboxChatDraft(item), nonce: Date.now() });
-    },
-    [setConversationId],
-  );
-
   const createNew = useCallback(() => {
     setConversationId(null);
     setView("chat");
@@ -412,8 +399,6 @@ export default function App() {
         return "Images";
       case "tasks":
         return "Tasks";
-      case "inbox":
-        return "Inbox";
       case "settings":
         return SETTINGS_PAGE_TITLE;
     }
@@ -442,7 +427,6 @@ export default function App() {
               void createNewNote();
             }}
             onNewImage={createNewImage}
-            inboxCount={inbox.pendingCount}
           />
         }
         trailingActions={
@@ -536,7 +520,6 @@ export default function App() {
             />
           )}
           {view === "tasks" && <TasksView />}
-          {view === "inbox" && <InboxView inbox={inbox} onStartChat={startChatFromCapture} />}
           {view === "notes" && (
             <NotesView
               notes={notes}

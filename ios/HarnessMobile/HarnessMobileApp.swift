@@ -17,7 +17,14 @@ struct HarnessMobileApp: App {
             ContentView(app: app, chatRouter: chatRouter)
                 .preferredColorScheme(.dark)
                 .tint(HarnessPalette.accent)
+                .onOpenURL(perform: handle)
         }
+    }
+
+    /// `harness://record` (the lock screen widget) lands on the capture home, recording.
+    private func handle(_ url: URL) {
+        guard url.scheme == "harness", url.host == "record" else { return }
+        app.beginCaptureFromLink()
     }
 
     /// Titles in `--fg` at a calm weight; hairline shadow in `--border-edge`.

@@ -13,7 +13,6 @@ pub enum UiSessionView {
     Chat,
     Settings,
     Tasks,
-    Inbox,
     Notes,
     Images,
 }
@@ -64,7 +63,6 @@ fn normalize_ui_session_view(raw: Option<&str>) -> UiSessionView {
         Some("chat") => UiSessionView::Chat,
         Some("settings") => UiSessionView::Settings,
         Some("tasks") => UiSessionView::Tasks,
-        Some("inbox") => UiSessionView::Inbox,
         Some("notes") => UiSessionView::Notes,
         Some("images") => UiSessionView::Images,
         _ => UiSessionView::Chat,

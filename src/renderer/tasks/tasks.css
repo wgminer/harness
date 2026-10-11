@@ -15,6 +15,17 @@
   border-color: transparent;
 }
 
+/* Match the row check column (24px slot, 20px glyph) so search lines up with task titles. */
+.tasks-search.workspace-list-search--compact {
+  gap: var(--space-3);
+}
+
+.tasks-search .workspace-list-search__icon {
+  width: var(--icon-size-xl);
+  height: var(--icon-size-xl);
+  margin-inline: calc((24px - var(--icon-size-xl)) / 2);
+}
+
 .tasks-page {
   --chat-composer-dock-height: var(--space-35);
   position: relative;
@@ -106,7 +117,9 @@
 }
 
 .tasks-modal-title-input {
-  min-height: 120px;
+  min-height: var(--input-height);
+  max-height: 40vh;
+  resize: none;
 }
 
 .tasks-list {
@@ -280,28 +293,35 @@
   text-transform: none;
 }
 
+/* Editor chips sit on a field background, so they need a real fill to read. */
 .tasks-tag--editable {
-  padding-right: 4px;
-  gap: 2px;
-  background: var(--overlay-subtle);
-  color: var(--fg-muted);
+  height: var(--space-6);
+  padding: 0 var(--space-1) 0 var(--space-2);
+  gap: var(--space-1);
+  font-size: var(--font-size-sidebar);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--overlay-strong);
+  color: var(--fg);
 }
 
 .tasks-tag-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px;
-  margin-left: 2px;
-  border-radius: var(--radius-sm);
+  width: var(--space-4);
+  height: var(--space-4);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
   background: transparent;
-  color: inherit;
+  color: var(--fg-muted);
   cursor: pointer;
-  opacity: 0.7;
 }
 
-.tasks-tag-remove:hover {
-  opacity: 1;
+.tasks-tag-remove:hover:not(:disabled) {
+  background: var(--overlay);
+  color: var(--fg);
 }
 
 .tasks-tag-remove:focus-visible {
@@ -309,35 +329,42 @@
   outline-offset: 1px;
 }
 
-
+/* Chips and the text input share one bordered field. */
 .tasks-tag-field {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--input-height);
+  padding: calc(var(--space-1) + 1px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-control);
+  cursor: text;
 }
 
-.tasks-tag-editor {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  min-height: 8px;
+.tasks-tag-field:focus-within {
+  border-color: var(--border-input-focus);
 }
 
 .tasks-tags-input {
+  flex: 1;
+  min-width: 96px;
+  height: var(--space-6);
+  padding: 0 var(--space-2);
   font-family: var(--font-family);
   font-size: var(--font-size);
-  width: 100%;
-  height: var(--input-height);
-  padding: 0 var(--space-3);
-  background: var(--bg-secondary);
+  background: transparent;
   color: var(--fg);
-  border: 1px solid var(--border-input);
-  border-radius: var(--radius-control);
+  border: 0;
+}
+
+.tasks-tags-input::placeholder {
+  color: var(--fg-muted);
 }
 
 .tasks-tags-input:focus {
   outline: none;
-  border-color: var(--border-input-focus);
 }
 
 .tasks-tag-remove svg {
@@ -345,7 +372,17 @@
   height: var(--icon-size-sm);
 }
 
-.app-modal-footer--spread .btn-danger svg {
+/* Delete stays quiet next to Save; red text only until hovered. */
+.tasks-modal-delete {
+  color: var(--danger-fg);
+}
+
+.tasks-modal-delete:hover:not(:disabled) {
+  background: var(--danger-surface);
+  color: var(--danger-fg);
+}
+
+.tasks-modal-delete svg {
   width: var(--icon-size-compact);
   height: var(--icon-size-compact);
 }

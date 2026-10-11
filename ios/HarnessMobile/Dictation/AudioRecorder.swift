@@ -306,6 +306,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             mode: .spokenAudio,
             options: [.defaultToSpeaker, .allowBluetooth]
         )
+        // iOS mutes haptics while the mic is live unless asked; the capture screen relies on them.
+        try? AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true)
     }
 
     nonisolated private static func deactivateSession() {

@@ -7,11 +7,11 @@ pub mod credentials;
 pub mod files;
 pub mod gmail;
 pub mod images;
-pub mod inbox;
 pub mod memory;
 pub mod notes;
 pub mod settings;
 pub mod tasks;
+pub mod terminal;
 pub mod ui;
 
 pub(crate) fn map_err<E: std::fmt::Display>(e: E) -> String {

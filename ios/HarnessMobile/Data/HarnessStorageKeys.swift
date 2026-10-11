@@ -3,6 +3,7 @@ import Foundation
 enum HarnessStorageKeys {
     static let lastSuccessfulSyncAt = "harness.lastSuccessfulSyncAt"
     static let setupNoticeDismissed = "harness.setupNoticeDismissed"
+    static let recordOnLaunch = "harness.recordOnLaunch"
     static let composeDraft = "harness.composeDraft"
     static let threadDrafts = "harness.composerDraftCache"
     static let lastSyncedRevision = "harness.lastSyncedRevision"

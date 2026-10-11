@@ -82,6 +82,18 @@
             },
             "description": "Optional filterable labels (e.g. urgent, research)."
           },
+          "important": {
+            "type": "boolean",
+            "description": "Whether this matters for the user's goals (the important axis of the Eisenhower matrix). Urgency comes from dueDate, so do not use this for deadlines."
+          },
+          "dueDate": {
+            "type": "string",
+            "description": "Due day as YYYY-MM-DD in the user's local calendar."
+          },
+          "estimateMinutes": {
+            "type": "number",
+            "description": "Rough time needed, in minutes."
+          },
           "metadata": {
             "type": "object",
             "description": "Optional extra structured information about the task."
@@ -101,7 +113,7 @@
     "type": "function",
     "function": {
       "name": "task_update",
-      "description": "Update an existing persistent assistant task (rename, change status, edit filterable tags, or attach metadata).",
+      "description": "Update an existing persistent assistant task (rename, change status, set importance, due day or time estimate, edit filterable tags, or attach metadata).",
       "parameters": {
         "type": "object",
         "properties": {
@@ -139,6 +151,24 @@
             "items": {
               "type": "string"
             }
+          },
+          "important": {
+            "type": "boolean",
+            "description": "Whether this matters for the user's goals (the important axis of the Eisenhower matrix). Urgency comes from dueDate, so do not use this for deadlines."
+          },
+          "dueDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Due day as YYYY-MM-DD in the user's local calendar. Empty string or null clears it."
+          },
+          "estimateMinutes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Rough time needed, in minutes. 0 or null clears it."
           },
           "metadata": {
             "type": "object"
@@ -213,7 +243,7 @@
     "type": "function",
     "function": {
       "name": "memory_search_conversations",
-      "description": "Search prior chats, dictations, note titles, and image titles for a free-text query. Use when the user is looking for a past thread, dictation, note, or image \u2014 or when cross-thread recall, continuity, names, or prior decisions would help. Results include hrefs; cite them as markdown links like [Title](/c/id) and do not invent ids.",
+      "description": "Search prior chats, dictations, note titles, and image titles for a free-text query. Use when the user is looking for a past thread, dictation, note, or image — or when cross-thread recall, continuity, names, or prior decisions would help. Results include hrefs; cite them as markdown links like [Title](/c/id) and do not invent ids.",
       "parameters": {
         "type": "object",
         "properties": {

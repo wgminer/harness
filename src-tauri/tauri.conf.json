@@ -34,9 +34,7 @@
           "$DATA/Harness/local-data/app-state/images/**",
           "$DATA/Harness Dev/local-data/app-state/images/**",
           "$DATA/Harness/audio-recordings/**",
-          "$DATA/Harness Dev/audio-recordings/**",
-          "$DATA/Harness/local-data/inbox/attachments/**",
-          "$DATA/Harness Dev/local-data/inbox/attachments/**"
+          "$DATA/Harness Dev/audio-recordings/**"
         ]
       }
     }

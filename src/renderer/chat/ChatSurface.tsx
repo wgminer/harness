@@ -71,6 +71,8 @@ interface ChatSurfaceProps {
   onPickProjectFolder?: () => Promise<void> | void;
   onUseSelfScope?: () => Promise<void> | void;
   onClearCodingScope?: () => Promise<void> | void;
+  terminalOpen?: boolean;
+  onToggleTerminal?: () => void;
   /** Hide the dock while dictation reply actions (Run / vocab) own the continue path. */
   hideComposer?: boolean;
   /** Conversation id so the scroll controller can land on the live edge once. */
@@ -132,6 +134,8 @@ export function ChatSurface({
   onPickProjectFolder,
   onUseSelfScope,
   onClearCodingScope,
+  terminalOpen = false,
+  onToggleTerminal,
   hideComposer = false,
   threadKey,
 }: ChatSurfaceProps) {
@@ -265,6 +269,8 @@ export function ChatSurface({
             onPickProjectFolder={onPickProjectFolder}
             onUseSelfScope={onUseSelfScope}
             onClearCodingScope={onClearCodingScope}
+            terminalOpen={terminalOpen}
+            onToggleTerminal={onToggleTerminal}
           />
         )}
       </div>

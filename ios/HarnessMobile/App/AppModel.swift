@@ -65,6 +65,12 @@ final class AppModel: ObservableObject {
     static let lastSuccessfulSyncAtKey = HarnessStorageKeys.lastSuccessfulSyncAt
     static let setupNoticeDismissedKey = HarnessStorageKeys.setupNoticeDismissed
 
+    /// Start recording as soon as the app cold-launches. On unless the user turns it off.
+    static var recordOnLaunch: Bool {
+        get { UserDefaults.standard.object(forKey: HarnessStorageKeys.recordOnLaunch) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: HarnessStorageKeys.recordOnLaunch) }
+    }
+
     @Published var syncStatus = SyncStatusSnapshot(kind: .idle, title: "", detail: nil, occurredAt: nil)
     @Published var isSyncing = false
     var composeDraft = ""
@@ -281,6 +287,13 @@ final class AppModel: ObservableObject {
         activeDictation = .createSession
     }
 
+    /// A record deep link: start a capture unless one is already running, in front of the list.
+    func beginCaptureFromLink() {
+        guard activeDictation == nil else { return }
+        chatRouter?.listOpen = false
+        beginCreateSessionDictation()
+    }
+
     func beginThreadDictation(conversationId: String) {
         activeDictation = .sendToConversation(conversationId)
     }
@@ -322,6 +335,13 @@ final class AppModel: ObservableObject {
         // which would delete a New Chat thread still waiting on its dictation.
         guard !didBootstrap else { return }
         didBootstrap = true
+        // Record-first: open the recorder before the list loads; capture does not depend on it.
+        // Skipped while the mic prompt or the setup notice would get in the way.
+        refreshSetupFlags()
+        let setupNoticePending = !setupNoticeDismissed && (needsAPIKey || syncNotConfigured)
+        if Self.recordOnLaunch, !setupNoticePending, recordingSession.hasRecordPermission {
+            beginCreateSessionDictation()
+        }
         let dir = localDataDir
         try? LocalDataLayout.ensureDirectories(at: dir)
         try? LocalDataLayout.ensureConversationsFile(at: dir)
@@ -492,6 +512,7 @@ final class AppModel: ObservableObject {
 
     /// Creates a dictation session with the transcribed user message already stored.
     /// Schedules LLM title refinement to match desktop `markVoiceDictationSession`.
+    /// The reply action is classified lazily, only if the capture is opened as a thread.
     @discardableResult
     func createDictationConversation(userMessage: String, recordingURL: URL? = nil) throws -> String {
         let conversationId = try store.createDictationConversation(
@@ -499,7 +520,6 @@ final class AppModel: ObservableObject {
             recordingURL: recordingURL
         )
         chatService.scheduleTitleRefinement(conversationId: conversationId)
-        chatService.scheduleDictationReplyAction(conversationId: conversationId)
         return conversationId
     }
 

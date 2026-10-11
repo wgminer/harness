@@ -6,7 +6,7 @@ import type { ChatModeId } from "../../shared/chatModes";
 import type { ChatMessage, MessageAttachment } from "../../shared/types";
 import type { Note, NoteSummary } from "../../shared/writing";
 import { titleFromMarkdownContent, UNTITLED_NOTE_TITLE } from "../../shared/writing";
-import type { TaskItem } from "../../shared/desktopAPI";
+import type { TaskItem, TaskMatrixPatch } from "../../shared/desktopAPI";
 import { isTaskStatus, type TaskStatus } from "../../shared/taskStatus";
 import { addTags, normalizeTags, removeTags } from "../../shared/tags";
 
@@ -451,7 +451,7 @@ export function createBrowserStore(storage: KeyValueStore = defaultStorage()) {
       };
       return this.setTasks([task, ...state.tasks]);
     },
-    updateTask(payload: {
+    updateTask(payload: TaskMatrixPatch & {
       id: string;
       title?: string;
       status?: TaskStatus;
@@ -469,6 +469,18 @@ export function createBrowserStore(storage: KeyValueStore = defaultStorage()) {
         if (payload.parentId !== undefined) {
           if (payload.parentId) next.parentId = payload.parentId;
           else delete next.parentId;
+        }
+        if (payload.important !== undefined) {
+          if (payload.important) next.important = true;
+          else delete next.important;
+        }
+        if (payload.dueDate !== undefined) {
+          if (payload.dueDate) next.dueDate = payload.dueDate;
+          else delete next.dueDate;
+        }
+        if (payload.estimateMinutes !== undefined) {
+          if (payload.estimateMinutes) next.estimateMinutes = payload.estimateMinutes;
+          else delete next.estimateMinutes;
         }
         return {
           ...next,

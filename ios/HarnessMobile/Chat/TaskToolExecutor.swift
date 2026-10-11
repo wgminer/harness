@@ -116,6 +116,9 @@ final class TaskToolExecutor {
         if let metadata = task.metadata {
             dict["metadata"] = metadata.mapValues { $0.any }
         }
+        if task.important == true { dict["important"] = true }
+        if let dueDate = task.dueDate { dict["dueDate"] = dueDate }
+        if let estimateMinutes = task.estimateMinutes { dict["estimateMinutes"] = estimateMinutes }
         return dict
     }
 

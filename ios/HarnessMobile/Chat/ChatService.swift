@@ -25,7 +25,6 @@ final class ChatService: ObservableObject {
     private var taskToolExecutor: TaskToolExecutor?
     private var client: OpenAIClient?
     private var titleRefinementTasks: [String: Task<Void, Never>] = [:]
-    private var dictationReplyActionTasks: [String: Task<Void, Never>] = [:]
 
     init(store: ConversationStore, tasksStore: TasksStore) {
         self.store = store
@@ -317,14 +316,6 @@ final class ChatService: ObservableObject {
             } catch {
                 // Title generation is best-effort; chat already succeeded.
             }
-        }
-    }
-
-    func scheduleDictationReplyAction(conversationId: String) {
-        dictationReplyActionTasks[conversationId]?.cancel()
-        dictationReplyActionTasks[conversationId] = Task {
-            defer { dictationReplyActionTasks[conversationId] = nil }
-            _ = await ensureDictationReplyAction(conversationId: conversationId)
         }
     }
 

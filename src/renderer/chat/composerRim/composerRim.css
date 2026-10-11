@@ -33,6 +33,9 @@
   --rim-level: calc(var(--rim-pulse-floor) + (1 - var(--rim-pulse-floor)) * var(--rim-breath));
   position: relative;
   isolation: isolate;
+  /* Drop shadow lives here: the glass below is clip-pathed, which would cut its own. */
+  border-radius: var(--rim-radius);
+  box-shadow: 0 var(--space-2) var(--space-6) var(--shadow-drop);
   animation:
     composer-rim-drift 8s linear infinite,
     composer-rim-pulse 7s ease-in-out infinite;
@@ -40,6 +43,11 @@
 
 .new-chat-composer .chat-composer-inner {
   background: color-mix(in oklab, var(--bg) 60%, transparent);
+  /*
+   * WebKit intermittently drops the border-radius clip on backdrop-filter while the halo
+   * behind it repaints, leaving square blurred corners. clip-path holds.
+   */
+  clip-path: inset(0 round var(--rim-radius));
 }
 
 .new-chat-composer::before,

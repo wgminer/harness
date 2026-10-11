@@ -10,6 +10,7 @@ struct MobileSettingsView: View {
     @State private var recordings: [VoiceRecording] = []
     @State private var autoSend = TranscriptionSettings.defaults.autoSend
     @State private var cleanupEnabled = TranscriptionSettings.defaults.cleanup.enabled
+    @State private var recordOnLaunch = AppModel.recordOnLaunch
 
     init(app: AppModel) {
         self.app = app
@@ -101,6 +102,16 @@ struct MobileSettingsView: View {
     @ViewBuilder
     private var dictationSection: some View {
         Section {
+            Toggle(
+                "Record when the app opens",
+                isOn: Binding(
+                    get: { recordOnLaunch },
+                    set: { newValue in
+                        recordOnLaunch = newValue
+                        AppModel.recordOnLaunch = newValue
+                    }
+                )
+            )
             Toggle(
                 "Send after dictation",
                 isOn: Binding(

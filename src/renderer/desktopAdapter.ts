@@ -1,10 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { HarnessAPI } from "../shared/desktopAPI";
+import type { HarnessAPI, TaskMatrixPatch } from "../shared/desktopAPI";
 import type {
   CodingScopeMeta,
   GlobalRecordingStatus,
   RecentRecording,
   RecordingChime,
+  TerminalDataChunk,
 } from "../shared/desktopAPI";
 import type {
   AppendMessageMeta,
@@ -18,7 +19,6 @@ import type {
   NoteSpellCheckInput,
 } from "../shared/writing";
 import type { ImageCreateInput, ImageGenerateInput } from "../shared/images";
-import type { InboxProcessAction } from "../shared/inbox";
 import type { SyncResult, SyncStatus } from "../shared/sync";
 import type { UpdateStatus } from "../shared/updateStatus";
 import { tauriCommandName, tauriEventName } from "../shared/ipcNames";
@@ -144,7 +144,7 @@ export function createHarnessAdapter(): HarnessAPI {
       list: () => invoke(cmd("tasks:list")),
       create: (title: string, tags?: string[], status?: string, parentId?: string) =>
         invoke(cmd("tasks:create"), { title, tags, status, parentId }),
-      update: (payload: {
+      update: (payload: TaskMatrixPatch & {
         id: string;
         title?: string;
         status?: string;
@@ -156,17 +156,6 @@ export function createHarnessAdapter(): HarnessAPI {
       delete: (id: string) => invoke(cmd("tasks:delete"), { id }),
       clearCompleted: () => invoke(cmd("tasks:clearCompleted")),
       breakdown: (id: string) => invoke(cmd("tasks:breakdown"), { id }),
-    },
-    inbox: {
-      list: () => invoke(cmd("inbox:list")),
-      refresh: () => invoke(cmd("inbox:refresh")),
-      updateText: (id: string, text: string) => invoke(cmd("inbox:updateText"), { id, text }),
-      process: (id: string, action: InboxProcessAction) =>
-        invoke(cmd("inbox:process"), { id, action }),
-      restore: (id: string) => invoke(cmd("inbox:restore"), { id }),
-      clearProcessed: () => invoke(cmd("inbox:clearProcessed")),
-      onChanged: (cb: () => void) =>
-        subscribe<Record<string, never>>("inbox:changed", () => cb()),
     },
     chat: {
       send: (conversationId: string, userContent: string) =>
@@ -265,6 +254,18 @@ export function createHarnessAdapter(): HarnessAPI {
       setScope: (conversationId: string, scope: CodingScopeMeta | null) =>
         invoke(cmd("coding:setScope"), { conversationId, scope }),
       selfScopeAvailable: () => invoke(cmd("coding:selfScopeAvailable")),
+    },
+    terminal: {
+      open: (conversationId: string, cols: number, rows: number) =>
+        invoke(cmd("terminal:open"), { conversationId, cols, rows }),
+      write: (conversationId: string, data: string) =>
+        invoke(cmd("terminal:write"), { conversationId, data }),
+      resize: (conversationId: string, cols: number, rows: number) =>
+        invoke(cmd("terminal:resize"), { conversationId, cols, rows }),
+      close: (conversationId: string) => invoke(cmd("terminal:close"), { conversationId }),
+      onData: (cb) => subscribe<TerminalDataChunk>("terminal:data", (p) => cb(p)),
+      onExit: (cb) =>
+        subscribe<{ conversationId: string }>("terminal:exit", (p) => cb(p.conversationId)),
     },
     search: {
       lookupImage: (query: string) =>

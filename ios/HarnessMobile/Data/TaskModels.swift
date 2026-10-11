@@ -19,6 +19,59 @@ struct TaskItem: Codable, Equatable, Identifiable {
     var metadata: [String: JSONValue]?
     /// Subtask parent; written by desktop. Kept so phone saves do not drop it.
     var parentId: String? = nil
+    /// Eisenhower "important" axis; nil when not important so the saved shape matches desktop.
+    /// Urgency is derived from `dueDate`, never stored.
+    var important: Bool? = nil
+    /// Local calendar day, `yyyy-MM-dd`.
+    var dueDate: String? = nil
+    var estimateMinutes: Int? = nil
+}
+
+/// Parsing for the matrix fields (`important`, `dueDate`, `estimateMinutes`); mirrors desktop `tasks.rs`.
+enum TaskMatrixFields {
+    static let dueDateError = "dueDate must be a calendar day like 2026-03-14"
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        return formatter
+    }()
+
+    /// A `yyyy-MM-dd` calendar day, or nil when the value is not a real date.
+    static func parseDueDate(_ value: Any?) -> String? {
+        guard let raw = value as? String else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let date = dayFormatter.date(from: trimmed),
+              dayFormatter.string(from: date) == trimmed
+        else { return nil }
+        return trimmed
+    }
+
+    /// Null or an empty string clears an optional field.
+    static func isClear(_ value: Any) -> Bool {
+        if value is NSNull { return true }
+        if let raw = value as? String {
+            return raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return false
+    }
+
+    /// Whole minutes above zero.
+    static func parseEstimateMinutes(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let rounded = number.doubleValue.rounded()
+        guard rounded.isFinite, rounded >= 1, rounded <= Double(UInt32.max) else { return nil }
+        return Int(rounded)
+    }
+
+    static func parseImportant(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
+    }
 }
 
 struct TaskState: Equatable {

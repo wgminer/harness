@@ -168,6 +168,13 @@ final class TasksStore: ObservableObject {
                     error: "Parent task not found or is itself a subtask: \(parentId)"
                 )
             }
+            var dueDate: String?
+            if let rawDue = args["dueDate"], !TaskMatrixFields.isClear(rawDue) {
+                guard let day = TaskMatrixFields.parseDueDate(rawDue) else {
+                    return TasksPayload(tasks: nextTasks, lastAction: .create, error: TaskMatrixFields.dueDateError)
+                }
+                dueDate = day
+            }
             let task = TaskItem(
                 id: idFactory(),
                 title: title,
@@ -176,7 +183,10 @@ final class TasksStore: ObservableObject {
                 createdAt: nowMs,
                 updatedAt: nowMs,
                 metadata: metadata,
-                parentId: parentId
+                parentId: parentId,
+                important: TaskMatrixFields.parseImportant(args["important"]) == true ? true : nil,
+                dueDate: dueDate,
+                estimateMinutes: TaskMatrixFields.parseEstimateMinutes(args["estimateMinutes"])
             )
             nextTasks.append(task)
             return TasksPayload(tasks: nextTasks, lastAction: .create, affectedIds: [task.id])
@@ -214,6 +224,27 @@ final class TasksStore: ObservableObject {
                     existing.parentId = parentId
                 } else if rawParent is NSNull || rawParent is String {
                     existing.parentId = nil
+                }
+            }
+            if let important = TaskMatrixFields.parseImportant(args["important"]) {
+                existing.important = important ? true : nil
+            }
+            // `dueDate`: a day sets it, "" or null clears it.
+            if let rawDue = args["dueDate"] {
+                if TaskMatrixFields.isClear(rawDue) {
+                    existing.dueDate = nil
+                } else if let day = TaskMatrixFields.parseDueDate(rawDue) {
+                    existing.dueDate = day
+                } else {
+                    return TasksPayload(tasks: nextTasks, lastAction: .update, error: TaskMatrixFields.dueDateError)
+                }
+            }
+            // `estimateMinutes`: a positive number sets it, 0 or null clears it.
+            if let rawEstimate = args["estimateMinutes"] {
+                if rawEstimate is NSNull || (rawEstimate as? NSNumber)?.doubleValue == 0 {
+                    existing.estimateMinutes = nil
+                } else if let minutes = TaskMatrixFields.parseEstimateMinutes(rawEstimate) {
+                    existing.estimateMinutes = minutes
                 }
             }
             if let raw = args["metadata"] as? [String: Any] {
@@ -342,7 +373,10 @@ final class TasksStore: ObservableObject {
             createdAt: createdAt,
             updatedAt: updatedAt,
             metadata: metadata,
-            parentId: (raw["parentId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            parentId: (raw["parentId"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            important: TaskMatrixFields.parseImportant(raw["important"]) == true ? true : nil,
+            dueDate: TaskMatrixFields.parseDueDate(raw["dueDate"]),
+            estimateMinutes: TaskMatrixFields.parseEstimateMinutes(raw["estimateMinutes"])
         )
     }
 
