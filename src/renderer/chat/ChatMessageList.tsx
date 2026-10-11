@@ -19,6 +19,8 @@ import { ToolCallsCard } from "./ToolCallsCard";
 import { StreamingAssistantContent } from "./StreamingAssistantContent";
 import { PastedTextCard } from "./PastedTextCard";
 import { splitPastedSegments } from "./pastedText";
+import { formatMessageTimeDetail } from "./messageTimeDetail";
+import { Tooltip } from "../ui/Tooltip";
 import {
   shouldUseStreamingAssistantRenderer,
   useStreamedAssistantIds,
@@ -260,6 +262,14 @@ export function ChatMessageList({
                   </>
                 ) : (
                   <>
+                    {isAssistant && m.reasoning?.trim() ? (
+                      <details className="md-details message-reasoning">
+                        <summary className="md-details__summary">Reasoning</summary>
+                        <div className="md-details__body">
+                          <MarkdownContent content={m.reasoning} {...markdownActions} />
+                        </div>
+                      </details>
+                    ) : null}
                     {hasToolCalls && (
                       <ToolCallsCard
                         toolCalls={
@@ -323,7 +333,9 @@ export function ChatMessageList({
                       <span className="message-block-meta-sep" aria-hidden="true">
                         ·
                       </span>
-                      <span className="message-block-meta-time">{formatMessageTime(m.timestamp)}</span>
+                      <Tooltip label={formatMessageTimeDetail(m, displayMessages[idx - 1])}>
+                        <span className="message-block-meta-time">{formatMessageTime(m.timestamp)}</span>
+                      </Tooltip>
                     </span>
                   ) : null}
                 </div>

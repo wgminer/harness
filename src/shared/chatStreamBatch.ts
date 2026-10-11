@@ -9,12 +9,15 @@ export interface ChatStreamBatchPolicy {
   minChars: number;
   maxHoldMs: number;
   newlineMinChars: number;
+  /** The first flush of a stream goes out once this many characters arrive, so text shows early. */
+  firstFlushMinChars?: number;
 }
 
 export const CHAT_STREAM_BATCH: ChatStreamBatchPolicy = {
   minChars: contract.minChars,
   maxHoldMs: contract.maxHoldMs,
   newlineMinChars: contract.newlineMinChars,
+  firstFlushMinChars: contract.firstFlushMinChars,
 };
 
 export type StreamBatchClock = () => number;
@@ -23,6 +26,7 @@ export type StreamBatchClock = () => number;
 export class StreamTextBatcher {
   private buffer = "";
   private bufferStartedAt: number | null = null;
+  private flushedOnce = false;
   private readonly now: StreamBatchClock;
 
   constructor(
@@ -56,6 +60,9 @@ export class StreamTextBatcher {
     const heldLong =
       this.bufferStartedAt != null && this.now() - this.bufferStartedAt >= this.policy.maxHoldMs;
 
+    const firstMin = this.policy.firstFlushMinChars;
+    if (!this.flushedOnce && firstMin && charLen >= firstMin) return this.takeAll();
+
     const lastNl = this.buffer.lastIndexOf("\n");
     if (lastNl >= 0) {
       const prefix = this.buffer.slice(0, lastNl + 1);
@@ -63,6 +70,7 @@ export class StreamTextBatcher {
       if (prefixChars >= this.policy.newlineMinChars) {
         this.buffer = this.buffer.slice(lastNl + 1);
         this.bufferStartedAt = this.buffer ? this.now() : null;
+        this.flushedOnce = true;
         return prefix;
       }
     }
@@ -77,6 +85,7 @@ export class StreamTextBatcher {
     const out = this.buffer;
     this.buffer = "";
     this.bufferStartedAt = null;
+    this.flushedOnce = true;
     return out;
   }
 }

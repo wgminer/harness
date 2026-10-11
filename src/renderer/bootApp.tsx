@@ -8,6 +8,8 @@ import { initGlobalHotkeyController } from "./recording/globalHotkeyController";
 import { RootApp } from "./RootApp";
 import { setCachedSettings } from "./settings/settingsSessionCache";
 import { isCurrentStickyWindow } from "./notes/stickyWindow";
+import "@fontsource-variable/newsreader/opsz.css";
+import "@fontsource-variable/newsreader/opsz-italic.css";
 import "./base.css";
 import "./ui/modal.css";
 import "./ui/menu.css";

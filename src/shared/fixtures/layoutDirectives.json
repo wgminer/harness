@@ -1,0 +1,37 @@
+[
+  {
+    "name": "plain text is untouched",
+    "input": "Meet at 3:30pm.\n\n- one\n- two",
+    "output": "Meet at 3:30pm.\n\n- one\n- two"
+  },
+  {
+    "name": "callout keeps its body as a paragraph",
+    "input": "Before.\n:::tip\nShort suggestion.\n:::\nAfter.",
+    "output": "Before.\n\nShort suggestion.\n\nAfter."
+  },
+  {
+    "name": "details keeps its summary",
+    "input": ":::details{summary=\"Sources\"}\nLong content.\n:::",
+    "output": "**Sources**\n\nLong content."
+  },
+  {
+    "name": "chip becomes its label",
+    "input": "Build is :chip[failing]{tone=danger} and :chip[slow].",
+    "output": "Build is failing and slow."
+  },
+  {
+    "name": "link card becomes a markdown link",
+    "input": "See:\n\n:::link{url=\"https://example.com\" title=\"Example\" desc=\"One-line summary.\" site=\"example.com\"}\n:::",
+    "output": "See:\n\n[Example](https://example.com) — One-line summary."
+  },
+  {
+    "name": "code fences are left alone",
+    "input": "```md\n:::tip\nliteral :chip[x]\n:::\n```",
+    "output": "```md\n:::tip\nliteral :chip[x]\n:::\n```"
+  },
+  {
+    "name": "nested fence with more colons",
+    "input": "::::warning\nCareful.\n::::",
+    "output": "Careful."
+  }
+]

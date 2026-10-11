@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { VoiceState } from "../chat/chatHelpers";
 import { MICROPHONE_PERMISSION_DENIED_MESSAGE } from "./recordingAudioUtils";
 import { transcribeWav } from "./recordingPipeline";
-import { playCancelChime, playDoneChime } from "./recordingUtils";
+import { playCancelChime, playDoneChime, playErrorChime } from "./recordingUtils";
 import { useRecorder } from "./useRecorder";
 
 const MAX_RECORDING_MS = 5 * 60 * 1000;
@@ -45,6 +45,8 @@ export function useVoiceCapture({
   const transcriptionRequestIdRef = useRef<string | null>(null);
   const transcriptionCancelledRef = useRef(false);
   const mirroringGlobalRef = useRef(false);
+  /** Bumped on cancel so a start still awaiting the mic does not resurrect the take. */
+  const startAttemptRef = useRef(0);
   const onTranscriptRef = useRef(onTranscript);
 
   const recorder = useRecorder();
@@ -155,6 +157,7 @@ export function useVoiceCapture({
         return;
       }
       if ("error" in result) {
+        void playErrorChime();
         setVoiceError(result.error);
       } else {
         void playDoneChime();
@@ -164,6 +167,7 @@ export function useVoiceCapture({
         });
       }
     } catch (err) {
+      void playErrorChime();
       setVoiceError(err instanceof Error ? err.message : "Recording failed.");
     } finally {
       transcriptionRequestIdRef.current = null;
@@ -173,10 +177,15 @@ export function useVoiceCapture({
 
   const startRecording = useCallback(async () => {
     if (mirroringGlobalRef.current) return;
+    const attempt = ++startAttemptRef.current;
     setVoiceError(null);
     setRecordingMs(0);
     try {
       await recorder.start();
+      if (attempt !== startAttemptRef.current) {
+        await recorder.cancel();
+        return;
+      }
       setVoiceState("recording");
       transcriptionCancelledRef.current = false;
       recordingStartRef.current = Date.now();
@@ -192,6 +201,8 @@ export function useVoiceCapture({
         }
       }, 33);
     } catch (err) {
+      if (attempt !== startAttemptRef.current) return;
+      void playErrorChime();
       setVoiceError(err instanceof Error ? err.message : MICROPHONE_PERMISSION_DENIED_MESSAGE);
     }
   }, [recorder, stopAndTranscribe]);
@@ -209,6 +220,7 @@ export function useVoiceCapture({
       await window.harness.recording.cancelGlobalSession().catch(() => {});
       return;
     }
+    startAttemptRef.current += 1;
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
@@ -218,13 +230,8 @@ export function useVoiceCapture({
       void window.harness.recording.cancelTranscription(transcriptionRequestIdRef.current).catch(() => {});
       transcriptionRequestIdRef.current = null;
     }
-    try {
-      if (voiceState === "recording") {
-        await recorder.stop({ chime: "none" });
-      }
-    } catch {
-      // already stopped
-    }
+    // Unconditional: voiceState can be stale here, so always release the mic.
+    await recorder.cancel();
     await playCancelChime();
     setVoiceState("idle");
     setVoiceError(null);

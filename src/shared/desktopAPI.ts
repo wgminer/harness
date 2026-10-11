@@ -30,6 +30,8 @@ export interface TaskItem {
   tags: string[];
   createdAt?: number;
   updatedAt?: number;
+  /** Subtask parent id (one level deep). Missing or unknown parent => top level. */
+  parentId?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -45,7 +47,7 @@ export interface TasksPayload {
   error?: string;
 }
 
-export type RecordingChime = "start" | "stop" | "done" | "cancel";
+export type RecordingChime = "start" | "stop" | "done" | "cancel" | "error";
 
 /** A saved take under audio-recordings/ (`rec_<ms>.wav`). */
 export interface RecentRecording {
@@ -216,17 +218,21 @@ export interface HarnessAPI {
   };
   tasks: {
     list: () => Promise<TasksPayload>;
-    create: (title: string, tags?: string[], status?: TaskStatus) => Promise<TasksPayload>;
+    create: (title: string, tags?: string[], status?: TaskStatus, parentId?: string) => Promise<TasksPayload>;
     update: (payload: {
       id: string;
       title?: string;
       status?: TaskStatus;
+      /** A task id nests it; null moves it back to the top level. */
+      parentId?: string | null;
       tags?: string[];
       add_tags?: string[];
       remove_tags?: string[];
     }) => Promise<TasksPayload>;
     delete: (id: string) => Promise<TasksPayload>;
     clearCompleted: () => Promise<TasksPayload>;
+    /** Ask the model for subtasks and save them under `id`. */
+    breakdown: (id: string) => Promise<TasksPayload>;
   };
   chat: {
     send: (conversationId: string, content: string) => Promise<void>;
@@ -242,10 +248,13 @@ export interface HarnessAPI {
       conversationId: string | null;
       hasActiveStream: boolean;
       content: string;
+      reasoning?: string;
       pendingTools: Array<{ toolName: string; payload: unknown }>;
     }>;
     getContextPreview: (conversationId?: string | null) => Promise<ContextPreview>;
     onStreamChunk: (cb: (conversationId: string, chunk: string) => void) => () => void;
+    /** Reasoning summary text for the in-flight assistant reply. */
+    onStreamReasoning: (cb: (conversationId: string, chunk: string) => void) => () => void;
     onStreamEnd: (cb: (conversationId: string) => void) => () => void;
     onNoteStreamOpen: (
       cb: (conversationId: string, noteId: string, title: string, summary: string) => void,

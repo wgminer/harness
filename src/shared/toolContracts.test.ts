@@ -40,6 +40,7 @@ describe("resources/contracts/tools.json", () => {
     const names = new Set(readToolDefinitions().map((d) => d.function.name));
     for (const expected of [
       "set_layout",
+      "set_chat_mode",
       "note_list",
       "note_create",
       "note_read",
@@ -68,13 +69,24 @@ describe("resources/contracts/tools.json", () => {
       "task_delete",
       "task_clear_completed",
       "memory_set",
-      "memory_list",
       "memory_search_conversations",
       "web_search",
       "get_datetime",
     ]) {
       expect(names.has(expected), `missing shared (also-iOS) tool: ${expected}`).toBe(true);
     }
+  });
+});
+
+describe("set_chat_mode tool", () => {
+  it("offers exactly the mode ids in chatModes.json", () => {
+    const def = readToolDefinitions().find((d) => d.function.name === "set_chat_mode");
+    const params = def?.function.parameters as {
+      properties: { mode: { enum: string[] } };
+    };
+    const raw = readFileSync(join(root, "resources/contracts/chatModes.json"), "utf8");
+    const modeIds = (JSON.parse(raw) as { modes: { id: string }[] }).modes.map((m) => m.id);
+    expect(params.properties.mode.enum).toEqual(modeIds);
   });
 });
 

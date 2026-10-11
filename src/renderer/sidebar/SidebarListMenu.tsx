@@ -21,6 +21,8 @@ interface SidebarListMenuProps {
   /** The list's first group label, which doubles as the menu trigger. */
   label: ReactNode;
   title?: string;
+  /** Plays one highlight sweep across the label each time it turns on. */
+  shimmer?: boolean;
   filter: SidebarLibraryFilter;
   onFilterChange: (filter: SidebarLibraryFilter) => void;
   sortMode: SidebarListSortMode;
@@ -31,6 +33,7 @@ interface SidebarListMenuProps {
 export function SidebarListMenu({
   label,
   title,
+  shimmer = false,
   filter,
   onFilterChange,
   sortMode,
@@ -154,7 +157,12 @@ export function SidebarListMenu({
           // The real label holds the width; the scramble overlays it so the chevron stays put.
           <span className="sidebar-list-menu__trigger-label sidebar-list-menu__trigger-label--scramble">
             <span className="sidebar-list-menu__trigger-label-sizer">{textLabel}</span>
-            <span className="sidebar-list-menu__trigger-label-glyphs" aria-hidden>
+            <span
+              className={["sidebar-list-menu__trigger-label-glyphs", shimmer ? "sidebar-shimmer" : ""]
+                .filter(Boolean)
+                .join(" ")}
+              aria-hidden
+            >
               {scramble.display}
             </span>
           </span>

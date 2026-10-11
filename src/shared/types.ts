@@ -99,6 +99,8 @@ export interface ChatMessage {
   model?: string;
   /** Optional image (or other) attachments; preserved across sync rewrites. */
   attachments?: MessageAttachment[];
+  /** Model reasoning summary for assistant messages, when the API returned one. */
+  reasoning?: string;
 }
 
 /** Optional fields when appending a message via IPC / storage. */

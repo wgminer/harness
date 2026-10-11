@@ -68,6 +68,7 @@ impl ChatController {
             "user",
             user_content,
             Some(AppendMessageMeta {
+                reasoning: None,
                 timestamp: Some(chrono::Utc::now().timestamp_millis()),
                 tool_calls: None,
                 model: None,
@@ -102,6 +103,7 @@ impl ChatController {
             "user",
             instruction,
             Some(AppendMessageMeta {
+                reasoning: None,
                 timestamp: Some(t1),
                 tool_calls: None,
                 model: None,
@@ -115,6 +117,7 @@ impl ChatController {
             "user",
             &transcript,
             Some(AppendMessageMeta {
+                reasoning: None,
                 timestamp: Some(t2),
                 tool_calls: None,
                 model: None,
@@ -311,6 +314,7 @@ impl ChatController {
             content: Some(system_prompt),
             tool_calls: None,
             tool_call_id: None,
+            response_items: None,
         }];
         let now_ms = chrono::Utc::now().timestamp_millis();
         for m in history {
@@ -320,6 +324,7 @@ impl ChatController {
                     content: Some(m.content),
                     tool_calls: None,
                     tool_call_id: None,
+                    response_items: None,
                 });
                 continue;
             }
@@ -331,6 +336,7 @@ impl ChatController {
                 )),
                 tool_calls: None,
                 tool_call_id: None,
+                response_items: None,
             });
         }
         if let Some(content) = user_content {
@@ -339,6 +345,7 @@ impl ChatController {
                 content: Some(annotate_message_content_for_model(content, Some(now_ms))),
                 tool_calls: None,
                 tool_call_id: None,
+                response_items: None,
             });
         }
         if let Some(content) = second_user_content {
@@ -347,6 +354,7 @@ impl ChatController {
                 content: Some(annotate_message_content_for_model(content, Some(now_ms + 1))),
                 tool_calls: None,
                 tool_call_id: None,
+                response_items: None,
             });
         }
         Ok((assembly, messages))
@@ -395,7 +403,6 @@ const IOS_TOOL_NAMES: &[&str] = &[
     "task_delete",
     "task_clear_completed",
     "memory_set",
-    "memory_list",
     "memory_search_conversations",
     "get_datetime",
     "web_search",

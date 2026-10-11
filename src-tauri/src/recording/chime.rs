@@ -1,4 +1,4 @@
-//! Native recording cues (start / stop / done / cancel), synthesized and played via cpal.
+//! Native recording cues (start / stop / done / cancel / error), synthesized and played via cpal.
 //!
 //! Played from Rust so cues are not delayed when the webview is backgrounded or throttled.
 //! Each cue runs on its own short-lived thread and never blocks the caller.
@@ -13,6 +13,8 @@ pub enum Chime {
     Stop,
     Done,
     Cancel,
+    /// A take failed somewhere after Stop (transcription, empty result, paste).
+    Error,
 }
 
 impl Chime {
@@ -22,17 +24,19 @@ impl Chime {
             "stop" => Some(Self::Stop),
             "done" => Some(Self::Done),
             "cancel" => Some(Self::Cancel),
+            "error" => Some(Self::Error),
             _ => None,
         }
     }
 
-    /// (frequency Hz, duration seconds) pairs, played back to back.
+    /// (frequency Hz, duration seconds) pairs, played back to back. 0 Hz is a rest.
     fn notes(self) -> &'static [(f32, f32)] {
         match self {
             Self::Start => &[(660.0, 0.08), (880.0, 0.12)],
             Self::Stop => &[(550.0, 0.08), (440.0, 0.15)],
             Self::Done => &[(784.0, 0.07), (988.0, 0.07), (1319.0, 0.16)],
             Self::Cancel => &[(330.0, 0.06), (220.0, 0.18)],
+            Self::Error => &[(196.0, 0.11), (0.0, 0.06), (196.0, 0.11), (0.0, 0.06), (196.0, 0.22)],
         }
     }
 }
@@ -140,6 +144,7 @@ mod tests {
     fn parses_known_kinds() {
         assert_eq!(Chime::parse("start"), Some(Chime::Start));
         assert_eq!(Chime::parse("done"), Some(Chime::Done));
+        assert_eq!(Chime::parse("error"), Some(Chime::Error));
         assert_eq!(Chime::parse("nope"), None);
     }
 

@@ -63,9 +63,9 @@
 }
 
 .settings-content {
-  max-width: var(--content-width);
+  max-width: var(--page-width);
   margin: 0 auto;
-  padding: var(--space-6) var(--shell-pad-inline) var(--space-12);
+  padding: var(--space-6) var(--page-pad-inline) var(--space-12);
 }
 
 .settings-segmented {

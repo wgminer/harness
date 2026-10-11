@@ -1,5 +1,6 @@
 pub mod fs_tools;
 pub mod git;
+pub mod pi;
 pub mod scope;
 pub mod self_repo;
 pub mod shell;

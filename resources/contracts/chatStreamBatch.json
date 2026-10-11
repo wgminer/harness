@@ -1,5 +1,6 @@
 {
   "minChars": 700,
   "maxHoldMs": 700,
-  "newlineMinChars": 280
+  "newlineMinChars": 280,
+  "firstFlushMinChars": 24
 }

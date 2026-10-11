@@ -63,6 +63,17 @@ impl ChatController {
         );
     }
 
+    pub(crate) fn emit_reasoning_chunk(&self, conversation_id: &str, chunk: &str) {
+        if chunk.is_empty() {
+            return;
+        }
+        self.active_stream_reasoning.lock().unwrap().push_str(chunk);
+        let _ = self.app.emit(
+            "chat-stream-reasoning",
+            json!({ "conversationId": conversation_id, "chunk": chunk }),
+        );
+    }
+
     pub(crate) fn emit_stream_end(&self, conversation_id: &str) {
         let _ = self.app.emit(
             "chat-stream-end",
@@ -163,10 +174,12 @@ impl ChatController {
                     })
                     .collect()
             };
+            let reasoning = self.active_stream_reasoning.lock().unwrap().clone();
             return json!({
                 "conversationId": cid,
                 "hasActiveStream": true,
                 "content": content,
+                "reasoning": reasoning,
                 "pendingTools": pending_tools,
             });
         }
@@ -218,6 +231,7 @@ impl ChatController {
             *guard = checkpoint.content_so_far.clone();
         }
         *self.note_stream.lock().unwrap() = None;
+        self.active_stream_reasoning.lock().unwrap().clear();
 
         let model_label = Self::active_chat_model_label();
         let tool_calls_this_turn = Arc::new(Mutex::new(checkpoint.tool_records_so_far.clone()));
@@ -281,6 +295,7 @@ impl ChatController {
             content: Some(action_result),
             tool_calls: None,
             tool_call_id: Some(checkpoint.tool_call_id.clone()),
+            response_items: None,
         });
 
         // Finish any later tools from the same assistant batch.
@@ -314,6 +329,7 @@ impl ChatController {
                         content: Some(result),
                         tool_calls: None,
                         tool_call_id: Some(tc.id.clone()),
+                        response_items: None,
                     });
                 }
                 Err(err) => {
@@ -323,6 +339,7 @@ impl ChatController {
                         content: Some(result),
                         tool_calls: None,
                         tool_call_id: Some(tc.id.clone()),
+                        response_items: None,
                     });
                 }
             }
@@ -348,6 +365,7 @@ impl ChatController {
                 |chunk| {
                     controller.emit_ui_text_chunk(&conversation_id_owned, chunk);
                 },
+                |chunk| controller.emit_reasoning_chunk(&conversation_id_owned, chunk),
                 {
                     let controller = controller.clone();
                     let conversation_id = conversation_id_owned.clone();
@@ -425,8 +443,44 @@ impl ChatController {
             *guard = String::new();
         }
         *self.note_stream.lock().unwrap() = None;
+        self.active_stream_reasoning.lock().unwrap().clear();
 
         let model_label = Self::active_chat_model_label();
+
+        // Conversations with a coding scope run through Pi, which owns the loop and tools.
+        let coding_scope = crate::memory::get_conversation_coding_scope(&self.state, conversation_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|meta| crate::coding::scope_from_meta(&meta).ok());
+        if let Some(scope) = coding_scope {
+            let prompt = trailing_user_prompt(&messages);
+            let mut tool_records = Vec::<ToolCallRecord>::new();
+            let stream_result = crate::coding::pi::run_turn(
+                crate::coding::pi::PiTurn {
+                    root: &scope.root,
+                    conversation_id,
+                    prompt: &prompt,
+                    api_key: &api_key,
+                    model: &model_label,
+                },
+                |chunk| self.emit_ui_text_chunk(conversation_id, chunk),
+                |chunk| self.emit_reasoning_chunk(conversation_id, chunk),
+                |name, payload| {
+                    self.emit_tool_panel_update(conversation_id, &name, payload.clone());
+                    tool_records.push(ToolCallRecord {
+                        tool_name: name,
+                        payload: Some(payload),
+                    });
+                },
+                &cancel,
+            )
+            .await;
+            return self
+                .finalize_assistant_stream(conversation_id, &model_label, stream_result, tool_records)
+                .await;
+        }
+
         let tool_calls_this_turn = Arc::new(Mutex::new(Vec::<ToolCallRecord>::new()));
 
         let client = OpenAIChatClient::new(api_key).map_err(|e| e.to_string())?;
@@ -459,6 +513,7 @@ impl ChatController {
                     drop(guard);
                     controller.emit_ui_text_chunk(&conversation_id_owned, chunk);
                 },
+                |chunk| controller.emit_reasoning_chunk(&conversation_id_owned, chunk),
                 {
                     let controller = controller.clone();
                     let conversation_id = conversation_id_owned.clone();
@@ -521,6 +576,8 @@ impl ChatController {
         }
 
         let captured_content = stream_result.as_ref().ok().cloned().unwrap_or_default();
+        let reasoning = std::mem::take(&mut *self.active_stream_reasoning.lock().unwrap());
+        let reasoning = (!reasoning.trim().is_empty()).then_some(reasoning);
         if let Some(ref stream) = stream_state {
             if !stream.body.is_empty() {
                 let body = notes::ensure_leading_note_h1(&stream.body, &stream.title);
@@ -560,6 +617,7 @@ impl ChatController {
                         "assistant",
                         &message_content,
                         Some(AppendMessageMeta {
+                            reasoning: reasoning.clone(),
                             timestamp: Some(chrono::Utc::now().timestamp_millis()),
                             model: Some(model_label.to_string()),
                             tool_calls: if tool_calls_this_turn.is_empty() {
@@ -595,6 +653,7 @@ impl ChatController {
                         "assistant",
                         &message_content,
                         Some(AppendMessageMeta {
+                            reasoning: reasoning.clone(),
                             timestamp: Some(chrono::Utc::now().timestamp_millis()),
                             model: Some(model_label.to_string()),
                             tool_calls: if tool_calls_this_turn.is_empty() {
@@ -614,6 +673,7 @@ impl ChatController {
                         "assistant",
                         &format!("Something went wrong: {err}"),
                         Some(AppendMessageMeta {
+                            reasoning: None,
                             timestamp: Some(chrono::Utc::now().timestamp_millis()),
                             model: Some(model_label.to_string()),
                             tool_calls: None,
@@ -666,6 +726,7 @@ impl ChatController {
             let mut guard = self.active_stream_content.lock().await;
             *guard = String::new();
         }
+        self.active_stream_reasoning.lock().unwrap().clear();
     }
 
     async fn stream_e2e_reply(&self, conversation_id: &str) -> Result<(), String> {
@@ -699,6 +760,7 @@ impl ChatController {
                 "assistant",
                 &emitted,
                 Some(AppendMessageMeta {
+                    reasoning: None,
                     timestamp: Some(chrono::Utc::now().timestamp_millis()),
                     model: Some(model_label),
                     tool_calls: None,
@@ -770,6 +832,20 @@ pub(crate) fn activate_note_stream_from_payload(
         routing_active: true,
     });
     controller.emit_note_stream_open(conversation_id, note_id, &title, &summary);
+}
+
+/// The newest user message(s), without the model-only timestamp prefix. Pi
+/// keeps its own history, so it is sent only what the user just wrote.
+fn trailing_user_prompt(messages: &[ChatMessageParam]) -> String {
+    let mut parts: Vec<String> = messages
+        .iter()
+        .rev()
+        .take_while(|m| m.role == "user")
+        .filter_map(|m| m.content.as_deref())
+        .map(super::turn::strip_sent_at_prefix)
+        .collect();
+    parts.reverse();
+    parts.join("\n\n")
 }
 
 fn split_into_word_chunks(content: &str) -> Vec<String> {

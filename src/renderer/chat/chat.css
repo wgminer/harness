@@ -75,7 +75,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--space-8) calc(var(--shell-pad-inline) * 2);
+  padding: var(--space-8) var(--page-pad-inline);
   box-sizing: border-box;
 }
 
@@ -154,7 +154,7 @@
   overflow-y: auto;
   overflow-anchor: none;
   width: 100%;
-  padding: var(--space-8) calc(var(--shell-pad-inline) * 2) var(--chat-composer-scroll-inset);
+  padding: var(--space-8) var(--page-pad-inline) var(--chat-composer-scroll-inset);
   scroll-padding-top: var(--space-8);
   scroll-padding-bottom: var(--chat-composer-scroll-inset);
 }
@@ -187,7 +187,7 @@
 }
 
 .chat-stream-block:first-child {
-  min-height: var(--line-height-message);
+  min-height: var(--line-height-chat);
 }
 
 /* Wait copy sits in the first-block slot without the entrance animation. */
@@ -299,9 +299,16 @@
 }
 
 .message-block.assistant .content {
-  font-family: var(--font-family-serif);
-  font-size: var(--font-size-title);
-  line-height: var(--line-height-message);
+  font-family: var(--font-family-chat);
+  font-size: var(--font-size-chat);
+  line-height: var(--line-height-chat);
+  font-weight: var(--font-weight-chat);
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures contextual;
+  font-optical-sizing: auto;
+  /* Avoid orphaned last words and let opening quotes hang into the margin. */
+  text-wrap: pretty;
+  hanging-punctuation: first;
 }
 
 .message-user-card {
@@ -509,8 +516,125 @@
   margin-bottom: var(--space-1);
 }
 
+/* Assistant prose sits on a taller line, so paragraphs need more air than the user card. */
+.message-block.assistant .content p,
+.message-block.assistant .content ul,
+.message-block.assistant .content ol {
+  margin-bottom: var(--space-3);
+}
+
+.message-block.assistant .content p:last-child,
+.message-block.assistant .content ul:last-child,
+.message-block.assistant .content ol:last-child {
+  margin-bottom: 0;
+}
+
+.message-block.assistant .content p:has(+ ul),
+.message-block.assistant .content p:has(+ ol) {
+  margin-bottom: var(--space-2);
+}
+
 .message-block .content strong {
   font-weight: 600;
+}
+
+/* Bold in a reply is emphasis within lighter serif prose, so it sits closer to the body weight. */
+.message-block.assistant .content strong,
+.message-block.assistant .content .md-heading {
+  font-weight: var(--font-weight-chat-strong);
+}
+
+/* Markdown headings keep the body size (see MarkdownContent); weight and space carry the hierarchy. */
+.message-block .content .md-heading {
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+.message-block .content * + .md-heading {
+  margin-top: var(--space-5);
+}
+
+.message-block.assistant .content .md-heading {
+  margin-bottom: var(--space-1);
+}
+
+.message-block .content a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.18em;
+  text-decoration-color: color-mix(in oklab, var(--accent-readable) 70%, transparent);
+  transition: text-decoration-color var(--motion-duration-ui) var(--motion-ease-standard);
+}
+
+.message-block .content a:hover {
+  color: var(--accent-readable);
+  text-decoration-color: currentColor;
+}
+
+.message-block .content a:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.message-block .content blockquote {
+  margin: var(--space-3) 0;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 2px solid var(--border-light);
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.message-block .content blockquote em {
+  font-style: normal;
+}
+
+.message-block .content hr {
+  margin: var(--space-5) 0;
+}
+
+/* Tables are data, not prose: UI sans, lining tabular figures, hairline rows.
+   display: block lets a wide table scroll inside the column without a wrapper. */
+.message-block .content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: var(--space-4) 0;
+  border-collapse: collapse;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sidebar);
+  line-height: var(--line-height-body);
+  font-variant-numeric: tabular-nums lining-nums;
+  text-wrap: wrap;
+  hanging-punctuation: none;
+}
+
+.message-block .content th,
+.message-block .content td {
+  padding: var(--space-2) var(--space-4) var(--space-2) 0;
+  border-bottom: 1px solid var(--border-edge);
+  text-align: start;
+  vertical-align: top;
+}
+
+.message-block .content th {
+  border-bottom-color: var(--border-light);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.message-block .content tr:last-child > td {
+  border-bottom: none;
+}
+
+.message-block .content th:last-child,
+.message-block .content td:last-child {
+  padding-inline-end: 0;
 }
 
 .message-block .content ul,
@@ -532,6 +656,15 @@
   margin-top: 2px;
 }
 
+.message-block.assistant .content li + li {
+  margin-top: var(--space-1);
+}
+
+.message-block .content li::marker {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* GFM wraps item text in <p>, which doubles vertical rhythm. */
 .message-block .content li > p {
   margin: 0;
@@ -548,8 +681,10 @@
 
 .message-block .content code {
   font-family: var(--font-family-mono);
-  font-size: var(--font-size-caption);
-  padding: var(--space-1) var(--space-2);
+  /* em so inline code tracks its host text (18px serif reply vs 16px user card). */
+  font-size: 0.8em;
+  padding: 0.1em 0.35em;
+  font-variant-ligatures: none;
   background: var(--bg-secondary);
   border: 1px solid var(--border-edge);
   border-radius: var(--radius-xs);
@@ -567,6 +702,10 @@
   margin: 0;
   padding: var(--space-3);
   font-family: var(--font-family-mono);
+  font-size: var(--font-size-caption);
+  line-height: var(--space-5);
+  text-wrap: wrap;
+  hanging-punctuation: none;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -577,6 +716,7 @@
 
 .message-block .content pre code {
   font-family: var(--font-family-mono);
+  font-size: inherit;
   padding: 0;
   background: none;
   border: none;
@@ -901,42 +1041,82 @@
   margin-bottom: var(--space-2);
 }
 
+/* Message toolbar. Meta and actions fade in on hover as a plain right-aligned row on the
+   canvas, in the gap under the message they belong to:
+   - user card -> reply: the row is centred in the gap;
+   - reply -> next turn: a wider gap, with the row tucked up under the text. */
+.message-block {
+  position: relative;
+}
+
+.message-block.user {
+  --message-gap: var(--space-8);
+  --message-toolbar-bottom: calc((var(--message-gap) - var(--space-6)) / 2);
+}
+
+.message-block.assistant {
+  --message-gap: var(--space-10);
+  --message-toolbar-bottom: calc(var(--message-gap) - var(--space-6) - var(--space-1));
+}
+
+.message-block.user,
+.message-block.assistant {
+  padding-bottom: var(--message-gap);
+}
+
 .message-block-footer {
+  position: absolute;
+  right: 0;
+  bottom: var(--message-toolbar-bottom);
+  z-index: 3;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  margin-top: 0;
-  padding: var(--space-1) 0 var(--space-3);
-}
-
-.message-block.assistant .message-block-footer {
-  padding-top: var(--space-1);
-}
-
-.message-block-meta {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-normal);
-  letter-spacing: 0.01em;
-  color: var(--fg-muted);
-}
-
-/* Role + time: same hover reveal as copy/save in the footer.
-   While streaming, the Assistant/model label stays visible with the spinner. */
-.message-block-meta-role,
-.message-block-meta-text {
+  gap: var(--space-2);
+  min-height: var(--space-6);
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
-.message-block:hover .message-block-meta-role,
-.message-block:hover .message-block-meta-text,
-.message-block-footer:focus-within .message-block-meta-role,
-.message-block-footer:focus-within .message-block-meta-text,
-.message-block-meta:has(.message-block-meta-spinner) .message-block-meta-role {
-  opacity: 0.4;
+.message-block:hover > .message-block-footer,
+.message-block-footer:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* While a reply streams, the spinner + model label stay put as plain text under it. */
+.message-block-footer:has(.message-block-meta-spinner) {
+  left: 0;
+  right: auto;
+  opacity: 1;
+}
+
+.message-block-footer:has(.message-block-meta-spinner) .message-block-meta-text,
+.message-block-footer:has(.message-block-meta-spinner) .message-block-footer-actions {
+  display: none;
+}
+
+.message-block-meta {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+}
+
+/* The card already says whose message it is; a user toolbar only needs the time. */
+.message-block.user .message-block-meta-role,
+.message-block.user .message-block-meta-sep {
+  display: none;
+}
+
+/* Hovering the time swaps in its other reading (reply duration or gap since the last message). */
+.message-block-meta-time {
+  cursor: default;
 }
 
 .message-block-meta-model {
@@ -985,16 +1165,8 @@
     background var(--motion-duration-ui) var(--motion-ease-standard),
     border-color var(--motion-duration-ui) var(--motion-ease-standard);
   flex-shrink: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.message-block:hover .message-footer-icon-btn:not(:hover):not(:focus-visible):not(:active),
-.message-block:hover .message-copy-btn:not(:hover):not(:focus-visible):not(:active),
-.message-block-footer:focus-within .message-footer-icon-btn:not(:hover):not(:focus-visible):not(:active),
-.message-block-footer:focus-within .message-copy-btn:not(:hover):not(:focus-visible):not(:active) {
-  opacity: 0.4;
-  pointer-events: auto;
+  /* The toolbar owns show/hide; buttons only dim at rest. */
+  opacity: 0.6;
 }
 
 .message-footer-icon-btn:hover,
@@ -1004,10 +1176,8 @@
 .message-copy-btn:focus-visible,
 .message-copy-btn:active {
   opacity: 1;
-  pointer-events: auto;
   color: var(--fg);
-  background: var(--btn-bg-hover);
-  border: 1px solid var(--border-input);
+  background: color-mix(in oklab, var(--fg) 12%, transparent);
 }
 
 .message-footer-icon-btn:disabled {
@@ -1088,7 +1258,9 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding: 0 calc(var(--shell-pad-inline) * 2);
+  /* Float the composer above the window edge instead of docking flush to it. */
+  --chat-composer-dock-lift: var(--space-5);
+  padding: 0 var(--page-pad-inline) var(--chat-composer-dock-lift);
   margin: 0;
   z-index: 3;
   pointer-events: auto;
@@ -1103,7 +1275,8 @@
 }
 
 .chat-composer-dock .chat-composer-inner {
-  border-bottom: none;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 var(--space-2) var(--space-6) var(--shadow-drop);
 }
 
 .chat-composer-inner {
@@ -1871,90 +2044,7 @@ button.chat-attach-card__main:disabled {
   border-bottom: 1px solid var(--border-edge);
 }
 
-/* ------------------------------------------------------------------ *
- * Assistant layout directives (see src/renderer/chat/markdownDirectives.tsx).
- * All scoped under .message-block .content so they don't leak into the
- * composer or sidebar markdown surfaces.
- * ------------------------------------------------------------------ */
-
-/* Callouts: :::tip / :::note / :::warning / :::danger */
-.message-block .content .md-callout {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: var(--space-3) 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-edge);
-  border-left: 3px solid var(--border-light);
-  background: var(--bg-secondary);
-}
-
-.message-block .content .md-callout__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--space-5);
-  height: var(--space-5);
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--fg-muted);
-}
-
-.message-block .content .md-callout__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.message-block .content .md-callout__title {
-  font-size: var(--font-size-caption);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-  margin-bottom: var(--space-1);
-}
-
-.message-block .content .md-callout__content > p:first-child {
-  margin-top: 0;
-}
-.message-block .content .md-callout__content > p:last-child {
-  margin-bottom: 0;
-}
-
-.message-block .content .md-callout--tip {
-  border: 1px solid var(--border-edge);
-  border-left: 3px solid var(--accent-readable);
-}
-.message-block .content .md-callout--tip .md-callout__icon,
-.message-block .content .md-callout--tip .md-callout__title {
-  color: var(--accent-readable);
-}
-
-.message-block .content .md-callout--note {
-  border: 1px solid var(--border-edge);
-  border-left: 3px solid var(--overlay-strong);
-}
-
-.message-block .content .md-callout--warning {
-  border: 1px solid var(--border-edge);
-  border-left: 3px solid var(--warning);
-}
-.message-block .content .md-callout--warning .md-callout__icon,
-.message-block .content .md-callout--warning .md-callout__title {
-  color: var(--warning-fg);
-}
-
-.message-block .content .md-callout--danger {
-  border: 1px solid var(--border-edge);
-  border-left: 3px solid var(--danger-fg);
-}
-.message-block .content .md-callout--danger .md-callout__icon,
-.message-block .content .md-callout--danger .md-callout__title {
-  color: var(--danger-fg);
-}
-
-/* Collapsible: :::details{summary="..."} */
+/* Collapsible disclosure (reasoning summary). */
 .message-block .content .md-details {
   margin: var(--space-3) 0;
   border: 1px solid var(--border-edge);
@@ -2000,88 +2090,17 @@ button.chat-attach-card__main:disabled {
   margin-bottom: 0;
 }
 
-/* Inline chip: :chip[label]{tone=...} */
-.message-block .content .md-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 var(--space-2);
-  height: var(--space-5);
-  line-height: var(--space-5);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-caption);
+.message-block .content .message-reasoning {
+  margin-top: 0;
+}
+
+.message-block .content .message-reasoning .md-details__summary {
   font-weight: 500;
-  border: 1px solid var(--border-edge);
-  background: var(--bg-secondary);
-  color: var(--fg);
-  white-space: nowrap;
-  vertical-align: baseline;
-}
-
-.message-block .content .md-chip--info {
-  color: var(--accent-readable);
-  border: 1px solid var(--accent);
-}
-.message-block .content .md-chip--warn {
-  color: var(--warning-fg);
-  border: 1px solid var(--warning);
-}
-.message-block .content .md-chip--danger {
-  color: var(--danger-fg);
-  border: 1px solid var(--danger-fg);
-}
-.message-block .content .md-chip--success {
-  color: var(--success-fg);
-  border: 1px solid var(--success-fg);
-}
-.message-block .content .md-chip--neutral {
   color: var(--fg-muted);
 }
 
-/* Link card: :::link{url=... title=... desc=... site=...} */
-.message-block .content .md-link-card {
-  display: block;
-  margin: var(--space-3) 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border-edge);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  text-decoration: none;
-  color: var(--fg);
-  transition: border-color var(--motion-duration-ui, 120ms) ease,
-    background var(--motion-duration-ui, 120ms) ease;
-}
-
-.message-block .content .md-link-card:hover {
-  border-color: var(--border-edge);
-  background: var(--hover-bg);
-}
-
-.message-block .content .md-link-card__site {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
+.message-block .content .message-reasoning .md-details__body {
   font-size: var(--font-size-caption);
-  color: var(--fg-muted);
-  margin-bottom: var(--space-1);
-}
-
-.message-block .content .md-link-card__site-text {
-  letter-spacing: 0.01em;
-}
-
-.message-block .content .md-link-card__title {
-  display: block;
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  color: var(--fg);
-  line-height: var(--line-height-body);
-}
-
-.message-block .content .md-link-card__desc {
-  display: block;
-  margin-top: var(--space-1);
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-caption);
   color: var(--fg-muted);
 }
 

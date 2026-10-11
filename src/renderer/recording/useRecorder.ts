@@ -6,50 +6,49 @@ import { encodeWav, playStartChime, playStopChime } from "./recordingUtils";
 export type Recorder = {
   start: () => Promise<void>;
   stop: (options?: { chime?: "stop" | "none" }) => Promise<ArrayBuffer>;
+  /** Drop the take and release the mic; safe to call in any state. */
+  cancel: () => Promise<void>;
 };
 
 export function createRecorder(): Recorder {
   let audioCtx: AudioContext | null = null;
-  let scriptProc: ScriptProcessorNode | null = null;
   let mediaStream: MediaStream | null = null;
   let pcmBuffers: Float32Array[] = [];
-  let releaseStreamOnStop = false;
+
+  /** Release the mic and audio context; returns what the take captured. */
+  async function teardown(): Promise<{ buffers: Float32Array[]; sampleRate: number }> {
+    const ctx = audioCtx;
+    const buffers = pcmBuffers;
+    mediaStream?.getTracks().forEach((t) => t.stop());
+    audioCtx = null;
+    mediaStream = null;
+    pcmBuffers = [];
+    await ctx?.close().catch(() => {});
+    return { buffers, sampleRate: ctx?.sampleRate ?? 44100 };
+  }
 
   async function start(): Promise<void> {
     await playStartChime();
-    const { stream, releaseOnStop } = await acquireRecordingStream();
-    mediaStream = stream;
-    releaseStreamOnStop = releaseOnStop;
-    const ctx = await createRecordingAudioContext();
-    const source = ctx.createMediaStreamSource(stream);
-    const processor = ctx.createScriptProcessor(4096, 1, 1);
+    try {
+      mediaStream = await acquireRecordingStream();
+      audioCtx = await createRecordingAudioContext();
+    } catch (err) {
+      await teardown();
+      throw err;
+    }
+    const source = audioCtx.createMediaStreamSource(mediaStream);
+    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
     const buffers: Float32Array[] = [];
     processor.onaudioprocess = (e) => {
       buffers.push(new Float32Array(e.inputBuffer.getChannelData(0)));
     };
     source.connect(processor);
-    processor.connect(ctx.destination);
-    audioCtx = ctx;
-    scriptProc = processor;
+    processor.connect(audioCtx.destination);
     pcmBuffers = buffers;
   }
 
   async function stop(options: { chime?: "stop" | "none" } = { chime: "stop" }): Promise<ArrayBuffer> {
-    const ctx = audioCtx;
-    const processor = scriptProc;
-    const stream = mediaStream;
-    const buffers = pcmBuffers;
-    const sampleRate = ctx?.sampleRate ?? 44100;
-    processor?.disconnect();
-    if (releaseStreamOnStop) {
-      stream?.getTracks().forEach((t) => t.stop());
-    }
-    audioCtx = null;
-    scriptProc = null;
-    mediaStream = null;
-    pcmBuffers = [];
-    releaseStreamOnStop = false;
-    await ctx?.close().catch(() => {});
+    const { buffers, sampleRate } = await teardown();
     if (options.chime === "stop") {
       await playStopChime();
     }
@@ -72,7 +71,13 @@ export function createRecorder(): Recorder {
     return encodeWav(buffers, sampleRate);
   }
 
-  return { start, stop };
+  return {
+    start,
+    stop,
+    cancel: async () => {
+      await teardown();
+    },
+  };
 }
 
 export function useRecorder(): Recorder {

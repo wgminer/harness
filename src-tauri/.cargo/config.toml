@@ -1,0 +1,5 @@
+# `cargo run` (used by `npm run dev`) launches the app through a runner that gives the
+# dev binary a stable code signature, so the Harness Dev Accessibility grant survives
+# rebuilds. See scripts/macos-dev-runner.py.
+[target.'cfg(target_os = "macos")']
+runner = "scripts/macos-dev-runner.py"

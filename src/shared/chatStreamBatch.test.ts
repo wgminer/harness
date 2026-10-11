@@ -21,6 +21,8 @@ describe("resources/contracts/chatStreamBatch.json", () => {
     expect(c.maxHoldMs).toBeGreaterThan(0);
     expect(c.newlineMinChars).toBeGreaterThan(0);
     expect(c.newlineMinChars).toBeLessThan(c.minChars);
+    expect(c.firstFlushMinChars).toBeGreaterThan(0);
+    expect(c.firstFlushMinChars).toBeLessThan(c.newlineMinChars);
   });
 
   it("matches TS imports from the same file", () => {
@@ -42,6 +44,14 @@ describe("StreamTextBatcher", () => {
     maxHoldMs: 350,
     newlineMinChars: 40,
   };
+
+  it("releases the first flush early, then batches coarsely", () => {
+    const b = new StreamTextBatcher({ ...policy, firstFlushMinChars: 10 }, () => 0);
+    expect(b.push("hello ")).toBeNull();
+    expect(b.push("world")).toBe("hello world");
+    expect(b.push("a".repeat(20))).toBeNull();
+    expect(b.pending).toBe("a".repeat(20));
+  });
 
   it("holds small deltas until minChars", () => {
     const b = new StreamTextBatcher(policy, () => 0);

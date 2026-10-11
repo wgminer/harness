@@ -110,6 +110,7 @@ pub async fn classify_dictation_reply_action(
         &cfg.system_prompt,
         &build_user_message(trimmed),
         cfg.max_completion_tokens,
+        crate::openai::SMALL_MODEL_REASONING_EFFORT,
         cfg.timeout_secs,
     )
     .await?;

@@ -79,7 +79,6 @@ pub fn is_assistant_tool_name(name: &str) -> bool {
             | "task_delete"
             | "task_clear_completed"
             | "memory_set"
-            | "memory_list"
             | "memory_search_conversations"
             | "get_datetime"
             | "web_search"
@@ -88,7 +87,37 @@ pub fn is_assistant_tool_name(name: &str) -> bool {
             | "note_read"
             | "note_save"
             | "note_delete"
+            | "set_chat_mode"
     )
+}
+
+const CHAT_MODE_RESTORED_INSTRUCTIONS: &str = "Grill mode is off. Disregard the [CHAT_MODE: qa] block for the rest of this turn and reply normally.";
+
+/// Tool result for a mode switch. The system prompt was assembled before the switch, so the
+/// result carries the new mode's instructions for the remainder of the turn.
+fn chat_mode_switch_payload(mode: crate::chat::modes::ChatMode) -> Value {
+    let overlay = crate::chat::modes::mode_overlay(mode);
+    let instructions = if overlay.is_empty() {
+        CHAT_MODE_RESTORED_INSTRUCTIONS.to_string()
+    } else {
+        overlay
+    };
+    json!({ "mode": mode.as_str(), "instructions": instructions })
+}
+
+async fn set_chat_mode(state: &AppState, args: &Value, conversation_id: Option<&str>) -> Value {
+    let Some(conversation_id) = conversation_id else {
+        return json!({ "error": "set_chat_mode needs an active conversation" });
+    };
+    let raw = args.get("mode").and_then(|v| v.as_str()).unwrap_or("").trim();
+    if !matches!(raw, "chat" | "qa") {
+        return json!({ "error": "set_chat_mode requires 'mode' to be \"chat\" or \"qa\"" });
+    }
+    let mode = crate::chat::modes::ChatMode::parse(Some(raw));
+    match crate::memory::set_conversation_chat_mode(state, conversation_id, mode.as_str()).await {
+        Ok(()) => chat_mode_switch_payload(mode),
+        Err(err) => json!({ "error": err.to_string() }),
+    }
 }
 
 async fn set_memory(state: &AppState, args: &Value) -> Result<MemoryToolPayload, std::io::Error> {
@@ -120,15 +149,6 @@ async fn set_memory(state: &AppState, args: &Value) -> Result<MemoryToolPayload,
         last_action: "set_memory".into(),
         memory,
         key: Some(key),
-    })
-}
-
-async fn list_memories(state: &AppState) -> Result<MemoryToolPayload, std::io::Error> {
-    let memory = crate::memory::get_user_memory(state).await?;
-    Ok(MemoryToolPayload {
-        last_action: "list_memories".into(),
-        memory,
-        key: None,
     })
 }
 
@@ -538,7 +558,6 @@ pub async fn execute_assistant_tool(
         "task_delete" => serde_json::to_value(delete_task(state, args).await?)?.into(),
         "task_clear_completed" => serde_json::to_value(clear_completed_tasks(state).await?)?.into(),
         "memory_set" => serde_json::to_value(set_memory(state, &args).await?)?.into(),
-        "memory_list" => serde_json::to_value(list_memories(state).await?)?.into(),
         "memory_search_conversations" => serde_json::to_value(
             search_memory_conversations(state, &args, exclude_conversation_id).await?,
         )?
@@ -548,6 +567,7 @@ pub async fn execute_assistant_tool(
         "note_list" | "note_create" | "note_read" | "note_save" | "note_delete" => {
             execute_note_tool(state, name, &args, exclude_conversation_id).await
         }
+        "set_chat_mode" => set_chat_mode(state, &args, exclude_conversation_id).await,
         _ => json!({ "error": format!("Unknown assistant tool: {name}") }),
     };
     Ok(serde_json::to_string(&payload).unwrap_or_else(|_| "{}".into()))
@@ -558,6 +578,17 @@ pub type TasksPayloadExport = TasksPayload;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chat_mode_switch_payload_carries_instructions_for_the_turn() {
+        let qa = chat_mode_switch_payload(crate::chat::modes::ChatMode::Qa);
+        assert_eq!(qa["mode"], "qa");
+        assert!(qa["instructions"].as_str().unwrap().contains("[CHAT_MODE: qa]"));
+
+        let chat = chat_mode_switch_payload(crate::chat::modes::ChatMode::Chat);
+        assert_eq!(chat["mode"], "chat");
+        assert_eq!(chat["instructions"], CHAT_MODE_RESTORED_INSTRUCTIONS);
+    }
 
     #[test]
     fn pick_tavily_image_prefers_top_level_object() {

@@ -108,6 +108,9 @@ pub struct MessageRecord {
     /// rewrites do not strip iOS-authored metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<MessageAttachment>>,
+    /// Model reasoning summary for assistant messages, when the API returned one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +122,8 @@ pub struct AppendMessageMeta {
     pub timestamp: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -517,6 +522,7 @@ pub async fn import_conversations(
             .messages
             .into_iter()
             .map(|m| MessageRecord {
+                reasoning: None,
                 role: m.role,
                 content: m.content,
                 tool_calls: None,
@@ -616,6 +622,7 @@ pub async fn append_message(
     let memory_dir = get_memory_dir();
     let mut messages = load_messages_in(state, &memory_dir, conversation_id).await;
     let mut record = MessageRecord {
+        reasoning: None,
         role: role.to_string(),
         content: content.to_string(),
         tool_calls: None,
@@ -632,6 +639,9 @@ pub async fn append_message(
         }
         if let Some(model) = meta.model.filter(|m| !m.is_empty()) {
             record.model = Some(model);
+        }
+        if let Some(reasoning) = meta.reasoning.filter(|r| !r.trim().is_empty()) {
+            record.reasoning = Some(reasoning);
         }
     }
 
@@ -677,22 +687,8 @@ pub async fn delete_conversation(state: &AppState, conversation_id: &str) -> Res
     Ok(())
 }
 
-pub async fn get_user_memory(_state: &AppState) -> Result<HashMap<String, String>, std::io::Error> {
-    let memory_dir = get_memory_dir();
-    let path = user_memory_path(&memory_dir);
-    if !file_exists(&path).await {
-        return Ok(HashMap::new());
-    }
-    let parsed = read_json_object_file(&path).await;
-    let mut out = HashMap::new();
-    if let Some(obj) = parsed.value.as_object() {
-        for (key, value) in obj {
-            if let Some(text) = value.as_str() {
-                out.insert(key.clone(), text.to_string());
-            }
-        }
-    }
-    Ok(out)
+pub async fn get_user_memory(state: &AppState) -> Result<HashMap<String, String>, std::io::Error> {
+    get_user_memory_in(state, &get_memory_dir()).await
 }
 
 pub async fn set_user_memory(
@@ -700,19 +696,7 @@ pub async fn set_user_memory(
     key: &str,
     value: &str,
 ) -> Result<(), std::io::Error> {
-    let memory_dir = get_memory_dir();
-    let mut mem = get_user_memory(state).await?;
-    mem.insert(key.to_string(), value.to_string());
-    let path = user_memory_path(&memory_dir);
-    let json_value = serde_json::to_value(&mem).unwrap_or_else(|_| json!({}));
-    write_json_pretty(
-        &state.write_chains,
-        &path,
-        &json_value,
-        JsonWriteStyle::Canonical,
-        "{}",
-    )
-    .await
+    set_user_memory_in(state, &get_memory_dir(), key, value).await
 }
 
 pub async fn delete_user_memory_key(state: &AppState, key: &str) -> Result<(), std::io::Error> {

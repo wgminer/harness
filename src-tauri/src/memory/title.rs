@@ -309,6 +309,7 @@ mod tests {
 
   fn msg(role: &str, content: &str) -> MessageRecord {
     MessageRecord {
+      reasoning: None,
       role: role.into(),
       content: content.into(),
       tool_calls: None,

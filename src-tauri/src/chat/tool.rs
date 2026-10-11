@@ -298,6 +298,12 @@ pub(crate) fn tool_record_payload(name: &str, result: &str) -> Option<Value> {
     if is_gmail_tool_name(name) {
         crate::gmail::strip_bodies_for_record(&mut payload);
     }
+    if name == "set_chat_mode" {
+        // The mode instructions are for the model only; the record just needs the mode.
+        if let Some(obj) = payload.as_object_mut() {
+            obj.remove("instructions");
+        }
+    }
     Some(payload)
 }
 

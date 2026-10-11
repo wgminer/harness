@@ -59,12 +59,14 @@ const WEB_CHIME_NOTES: Record<RecordingChime, [number, number][]> = {
   stop: [[550, 0.08], [440, 0.15]],
   done: [[784, 0.07], [988, 0.07], [1319, 0.16]],
   cancel: [[330, 0.06], [220, 0.18]],
+  error: [[196, 0.11], [0, 0.06], [196, 0.11], [0, 0.06], [196, 0.22]],
 };
 
 /** Web Audio fallback for the browser debug shell; desktop plays cues natively. */
 export async function playWebChime(kind: RecordingChime): Promise<void> {
   for (const [frequency, duration] of WEB_CHIME_NOTES[kind]) {
-    await playTone(frequency, duration);
+    if (frequency === 0) await new Promise((r) => setTimeout(r, duration * 1000));
+    else await playTone(frequency, duration);
   }
 }
 
@@ -87,4 +89,8 @@ export function playDoneChime(): Promise<void> {
 
 export function playCancelChime(): Promise<void> {
   return playChime("cancel");
+}
+
+export function playErrorChime(): Promise<void> {
+  return playChime("error");
 }

@@ -96,6 +96,8 @@ fn emit_recording_error_payload(
     recording_path: Option<&Path>,
     needs_accessibility: bool,
 ) {
+    // Every failed take ends here, so the error cue covers transcription, empty, and paste failures.
+    chime::play(Chime::Error);
     let mut payload = serde_json::json!({ "message": message });
     if let Some(path) = recording_path {
         payload["recordingPath"] = serde_json::json!(path.to_string_lossy());
@@ -205,6 +207,7 @@ async fn deliver_unfocused(
         "user",
         text,
         Some(AppendMessageMeta {
+            reasoning: None,
             tool_calls: None,
             timestamp: Some(chrono::Utc::now().timestamp_millis()),
             model: None,

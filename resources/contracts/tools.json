@@ -22,6 +22,29 @@
   {
     "type": "function",
     "function": {
+      "name": "set_chat_mode",
+      "description": "Switch this conversation's chat mode. 'qa' is Grill: interview the user one question at a time to pressure-test a plan, idea, or decision. 'chat' is the normal mode. The result carries the instructions to follow for the rest of the turn.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "chat",
+              "qa"
+            ],
+            "description": "Mode to switch to: 'qa' to start grilling, 'chat' to return to normal chat"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "task_list",
       "description": "List all persistent assistant tasks. Use this to understand current open work items before adding or changing tasks.",
       "parameters": {
@@ -62,6 +85,10 @@
           "metadata": {
             "type": "object",
             "description": "Optional extra structured information about the task."
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Optional id of a top-level task to nest this under as a subtask (one level deep)."
           }
         },
         "required": [
@@ -115,6 +142,13 @@
           },
           "metadata": {
             "type": "object"
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Nest under this top-level task id as a subtask; empty string or null moves it back to the top level."
           }
         },
         "required": [
@@ -172,17 +206,6 @@
           "key",
           "value"
         ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "memory_list",
-      "description": "List all stored persistent user memories and preferences.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
       }
     }
   },

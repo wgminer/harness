@@ -34,6 +34,8 @@ pub struct ChatController {
     pub(crate) active_stream_conversation: Arc<Mutex<Option<String>>>,
     /// UI-visible assistant text accumulated for the active stream (for remount rehydrate).
     pub(crate) active_stream_content: Arc<Mutex<String>>,
+    /// Reasoning summary accumulated for the active stream; saved with the assistant message.
+    pub(crate) active_stream_reasoning: Arc<std::sync::Mutex<String>>,
 }
 
 impl ChatController {
@@ -46,6 +48,7 @@ impl ChatController {
             note_stream: Arc::new(std::sync::Mutex::new(None)),
             active_stream_conversation: Arc::new(Mutex::new(None)),
             active_stream_content: Arc::new(Mutex::new(String::new())),
+            active_stream_reasoning: Arc::new(std::sync::Mutex::new(String::new())),
         }
     }
 }

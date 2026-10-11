@@ -176,6 +176,13 @@
   --font-family: -apple-system, "system-ui", "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
   --font-family-serif: "New York", ui-serif, Georgia, "Times New Roman", serif;
   --font-family-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  /* Assistant prose in the chat thread: Newsreader (bundled via @fontsource-variable, opsz + wght axes),
+     set light so it reads as a quieter voice than the UI sans. */
+  --font-family-chat: "Newsreader Variable", var(--font-family-serif);
+  --font-size-chat: 16px;
+  --line-height-chat: 24px;
+  --font-weight-chat: 350;
+  --font-weight-chat-strong: 500;
   --font-size: var(--font-size-body);
   --font-size-caption: 12px;
   --font-size-sidebar: 14px;
@@ -235,6 +242,10 @@
   --sidebar-width: calc(var(--grid) * 70);
   --content-width: calc(var(--grid) * 150);
   --shell-pad-inline: var(--space-4);
+  /* Centered page column (Chat, dictation, Tasks, Settings): one gutter, one outer width.
+     --page-width is the border-box max-width, so the text column is --content-width. */
+  --page-pad-inline: calc(var(--shell-pad-inline) * 2);
+  --page-width: calc(var(--content-width) + var(--page-pad-inline) * 2);
 
   /* --- Motion (shared across themes) --- */
   --motion-duration-fast: 120ms;

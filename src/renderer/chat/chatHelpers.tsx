@@ -8,13 +8,8 @@ import {
 import { Check, Copy, SquarePen } from "lucide-react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import remarkDirective from "remark-directive";
 import rehypeHighlight from "rehype-highlight";
 import { formatMediumTimestamp } from "../../shared/formatMediumTimestamp";
-import {
-  directiveComponents,
-  remarkDirectiveToHast,
-} from "./markdownDirectives";
 import {
   libraryRefFallbackLabel,
   memorySearchHitsFromPayload,
@@ -24,6 +19,7 @@ import {
 } from "../../shared/conversationSearch";
 import { parseLocalFilePath } from "../../shared/localFilePath";
 import { isEditableTextPath } from "../../shared/files";
+import { stripLayoutDirectives } from "../../shared/layoutDirectives";
 import { stripQaOptions } from "../../shared/qaOptions";
 import { scheduleCopyFeedbackClear, useCopyFeedback } from "../hooks/useCopyFeedback";
 
@@ -146,6 +142,7 @@ export interface Message {
   toolCalls?: ToolCallDisplay[];
   timestamp?: number;
   model?: string;
+  reasoning?: string;
 }
 
 export function formatMessageTime(ts: number): string {
@@ -312,9 +309,10 @@ function CodeBlock({
 /**
  * Renders assistant/user markdown.
  *
- * Headers h1-h6 are intentionally squashed to paragraphs so the model can't
- * accidentally blow up the type scale; section structure is signalled instead
- * via the custom layout directives in `markdownDirectives.tsx`.
+ * Headers h1-h6 are intentionally squashed to body-size paragraphs so the model
+ * can't accidentally blow up the type scale; `.md-heading` marks them with
+ * weight and spacing only. Retired layout directives in old messages are
+ * flattened to plain markdown by `stripLayoutDirectives`.
  * Fenced code blocks flow through highlight.js via `CodeBlock`.
  */
 export function MarkdownContent({
@@ -332,7 +330,7 @@ export function MarkdownContent({
 }: MarkdownContentProps) {
   const codeBlockIndexRef = useRef(0);
   codeBlockIndexRef.current = 0;
-  const displayContent = useMemo(() => stripQaOptions(content), [content]);
+  const displayContent = useMemo(() => stripLayoutDirectives(stripQaOptions(content)), [content]);
   const libraryTitles = useMemo(() => {
     const map = new Map<string, string>();
     for (const hit of libraryHits ?? []) map.set(hit.id, hit.title);
@@ -348,7 +346,7 @@ export function MarkdownContent({
       : undefined;
 
   const headingAsParagraph = ({ children, ...props }: { children?: ReactNode }) => (
-    <p {...props}>{children}</p>
+    <p {...props} className="md-heading">{children}</p>
   );
   const preComponent = ({ children, ...rest }: { children?: ReactNode }) => {
     const blockIndex = codeBlockIndexRef.current;
@@ -410,12 +408,11 @@ export function MarkdownContent({
       }
       return <code className={className} {...props}>{children}</code>;
     },
-    ...directiveComponents,
   } as unknown as Components;
 
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveToHast]}
+      remarkPlugins={[remarkGfm]}
       rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
       urlTransform={(url) => (/^file:/i.test(url.trim()) ? url : defaultUrlTransform(url))}
       components={components}
@@ -452,7 +449,29 @@ export function toolCallLabel(call: ToolCallDisplay): string {
     const title = noteTitleFromCreateToolCall(call);
     return title ? `Created “${title}”` : "Created note";
   }
-  return toolLabel(call.toolName);
+  if (call.toolName === "set_chat_mode") {
+    const mode = (call.payload as { mode?: string } | undefined)?.mode;
+    if (mode === "qa") return "Started grilling";
+    if (mode === "chat") return "Back to chat";
+  }
+  const detail = codingToolDetail(call);
+  return detail ? `${toolLabel(call.toolName)} · ${detail}` : toolLabel(call.toolName);
+}
+
+/** Path or command of a finished coding tool call, so a turn reads as what was done. */
+function codingToolDetail(call: ToolCallDisplay): string | null {
+  const payload = call.payload as
+    | { pending?: boolean; path?: unknown; command?: unknown; pattern?: unknown; isError?: boolean }
+    | undefined;
+  if (!payload || typeof payload !== "object" || payload.pending === true) return null;
+  if (!/^(ws_|run_command$)/.test(call.toolName)) return null;
+  const subject = [payload.command, payload.path, payload.pattern].find(
+    (value): value is string => typeof value === "string" && value.trim().length > 0,
+  );
+  if (!subject) return null;
+  const oneLine = subject.trim().split("\n")[0];
+  const short = oneLine.length > 80 ? `${oneLine.slice(0, 79)}…` : oneLine;
+  return payload.isError ? `${short} (failed)` : short;
 }
 
 export function toolLabel(name: string): string {
@@ -475,6 +494,7 @@ export function toolLabel(name: string): string {
     note_save: "Saved note",
     note_delete: "Deleted note",
     set_layout: "Updated layout",
+    set_chat_mode: "Switched mode",
     ws_list_tree: "Listed project files",
     ws_search: "Searched project",
     ws_read: "Read file",

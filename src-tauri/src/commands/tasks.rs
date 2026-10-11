@@ -4,7 +4,9 @@ use serde_json::Value;
 use tauri::{command, State};
 
 use crate::state::AppState;
-use crate::tasks::{clear_completed_tasks, create_task, delete_task, list_tasks, update_task};
+use crate::tasks::{
+    breakdown_task, clear_completed_tasks, create_task, delete_task, list_tasks, update_task,
+};
 
 use super::map_err;
 
@@ -20,8 +22,14 @@ pub async fn tasks_create(
     title: String,
     tags: Option<Vec<String>>,
     status: Option<String>,
+    parent_id: Option<String>,
 ) -> Result<Value, String> {
-    let args = serde_json::json!({ "title": title, "tags": tags, "status": status });
+    let args = serde_json::json!({
+        "title": title,
+        "tags": tags,
+        "status": status,
+        "parentId": parent_id,
+    });
     let payload = create_task(&state, args).await.map_err(map_err)?;
     serde_json::to_value(payload).map_err(map_err)
 }
@@ -43,5 +51,11 @@ pub async fn tasks_delete(state: State<'_, AppState>, id: String) -> Result<Valu
 #[command(rename_all = "camelCase")]
 pub async fn tasks_clear_completed(state: State<'_, AppState>) -> Result<Value, String> {
     let result = clear_completed_tasks(&state).await.map_err(map_err)?;
+    serde_json::to_value(result).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
+pub async fn tasks_breakdown(state: State<'_, AppState>, id: String) -> Result<Value, String> {
+    let result = breakdown_task(&state, &id).await?;
     serde_json::to_value(result).map_err(map_err)
 }

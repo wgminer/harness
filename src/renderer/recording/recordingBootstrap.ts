@@ -2,14 +2,11 @@ import { MICROPHONE_PERMISSION_DENIED_MESSAGE } from "./recordingAudioUtils";
 
 let ready = false;
 let readyPromise: Promise<void> | null = null;
-let bootstrapStream: MediaStream | null = null;
 
 /** Reset bootstrap state (tests only). */
 export function resetRecordingBootstrapForTests(): void {
   ready = false;
   readyPromise = null;
-  bootstrapStream?.getTracks().forEach((t) => t.stop());
-  bootstrapStream = null;
 }
 
 async function resumeAudioContext(ctx: AudioContext): Promise<void> {
@@ -35,16 +32,10 @@ async function doEnsureReady(): Promise<void> {
     }
   }
 
-  const tracksLive = bootstrapStream?.getAudioTracks().some((t) => t.readyState === "live") ?? false;
-  if (!tracksLive) {
-    bootstrapStream?.getTracks().forEach((t) => t.stop());
-    bootstrapStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  }
-
   ready = true;
 }
 
-/** Ensure macOS mic TCC + a live getUserMedia stream for in-app recording. */
+/** Ensure macOS mic TCC for in-app recording. */
 export async function ensureRecordingReady(): Promise<void> {
   if (ready) return;
   if (readyPromise) return readyPromise;
@@ -54,18 +45,20 @@ export async function ensureRecordingReady(): Promise<void> {
   return readyPromise;
 }
 
-/** Reuse a live bootstrap stream when available; otherwise acquire a new one. */
-export async function acquireRecordingStream(): Promise<{
-  stream: MediaStream;
-  releaseOnStop: boolean;
-}> {
+/**
+ * Voice processing (echo cancellation etc.) makes macOS duck other apps' audio while the
+ * mic is open; dictation does not need it, so ask for a plain capture.
+ */
+const DICTATION_AUDIO: MediaTrackConstraints = {
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false,
+};
+
+/** Acquire a fresh mic stream for one take; the caller stops its tracks when the take ends. */
+export async function acquireRecordingStream(): Promise<MediaStream> {
   await ensureRecordingReady();
-  const tracksLive = bootstrapStream?.getAudioTracks().some((t) => t.readyState === "live") ?? false;
-  if (tracksLive && bootstrapStream) {
-    return { stream: bootstrapStream, releaseOnStop: false };
-  }
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  return { stream, releaseOnStop: true };
+  return navigator.mediaDevices.getUserMedia({ audio: DICTATION_AUDIO });
 }
 
 /** Create a fresh AudioContext for an active recording session. */

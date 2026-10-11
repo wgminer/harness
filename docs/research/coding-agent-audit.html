@@ -1,0 +1,913 @@
+<title>Harness Coding Agent Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: single reading column (~72ch) with wide tables allowed to scroll; a sticky contents rail on desktop. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1a1f2b;
+  --muted: #5a6273;
+  --line: #dde1e8;
+  --accent: #2c55c9;
+  --accent-soft: #e6ecfb;
+  --code-bg: #eef0f4;
+  --adopt: #1f7a4d;   --adopt-bg: #e2f3ea;
+  --adapt: #8a5a00;   --adapt-bg: #fbf0d9;
+  --defer: #5a6273;   --defer-bg: #eceef2;
+  --gap: #a3361f;     --gap-bg: #f9e5e0;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Instrument Sans", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151c; --surface: #1a1e27; --fg: #e4e7ee; --muted: #9aa2b3; --line: #2c3240;
+    --accent: #86a6ff; --accent-soft: #1f2a47; --code-bg: #222734;
+    --adopt: #6fd3a0; --adopt-bg: #16301f; --adapt: #f0c060; --adapt-bg: #33280f;
+    --defer: #a7aec0; --defer-bg: #262b36; --gap: #ff9c85; --gap-bg: #3a1d16;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151c; --surface: #1a1e27; --fg: #e4e7ee; --muted: #9aa2b3; --line: #2c3240;
+  --accent: #86a6ff; --accent-soft: #1f2a47; --code-bg: #222734;
+  --adopt: #6fd3a0; --adopt-bg: #16301f; --adapt: #f0c060; --adapt-bg: #33280f;
+  --defer: #a7aec0; --defer-bg: #262b36; --gap: #ff9c85; --gap-bg: #3a1d16;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 80px; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 48px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; } nav.toc { display: none; } }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13px; }
+nav.toc p { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+main { min-width: 0; }
+main > section { max-width: 76ch; }
+main > section.wide { max-width: none; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; }
+h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 700; margin: 0 0 12px; letter-spacing: -.01em; }
+h2 { font-size: 26px; font-weight: 700; margin: 64px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+h3 { font-size: 18px; font-weight: 700; margin: 32px 0 8px; }
+p, li { max-width: 72ch; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .86em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.lede { font-size: 19px; color: var(--fg); max-width: 66ch; }
+.meta { color: var(--muted); font-size: 14px; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 18px 20px; margin: 24px 0; border-radius: 4px; }
+.callout h3 { margin-top: 0; }
+.callout ol, .callout ul { margin: 8px 0 0; padding-left: 20px; }
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; vertical-align: 1px; }
+.chip.adopt { color: var(--adopt); background: var(--adopt-bg); }
+.chip.adapt { color: var(--adapt); background: var(--adapt-bg); }
+.chip.defer { color: var(--defer); background: var(--defer-bg); }
+.chip.gap { color: var(--gap); background: var(--gap-bg); }
+.scroll { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.5; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--code-bg); }
+td.axis { font-weight: 600; white-space: nowrap; }
+.matrix td { min-width: 190px; }
+.matrix td.axis { min-width: 130px; }
+.matrix td.rec { background: var(--accent-soft); }
+.cite { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
+.findings { display: grid; gap: 12px; margin: 16px 0; padding: 0; list-style: none; }
+.findings li { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; max-width: none; }
+.findings li strong { display: block; margin-bottom: 2px; }
+figure { margin: 24px 0; }
+figure .scroll { padding: 12px; }
+figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+svg text { font-family: var(--font-body); }
+.phase { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 18px 20px; margin: 16px 0; }
+.phase h3 { margin: 0 0 4px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.phase .num { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+.phase ul { padding-left: 20px; margin: 6px 0; }
+.phase .ac { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 12px 0 2px; }
+.kbd { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 5px; background: var(--surface); }
+.sources li { font-size: 14px; margin-bottom: 6px; }
+.mock { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 10px; font-size: 14px; }
+.mock code { font-size: 13px; }
+.mock-text { max-width: 60ch; }
+.mock-group, .mock-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mock-item { border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; display: grid; gap: 6px; min-width: 0; }
+.mock-running { border-color: var(--accent); }
+.mock-out { margin: 0; font-family: var(--font-mono); font-size: 12px; background: var(--code-bg); padding: 8px; border-radius: 3px; overflow-x: auto; white-space: pre; }
+.mock-dim { color: var(--muted); font-size: 12px; }
+.mock-link { color: var(--accent); font-size: 12px; text-decoration: underline; text-underline-offset: 2px; }
+.mock-add { color: var(--adopt); font-family: var(--font-mono); font-size: 12px; }
+.mock-del { color: var(--gap); font-family: var(--font-mono); font-size: 12px; }
+.mock-steer { border-left: 3px solid var(--adapt); background: var(--adapt-bg); padding: 6px 10px; border-radius: 0 4px 4px 0; font-size: 13px; }
+.mock-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px dashed var(--line); padding-top: 10px; font-size: 13px; color: var(--muted); }
+.mock-chip { font-family: var(--font-mono); font-size: 11px; background: var(--accent-soft); color: var(--accent); padding: 1px 6px; border-radius: 3px; }
+.mock-stop { margin-left: auto; border: 1px solid var(--line); border-radius: 4px; padding: 2px 10px; color: var(--fg); }
+.st { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; flex: none; }
+.st.ok { background: var(--adopt-bg); color: var(--adopt); }
+.st.run { border: 2px solid var(--accent-soft); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .st.run { animation: none; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <p>Contents</p>
+  <ol>
+    <li><a href="#recommendation">Recommendation</a></li>
+    <li><a href="#corrections">Corrections</a></li>
+    <li><a href="#harness-today">Harness today</a></li>
+    <li><a href="#matrix">Axis comparison</a></li>
+    <li><a href="#steering">Steering in depth</a></li>
+    <li><a href="#undo">Undo in depth</a></li>
+    <li><a href="#display">Tool display and UX</a></li>
+    <li><a href="#web">Web search</a></li>
+    <li><a href="#attach">Attachments and folders</a></li>
+    <li><a href="#ios">Desktop and iOS</a></li>
+    <li><a href="#architecture">Target architecture</a></li>
+    <li><a href="#changes">Modules, contracts, IPC</a></li>
+    <li><a href="#phases">Phased plan</a></li>
+    <li><a href="#sources">Sources</a></li>
+  </ol>
+</nav>
+
+<main>
+<section>
+  <p class="eyebrow">Research and design · 9 Oct 2026 · no code changed</p>
+  <h1>Harness Coding Agent Audit</h1>
+  <p class="lede">An audit of OpenCode, Codex, Pi and Cline from their current source, a map of the Harness coding agent as it stands, and a proposed redesign: a small, Pi-style agent loop with undo and mid-turn steering built in.</p>
+  <p class="meta">Source snapshots read on 2026-10-09: <code>sst/opencode@055d95b</code>, <code>openai/codex@7efd184</code>, <code>badlogic/pi-mono@42a3497</code>, <code>cline/cline@d20b337</code>. Harness at <code>main@ed9526f</code> plus uncommitted WIP. File paths below are relative to each repo.</p>
+</section>
+
+<section id="recommendation">
+  <h2>Recommendation</h2>
+  <p>Build Harness's coding agent the way Pi builds its agent: four tools, a short prompt, and a loop that keeps going until the model stops calling tools. That way most capability gains come from switching to a better model, not from harness features. Spend the complexity budget on three things the user handles directly: <strong>steering</strong>, <strong>undo</strong>, and <strong>approvals you rarely see</strong>.</p>
+  <div class="callout">
+    <h3>The proposal in nine decisions</h3>
+    <ol>
+      <li><strong>Fix the loop before adding features.</strong> Harness doesn't send earlier turns' tool calls back to the model, and it stops after 10 tool rounds without saying so. Both have to be fixed before steering or undo can be trusted.</li>
+      <li><strong>Steer by default, queue on request.</strong> While a turn runs, <span class="kbd">Enter</span> sends a steer and <span class="kbd">⌥ Enter</span> queues a follow-up. Pi, Codex and the Copilot SDK all work this way. Harness applies the steer in its own loop after the in-flight tool call finishes, so it works with any model and doesn't depend on server-side steering support.</li>
+      <li><strong>Undo per turn, using a separate snapshot repo.</strong> A hidden git directory in app data, snapshotted at the start of each turn and after each mutating tool. Restore can roll back files, the conversation, or both. The user's own <code>.git</code> is never touched.</li>
+      <li><strong>Four tools: <code>read</code>, <code>edit</code> (an <code>edits[]</code> array), <code>write</code>, <code>bash</code>.</strong> The list, search, delete and git tools fold into <code>bash</code>. Once undo exists, edits run without asking by default. Shell commands go through a permission rules contract that supports "always allow <code>npm test *</code>" and "deny with a note to the agent".</li>
+      <li><strong>Show the work as it happens.</strong> Each turn becomes a timeline of text and tool calls in the order they happened. Each call shows live status, its command or path, its output and result, and how long it took. Today one card sits above the reply, failed calls get a checkmark, and no output is shown. See <a href="#display">Tool display and UX</a>.</li>
+      <li><strong>Make web search strong.</strong> Upgrade <code>web_search</code> (domain and recency filters, deeper results, parallel calls, visible sources) and add <code>web_fetch</code> to read a full page. These are the only two tools added beyond Pi's four. See <a href="#web">Web search</a>.</li>
+      <li><strong>Attach by reference, not by copy.</strong> <code>@</code> mentions with a fuzzy file picker, image attachments, and folder drops that add workspace folders. The workspace becomes a root plus added folders, each read-only or read-write, and reads outside it ask once. See <a href="#attach">Attachments and folder access</a>.</li>
+      <li><strong>The phone views and queues.</strong> iOS has no coding agent. It renders coding turns from synced display items, using a shared <code>toolDisplay.json</code> contract, and can queue a "run on desktop" job that the desktop picks up when you're back. See <a href="#ios">Desktop and iOS</a>.</li>
+      <li><strong>Defer Plan mode, subagents, sandboxing and an HTTP server.</strong> Add a loop guard and compaction once the core works. Shape the IPC events after Codex's Thread/Turn/Item model, so a headless client could be added later without redesigning them.</li>
+    </ol>
+  </div>
+  <p>Steering, undo and web search are the three priorities. The timeline display ships first, because steering and undo both need it to show where things happened.</p>
+  <p>This reorders your provisional ranking. Steering moves to the top as you asked. Undo stays second. The history-replay fix is a new prerequisite. Pattern-based "always allow" becomes part of a broader permissions slice. Plan mode and the explore subagent drop out of the first pass, because with steering and undo in place they solve problems you will mostly no longer have.</p>
+</section>
+
+<section id="corrections">
+  <h2>Corrections to the first pass</h2>
+  <p>Six of the first-pass findings differ from what the current source does.</p>
+  <ul class="findings">
+    <li><strong>OpenCode does not deny <code>.env</code> reads; it asks.</strong> The defaults are <code>read: {"*": "allow", "*.env": "ask", "*.env.*": "ask", "*.env.example": "allow"}</code>. The broader default is <code>"*": "allow"</code>: out of the box, Build only asks for <code>doom_loop</code> and paths outside the project. <span class="cite">packages/opencode/src/agent/agent.ts:116-135</span></li>
+    <li><strong>OpenCode's Explore is read-only only by convention, and there is no "Scout" agent.</strong> Explore allows <code>bash</code>, so nothing stops it writing through the shell. The built-in agents are build, plan, general and explore, plus hidden compaction, title and summary agents. <span class="cite">agent/agent.ts:196-262</span></li>
+    <li><strong>OpenCode gives GPT models <code>apply_patch</code> instead of <code>edit</code>/<code>write</code>.</strong> Any model ID containing <code>gpt-</code> (except oss and gpt-4) gets the patch tool. That matters for Harness, which defaults to <code>gpt-5.4</code>. <span class="cite">tool/registry.ts:296-300</span></li>
+    <li><strong>Codex no longer has file undo.</strong> Ghost-commit snapshots were turned on by default in Nov 2025 (<a href="https://github.com/openai/codex/pull/6041">openai/codex#6041</a>) and got a v2 in Dec 2025 (<a href="https://github.com/openai/codex/pull/8055">openai/codex#8055</a>). Current config code keeps the setting only for compatibility, "even though snapshots are no longer produced". <code>thread/revert</code> rewrites history only. <span class="cite">codex-rs/core/src/config/mod.rs:231; app-server-protocol/src/protocol/v2/thread.rs:1288</span></li>
+    <li><strong>Pi now has built-in MCP and optional extra tools.</strong> The Nov 2025 post predates this. MCP (<code>pi mcp add</code>), project trust, and optional <code>grep</code>/<code>find</code>/<code>ls</code> tools now ship in the box. The default tool set is still read/bash/edit/write, and plan mode and subagents are still left out on purpose. <span class="cite">packages/coding-agent/docs/mcp.md; src/core/agent-session.ts:3652; README.md:19</span></li>
+    <li><strong>Cline's docs and code disagree about checkpoints.</strong> The docs describe a shadow repo committed after every tool call. The current SDK snapshots once per user run (<code>beforeRun</code>) using <code>git stash create</code> plus a synthetic commit for untracked files. It keeps these alive under <code>refs/cline/checkpoints/&lt;session&gt;/</code> <em>inside the user's repo</em>, with a scratch index file kept in Cline's data dir. <span class="cite">docs/core-workflows/checkpoints.mdx vs sdk/packages/core/src/hooks/checkpoint-hooks.ts:21-437, 652</span></li>
+  </ul>
+  <p class="meta">Not re-read from source this pass: Aider, OpenHands, Goose and DeepSeek Harness. Goose has moved to <code>aaif-goose/goose</code>. DeepSeek Harness exists (created 2026-08-13) as described. Treat those first-pass notes as unverified.</p>
+</section>
+
+<section id="harness-today">
+  <h2>Harness today</h2>
+  <p>The coding agent shares the general chat loop, so every finding below applies to all of chat, not only to coding.</p>
+  <ul class="findings">
+    <li><span class="chip gap">Gap</span> <strong>Tool history is dropped between turns.</strong> <code>assemble_context</code> rebuilds history from each message's text and sets <code>tool_calls: None</code>. <code>ToolCallRecord</code> stores only a tool name and the result payload, with no arguments or call ID. So on the next user message, the model has forgotten every file it read and every edit it made, unless it wrote them out in prose. <span class="cite">src-tauri/src/chat/turn.rs:316-342; src-tauri/src/memory.rs:82</span></li>
+    <li><span class="chip gap">Gap</span> <strong>The loop stops silently after 10 rounds.</strong> <code>MAX_TOOL_CALL_ITERATIONS = 10</code> (kept equal to iOS by a test). At the cap the loop just <code>break</code>s, often leaving an empty or half-finished reply, with no summary and nothing in the UI. Ten rounds is low for coding; a "read 3 files, edit, typecheck, fix" task uses most of them. <span class="cite">src-tauri/src/openai.rs:15, 738-741, 361; ios/HarnessMobile/Chat/OpenAIClient.swift:120</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Sending mid-turn interrupts the turn.</strong> The composer shows Stop while a turn runs. Sending anyway calls <code>beginNewTurn</code>, which aborts the stream, calls <code>chat.stop()</code> (cancelling pending approvals), and starts a fresh turn. Combined with the first gap, the new turn loses the work in progress. <span class="cite">src/renderer/chat/ChatView.tsx:263-285; ChatComposer.tsx:590-601</span></li>
+    <li><span class="chip gap">Gap</span> <strong>The permission policy is hardcoded in Rust.</strong> The auto-run allowlist (<code>AUTO_RUN_PREFIXES</code>: git status/diff/log, typecheck, eslint, tsc, cargo check) and the project deny globs live in Rust constants, not in <code>resources/contracts/</code>. There is no <code>.env</code> rule, no "always allow", and Cancel sends the model no reason. <span class="cite">src-tauri/src/coding/shell.rs:14-22; coding/scope.rs:11-23, 309-314</span></li>
+    <li><span class="chip gap">Gap</span> <strong>No AGENTS.md, compaction, token accounting or loop guard.</strong> Project scope gets a generated block (root, detected stack, top-level names). Self scope gets hardcoded convention text. Nothing reads the project's own <code>AGENTS.md</code>. <span class="cite">coding/mod.rs:57-88; coding/self_repo.rs:39-50</span></li>
+    <li><span class="chip adopt">Keep</span> <strong>Approvals survive a restart.</strong> <code>gated_checkpoint.rs</code> saves the in-flight tool round (messages, call ID, remaining calls, partial text) to disk, so Proceed still works after the app restarts. None of the four reference harnesses does this as cleanly. Steering and undo should build on it. <span class="cite">src-tauri/src/chat/gated_checkpoint.rs; chat/stream.rs:200-345</span></li>
+    <li><span class="chip adopt">Keep</span> <strong>Scope safety.</strong> Paths resolve under a canonical root, symlinks that escape the root are rejected, self scope refuses edits on main/master, and common secret variables are removed from child processes. <span class="cite">coding/scope.rs:161-275; coding/git.rs:139-154; coding/shell.rs:79-89</span></li>
+    <li><span class="chip defer">Note</span> <strong>Transport and storage.</strong> Chat Completions with streaming, model <code>gpt-5.4</code> (env override), tool calls run one at a time, 300 s HTTP timeout, 120 s command timeout, 20 KB output tail. Messages are a JSON array per conversation that is rewritten on every append, and they sync to iOS. <span class="cite">openai.rs:21, 696-700; coding/shell.rs:9-10; memory.rs:609-660</span></li>
+  </ul>
+</section>
+
+<section id="matrix" class="wide">
+  <h2>Axis comparison</h2>
+  <p style="max-width:72ch">One row per design axis. The last column is the recommendation for Harness. Citations point at the file that shows the behavior.</p>
+  <div class="scroll" role="region" aria-label="Design axis comparison" tabindex="0">
+  <table class="matrix">
+    <thead><tr><th>Axis</th><th>OpenCode</th><th>Codex</th><th>Pi</th><th>Cline (SDK)</th><th>Harness today</th><th>Recommendation</th></tr></thead>
+    <tbody>
+    <tr><td class="axis">Loop and stop</td>
+      <td>Runs until the finish reason isn't <code>tool-calls</code>. Per-agent <code>steps</code> (default unlimited); on the last step it injects a "max steps reached, text only" message.<span class="cite">session/prompt.ts:1178-1281</span></td>
+      <td>Runs until the model stops calling tools or the user interrupts. I found no fixed step cap in core.<span class="cite">core/src/session/</span></td>
+      <td>Inner loop while there are tool calls <em>or</em> pending steers; outer loop for follow-ups; no cap. A <code>length</code> stop fails every tool call in that message instead of running truncated arguments.<span class="cite">packages/agent/src/agent-loop.ts:163-320</span></td>
+      <td>Iterates with a mistake tracker and a loop guard (see the last row).<span class="cite">runtime/orchestration/</span></td>
+      <td>Hard cap of 10, silent <code>break</code>.<span class="cite">openai.rs:738</span></td>
+      <td class="rec"><span class="chip adapt">Adapt Pi</span> Loop until no tool calls; check steers between rounds; a safety cap from a contract (around 100) that ends with a text-only summary turn; fail tool calls on a <code>length</code> stop.</td></tr>
+    <tr><td class="axis">Tool surface</td>
+      <td>About 15: read, edit/write or apply_patch, glob, grep, shell, task, todo, webfetch, websearch, skill, question, plan enter/exit, lsp.<span class="cite">tool/registry.ts</span></td>
+      <td>Shell, apply_patch, plan, the <code>spawn_agent</code> family, MCP, plus many app-only features.<span class="cite">core/src/tools/spec_plan.rs:773</span></td>
+      <td>read, bash, edit, write by default; grep/find/ls optional.<span class="cite">coding-agent/src/core/tools/index.ts:165-171</span></td>
+      <td>Presets toggle read, search, bash, editor, web fetch, skills, ask, spawn agent.<span class="cite">extensions/tools/presets.ts</span></td>
+      <td>10 tools, including list_tree, search, delete and three git tools.<span class="cite">resources/contracts/codingTools.json</span></td>
+      <td class="rec"><span class="chip adopt">Adopt Pi</span> read, edit, write, bash. Delete, search, list and git go through bash, which current models handle well.</td></tr>
+    <tr><td class="axis">Edit format</td>
+      <td>Exact replace with 9 fuzzy fallbacks (trimmed lines, block anchors, whitespace, indentation, escapes...); apply_patch for GPT.<span class="cite">tool/edit.ts:244-699</span></td>
+      <td>apply_patch (V4A envelope).<span class="cite">codex-rs/apply-patch/</span></td>
+      <td><code>edits[]</code> of <code>{oldText,newText}</code>, each matched against the <em>original</em> file, unique and non-overlapping.<span class="cite">core/tools/edit.ts:21-49</span></td>
+      <td>Editor tool; apply_patch off by default.<span class="cite">presets.ts:25-37</span></td>
+      <td>One exact, unique replacement per call.<span class="cite">coding/fs_tools.rs:361-399</span></td>
+      <td class="rec"><span class="chip adopt">Adopt Pi</span> <code>edits[]</code>, exact match, and an error that names the closest matching lines. Watch failure rates on GPT; apply_patch is the fallback to try.</td></tr>
+    <tr><td class="axis">Permissions</td>
+      <td>Rules per permission with glob patterns, last match wins, default ask. Bash is parsed with tree-sitter and every sub-command checked. "Always" approves <code>arity-prefix *</code> for the session. A reject with a message is passed back to the model as feedback.<span class="cite">permission/index.ts:28-171; tool/shell.ts:380-410; permission/arity.ts</span></td>
+      <td>Approval policy <code>on-request</code> (default), granular, or never. Decisions: Approved, ApprovedForSession, ApprovedExecpolicyAmendment (appends a <code>prefix_rule</code> to <code>default.rules</code>), Denied{rejection}, Abort.<span class="cite">protocol/src/protocol.rs:1090-1113, 4242-4280; execpolicy/src/amend.rs:79</span></td>
+      <td>None. The docs say to run Pi in a container if you want a boundary; project trust controls only which <code>.pi</code> resources load.<span class="cite">docs/security.md</span></td>
+      <td>Per-tool <code>autoApprove</code> policies; a "yolo" preset.<span class="cite">presets.ts:140-160</span></td>
+      <td>Fixed gated list plus a 7-prefix allowlist; only Proceed or Cancel.<span class="cite">coding/mod.rs:22-27</span></td>
+      <td class="rec"><span class="chip adapt">Adapt OpenCode + Codex</span> Rules in a contract; bash arity prefixes; decisions Allow once / Always (conversation) / Always (project, persisted) / Deny with note.</td></tr>
+    <tr><td class="axis">Sandbox</td>
+      <td>None at the OS level.</td>
+      <td>Seatbelt via <code>/usr/bin/sandbox-exec</code>; WorkspaceWrite with network off by default; <code>.git</code>, <code>.agents</code> and <code>.codex</code> kept read-only.<span class="cite">sandboxing/src/seatbelt.rs:62; protocol/src/protocol.rs:1177-1215; protocol/src/permissions.rs:40-42</span></td>
+      <td>None; points users to containers.<span class="cite">docs/containerization.md</span></td>
+      <td>None at the OS level.</td>
+      <td>Scope checks on file tools; <code>sh -lc</code> with secrets removed from the environment.</td>
+      <td class="rec"><span class="chip defer">Defer</span> Seatbelt for <code>bash</code> later (Phase 10). Undo plus approvals cover the common failures first.</td></tr>
+    <tr><td class="axis">Checkpoints / undo</td>
+      <td>Separate git dir per project and worktree; <code>add</code> + <code>write-tree</code> at every step start and finish; revert to a message or part, plus unrevert.<span class="cite">snapshot/index.ts:71-425; session/processor.ts:424-436; session/revert.ts</span></td>
+      <td>Removed (see Corrections).</td>
+      <td>Conversation tree only (<code>/tree</code>, <code>/fork</code>); no file undo.<span class="cite">docs/sessions.md</span></td>
+      <td>Per run, stash-shaped commits under private refs in the user's repo; restore files, task, or both.<span class="cite">hooks/checkpoint-hooks.ts</span></td>
+      <td>None.</td>
+      <td class="rec"><span class="chip adopt">Adopt OpenCode storage + Cline UX</span> Separate git dir, a snapshot per turn and per mutating tool; restore files / conversation / both.</td></tr>
+    <tr><td class="axis">Steering</td>
+      <td>Not studied in depth this pass.</td>
+      <td><code>turn/steer</code> with an <code>expectedTurnId</code> precondition; server-side <code>thread/queue/*</code>; some turns can't be steered (review, manual compact). In the TUI, Enter steers and Tab queues.<span class="cite">app-server-protocol/src/protocol/v2/turn.rs:311-334; v2/shared.rs:114; openai/codex#9077</span></td>
+      <td><code>steer()</code> and <code>followUp()</code> queues; a steer lands after the current tool batch and before the next model call; follow-ups land when the agent would otherwise stop; <span class="kbd">⌥ Enter</span> queues, <span class="kbd">⌥ ↑</span> pulls queued text back.<span class="cite">agent/src/agent.ts:299-305; docs/rpc-commands.md:23-27</span></td>
+      <td>Not studied in depth.</td>
+      <td>Sending mid-turn interrupts the turn.</td>
+      <td class="rec"><span class="chip adopt">Adopt Pi + Codex</span> See <a href="#steering">Steering in depth</a>.</td></tr>
+    <tr><td class="axis">Compaction</td>
+      <td>Compacts when tokens reach input limit minus a reserve (up to 20k), using a hidden compaction agent. Optional pruning of old tool output beyond 40k protected tokens.<span class="cite">session/overflow.ts; session/compaction.ts:28-33, 273-315</span></td>
+      <td>A handoff summary prompt; the rebuilt history is the summary plus recent user messages (up to 20k tokens) kept word for word; a remote compaction path too.<span class="cite">core/src/compact.rs:63, 384-386; prompts/templates/compact/prompt.md</span></td>
+      <td>Compacts when context exceeds window minus 16,384; keeps the last 20k tokens; the summary is an entry in the tree and the originals stay on disk.<span class="cite">docs/compaction.md:32-45</span></td>
+      <td>Not re-read.</td>
+      <td>None.</td>
+      <td class="rec"><span class="chip adapt">Adapt Pi + Codex</span> Pi's trigger and kept tail; keep user messages word for word like Codex. Needs token usage from the API first.</td></tr>
+    <tr><td class="axis">Plan mode</td>
+      <td>A primary agent whose rules deny edits except <code>.opencode/plans/*.md</code>.<span class="cite">agent/agent.ts:155-180</span></td>
+      <td>Collaboration modes plus a plan tool.</td>
+      <td>Left out on purpose; plans go in files.<span class="cite">README.md:19</span></td>
+      <td>Plan/Act; Plan disables the editor but keeps bash behind a command guard.<span class="cite">presets.ts:39-57</span></td>
+      <td>Chat and Q&amp;A ("Grill"); no Plan mode.</td>
+      <td class="rec"><span class="chip defer">Defer</span> If added later, make it a permission preset (edits denied), not a third chat mode.</td></tr>
+    <tr><td class="axis">Subagents</td>
+      <td><code>task</code> creates a child session; depth limit 1; resumable by <code>task_id</code>; background mode is experimental.<span class="cite">tool/task.ts:46-160</span></td>
+      <td><code>spawn_agent</code>, <code>send_input</code>, <code>wait_agent</code>, <code>close_agent</code>.<span class="cite">core/src/tools/spec_plan.rs:773</span></td>
+      <td>None built in; available as extensions.</td>
+      <td>Spawn agent and agent teams.</td>
+      <td>None.</td>
+      <td class="rec"><span class="chip defer">Defer</span> Revisit only if context pressure shows up after compaction ships.</td></tr>
+    <tr><td class="axis">Sessions</td>
+      <td>SQLite (drizzle) session/message/part tables; <code>fork(sessionID, messageID)</code>; child sessions.<span class="cite">session/session.ts:24-30, 425</span></td>
+      <td>Rollout files; <code>thread/fork</code>, <code>thread/resume</code>, <code>thread/revert</code>.</td>
+      <td>JSONL tree (<code>id</code>/<code>parentId</code>); branches stay in one file.<span class="cite">docs/session-format.md:3, 57</span></td>
+      <td>Messages plus checkpoint metadata.</td>
+      <td>One JSON array per conversation, synced; no tool items.</td>
+      <td class="rec"><span class="chip adapt">Adapt Pi</span> A local-only JSONL sidecar of full turn items, ready for a tree; the synced message file stays as the summary view.</td></tr>
+    <tr><td class="axis">Protocol</td>
+      <td>HTTP server with OpenAPI spec and <code>/event</code> SSE; the TUI, desktop and IDE are all clients.<span class="cite">server/routes/instance/httpapi/public.ts:155; packages/sdk/openapi.json</span></td>
+      <td>JSON-RPC app-server: Thread/Turn/Item; <code>item/started</code>, <code>item/*/delta</code>, <code>item/completed</code>; approvals arrive as requests from the server.<span class="cite">app-server-protocol/src/protocol/common.rs</span></td>
+      <td>RPC as JSON lines over stdio, plus an SDK.<span class="cite">docs/rpc.md</span></td>
+      <td>SDK with host adapters (VS Code, CLI).</td>
+      <td>Tauri commands plus ad-hoc events.</td>
+      <td class="rec"><span class="chip adapt">Adapt Codex vocabulary</span> Stay on Tauri IPC, but emit turn and item events in Codex's shape.</td></tr>
+    <tr><td class="axis">Extensibility</td>
+      <td>Global and project AGENTS.md, falls back to CLAUDE.md, first project match wins; skills; plugins; MCP.<span class="cite">session/instruction.ts:61-122</span></td>
+      <td>AGENTS.md and AGENTS.override.md; skills; plugins; hooks; MCP.<span class="cite">core/src/agents_md.rs:45</span></td>
+      <td>AGENTS.md and CLAUDE.md (loaded even without project trust); TS extensions; skills; prompt templates; MCP.<span class="cite">docs/security.md</span></td>
+      <td>Rules, skills, hooks, MCP.</td>
+      <td>None for projects.</td>
+      <td class="rec"><span class="chip adopt">Adopt</span> Load the scope root's AGENTS.md, falling back to CLAUDE.md. Skills and MCP later.</td></tr>
+    <tr><td class="axis">Loop / failure guard</td>
+      <td>3 identical calls in a row (same tool, same JSON input) trigger a <code>doom_loop</code> permission ask.<span class="cite">session/processor.ts:29, 356-377</span></td>
+      <td>None found; relies on interrupt and steer.</td>
+      <td>None; relies on the user. Retries transient API errors (3).<span class="cite">docs/settings.md:125-128</span></td>
+      <td>Identical-call warning at 3 and escalation at 5; 6 consecutive mistakes (API error, invalid call, failed tool) pause and ask the user.<span class="cite">runtime/safety/loop-detection.ts:54-57; mistake-tracker.ts; session-runtime-orchestrator.ts:471</span></td>
+      <td>None.</td>
+      <td class="rec"><span class="chip adopt">Adopt Cline</span> Same thresholds, values in a contract. At 3, add a note to the tool result; at 5 identical calls or 6 failures, pause with a card.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="steering">
+  <h2>Steering in depth</h2>
+  <p>Steering means adding an instruction to the running turn. Queueing means holding the message until the turn ends. Every implementation I checked applies a steer at a <em>boundary</em>: a tool call that has already started always finishes.</p>
+  <div class="scroll" role="region" aria-label="Steering implementations" tabindex="0">
+  <table>
+    <thead><tr><th>Source</th><th>Where the steer lands</th><th>Default key</th><th>Unused steer at turn end</th></tr></thead>
+    <tbody>
+      <tr><td>Pi (source)</td><td>After the current assistant message's tool calls finish, before the next model call. Also re-checked after a long preparation step such as compaction.</td><td><span class="kbd">Enter</span> steers, <span class="kbd">⌥ Enter</span> queues a follow-up</td><td>The loop keeps going while steers are pending</td></tr>
+      <tr><td>Codex (source)</td><td>Through <code>turn/steer</code> into the active turn's pending input; rejected with <code>ActiveTurnNotSteerable</code> during review or manual compaction</td><td><span class="kbd">Enter</span> steers, <span class="kbd">Tab</span> queues (<a href="https://github.com/openai/codex/pull/9077">#9077</a>)</td><td>Server-side queue, <code>thread/queue/*</code></td></tr>
+      <tr><td>Copilot SDK (docs)</td><td>"Injected before the next LLM request"; a tool call already under way finishes first</td><td>The SDK default is queue (<code>enqueue</code>); in Copilot CLI every prompt steers</td><td>Falls back to the queue (the docs disagree on front or back)</td></tr>
+      <tr><td>OpenAI Responses (docs)</td><td>Server-side <code>response.steer</code> over a WebSocket; the current output item and any hosted tools finish, then the response ends <code>incomplete</code> with reason <code>steered</code> and continues automatically</td><td>n/a</td><td>Lives only on the open connection; lost if it drops</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>OpenAI's guide says server-side steering needs a newer model family over a WebSocket connection to the Responses API. Harness uses Chat Completions with <code>gpt-5.4</code>, so it can't use it today. That's acceptable: doing it in Harness's own loop matches Pi and works with any model. A Responses adapter can add server-side steering later as a speed-up, without changing the UI.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 760 230" width="760" role="img" aria-labelledby="steerTitle steerDesc" style="display:block;max-width:none">
+      <title id="steerTitle">Steering timeline</title>
+      <desc id="steerDesc">A model call returns two tool calls. While the first runs, the user steers. The first tool finishes, the second is skipped, the steer is added to the transcript, and the next model call sees it.</desc>
+      <line x1="20" y1="120" x2="740" y2="120" stroke="var(--line)" stroke-width="2"/>
+      <rect x="20" y="96" width="140" height="48" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="90" y="118" text-anchor="middle" font-size="13" fill="var(--fg)" font-weight="600">Model call 1</text>
+      <text x="90" y="135" text-anchor="middle" font-size="11" fill="var(--muted)">returns bash + edit</text>
+      <rect x="175" y="96" width="150" height="48" rx="4" fill="var(--surface)" stroke="var(--fg)"/>
+      <text x="250" y="118" text-anchor="middle" font-size="13" fill="var(--fg)" font-weight="600">bash: npm test</text>
+      <text x="250" y="135" text-anchor="middle" font-size="11" fill="var(--muted)">runs to completion</text>
+      <rect x="340" y="96" width="120" height="48" rx="4" fill="var(--defer-bg)" stroke="var(--defer)" stroke-dasharray="4 3"/>
+      <text x="400" y="118" text-anchor="middle" font-size="13" fill="var(--defer)" font-weight="600">edit</text>
+      <text x="400" y="135" text-anchor="middle" font-size="11" fill="var(--defer)">skipped: user steered</text>
+      <rect x="475" y="96" width="110" height="48" rx="4" fill="var(--adapt-bg)" stroke="var(--adapt)"/>
+      <text x="530" y="118" text-anchor="middle" font-size="13" fill="var(--adapt)" font-weight="600">Steer added</text>
+      <text x="530" y="135" text-anchor="middle" font-size="11" fill="var(--adapt)">as a user message</text>
+      <rect x="600" y="96" width="140" height="48" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="670" y="118" text-anchor="middle" font-size="13" fill="var(--fg)" font-weight="600">Model call 2</text>
+      <text x="670" y="135" text-anchor="middle" font-size="11" fill="var(--muted)">sees the steer</text>
+      <line x1="260" y1="40" x2="260" y2="94" stroke="var(--adapt)" stroke-width="2"/>
+      <circle cx="260" cy="40" r="5" fill="var(--adapt)"/>
+      <text x="272" y="36" font-size="12" fill="var(--fg)" font-weight="600">User presses Enter: "use pnpm, not npm"</text>
+      <text x="272" y="52" font-size="11" fill="var(--muted)">goes into the steer queue; a chip above the composer shows it</text>
+      <text x="20" y="190" font-size="12" fill="var(--muted)">Boundary rule: a tool call already running always finishes. Calls not yet started in the same batch get a</text>
+      <text x="20" y="208" font-size="12" fill="var(--muted)">"skipped" result. Text-only streaming is aborted and resent, keeping the partial text.</text>
+    </svg>
+    </div>
+    <figcaption>Proposed steering behavior for Harness, done in Harness's own loop so it works with Chat Completions.</figcaption>
+  </figure>
+
+  <h3>Proposed rules</h3>
+  <ul>
+    <li><strong>Defaults.</strong> While a turn runs, <span class="kbd">Enter</span> steers and <span class="kbd">⌥ Enter</span> queues a follow-up. Stop remains a separate button that cancels the turn. When the agent is idle, Enter starts a turn as it does now.</li>
+    <li><strong>Boundary.</strong> A running tool call always finishes. Calls not yet started in the same batch get a <code>{"skipped":true,"reason":"user sent a new instruction"}</code> result, so the model reacts on its next call instead of after the whole batch. This is a deliberate step past Pi, which runs the full batch first.</li>
+    <li><strong>Mid-text.</strong> If the model is only streaming text (no tool call in progress), abort that request, keep the partial text as the assistant message, add the steer, and send again. This matches what OpenAI's server does when it ends a response as <code>steered</code>.</li>
+    <li><strong>During an approval.</strong> If a tool is waiting on its approval card, a steer counts as <em>Deny with note</em> for that call, with the steer text passed to the model. Copilot CLI documents this use.</li>
+    <li><strong>Persistence.</strong> A steer is written to the transcript as a user message at the point it was applied, marked <code>origin: "steer"</code>. Steers not yet applied are stored in the gated checkpoint, so they survive a restart the way pending approvals do now.</li>
+    <li><strong>Turn ends first.</strong> If the turn finishes before a steer is applied, the steer becomes the next turn's opening message (the Copilot SDK fallback). Queued follow-ups go after it, one turn each.</li>
+    <li><strong>UI.</strong> Pending steers and follow-ups show as chips above the composer, each with Edit, "Send as follow-up" and Remove. <span class="kbd">⌥ ↑</span> pulls them back into the composer, as in Pi.</li>
+  </ul>
+</section>
+
+<section id="undo">
+  <h2>Undo in depth</h2>
+  <p>Three designs have been shipped. Codex's history makes the main risk clear: snapshotting large untracked trees is slow and noisy. Codex spent several PRs on size limits and warnings, then stopped producing snapshots.</p>
+  <div class="scroll" role="region" aria-label="Undo designs" tabindex="0">
+  <table>
+    <thead><tr><th>Design</th><th>Benefits</th><th>Costs</th></tr></thead>
+    <tbody>
+      <tr><td>Separate git dir per project (OpenCode)</td><td>Never touches the user's repo; works on folders that aren't git repos; a <code>write-tree</code> hash per step costs little</td><td>A second object store per project; needs gc and size limits; has to respect <code>.gitignore</code></td></tr>
+      <tr><td>Stash-shaped commits under private refs in the user's repo (Cline SDK)</td><td>Reuses the repo's object store; restores work with <code>git stash apply</code></td><td>Writes refs into the user's <code>.git</code>; needs a git repo; per run only</td></tr>
+      <tr><td>Ghost commits (Codex, removed)</td><td>Simple</td><td>Warnings and slowness on large untracked files; removed</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><strong>Recommendation:</strong> the OpenCode storage model with Cline's restore choices.</p>
+  <ul>
+    <li><strong>Store.</strong> <code>&lt;app data&gt;/coding-snapshots/&lt;hash(root)&gt;/</code>, used as <code>git --git-dir=… --work-tree=&lt;root&gt;</code>. Honor <code>.gitignore</code> plus the scope deny globs. Skip any single file over 2 MB and any untracked directory over a file-count limit, and record what was skipped in the snapshot so the UI can say "not covered".</li>
+    <li><strong>When.</strong> One snapshot at turn start (the restore point the user sees) and one after each successful <code>edit</code>/<code>write</code>/mutating <code>bash</code> (so per-call diffs work). Each is a <code>write-tree</code> hash stored on the turn record. No commits.</li>
+    <li><strong>Restore.</strong> On any user message: <em>Restore files</em>, <em>Restore conversation</em>, or <em>Restore both</em>. Files use <code>read-tree</code> + <code>checkout-index -a -f</code>, then delete files added since that snapshot. Take a snapshot just before restoring, so a restore can itself be undone once (OpenCode's unrevert).</li>
+    <li><strong>Scope.</strong> Undo covers files in the scope only. It can't undo side effects of <code>bash</code> outside it (network calls, global installs, <code>git push</code>). The restore dialog should say so in one line.</li>
+    <li><strong>What it unlocks.</strong> With undo in place, edits can run without asking by default (a setting, on by default), the way Cline's docs describe. The approval card then mostly appears for shell commands.</li>
+  </ul>
+</section>
+
+<section id="display">
+  <h2>Tool display and UX</h2>
+  <p>Steering and undo only work if you can see what the agent is doing. Today you mostly can't.</p>
+  <h3>What a turn looks like today</h3>
+  <ul class="findings">
+    <li><span class="chip gap">Gap</span> <strong>One card above the whole reply.</strong> Every tool call in a turn goes into a single <code>ToolCallsCard</code> placed <em>above</em> the assistant text. Text from all rounds is joined into one bubble underneath, so you can't tell what the agent said before or after a given action. <span class="cite">src/renderer/chat/ChatMessageList.tsx:263-292; src-tauri/src/openai.rs:796</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Fixed labels, no detail.</strong> Completed rows show only "Read file", "Run command" or "Edit file". There's no path, command, exit code, output, duration or diff after an edit applies. The path and a preview clipped to 24 lines appear only while a call waits for approval. <span class="cite">ToolCallsCard.tsx:15, 228-262; chatHelpers.tsx:450-496</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Errors look like success.</strong> <code>toolIcon()</code> always returns a checkmark, so a failed edit, a non-zero exit, a denied call and a successful call all look the same. <span class="cite">chatHelpers.tsx:498-500</span></li>
+    <li><span class="chip gap">Gap</span> <strong>No running state.</strong> Rust emits <code>chat-tool-panel-update</code> only after a tool finishes (or when it needs approval). During a two-minute <code>npm test</code> you only see the "THINKING" ticker. Command output is collected with <code>wait_with_output</code> and returned all at once. <span class="cite">src-tauri/src/chat/tool.rs:186-196; coding/shell.rs:96-101</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Collapses at 2 calls.</strong> With two or more calls, the card collapses to a summary like "Read file (3), Run command". A 30-call coding turn becomes one line. <span class="cite">chatHelpers.tsx:429-448</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Fragile matching.</strong> Updates are matched to rows by tool name and <code>pendingId</code>, and rows are keyed by array index. Two concurrent <code>bash</code> calls, or a reload in mid-turn, can attach a result to the wrong row. <span class="cite">src/renderer/chat/ChatView.tsx:300-345</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Detail lost on reload.</strong> The saved <code>ToolCallRecord</code> has no arguments, so even with better rendering, an old turn couldn't show which command ran. <span class="cite">src-tauri/src/memory.rs:82-87</span></li>
+  </ul>
+
+  <h3>How the reference harnesses do it</h3>
+  <ul>
+    <li><strong>Codex</strong>: each action is an <em>item</em> with a lifecycle (<code>item/started</code>, deltas such as <code>item/commandExecution/outputDelta</code> and <code>item/fileChange/patchUpdated</code>, then <code>item/completed</code>), plus <code>turn/diff/updated</code> for the turn's combined diff and <code>thread/tokenUsage/updated</code>. <span class="cite">app-server-protocol/src/protocol/common.rs</span></li>
+    <li><strong>OpenCode</strong>: tool parts go <code>pending → running → completed | error</code> with start and end times. The shell tool streams its output into the part's metadata as it runs, keeping the last 30,000 characters. <span class="cite">session/processor.ts:174-344; tool/shell.ts:27, 475-525</span></li>
+    <li><strong>Pi</strong>: <code>tool_execution_start / update / end</code> events with <code>partialResult</code>, <code>isError</code> and <code>durationMs</code>; tool output is collapsed by default and <span class="kbd">Ctrl O</span> expands it. <span class="cite">coding-agent/docs/json.md:105-107; docs/keybindings.md</span></li>
+  </ul>
+
+  <h3>Proposed: a turn timeline</h3>
+  <figure>
+    <div class="mock" aria-label="Mockup of a coding turn timeline">
+      <div class="mock-text">I'll check the failing test first.</div>
+      <div class="mock-group"><span class="st ok">✓</span> Explored 4 files <span class="mock-dim">src/App.tsx, src/api.ts, +2 · 0.3s</span> <span class="mock-link">Show</span></div>
+      <div class="mock-item">
+        <div class="mock-head"><span class="st ok">✓</span> <code>$ pnpm test src/api</code> <span class="chip gap">exit 1</span> <span class="mock-dim">12.4s</span> <span class="mock-link">Output</span></div>
+        <pre class="mock-out">FAIL src/api.test.ts &gt; parses dates
+Expected: 2026-10-09  Received: 2026-10-08</pre>
+      </div>
+      <div class="mock-text">Off by one in the timezone conversion. Fixing it.</div>
+      <div class="mock-item">
+        <div class="mock-head"><span class="st ok">✓</span> Edited <code>src/api.ts</code> <span class="mock-add">+3</span> <span class="mock-del">−1</span> <span class="mock-dim">auto-approved</span> <span class="mock-link">Diff</span> <span class="mock-link">Undo</span></div>
+      </div>
+      <div class="mock-steer">You: "also add a test for DST"<span class="mock-dim"> · applied after the edit</span></div>
+      <div class="mock-item mock-running">
+        <div class="mock-head"><span class="st run" aria-hidden="true"></span> <code>$ pnpm test src/api</code> <span class="mock-dim">running · 0:07</span> <span class="mock-link">Stop command</span></div>
+        <pre class="mock-out">✓ parses dates (3 ms)
+… running 14 more</pre>
+      </div>
+      <div class="mock-status"><span class="st run" aria-hidden="true"></span> Running tests · step 9 · 1:42 <span class="mock-chip">1 queued</span> <span class="mock-stop">Stop</span></div>
+    </div>
+    <figcaption>Mockup. Text and tool calls appear in the order they happened. Read-only calls collapse into one group; changes and failures always stay visible.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>One item per action.</strong> Text segments, tool calls, steers, approvals, guard pauses and checkpoint markers render in order inside the assistant message. This replaces "card on top, joined text below".</li>
+    <li><strong>Visible states.</strong> Preparing (arguments still streaming), Awaiting approval, Running (elapsed time, last lines of output), Done, Failed (exit code, first lines of stderr), Denied (with your note), Skipped (steered), Stopped. Each state has its own icon and color, not just a label.</li>
+    <li><strong>A renderer for each tool.</strong>
+      <ul>
+        <li><code>read</code>: path and line range; content hidden unless opened.</li>
+        <li><code>edit</code>/<code>write</code>: path, <code>+n −m</code>, collapsed diff, Undo; on failure, the closest matching lines.</li>
+        <li><code>bash</code>: the command as the title, live output tail, exit chip, duration; expanding shows full output with a note when truncated; a per-command Stop that kills only that process.</li>
+        <li><code>web_search</code>/<code>web_fetch</code>: see <a href="#web">Web search</a>.</li>
+      </ul>
+    </li>
+    <li><strong>Grouping.</strong> Consecutive read-only calls (reads, <code>rg</code>, <code>git status</code>, searches) collapse into one "Explored 4 files" line. Edits, failures, approvals and long-running commands are never collapsed. This replaces "collapse at 2".</li>
+    <li><strong>Turn status line.</strong> While a turn runs, a line pinned above the composer shows the current activity, the step count and elapsed time, the queue chips, and Stop. It replaces the ticker for coding turns and has an <code>aria-live="polite"</code> region.</li>
+    <li><strong>Turn footer.</strong> When a turn ends: "Changed 3 files +40 −12 · 18 steps · 2m 10s" with <strong>Review changes</strong> (the turn's combined diff) and <strong>Restore…</strong>. If the turn hit the step cap or a guard, the footer says why.</li>
+    <li><strong>Approvals stay in view.</strong> An approval waiting off-screen gets a pinned copy above the composer. If the window isn't focused, a system notification and Dock badge say the agent is blocked. Keyboard: <span class="kbd">⌘ ↵</span> runs, <span class="kbd">Esc</span> denies; <span class="kbd">Enter</span> stays "steer".</li>
+    <li><strong>Scrolling.</strong> Auto-follow while you're at the bottom, a "Jump to latest" pill otherwise. Live output scrolls inside its own box and never pushes the page.</li>
+    <li><strong>Same view after reload.</strong> The timeline is rebuilt from the transcript sidecar, so an old turn looks the same as a live one.</li>
+  </ul>
+  <h3>What the backend has to provide</h3>
+  <ul>
+    <li>A stable <code>itemId</code> (the model's tool-call ID) on every event, replacing name-and-pendingId matching.</li>
+    <li>Events: <code>chat-item-started</code>, <code>chat-item-delta</code> (text or output chunks, throttled to about 10 per second, tail-capped), <code>chat-item-completed</code> (status, exit code, duration, diff stats), <code>chat-turn-diff-updated</code>. <code>chat-stream-chunk</code> and <code>chat-tool-panel-update</code> stay until the renderer has fully moved over.</li>
+    <li><code>bash</code> streams stdout and stderr through piped readers instead of <code>wait_with_output</code>, with a kill handle per item.</li>
+    <li>The tool name is announced as soon as it appears in the SSE deltas, so a large <code>write</code> shows "Preparing write…" instead of a silent pause.</li>
+    <li>Diff stats computed in Rust after each edit, and stored with the item.</li>
+  </ul>
+</section>
+
+<section id="web">
+  <h2>Web search</h2>
+  <p>You use web search heavily in Claude, so treat it as a core tool. Harness has a basic one today.</p>
+  <h3>Today</h3>
+  <ul class="findings">
+    <li><span class="chip gap">Gap</span> <strong>A thin Tavily wrapper.</strong> <code>search_depth: "basic"</code>, up to 10 results, snippets cut at 4,000 characters, <code>include_answer: false</code>, 45 s timeout, no retries. No domain filter, no recency filter, no news mode. It needs a separate Tavily key. <span class="cite">src-tauri/src/chat/assistant_tools.rs:195-298; resources/contracts/tools.json:222-238</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Can't read a page.</strong> There's no fetch tool, so the model works from snippets and can't follow a link to the docs page or changelog it found.</li>
+    <li><span class="chip gap">Gap</span> <strong>Searches run one at a time.</strong> The loop runs tool calls in sequence, so four queries cost four round trips. <span class="cite">openai.rs:823-842</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Sources aren't shown.</strong> The card says "Web search" with no query, result list or links. Citations depend on the model choosing to include them.</li>
+  </ul>
+  <h3>Reference</h3>
+  <ul>
+    <li><strong>OpenCode</strong>: <code>websearch</code> through Exa or Parallel (<code>numResults</code>, <code>livecrawl</code>, <code>type: auto | fast | deep</code>) and <code>webfetch</code> (URL to markdown, text or HTML; 5 MB cap; timeout up to 120 s). <span class="cite">tool/websearch.ts:12-41; tool/webfetch.ts:9-50</span></li>
+    <li><strong>Codex</strong>: the OpenAI-hosted <code>web_search</code> tool, with cached, indexed or live modes, domain filters, user location and context size. <span class="cite">core/src/tools/hosted_spec.rs:14-44</span></li>
+    <li><strong>Pi</strong>: none built in; available as an extension or MCP server.</li>
+  </ul>
+  <h3>Proposed</h3>
+  <ul>
+    <li><strong><code>web_search</code> v2</strong>: <code>query</code>, <code>max_results</code>, <code>allowed_domains</code>, <code>blocked_domains</code>, <code>time_range</code> (day, week, month, year), <code>topic</code> (general or news), <code>depth</code> (basic or advanced). It maps directly to Tavily's existing parameters, so the backend stays the same. Returns title, URL, published date and content for each result.</li>
+    <li><strong><code>web_fetch</code></strong> (new): <code>url</code>, optional <code>prompt</code>, optional <code>offset</code>.
+      <ul>
+        <li>Fetches with reqwest and converts HTML to markdown. Caps size, caches for 15 minutes, upgrades http to https, and follows redirects only on the same host.</li>
+        <li>Blocks localhost, private IP ranges and <code>file:</code> URLs.</li>
+        <li>With a <code>prompt</code>, the page is answered by a small model (the existing <code>gpt-5.4-mini</code> setting) and only the answer reaches the main context. Without one, pages of markdown come back with an <code>offset</code> to read further.</li>
+      </ul>
+    </li>
+    <li><strong>Run read-only tools in parallel.</strong> When the model returns several read-only calls in one round (searches, fetches, reads), run them concurrently. Mutating tools stay in order. Pi does the same, running in parallel unless a tool is marked sequential. <span class="cite">packages/agent/src/agent-loop.ts:517-519</span></li>
+    <li><strong>Reliability.</strong> Retry 429 and 5xx with backoff; keep a clear error when no key is set; fall back from advanced to basic on timeout.</li>
+    <li><strong>Display.</strong> The search card shows the query and a list of results (title, domain, date) you can open. The fetch card shows the URL, page title and size. The message ends with a <strong>Sources</strong> row built from every URL the turn searched or fetched, so citations don't depend on the model.</li>
+    <li><strong>Safety.</strong> Page content is untrusted. The system prompt says so, and a fetched page never changes permissions. Web tools are read-only, so they run without approval.</li>
+    <li><strong>Provider path.</strong> Put the provider behind a small trait. Tavily now; OpenAI-hosted search once the Responses adapter exists (no extra key, built-in citations); Exa as an option. This fits "wait for the model to get better": hosted search improves along with the model.</li>
+  </ul>
+  <p>Both tools are available in ordinary chat as well as coding chats, and the iOS contract keeps its current <code>web_search</code> fields until iOS adopts the new ones.</p>
+</section>
+
+<section id="attach">
+  <h2>Attachments and folder access</h2>
+  <h3>Attachments today</h3>
+  <ul class="findings">
+    <li><span class="chip gap">Gap</span> <strong>Text and audio only.</strong> Images, PDFs and folders are rejected with "Text and audio files work for now." Pasting a screenshot of a UI bug, the most common attachment for coding, doesn't work on desktop, although iOS already syncs photo attachments (<code>MessageAttachment</code>). <span class="cite">src/renderer/chat/fileAttach.ts:28-30; src-tauri/src/memory.rs:90-95</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Project files are copied in as pasted text.</strong> A file dropped from the project becomes a <code>&lt;pasted_text&gt;</code> block (up to 512 KB). The model gets a copy without a path, which goes stale after the first edit, instead of a reference to the file. <span class="cite">ChatComposer.tsx:262-290; pastedText.ts:23-25</span></li>
+    <li><span class="chip gap">Gap</span> <strong>No way to mention a file.</strong> There's no <code>@</code> file picker; to point at a file you type its path from memory.</li>
+    <li><span class="chip gap">Gap</span> <strong>Messages are text only.</strong> <code>ChatMessageParam.content</code> is <code>Option&lt;String&gt;</code>, so the model can't be sent an image at all. <span class="cite">src-tauri/src/openai.rs:41</span></li>
+  </ul>
+  <h3>Proposed composer</h3>
+  <ul>
+    <li><strong><code>@</code> mentions.</strong> Typing <code>@</code> opens a fuzzy file picker over the workspace (respecting <code>.gitignore</code>), like Codex's <code>fuzzyFileSearch</code> methods. The file shows as a chip with its relative path. At send time the content goes in as <code>&lt;file path="src/api.ts"&gt;…&lt;/file&gt;</code> (capped; larger files go in as a path with a note to read it) and is recorded as a <code>read</code> item, so the timeline and undo know about it.</li>
+    <li><strong>Drops depend on what and where.</strong>
+      <ul>
+        <li>A file inside the workspace becomes an <code>@</code> chip, not a copy.</li>
+        <li>A text file outside the workspace is still attached as content, as today.</li>
+        <li>A folder offers <em>Use as project folder</em> or <em>Add to workspace</em> (read-only or read-write).</li>
+        <li>An image becomes an image attachment.</li>
+      </ul>
+    </li>
+    <li><strong>Images.</strong> Paste, drop or pick PNG, JPEG, WebP or GIF. Stored with the same <code>MessageAttachment</code> record iOS uses, so they sync both ways. Sent as image content parts. Messages change from a string to a list of content parts. Steers can carry images too, as in Pi.</li>
+    <li><strong>PDFs.</strong> Text extraction later; until then the rejection message names the formats that work.</li>
+    <li><strong>Chips</strong> show name, relative path or source, size and an approximate token count, with remove and "inline as text". Attaching works while a turn is running, and the attachment goes with the steer or follow-up.</li>
+  </ul>
+
+  <h3>Folder access today</h3>
+  <ul>
+    <li>One root per conversation (a project folder or Harness's own UI files). File tools resolve paths under that root, reject <code>..</code> and symlinks that leave it, and skip the deny globs. Anything outside the root fails with "Invalid path". <span class="cite">coding/scope.rs:161-253</span></li>
+    <li><code>run_command</code> runs <code>sh -lc</code> in the root with no path checks. Once a command is approved it can touch anything your user account can.</li>
+    <li>The app isn't sandboxed (<code>entitlements.plist</code> has no <code>app-sandbox</code> key), so no security-scoped bookmarks are needed. macOS still asks once per protected location the first time Harness touches it: Desktop, Documents, Downloads, iCloud Drive, removable volumes. A refusal currently surfaces as a raw permission error.</li>
+  </ul>
+  <h3>Proposed folder model</h3>
+  <div class="scroll" role="region" aria-label="Folder access levels" tabindex="0">
+  <table>
+    <thead><tr><th>Location</th><th>File tools</th><th>bash (best effort)</th></tr></thead>
+    <tbody>
+      <tr><td class="axis">Project root</td><td>Read and write; edits auto-approved with undo</td><td>Runs per the permission rules</td></tr>
+      <tr><td class="axis">Added folder, read-write</td><td>Read and write; included in snapshots</td><td>Same as the root</td></tr>
+      <tr><td class="axis">Added folder, read-only</td><td>Read; writes denied</td><td>Commands whose path arguments write there ask</td></tr>
+      <tr><td class="axis">Anywhere else</td><td>Reads ask once, with "Always allow this folder" (adds it read-only); writes denied</td><td>Commands with path arguments outside the workspace ask</td></tr>
+      <tr><td class="axis">Secrets (<code>.env*</code>, <code>*.pem</code>, <code>id_*</code>, <code>~/.ssh</code>, <code>~/.aws</code>)</td><td>Reads ask, even inside the root</td><td>Ask</td></tr>
+      <tr><td class="axis">Deny globs (<code>.git/</code> internals, <code>node_modules</code>…)</td><td>Hidden from list and search; writes denied</td><td>Not enforced</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <ul>
+    <li><strong>Where this comes from.</strong> OpenCode's <code>external_directory</code> permission (outside reads ask, with folder globs for "always") and its shell scanner, which resolves path arguments of file commands and flags ones outside the project. Codex's extra writable roots, which its TUI warns about when you add folders. <span class="cite">opencode tool/shell.ts:28-51, 380-410; agent/agent.ts:103-135; codex tui/src/additional_dirs.rs</span></li>
+    <li><strong>Be upfront about bash.</strong> Path checks on shell commands are a heuristic: they catch <code>cat ../other/x</code>, not <code>python script.py</code>. The access table should say so. Only Seatbelt (Phase 10) actually limits bash.</li>
+    <li><strong>Per project, remembered.</strong> Added folders and "always" rules live with the project in the project registry (<code>coding_projects.json</code>, synced without local paths), so a new conversation in the same project starts with the same access.</li>
+    <li><strong>Workspace popover.</strong> Clicking the scope pill opens a list: the root and each added folder with its access level (change, remove), "Add folder…", and a short summary of the project's "always allow" rules with a link to edit them. It replaces "Clear workspace" in the Plus menu.</li>
+    <li><strong>macOS prompts.</strong> Picking a project through the folder picker grants access for that location. If the agent later hits a TCC refusal, the tool result and a card say "macOS blocked access to Documents. Allow Harness in System Settings › Privacy &amp; Security › Files and Folders" instead of <code>Operation not permitted</code>.</li>
+    <li><strong>Self scope</strong> keeps its fixed allow globs (renderer <code>.tsx</code>/<code>.css</code> only); folders can't be added to it.</li>
+  </ul>
+</section>
+
+<section id="ios">
+  <h2>Desktop and iOS</h2>
+  <p>The coding agent runs only on the desktop, because it needs the file system and a shell. The phone should <strong>show</strong> coding turns the same way the desktop does, and <strong>queue work</strong> for the desktop to run when you're back.</p>
+  <h3>Today</h3>
+  <ul class="findings">
+    <li><span class="chip gap">Gap</span> <strong>Tool labels are copied by hand and have drifted.</strong> iOS keeps its own label table and compress threshold. It says "Searched the web" where desktop falls back to "Web search", and it has no labels for coding tools, so they render as "Ws edit" or "Run command". This breaks the repo's no-hand-copied-contracts rule. <span class="cite">ios/HarnessMobile/Chat/TaskToolExecutor.swift:127-158; src/renderer/chat/chatHelpers.tsx:429-496</span></li>
+    <li><span class="chip gap">Gap</span> <strong>Nothing to render with.</strong> The synced <code>ToolCallRecord</code> has only a tool name and payload, so iOS can't show the command, its status or a diff for a coding turn. <span class="cite">src-tauri/src/memory.rs:82-87</span></li>
+  </ul>
+  <h3>Proposed split</h3>
+  <div class="scroll" role="region" aria-label="Desktop and iOS responsibilities" tabindex="0">
+  <table>
+    <thead><tr><th></th><th>Desktop</th><th>iOS</th></tr></thead>
+    <tbody>
+      <tr><td class="axis">Coding agent</td><td>Runs turns; steering; approvals; undo</td><td>None. Views coding turns read-only</td></tr>
+      <tr><td class="axis">Chat tools</td><td>Full set, including web search v2 and web fetch</td><td>Its current set; adopts the web search v2 fields and web fetch when convenient</td></tr>
+      <tr><td class="axis">Turn rendering</td><td>Timeline from the local transcript (full output)</td><td>The same timeline from synced display items (output tail only)</td></tr>
+      <tr><td class="axis">Run on desktop</td><td>Picks up queued jobs and asks before starting (default) or auto-starts (setting)</td><td>"Run on desktop" composer action with a project picker; shows queued, running and done</td></tr>
+      <tr><td class="axis">Steering</td><td>Live</td><td>Follow-ups only, queued through sync. Live steering from the phone waits for real-time sync, which is Frozen.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>Consistent rendering</h3>
+  <ul>
+    <li><strong><code>resources/contracts/toolDisplay.json</code></strong> (new): for each tool, its label, past-tense label, icon key, which argument becomes the title (<code>command</code>, <code>path</code>, <code>query</code>, <code>url</code>), whether it counts as read-only for grouping, plus the state list and the grouping rule. TS and Swift both read it, and a parity test replaces the two hand-kept tables.</li>
+    <li><strong>Synced display items</strong>: each assistant <code>MessageRecord</code> gains an optional <code>items</code> array of compact entries: <code>{id, kind, toolName, title, status, exitCode?, durationMs?, diffStat?, outputTail? (≤2 KB), urls?}</code>. Full output and arguments stay in the local transcript sidecar. Swift's <code>Codable</code> ignores fields it doesn't know, but the Rust struct must declare <code>items</code> or sync rewrites on the desktop will drop it.</li>
+    <li>iOS's <code>ToolCallsCardView</code> becomes the same timeline (text and items in order, the same state icons, the same "Explored 4 files" grouping), using native SwiftUI shapes rather than copying desktop pixels.</li>
+  </ul>
+  <h3>Queueing work for the desktop</h3>
+  <ul>
+    <li><strong>Projects list</strong>: the desktop syncs <code>coding_projects.json</code> (<code>{id, name, kind}</code>, no local paths) so the phone can pick a project.</li>
+    <li><strong>Job</strong>: "Run on desktop" adds the user message to a conversation with <code>desktopRun: {projectId, status: "queued", requestedAt}</code> on the conversation. It syncs through R2 like any other change.</li>
+    <li><strong>Pickup</strong>: when the desktop syncs and finds queued jobs, it shows a "2 tasks from iPhone" badge with Run / Dismiss for each. The run happens in that conversation with that project's scope. Status changes (running, waiting for approval, done, failed) and display items sync back.</li>
+    <li><strong>Unattended runs</strong>: edits are auto-approved with undo; shell commands still follow the permission rules, so a job may pause for approval. The phone shows "Waiting for approval on desktop" instead of a spinner.</li>
+    <li><strong>Safety</strong>: anyone who can write to the R2 bucket could queue a job, which means running code on the desktop. Default to asking before starting. Auto-start is a setting that's off by default, and even with it on, shell permissions still apply.</li>
+  </ul>
+</section>
+
+<section id="architecture" class="wide">
+  <h2>Target architecture</h2>
+  <p style="max-width:72ch">The loop moves out of <code>openai.rs</code> into a session object that owns the queues, the guard and the snapshots. <code>openai.rs</code> shrinks to a model adapter that streams one response. Ordinary chat uses the same loop, so steering works in chat too.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 900 400" width="900" role="img" aria-labelledby="archTitle archDesc" style="display:block;max-width:none">
+      <title id="archTitle">Proposed coding agent architecture</title>
+      <desc id="archDesc">The renderer sends send, steer, follow-up and approval commands to an AgentSession in Rust. The session runs a loop that calls the model adapter and the tool runtime, goes through the permission gate and loop guard, writes the transcript and snapshots, and emits turn and item events back to the renderer.</desc>
+      <rect x="20" y="30" width="200" height="340" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="120" y="56" text-anchor="middle" font-size="14" font-weight="700" fill="var(--fg)">Renderer</text>
+      <text x="40" y="90" font-size="12" fill="var(--fg)">ChatComposer</text>
+      <text x="40" y="106" font-size="11" fill="var(--muted)">Enter steer · ⌥Enter queue</text>
+      <text x="40" y="136" font-size="12" fill="var(--fg)">QueueChips (new)</text>
+      <text x="40" y="166" font-size="12" fill="var(--fg)">ToolCallsCard</text>
+      <text x="40" y="182" font-size="11" fill="var(--muted)">once · always · deny + note</text>
+      <text x="40" y="212" font-size="12" fill="var(--fg)">TurnRestoreMenu (new)</text>
+      <text x="40" y="228" font-size="11" fill="var(--muted)">files · conversation · both</text>
+      <text x="40" y="258" font-size="12" fill="var(--fg)">GuardCard (new)</text>
+      <text x="40" y="274" font-size="11" fill="var(--muted)">loop / mistake pause</text>
+
+      <line x1="222" y1="140" x2="298" y2="140" stroke="var(--accent)" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="230" y="130" font-size="10" fill="var(--muted)">commands</text>
+      <line x1="298" y1="250" x2="222" y2="250" stroke="var(--adopt)" stroke-width="2" marker-end="url(#arr2)"/>
+      <text x="230" y="268" font-size="10" fill="var(--muted)">events</text>
+
+      <rect x="300" y="30" width="330" height="340" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="465" y="56" text-anchor="middle" font-size="14" font-weight="700" fill="var(--fg)">AgentSession  (chat/agent_loop.rs)</text>
+      <rect x="320" y="72" width="140" height="58" rx="4" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="390" y="96" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">Steer queue</text>
+      <text x="390" y="114" text-anchor="middle" font-size="11" fill="var(--muted)">drained per round</text>
+      <rect x="470" y="72" width="140" height="58" rx="4" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="540" y="96" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">Follow-up queue</text>
+      <text x="540" y="114" text-anchor="middle" font-size="11" fill="var(--muted)">drained at turn end</text>
+      <rect x="320" y="146" width="290" height="80" rx="4" fill="var(--surface)" stroke="var(--fg)"/>
+      <text x="465" y="170" text-anchor="middle" font-size="12" font-weight="700" fill="var(--fg)">Loop</text>
+      <text x="465" y="190" text-anchor="middle" font-size="11" fill="var(--muted)">apply steers → model call → tool calls → repeat</text>
+      <text x="465" y="208" text-anchor="middle" font-size="11" fill="var(--muted)">stops on: no tool calls · Stop · cap · guard</text>
+      <rect x="320" y="242" width="140" height="58" rx="4" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="390" y="266" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">Permission gate</text>
+      <text x="390" y="284" text-anchor="middle" font-size="11" fill="var(--muted)">rules + gated_checkpoint</text>
+      <rect x="470" y="242" width="140" height="58" rx="4" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="540" y="266" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">Loop guard</text>
+      <text x="540" y="284" text-anchor="middle" font-size="11" fill="var(--muted)">identical · failures</text>
+      <rect x="320" y="312" width="290" height="44" rx="4" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="465" y="339" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">Compaction (later)</text>
+
+      <line x1="632" y1="100" x2="688" y2="100" stroke="var(--fg)" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <line x1="632" y1="180" x2="688" y2="180" stroke="var(--fg)" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <line x1="632" y1="260" x2="688" y2="260" stroke="var(--fg)" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <line x1="632" y1="334" x2="688" y2="334" stroke="var(--fg)" stroke-width="1.5" marker-end="url(#arr3)"/>
+
+      <rect x="690" y="72" width="190" height="58" rx="4" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="785" y="96" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">Model adapter</text>
+      <text x="785" y="114" text-anchor="middle" font-size="11" fill="var(--muted)">openai.rs · streams one response</text>
+      <rect x="690" y="152" width="190" height="58" rx="4" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="785" y="176" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">Tool runtime</text>
+      <text x="785" y="194" text-anchor="middle" font-size="11" fill="var(--muted)">read · edit · write · bash</text>
+      <rect x="690" y="232" width="190" height="58" rx="4" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="785" y="256" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">Snapshots</text>
+      <text x="785" y="274" text-anchor="middle" font-size="11" fill="var(--muted)">coding/snapshot.rs · shadow git</text>
+      <rect x="690" y="312" width="190" height="44" rx="4" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="785" y="339" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">Transcript JSONL (local)</text>
+
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+        <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--adopt)"/></marker>
+        <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--fg)"/></marker>
+      </defs>
+    </svg>
+    </div>
+    <figcaption>The AgentSession takes over the loop from <code>OpenAIChatClient::send_message_with_tools_from</code>. <code>gated_checkpoint.rs</code> remains the restart-safe store for anything waiting on the user: approvals and unapplied steers.</figcaption>
+  </figure>
+
+  <h3 style="max-width:72ch">Why this shape keeps model upgrades simple</h3>
+  <ul style="max-width:72ch">
+    <li>The model choice lives in one setting. The tools are generic (files and a shell), so a stronger model gets better without harness changes.</li>
+    <li>No model-specific prompt workarounds. Edit failure rate is the one number to track; if GPT models struggle with <code>edits[]</code>, switching that model to apply_patch is a one-line change in the tool registry, as OpenCode does.</li>
+    <li>Moving to the Responses API later (for reasoning items and server-side steering) only touches the model adapter. The loop, queues, UI and contracts stay the same.</li>
+  </ul>
+</section>
+
+<section id="changes">
+  <h2>Modules, contracts, IPC</h2>
+  <h3>Rust</h3>
+  <div class="scroll" role="region" aria-label="Rust module changes" tabindex="0">
+  <table>
+    <thead><tr><th>Module</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td><code>openai.rs</code></td><td>Remove the loop from <code>send_message_with_tools_from</code>, leaving a <code>stream_response(messages, tools, cancel) -&gt; AssistantMessage</code> with <code>finish_reason</code> and usage (<code>stream_options.include_usage</code>). Keep <code>MAX_TOOL_CALL_ITERATIONS</code> for iOS parity only, or move both platforms to the contract.</td></tr>
+      <tr><td><code>chat/agent_loop.rs</code> (new)</td><td>The AgentSession: the loop, the steer and follow-up queues, skip-on-steer, the step cap with a summary turn, failing calls on a <code>length</code> stop. Replaces the duplicated closures in <code>stream.rs</code> (<code>stream_assistant_reply</code> and <code>resume_from_gated_checkpoint</code>).</td></tr>
+      <tr><td><code>chat/guard.rs</code> (new)</td><td>Counts identical calls (signature = tool name + JSON with sorted keys) and consecutive failures; returns ok / note / pause.</td></tr>
+      <tr><td><code>chat/gated_checkpoint.rs</code></td><td>Add <code>pending_steers</code>, <code>pending_follow_ups</code>, <code>turn_id</code>, <code>snapshot_hash</code>. Approval results gain <code>decision</code> + <code>note</code> + <code>pattern</code>.</td></tr>
+      <tr><td><code>chat/tool.rs</code></td><td><code>execute_tool</code> asks the permission gate instead of <code>coding_tool_is_gated</code>. Rule evaluation moves out; the gated preview payloads stay.</td></tr>
+      <tr><td><code>chat/turn.rs</code></td><td><code>assemble_context</code> replays assistant <code>tool_calls</code> and <code>tool</code> results from the transcript sidecar for coding conversations, with old tool output truncated. Adds the scope's AGENTS.md block.</td></tr>
+      <tr><td><code>coding/permissions.rs</code> (new)</td><td>Last-match-wins rule evaluation (OpenCode's <code>evaluate</code>); splits bash on <code>&amp;&amp; || ; |</code>, checks each part, and derives arity prefixes from the contract. Replaces <code>AUTO_RUN_PREFIXES</code> and <code>is_gated_coding_tool</code>.</td></tr>
+      <tr><td><code>coding/snapshot.rs</code> (new)</td><td>Shadow git: <code>track() -&gt; hash</code>, <code>diff(from, to)</code>, <code>restore(hash)</code>, gc, size limits.</td></tr>
+      <tr><td><code>coding/fs_tools.rs</code></td><td><code>edit</code> takes <code>edits[]</code>; <code>read</code> output gets line numbers and an offset/limit; delete, list and search are removed in favor of <code>bash</code>.</td></tr>
+      <tr><td><code>coding/scope.rs</code></td><td><code>PROJECT_DENY_GLOBS</code> moves to the contract. Self-scope convention text comes from the repo's AGENTS.md plus the aspect globs.</td></tr>
+      <tr><td><code>memory/transcript.rs</code> (new)</td><td>A local-only JSONL sidecar per coding conversation: entries carry <code>id</code>, <code>parentId</code>, <code>turnId</code>, <code>kind</code> (user, steer, assistant, tool_call, tool_result, snapshot, compaction). Not synced; iOS keeps reading <code>messages_*.json</code>.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>Contracts (<code>resources/contracts/</code>)</h3>
+  <ul>
+    <li><code>codingTools.json</code>: shrink to read, edit, write, bash.</li>
+    <li><code>codingPermissions.json</code> (new): default rules (<code>edit: allow</code>, <code>bash: {"*": "ask", "git status*": "allow", "rg *": "allow", …}</code>, <code>read: {"*.env": "ask"}</code>), deny globs, and the arity table. Read by Rust and by the settings UI. Register it in <code>ios/HarnessMobile.xcodeproj</code> only if iOS reads it (it shouldn't).</li>
+    <li><code>agentLimits.json</code> (new): step cap, guard thresholds (3 / 5 / 6), compaction reserve and kept-tail size, snapshot size limits. Update the parity test in <code>openai.rs:361</code>.</li>
+    <li><code>tools.json</code>: <code>web_search</code> gains optional filter fields (iOS ignores them until it adopts them); new <code>web_fetch</code>.</li>
+    <li><code>toolDisplay.json</code> (new): labels, title argument, icon key, read-only flag, states and grouping rule, shared by TS and Swift; register it under <code>SharedContracts</code> in <code>ios/HarnessMobile.xcodeproj</code>.</li>
+    <li><code>chatModes.json</code>: unchanged.</li>
+  </ul>
+  <h3>IPC (names follow <code>src/shared/ipcNames.ts</code>)</h3>
+  <div class="scroll" role="region" aria-label="IPC changes" tabindex="0">
+  <table>
+    <thead><tr><th>Name</th><th>Kind</th><th>Payload</th></tr></thead>
+    <tbody>
+      <tr><td><code>chat:steer</code></td><td>command</td><td><code>{conversationId, content, expectedTurnId}</code>; returns <code>queued | applied | turnEnded</code></td></tr>
+      <tr><td><code>chat:queueFollowUp</code></td><td>command</td><td><code>{conversationId, content}</code></td></tr>
+      <tr><td><code>chat:updateQueued</code> / <code>chat:removeQueued</code></td><td>command</td><td><code>{conversationId, queuedId, content?}</code></td></tr>
+      <tr><td><code>chat:resolveGatedTool</code></td><td>command (extended)</td><td>adds <code>decision: once | alwaysConversation | alwaysProject | deny</code>, <code>note?</code>, <code>pattern?</code>; <code>proceed</code>/<code>cancel</code> still accepted</td></tr>
+      <tr><td><code>coding:listCheckpoints</code></td><td>command</td><td><code>{conversationId}</code> → turns with snapshot hash, changed files, files not covered</td></tr>
+      <tr><td><code>coding:checkpointDiff</code></td><td>command</td><td><code>{conversationId, turnId}</code> → unified diff</td></tr>
+      <tr><td><code>coding:restoreCheckpoint</code></td><td>command</td><td><code>{conversationId, turnId, mode: files | conversation | both}</code></td></tr>
+      <tr><td><code>coding:undoRestore</code></td><td>command</td><td><code>{conversationId}</code></td></tr>
+      <tr><td><code>chat-item-started</code> / <code>chat-item-delta</code> / <code>chat-item-completed</code></td><td>event</td><td><code>{conversationId, turnId, itemId, kind: text | tool | steer | approval | guard | checkpoint, toolName?, args?}</code>; deltas carry <code>text</code> or <code>output</code>; completion carries <code>status, exitCode?, durationMs, diffStat?</code></td></tr>
+      <tr><td><code>coding:searchFiles</code></td><td>command</td><td><code>{conversationId, query, limit}</code> → ranked relative paths across the workspace (ignore-aware)</td></tr>
+      <tr><td><code>coding:addFolder</code> / <code>coding:removeFolder</code> / <code>coding:setFolderAccess</code></td><td>command</td><td><code>{conversationId, path, access: read | readWrite}</code>; saved to the project</td></tr>
+      <tr><td><code>chat-turn-diff-updated</code></td><td>event</td><td><code>{conversationId, turnId, files: [{path, added, removed}]}</code></td></tr>
+      <tr><td><code>chat:killCommand</code></td><td>command</td><td><code>{conversationId, itemId}</code>: stops one running <code>bash</code> item; the model gets "killed by user"</td></tr>
+      <tr><td><code>chat-turn-started</code> / <code>chat-turn-completed</code></td><td>event</td><td><code>{conversationId, turnId, reason?: done | stopped | cap | guard}</code></td></tr>
+      <tr><td><code>chat-queue-changed</code></td><td>event</td><td><code>{conversationId, steering: [...], followUps: [...]}</code>: the whole queue each time, as in Pi's <code>queue_update</code></td></tr>
+      <tr><td><code>chat-steer-applied</code></td><td>event</td><td><code>{conversationId, turnId, queuedId, skippedToolCallIds}</code></td></tr>
+      <tr><td><code>chat-guard-paused</code></td><td>event</td><td><code>{conversationId, kind: identical | failures, tool, count}</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Each new command has to be added to <code>tauri::generate_handler!</code> in <code>lib.rs</code> and to <code>desktopAdapter.ts</code>; <code>ipcNames.test.ts</code> enforces that. The browser debug shell needs stubs: steering can be simulated against the dummy stream, and checkpoints return empty.</p>
+  <h3>Approval UI (<code>ToolCallsCard.tsx</code>)</h3>
+  <ul>
+    <li>Bash card: <strong>Run</strong>, <strong>Always allow <code>npm test *</code></strong> (with a scope picker: this conversation or this project), and <strong>Deny…</strong>, which opens a one-line note sent to the agent. Pressing Enter in the composer while the card is showing does the same as Deny with that text.</li>
+    <li>Edit cards when edits don't ask: show the diff after the fact with an <strong>Undo this change</strong> link (restores the snapshot taken before that call).</li>
+    <li>Guard card: "The agent called <code>read src/App.tsx</code> five times in a row." Buttons: <strong>Continue</strong>, <strong>Stop</strong>; or type a steer.</li>
+  </ul>
+</section>
+
+<section id="phases">
+  <h2>Phased plan</h2>
+  <p>Ordered by value: steering, web search and undo are the three priorities, with the timeline in front because steering and undo need it. Each phase can ship on its own and stays within the Rust loop, one contract and one renderer surface where possible.</p>
+
+  <div class="phase">
+    <h3><span class="num">Phase 0</span> Replay tool history; replace the silent cap</h3>
+    <ul>
+      <li>Add the transcript sidecar; record full assistant tool calls (with IDs and arguments) and results for coding conversations.</li>
+      <li><code>assemble_context</code> replays them, truncating results older than the last N turns to a stub.</li>
+      <li>Move the loop into <code>chat/agent_loop.rs</code>; the cap comes from <code>agentLimits.json</code> (desktop around 100); reaching it runs one text-only summary turn and emits <code>chat-turn-completed{reason:"cap"}</code>.</li>
+    </ul>
+    <p class="ac">Acceptance</p>
+    <ul>
+      <li>After a turn that read <code>package.json</code>, asking "what's the test script?" is answered without another read.</li>
+      <li>A task that needs 15 tool rounds completes; a task stuck at the cap ends with a visible summary and a "Step limit reached" note.</li>
+      <li>Restarting while an approval is pending still resumes (existing behavior); <code>npm test</code> passes.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 1</span> Turn timeline and live tool status</h3>
+    <ul>
+      <li>Item events with stable IDs; <code>bash</code> output streaming with a per-command kill; tool name announced as soon as it streams in.</li>
+      <li>The assistant message renders as a timeline of items; renderers for read, edit, write, bash and web search; state icons; grouping of read-only calls; turn status line; turn footer with diff stats.</li>
+    </ul>
+    <p class="ac">Acceptance</p>
+    <ul>
+      <li>During <code>pnpm test</code>, the row shows the command, a running timer and the last lines of output within a second of each line printing.</li>
+      <li>A failed edit and a non-zero exit show a failure icon and the error; a success shows a checkmark.</li>
+      <li>Text the model wrote between two tool calls appears between them, not merged at the bottom.</li>
+      <li>Reloading the conversation shows the same timeline, including commands and exit codes.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 2</span> Steering and the follow-up queue</h3>
+    <ul>
+      <li>Steer and follow-up queues in the AgentSession; <code>chat:steer</code>, <code>chat:queueFollowUp</code>, the queue events.</li>
+      <li>Composer: stays enabled while a turn runs; <span class="kbd">Enter</span> steers, <span class="kbd">⌥ Enter</span> queues; queue chips with edit/remove; <span class="kbd">⌥ ↑</span> pulls queued text back.</li>
+      <li>Skip-on-steer for calls not yet started; abort and resend when only text is streaming; a steer during a pending approval counts as deny with note.</li>
+    </ul>
+    <p class="ac">Acceptance</p>
+    <ul>
+      <li>While <code>npm test</code> runs, steering "use pnpm" results in the next model request containing that text; the running command is not killed; later calls in the same batch show "skipped".</li>
+      <li>A follow-up sent mid-turn starts its own turn after the current one finishes; the transcript shows both in order.</li>
+      <li>Quitting with a pending steer and relaunching keeps the steer in the queue.</li>
+      <li>Ordinary (non-coding) chat steers the same way.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 3</span> Web search v2 and web fetch</h3>
+    <ul>
+      <li>Add filters, depth, topic and retries to <code>web_search</code>; add a new <code>web_fetch</code> (markdown, an offset for paging, an optional prompt answered by the mini model, SSRF guard, 15-minute cache).</li>
+      <li>Read-only calls in a round run in parallel; search and fetch cards; a Sources row on each message.</li>
+      <li>Doesn't depend on the coding work, so it can ship at any point.</li>
+    </ul>
+    <p class="ac">Acceptance</p>
+    <ul>
+      <li>"What changed in the latest Tauri release?" searches with <code>time_range</code>, fetches the release notes page, and answers with links; the Sources row lists every URL used.</li>
+      <li>Three searches in one round finish in about the time of the slowest one, not the sum.</li>
+      <li><code>web_fetch</code> on <code>http://localhost:5173</code> or <code>http://10.0.0.1</code> is refused with a clear error.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 4</span> Undo</h3>
+    <ul>
+      <li><code>coding/snapshot.rs</code> with size limits; a snapshot at turn start and after each mutating tool.</li>
+      <li>A restore menu on each user message with Files / Conversation / Both; undo of a restore; per-change Undo on edit cards.</li>
+    </ul>
+    <p class="ac">Acceptance</p>
+    <ul>
+      <li>In a project folder that isn't a git repo, Restore files after a three-edit turn returns all three files byte-identical and removes a file the turn created.</li>
+      <li>The user's <code>.git</code> directory is unchanged (<code>git status</code>, refs and stash are identical before and after).</li>
+      <li>A repo with a 500 MB untracked folder still snapshots in under 1 s after the first run, and the menu lists the folder as not covered.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 5</span> iOS view and run-on-desktop queue</h3>
+    <ul>
+      <li><code>toolDisplay.json</code> plus a parity test (TS and Swift); synced <code>items</code> on assistant messages; the iOS timeline view. The contract can land earlier, during Phase 1.</li>
+      <li><code>coding_projects.json</code>; "Run on desktop" on iOS; the desktop pickup badge with Run / Dismiss; job status synced back.</li>
+    </ul>
+    <p class="ac">Acceptance</p>
+    <ul>
+      <li>A coding turn run on the desktop shows on the phone with the same labels, states, commands and diff stats after a sync.</li>
+      <li>A job queued from the phone appears on the desktop after its next sync, waits for Run, and its result and status show on the phone after the following sync.</li>
+      <li>With auto-start off, nothing runs without a click on the desktop.</li>
+      <li>The label parity test fails if a tool is added to the contract but not handled on either platform.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 6</span> Composer attachments</h3>
+    <ul>
+      <li>Messages become lists of content parts; image attachments (paste, drop, pick) using the existing <code>MessageAttachment</code>.</li>
+      <li><code>@</code> fuzzy file picker (<code>coding:searchFiles</code>); workspace files dropped or mentioned become path chips that are read at send time.</li>
+      <li>Folder drops offer "Use as project folder" or "Add to workspace".</li>
+    </ul>
+    <p class="ac">Acceptance</p>
+    <ul>
+      <li>Pasting a screenshot and asking "what's wrong with this layout?" sends the image, and the model describes it.</li>
+      <li><code>@api</code> finds <code>src/api.ts</code> within 100 ms on a 10k-file repo; the sent message contains the file with its path, and the timeline shows a read item.</li>
+      <li>An image attached on desktop shows in the same conversation on iOS after a sync.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 7</span> Four tools, AGENTS.md, permissions and workspace folders</h3>
+    <ul>
+      <li><code>codingTools.json</code> becomes read, edit (<code>edits[]</code>), write, bash. AGENTS.md (or CLAUDE.md) from the scope root goes into the prompt.</li>
+      <li><code>codingPermissions.json</code> plus <code>coding/permissions.rs</code>; the approval card offers once / always (conversation or project) / deny with note. Edits allowed by default now that undo exists (setting).</li>
+      <li>Workspace = root plus added folders (read-only or read-write) saved per project; outside reads ask with "Always allow this folder"; secret globs ask; best-effort path scan for bash; the workspace popover; a clear message on macOS refusals.</li>
+    </ul>
+    <p class="ac">Acceptance</p>
+    <ul>
+      <li>Approving <code>npm test -- --run</code> with "Always (project)" means <code>npm test src/x</code> runs without a card, in this conversation and in a new one.</li>
+      <li><code>npm test &amp;&amp; rm -rf dist</code> still asks, because the <code>rm</code> part isn't allowed.</li>
+      <li>Deny with note "use vitest directly" shows up in the model's next tool result; the turn continues.</li>
+      <li>No permission values remain hardcoded in Rust (<code>grep AUTO_RUN_PREFIXES</code> finds nothing).</li>
+      <li>Reading <code>~/Projects/other/README.md</code> asks once; "Always allow this folder" lets later reads there through, also in a new conversation in the same project; a write there is refused.</li>
+      <li>Reading <code>.env</code> in the root asks.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 8</span> Loop guard</h3>
+    <ul><li><code>chat/guard.rs</code>; thresholds from the contract; a note added at 3, a pause card at 5 identical calls or 6 consecutive failures.</li></ul>
+    <p class="ac">Acceptance</p>
+    <ul><li>A scripted model that repeats the same failing edit pauses on the fifth attempt with a guard card. Continue resets the counter; typing a steer resumes with that text.</li></ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 9</span> Compaction</h3>
+    <ul><li>Token usage from the stream; compact when context exceeds window minus 16k; keep the last 20k tokens plus all user messages word for word; the summary is a transcript entry, and the originals stay in the sidecar.</li></ul>
+    <p class="ac">Acceptance</p>
+    <ul><li>A long session crosses the threshold, compacts between rounds (not mid-tool), and the next steer still applies; the UI shows a "Context compacted" marker that expands to the summary.</li></ul>
+  </div>
+
+  <div class="phase">
+    <h3><span class="num">Phase 10</span> Optional, each on its own</h3>
+    <ul>
+      <li>Responses API adapter, using server-side <code>response.steer</code> where the model supports it.</li>
+      <li>Seatbelt for <code>bash</code> (workspace write, network off, <code>.git</code> read-only), as Codex does.</li>
+      <li>A read-only preset (edits denied) offered as a toggle, if wanted.</li>
+      <li>Fork a conversation from any entry (the sidecar is already a tree).</li>
+      <li>A read-only explore subagent, only if compaction proves insufficient.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="sources">
+  <h2>Sources</h2>
+  <h3>Primary (source code, read 2026-10-09)</h3>
+  <ul class="sources">
+    <li><a href="https://github.com/sst/opencode/tree/055d95b">sst/opencode@055d95b</a>: <code>packages/opencode/src/{agent/agent.ts, permission/, session/processor.ts, session/prompt.ts, session/compaction.ts, session/overflow.ts, session/revert.ts, snapshot/index.ts, tool/registry.ts, tool/edit.ts, tool/shell.ts, tool/task.ts, session/instruction.ts}</code></li>
+    <li><a href="https://github.com/openai/codex/tree/7efd184">openai/codex@7efd184</a>: <code>codex-rs/{app-server-protocol/src/protocol/, protocol/src/protocol.rs, protocol/src/permissions.rs, sandboxing/src/seatbelt.rs, execpolicy/src/amend.rs, core/src/compact.rs, core/src/config/mod.rs, core/src/agents_md.rs, tui/src/chatwidget.rs}</code>; PRs <a href="https://github.com/openai/codex/pull/9077">openai/codex#9077</a>, <a href="https://github.com/openai/codex/pull/6041">openai/codex#6041</a>, <a href="https://github.com/openai/codex/pull/8055">openai/codex#8055</a></li>
+    <li><a href="https://github.com/badlogic/pi-mono/tree/42a3497">badlogic/pi-mono@42a3497</a>: <code>packages/agent/src/{agent-loop.ts, agent.ts}</code>, <code>packages/coding-agent/src/core/{tools/, system-prompt.ts, agent-session.ts}</code>, <code>packages/coding-agent/docs/{rpc-commands.md, sessions.md, session-format.md, compaction.md, security.md, mcp.md, keybindings.md}</code></li>
+    <li><a href="https://github.com/cline/cline/tree/d20b337">cline/cline@d20b337</a>: <code>sdk/packages/core/src/{hooks/checkpoint-hooks.ts, runtime/safety/, extensions/tools/presets.ts, types/chat-schema.ts}</code></li>
+    <li>Harness <code>main@ed9526f</code>: <code>src-tauri/src/{openai.rs, chat/*.rs, coding/*.rs, memory.rs}</code>, <code>src/renderer/chat/{ChatView.tsx, ChatComposer.tsx, ToolCallsCard.tsx}</code>, <code>resources/contracts/{codingTools.json, chatModes.json}</code></li>
+  </ul>
+  <h3>Documentation (vendor-written; flagged where it matters)</h3>
+  <ul class="sources">
+    <li><a href="https://developers.openai.com/api/docs/guides/steering.md">OpenAI: Mid-turn steering</a>. Vendor doc. Its claims about which models support steering couldn't be checked against code; it describes the API, not the Codex CLI.</li>
+    <li><a href="https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/steering-and-queueing">GitHub Copilot SDK: Steering and queueing</a>. Vendor doc, public preview. It contradicts itself about where an unused steer goes (front or back of the queue).</li>
+    <li><a href="https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/steer-agents">GitHub Copilot CLI: Steering agents</a>. Vendor doc.</li>
+    <li><a href="https://docs.cline.bot">Cline docs: Checkpoints</a> (<code>docs/core-workflows/checkpoints.mdx</code>). Vendor doc that <strong>differs from current code</strong>; the code was preferred.</li>
+    <li><a href="https://mariozechner.at/posts/2025-11-30-pi-coding-agent/">Mario Zechner: Pi coding agent</a>. Written by the author, argues for minimalism, and predates Pi's built-in MCP.</li>
+  </ul>
+  <h3>Secondary (used only for leads, then checked)</h3>
+  <ul class="sources">
+    <li><a href="https://blog.devgenius.io/codex-clis-busy-week-steer-mode-fork-and-7-releases-in-3-days-ece5c742923e">DevGenius: Codex CLI's Busy Week</a>. Pointed to PR #9077, which I then checked.</li>
+    <li><a href="https://docs.openclaw.ai/concepts/queue-steering.md">OpenClaw: Queue steering</a>. Third-party description of Codex <code>turn/steer</code>; not relied on.</li>
+  </ul>
+</section>
+</main>
+</div>

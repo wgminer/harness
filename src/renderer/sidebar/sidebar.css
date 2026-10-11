@@ -8,7 +8,7 @@
 .sidebar-list {
   list-style: none;
   margin: 0;
-  padding: 0 0 var(--space-4);
+  padding: 0;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -218,7 +218,8 @@
 
 .sidebar-list-more {
   list-style: none;
-  padding: var(--space-1) var(--sidebar-text-inset) var(--space-2);
+  /* Bottom gap matches the left text inset; the button supplies --space-1 of it. */
+  padding: var(--space-1) var(--sidebar-text-inset) calc(var(--sidebar-text-inset) - var(--space-1));
 }
 
 .sidebar-list-more-btn {
@@ -240,6 +241,43 @@
 .sidebar-list-more-btn:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* One sweep across a label when the list reaches that end ("Show more" at the bottom, the title at the top). */
+.sidebar-shimmer {
+  --sidebar-shimmer-band: var(--fg);
+  background-image: linear-gradient(
+    100deg,
+    currentColor 42%,
+    var(--sidebar-shimmer-band) 50%,
+    currentColor 58%
+  );
+  background-size: 250% 100%;
+  background-position: 0% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: sidebar-shimmer 1200ms var(--motion-ease-out) 150ms 1 backwards;
+}
+
+@keyframes sidebar-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+
+/* The title is already full-strength, so its band dims instead of brightening. */
+.sidebar-list-menu__trigger-label-glyphs.sidebar-shimmer {
+  --sidebar-shimmer-band: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-shimmer {
+    animation: none;
+  }
 }
 
 .sidebar-group-items {

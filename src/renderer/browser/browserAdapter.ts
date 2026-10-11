@@ -204,11 +204,12 @@ export function createBrowserAdapter(): HarnessAPI {
     },
     tasks: {
       list: async () => tasksPayload(store.tasks()),
-      create: async (title, tags, status) =>
-        tasksPayload(store.createTask(title, tags, status), "create"),
+      create: async (title, tags, status, parentId) =>
+        tasksPayload(store.createTask(title, tags, status, parentId), "create"),
       update: async (payload) => tasksPayload(store.updateTask(payload), "update", [payload.id]),
       delete: async (id) => tasksPayload(store.deleteTask(id), "delete", [id]),
       clearCompleted: async () => tasksPayload(store.clearCompletedTasks(), "clearCompleted"),
+      breakdown: async () => ({ tasks: store.tasks(), error: WEB_UNSUPPORTED }),
     },
     chat: {
       send: (conversationId, content) => chat.send(conversationId, content),
@@ -228,6 +229,7 @@ export function createBrowserAdapter(): HarnessAPI {
         onBrowserEvent<{ conversationId: string; chunk: string }>("chat:streamChunk", (p) =>
           cb(p.conversationId, p.chunk),
         ),
+      onStreamReasoning: () => () => {},
       onStreamEnd: (cb) =>
         onBrowserEvent<{ conversationId: string }>("chat:streamEnd", (p) => cb(p.conversationId)),
       onNoteStreamOpen: () => () => {},

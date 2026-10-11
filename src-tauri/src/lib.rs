@@ -137,6 +137,7 @@ pub fn run() {
             commands::tasks::tasks_update,
             commands::tasks::tasks_delete,
             commands::tasks::tasks_clear_completed,
+            commands::tasks::tasks_breakdown,
             commands::chat::chat_send,
             commands::chat::chat_polish_last_user,
             commands::chat::chat_generate_reply,

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { X, Loader2 } from "lucide-react";
 import {
   conversationDisplayTitle,
@@ -101,6 +101,12 @@ export function Sidebar({
   const { scrollRef: sidebarListRef, fadeTop, fadeBottom, onScroll: onSidebarListScroll } =
     useScrollFadeEdges();
 
+  // The title shimmers on a return to the top, not on first paint.
+  const [hasLeftTop, setHasLeftTop] = useState(false);
+  useEffect(() => {
+    if (fadeTop) setHasLeftTop(true);
+  }, [fadeTop]);
+
   const libraryRows = useMemo<LibraryRow[]>(
     () => [
       ...conversations.map((c): LibraryRow => ({ ...c, itemKind: "conversation" })),
@@ -155,6 +161,7 @@ export function Sidebar({
     <SidebarListMenu
       label={label}
       title={title}
+      shimmer={hasLeftTop && !fadeTop}
       filter={libraryFilter}
       onFilterChange={onLibraryFilterChange}
       sortMode={listSortMode}
@@ -402,7 +409,13 @@ export function Sidebar({
               <li className="sidebar-list-more">
                 <button
                   type="button"
-                  className="sidebar-list-more-btn"
+                  className={[
+                    "sidebar-list-more-btn",
+                    // At the bottom of the list: one sweep; leaving and returning replays it.
+                    fadeBottom ? "" : "sidebar-shimmer",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   data-testid="sidebar-show-more"
                   onClick={() => setVisibleLimit((n) => n + SIDEBAR_PAGE_SIZE)}
                 >

@@ -580,6 +580,7 @@ mod tests {
                 dictation_reply_action: None,
             },
             messages: vec![MessageRecord {
+                reasoning: None,
                 role: "user".into(),
                 content: "We are renovating the kitchen".into(),
                 tool_calls: None,
@@ -614,6 +615,7 @@ mod tests {
                 dictation_reply_action: None,
             },
             messages: vec![MessageRecord {
+                reasoning: None,
                 role: "user".into(),
                 content: "Budget meeting".into(),
                 tool_calls: None,

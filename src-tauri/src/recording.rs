@@ -30,7 +30,7 @@ use crate::paths::{get_recordings_dir, resolve_bundled_resource};
 use crate::settings::{default_settings, get_settings};
 use crate::recording::transcript_cleanup::{append_preferred_spellings, resolve_glossary};
 
-const OPENAI_TRANSCRIPT_CLEANUP_MODEL: &str = "gpt-5.4-mini";
+const OPENAI_TRANSCRIPT_CLEANUP_MODEL: &str = "gpt-6-luna";
 const HARNESS_E2E_TRANSCRIBE_TEXT: &str = "E2E transcribed text.";
 
 const EXIT_PERMISSION_DENIED: i32 = 2;
@@ -250,7 +250,8 @@ async fn run_transcript_cleanup(
         "messages": [
             { "role": "system", "content": system_prompt },
             { "role": "user", "content": user_message }
-        ]
+        ],
+        "reasoning_effort": crate::openai::SMALL_MODEL_REASONING_EFFORT
     });
 
     let response = client

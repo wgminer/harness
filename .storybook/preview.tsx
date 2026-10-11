@@ -1,4 +1,6 @@
 import type { Preview } from "@storybook/react-vite";
+import "@fontsource-variable/newsreader/opsz.css";
+import "@fontsource-variable/newsreader/opsz-italic.css";
 import "../src/renderer/base.css";
 import "../src/renderer/ui/modal.css";
 import "../src/renderer/ui/menu.css";

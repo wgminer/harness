@@ -14,12 +14,12 @@ const FALLBACK_TITLE_MAX_CHARS = 60;
 
 export function browserChatModel(): string {
   const env = (import.meta as { env?: Record<string, string | undefined> }).env;
-  return env?.VITE_OPENAI_CHAT_MODEL?.trim() || "gpt-5.4";
+  return env?.VITE_OPENAI_CHAT_MODEL?.trim() || "gpt-6.1-sol";
 }
 
 export function browserTitleModel(): string {
   const env = (import.meta as { env?: Record<string, string | undefined> }).env;
-  return env?.VITE_OPENAI_TITLE_MODEL?.trim() || "gpt-5.4-nano";
+  return env?.VITE_OPENAI_TITLE_MODEL?.trim() || "gpt-6-luna";
 }
 
 export function consumeSseBuffer(buffer: string): { events: string[]; rest: string } {
@@ -89,6 +89,7 @@ export async function streamOpenAiChat(input: {
     body: JSON.stringify({
       model: input.model,
       messages: input.messages,
+      reasoning_effort: "low",
       stream: true,
     }),
     signal: input.signal,
@@ -154,6 +155,7 @@ async function completeTitle(apiKey: string, messages: Array<{ role: string; con
         },
         { role: "user", content: prompt || "Untitled chat" },
       ],
+      reasoning_effort: "low",
       stream: false,
     }),
   });

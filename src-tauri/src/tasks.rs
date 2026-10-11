@@ -47,6 +47,9 @@ pub struct TaskItem {
     pub tags: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Subtask parent (one level deep, like Todoist `parent_id`). Missing parent => top level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
 }
@@ -199,6 +202,24 @@ fn apply_tag_patch(existing: &[String], patch: &Value) -> Option<Vec<String>> {
     if changed { Some(next) } else { None }
 }
 
+/// Non-empty `parentId` from an args or row object.
+fn parent_id_arg(args: &Value) -> Option<String> {
+    args.get("parentId")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+/// Subtasks nest one level: a parent must exist and must not itself be a subtask.
+fn valid_parent(tasks: &[TaskItem], parent_id: &str, child_id: Option<&str>) -> bool {
+    child_id != Some(parent_id)
+        && tasks
+            .iter()
+            .any(|t| t.id == parent_id && t.parent_id.is_none())
+        && child_id.is_none_or(|id| !tasks.iter().any(|t| t.parent_id.as_deref() == Some(id)))
+}
+
 fn migrate_raw_task(raw: &Value) -> Option<TaskItem> {
     let obj = raw.as_object()?;
     let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("").trim();
@@ -216,6 +237,7 @@ fn migrate_raw_task(raw: &Value) -> Option<TaskItem> {
         .unwrap_or(created_at);
     let (status, tags) = migrate_task_fields(raw);
     let metadata = obj.get("metadata").cloned().filter(|v| v.is_object());
+    let parent_id = parent_id_arg(raw);
     Some(TaskItem {
         id: id.to_string(),
         title: title.to_string(),
@@ -223,6 +245,7 @@ fn migrate_raw_task(raw: &Value) -> Option<TaskItem> {
         tags,
         created_at,
         updated_at,
+        parent_id,
         metadata,
     })
 }
@@ -314,6 +337,17 @@ pub fn apply_task_action(state: &TaskState, action: TaskAction, now_ms: i64) -> 
                 .unwrap_or(TaskStatus::Pending);
             let tags = normalize_tags(args.get("tags").unwrap_or(&json!([])));
             let metadata = args.get("metadata").cloned().filter(|v| v.is_object());
+            let parent_id = match parent_id_arg(&args) {
+                Some(pid) if !valid_parent(&next_state.tasks, &pid, None) => {
+                    return TasksPayload {
+                        tasks: next_state.tasks,
+                        last_action: "create".into(),
+                        affected_ids: None,
+                        error: Some(format!("Parent task not found or is itself a subtask: {pid}")),
+                    };
+                }
+                other => other,
+            };
             let task = TaskItem {
                 id: generate_id("task"),
                 title,
@@ -321,6 +355,7 @@ pub fn apply_task_action(state: &TaskState, action: TaskAction, now_ms: i64) -> 
                 tags,
                 created_at: now_ms,
                 updated_at: now_ms,
+                parent_id,
                 metadata,
             };
             let id = task.id.clone();
@@ -369,6 +404,26 @@ pub fn apply_task_action(state: &TaskState, action: TaskAction, now_ms: i64) -> 
             if let Some(tag_patch) = apply_tag_patch(&next.tags, &args) {
                 next.tags = tag_patch;
             }
+            // `parentId`: a task id nests it, "" or null moves it back to the top level.
+            if let Some(raw_parent) = args.get("parentId") {
+                match parent_id_arg(&args) {
+                    Some(pid) if valid_parent(&next_state.tasks, &pid, Some(&next.id)) => {
+                        next.parent_id = Some(pid);
+                    }
+                    Some(pid) => {
+                        return TasksPayload {
+                            tasks: next_state.tasks,
+                            last_action: "update".into(),
+                            affected_ids: None,
+                            error: Some(format!("Cannot nest under task: {pid}")),
+                        };
+                    }
+                    None if raw_parent.is_null() || raw_parent.as_str().is_some() => {
+                        next.parent_id = None;
+                    }
+                    None => {}
+                }
+            }
             if let Some(meta_patch) = args.get("metadata").and_then(|v| v.as_object()) {
                 let mut merged = next.metadata.clone().unwrap_or_else(|| json!({}));
                 if let Some(obj) = merged.as_object_mut() {
@@ -402,7 +457,10 @@ pub fn apply_task_action(state: &TaskState, action: TaskAction, now_ms: i64) -> 
                 };
             }
             let before = next_state.tasks.len();
-            next_state.tasks.retain(|t| t.id != id);
+            // Deleting a parent deletes its subtasks (Todoist does the same).
+            next_state
+                .tasks
+                .retain(|t| t.id != id && t.parent_id.as_deref() != Some(id.as_str()));
             if next_state.tasks.len() == before {
                 return TasksPayload {
                     tasks: next_state.tasks,
@@ -426,6 +484,16 @@ pub fn apply_task_action(state: &TaskState, action: TaskAction, now_ms: i64) -> 
                     removed_ids.push(task.id);
                 } else {
                     remaining.push(task);
+                }
+            }
+            // Open subtasks of a cleared parent stay, promoted to the top level.
+            for task in &mut remaining {
+                if task
+                    .parent_id
+                    .as_ref()
+                    .is_some_and(|pid| removed_ids.contains(pid))
+                {
+                    task.parent_id = None;
                 }
             }
             next_state.tasks = remaining;
@@ -480,4 +548,194 @@ pub async fn clear_completed_tasks(state: &AppState) -> Result<TasksPayload, std
     let payload = apply_task_action(&task_state, TaskAction::ClearCompleted, now);
     save_tasks(state, &TaskState { tasks: payload.tasks.clone() }).await?;
     Ok(payload)
+}
+
+const BREAKDOWN_SYSTEM: &str = "You break a to-do item into the concrete next steps needed to finish it. \
+Return JSON: {\"subtasks\": [\"...\"]}. Give 2 to 6 short, imperative steps in order, \
+each a single action someone could start right away. No numbering, no restating the task, \
+no generic steps like \"plan\" or \"review\" unless they are real work.";
+
+/// Parse `{"subtasks": [..]}` into trimmed, non-empty titles (max 8).
+pub fn parse_breakdown_titles(raw: &str) -> Vec<String> {
+    let parsed: Value = serde_json::from_str(raw).unwrap_or(Value::Null);
+    parsed
+        .get("subtasks")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.trim().trim_start_matches(['-', '*', ' ']).trim().to_string())
+                .filter(|s| !s.is_empty())
+                .take(8)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Ask the model for subtasks of `id` and save them as its children.
+pub async fn breakdown_task(state: &AppState, id: &str) -> Result<TasksPayload, String> {
+    let task_state = load_tasks(state).await.map_err(|e| e.to_string())?;
+    let Some(task) = task_state.tasks.iter().find(|t| t.id == id).cloned() else {
+        return Err(format!("Task not found: {id}"));
+    };
+    if task.parent_id.is_some() {
+        return Err("Subtasks cannot be broken down further.".into());
+    }
+    let api_key = crate::credentials::resolve_openai_api_key().await.trim().to_string();
+    if api_key.is_empty() {
+        return Err("OpenAI API key required.".into());
+    }
+    let existing: Vec<&str> = task_state
+        .tasks
+        .iter()
+        .filter(|t| t.parent_id.as_deref() == Some(id))
+        .map(|t| t.title.as_str())
+        .collect();
+    let mut user = format!("Task: {}", task.title);
+    if !existing.is_empty() {
+        user.push_str(&format!(
+            "\n\nExisting subtasks (do not repeat these):\n- {}",
+            existing.join("\n- ")
+        ));
+    }
+    let raw = crate::openai::chat_completion_json(
+        &api_key,
+        crate::openai::openai_chat_model().as_str(),
+        BREAKDOWN_SYSTEM,
+        &user,
+        2500,
+        crate::openai::CHAT_REASONING_EFFORT,
+        45,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    let titles = parse_breakdown_titles(&raw);
+    if titles.is_empty() {
+        return Err("Could not break this task down.".into());
+    }
+
+    // Reload so edits made while the model was thinking are not lost.
+    let mut next = load_tasks(state).await.map_err(|e| e.to_string())?;
+    if !next.tasks.iter().any(|t| t.id == id) {
+        return Err(format!("Task not found: {id}"));
+    }
+    let now = chrono::Utc::now().timestamp_millis();
+    let mut created = Vec::new();
+    for (i, title) in titles.into_iter().enumerate() {
+        let child = TaskItem {
+            id: generate_id("task"),
+            title,
+            status: TaskStatus::Pending,
+            tags: Vec::new(),
+            // Offset so creation order is stable for sorting.
+            created_at: now + i as i64,
+            updated_at: now + i as i64,
+            parent_id: Some(id.to_string()),
+            metadata: None,
+        };
+        created.push(child.id.clone());
+        next.tasks.push(child);
+    }
+    save_tasks(state, &next).await.map_err(|e| e.to_string())?;
+    Ok(TasksPayload {
+        tasks: next.tasks,
+        last_action: "breakdown".into(),
+        affected_ids: Some(created),
+        error: None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create(state: &TaskState, args: Value) -> TaskState {
+        let payload = apply_task_action(state, TaskAction::Create { args }, 1);
+        assert!(payload.error.is_none(), "{:?}", payload.error);
+        TaskState { tasks: payload.tasks }
+    }
+
+    fn with_parent_and_child() -> (TaskState, String, String) {
+        let state = create(&TaskState { tasks: vec![] }, json!({ "title": "Parent" }));
+        let parent = state.tasks[0].id.clone();
+        let state = create(&state, json!({ "title": "Child", "parentId": parent }));
+        let child = state.tasks[1].id.clone();
+        (state, parent, child)
+    }
+
+    #[test]
+    fn subtasks_nest_one_level() {
+        let (state, _, child) = with_parent_and_child();
+        let payload = apply_task_action(
+            &state,
+            TaskAction::Create { args: json!({ "title": "Grandchild", "parentId": child }) },
+            2,
+        );
+        assert!(payload.error.is_some());
+    }
+
+    #[test]
+    fn parent_with_children_cannot_be_nested() {
+        let (state, parent, _) = with_parent_and_child();
+        let state = create(&state, json!({ "title": "Other" }));
+        let other = state.tasks[2].id.clone();
+        let payload = apply_task_action(
+            &state,
+            TaskAction::Update { args: json!({ "id": parent, "parentId": other }) },
+            2,
+        );
+        assert!(payload.error.is_some());
+    }
+
+    #[test]
+    fn update_can_clear_parent() {
+        let (state, _, child) = with_parent_and_child();
+        let payload = apply_task_action(
+            &state,
+            TaskAction::Update { args: json!({ "id": child, "parentId": null }) },
+            2,
+        );
+        assert!(payload.tasks.iter().all(|t| t.parent_id.is_none()));
+    }
+
+    #[test]
+    fn deleting_parent_deletes_subtasks() {
+        let (state, parent, _) = with_parent_and_child();
+        let payload = apply_task_action(&state, TaskAction::Delete { args: json!({ "id": parent }) }, 2);
+        assert!(payload.tasks.is_empty());
+    }
+
+    #[test]
+    fn clearing_completed_parent_promotes_open_subtasks() {
+        let (state, parent, child) = with_parent_and_child();
+        let state = TaskState {
+            tasks: apply_task_action(
+                &state,
+                TaskAction::Update { args: json!({ "id": parent, "status": "completed" }) },
+                2,
+            )
+            .tasks,
+        };
+        let payload = apply_task_action(&state, TaskAction::ClearCompleted, 3);
+        assert_eq!(payload.tasks.len(), 1);
+        assert_eq!(payload.tasks[0].id, child);
+        assert!(payload.tasks[0].parent_id.is_none());
+    }
+
+    #[test]
+    fn parent_id_round_trips_through_storage_shape() {
+        let (state, parent, _) = with_parent_and_child();
+        let raw = serde_json::to_value(&state.tasks[1]).unwrap();
+        assert_eq!(raw["parentId"], json!(parent));
+        assert!(serde_json::to_value(&state.tasks[0]).unwrap().get("parentId").is_none());
+        assert_eq!(migrate_raw_task(&raw).unwrap().parent_id.as_deref(), Some(parent.as_str()));
+    }
+
+    #[test]
+    fn parses_breakdown_titles() {
+        let titles = parse_breakdown_titles(r#"{"subtasks": [" - Call Sam ", "", "Book flight"]}"#);
+        assert_eq!(titles, vec!["Call Sam", "Book flight"]);
+        assert!(parse_breakdown_titles("not json").is_empty());
+    }
 }

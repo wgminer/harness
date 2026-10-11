@@ -438,7 +438,7 @@ export function createBrowserStore(storage: KeyValueStore = defaultStorage()) {
       persist();
       return state.tasks;
     },
-    createTask(title: string, tags?: string[], status?: TaskStatus): TaskItem[] {
+    createTask(title: string, tags?: string[], status?: TaskStatus, parentId?: string): TaskItem[] {
       const now = Date.now();
       const task: TaskItem = {
         id: generateBrowserId("task"),
@@ -447,6 +447,7 @@ export function createBrowserStore(storage: KeyValueStore = defaultStorage()) {
         tags: normalizeTags(tags),
         createdAt: now,
         updatedAt: now,
+        ...(parentId ? { parentId } : {}),
       };
       return this.setTasks([task, ...state.tasks]);
     },
@@ -454,6 +455,7 @@ export function createBrowserStore(storage: KeyValueStore = defaultStorage()) {
       id: string;
       title?: string;
       status?: TaskStatus;
+      parentId?: string | null;
       tags?: string[];
       add_tags?: string[];
       remove_tags?: string[];
@@ -463,8 +465,13 @@ export function createBrowserStore(storage: KeyValueStore = defaultStorage()) {
         let tags = payload.tags != null ? normalizeTags(payload.tags) : task.tags;
         if (payload.add_tags) tags = addTags(tags, payload.add_tags);
         if (payload.remove_tags) tags = removeTags(tags, payload.remove_tags);
+        const next = { ...task };
+        if (payload.parentId !== undefined) {
+          if (payload.parentId) next.parentId = payload.parentId;
+          else delete next.parentId;
+        }
         return {
-          ...task,
+          ...next,
           title: payload.title != null ? payload.title : task.title,
           status: payload.status ?? task.status,
           tags,
@@ -474,7 +481,7 @@ export function createBrowserStore(storage: KeyValueStore = defaultStorage()) {
       return this.setTasks(tasks);
     },
     deleteTask(id: string): TaskItem[] {
-      return this.setTasks(state.tasks.filter((t) => t.id !== id));
+      return this.setTasks(state.tasks.filter((t) => t.id !== id && t.parentId !== id));
     },
     clearCompletedTasks(): TaskItem[] {
       return this.setTasks(state.tasks.filter((t) => t.status !== "completed" && t.status !== "cancelled"));

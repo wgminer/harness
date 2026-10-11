@@ -41,6 +41,7 @@ impl MemoryCompileLlm for OpenAiImportDistiller {
             IMPORT_SYSTEM_PROMPT,
             export_text,
             2500,
+            crate::openai::SMALL_MODEL_REASONING_EFFORT,
             90,
         )
         .await

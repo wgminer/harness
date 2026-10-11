@@ -378,6 +378,7 @@ mod tests {
 
     fn msg(role: &str, content: &str, ts: i64) -> MessageRecord {
         MessageRecord {
+            reasoning: None,
             role: role.to_string(),
             content: content.to_string(),
             tool_calls: None,
@@ -405,6 +406,7 @@ mod tests {
     #[test]
     fn clean_dialogue_drops_tool_only_assistant() {
         let messages = vec![MessageRecord {
+            reasoning: None,
             role: "assistant".to_string(),
             content: String::new(),
             tool_calls: Some(vec![ToolCallRecord {

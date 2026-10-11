@@ -699,7 +699,8 @@ pub async fn propose_note_edit(input: &serde_json::Value) -> Result<NoteEditProp
         crate::openai::openai_chat_model().as_str(),
         system,
         &user,
-        1500,
+        4000,
+        crate::openai::CHAT_REASONING_EFFORT,
         60,
     )
     .await
@@ -728,7 +729,8 @@ pub async fn propose_note_spell_check(input: &serde_json::Value) -> Result<NoteE
         crate::openai::openai_chat_model().as_str(),
         system,
         selected,
-        1500,
+        4000,
+        crate::openai::CHAT_REASONING_EFFORT,
         60,
     )
     .await

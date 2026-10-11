@@ -141,18 +141,20 @@ export function createHarnessAdapter(): HarnessAPI {
     },
     tasks: {
       list: () => invoke(cmd("tasks:list")),
-      create: (title: string, tags?: string[], status?: string) =>
-        invoke(cmd("tasks:create"), { title, tags, status }),
+      create: (title: string, tags?: string[], status?: string, parentId?: string) =>
+        invoke(cmd("tasks:create"), { title, tags, status, parentId }),
       update: (payload: {
         id: string;
         title?: string;
         status?: string;
+        parentId?: string | null;
         tags?: string[];
         add_tags?: string[];
         remove_tags?: string[];
       }) => invoke(cmd("tasks:update"), { payload }),
       delete: (id: string) => invoke(cmd("tasks:delete"), { id }),
       clearCompleted: () => invoke(cmd("tasks:clearCompleted")),
+      breakdown: (id: string) => invoke(cmd("tasks:breakdown"), { id }),
     },
     chat: {
       send: (conversationId: string, userContent: string) =>
@@ -171,6 +173,7 @@ export function createHarnessAdapter(): HarnessAPI {
           conversationId: string | null;
           hasActiveStream: boolean;
           content: string;
+          reasoning?: string;
           pendingTools: Array<{ toolName: string; payload: unknown }>;
         }>(cmd("chat:getActiveTurn")),
       getContextPreview: (conversationId?: string | null) =>
@@ -180,6 +183,11 @@ export function createHarnessAdapter(): HarnessAPI {
       onStreamChunk: (cb) =>
         subscribe<{ conversationId: string; chunk: string }>(
           "chat:streamChunk",
+          (p) => cb(p.conversationId, p.chunk),
+        ),
+      onStreamReasoning: (cb) =>
+        subscribe<{ conversationId: string; chunk: string }>(
+          "chat:streamReasoning",
           (p) => cb(p.conversationId, p.chunk),
         ),
       onStreamEnd: (cb) =>

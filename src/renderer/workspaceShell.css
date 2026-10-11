@@ -33,11 +33,11 @@
 }
 
 .workspace-header-inner {
-  max-width: var(--content-width);
+  max-width: var(--page-width);
   margin: 0 auto;
   width: 100%;
   min-height: var(--space-8);
-  padding: 0 var(--shell-pad-inline);
+  padding: 0 var(--page-pad-inline);
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -53,11 +53,11 @@
 }
 
 .workspace-header-sub {
-  max-width: var(--content-width);
+  max-width: var(--page-width);
   margin: 0 auto;
   width: 100%;
   min-height: var(--space-8);
-  padding: 0 var(--shell-pad-inline);
+  padding: 0 var(--page-pad-inline);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -80,9 +80,9 @@
 }
 
 .workspace-content {
-  max-width: var(--content-width);
+  max-width: var(--page-width);
   margin: 0 auto;
-  padding: var(--space-4) var(--shell-pad-inline) var(--space-12);
+  padding: var(--space-4) var(--page-pad-inline) var(--space-12);
 }
 
 /** Vertical stack for list pages (Tasks, Editor) — one gap token, no sibling margins. */

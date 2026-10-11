@@ -10,7 +10,6 @@ import {
 import { ChatTitleModal } from "./ChatTitleModal";
 import { ChatSurface } from "./ChatSurface";
 import { ChatComposer } from "./ChatComposer";
-import { ChatModePicker } from "./ChatModePicker";
 import { DictationSuggestedPromptChips } from "./DictationSuggestedPromptChips";
 import { useChatComposer, type ComposerDraft } from "./useChatComposer";
 import {
@@ -164,10 +163,7 @@ export function ChatView({
   const {
     composeChatMode,
     activeChatMode,
-    modeSwitching,
     resetOptimisticChatMode,
-    handleChatModeChange,
-    handleCycleMode,
     codingScope,
     selfScopeAvailable,
     applyCodingScope,
@@ -251,11 +247,13 @@ export function ChatView({
       toolCalls: (lastAssistant as Message).toolCalls,
       model: (lastAssistant as Message).model,
     };
+    const storedReasoning = (lastAssistant as Message).reasoning;
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== assistantId) return m;
         const merged = mergeAssistantFromStorage(m, stored);
-        return merged ? { ...m, ...merged } : m;
+        const next = merged ? { ...m, ...merged } : m;
+        return storedReasoning && !next.reasoning ? { ...next, reasoning: storedReasoning } : next;
       })
     );
   }, []);
@@ -490,6 +488,7 @@ export function ChatView({
         toolCalls: (m as Message).toolCalls,
         timestamp: (m as Message).timestamp,
         model: (m as Message).model,
+        reasoning: (m as Message).reasoning,
       }));
 
       const pendingForThis =
@@ -516,6 +515,7 @@ export function ChatView({
             id: assistantId,
             role: "assistant",
             content: activeTurn.content || "",
+            reasoning: activeTurn.reasoning || undefined,
             toolCalls: activeTurn.pendingTools.map((t) => ({
               toolName: t.toolName,
               payload: t.payload,
@@ -579,11 +579,20 @@ export function ChatView({
 
       if (toolName === "open_long_response") return;
       setAssistantToolCall(assistantId, toolName, payload);
+      // The assistant switched modes; reload the conversation so the composer follows.
+      if (toolName === "set_chat_mode") onConversationCreated();
     });
     return () => {
       unsub();
     };
-  }, [activeAssistantMessageId, applyAssistantChunk, isTurnCurrent, onNotesChanged, setAssistantToolCall]);
+  }, [
+    activeAssistantMessageId,
+    applyAssistantChunk,
+    isTurnCurrent,
+    onConversationCreated,
+    onNotesChanged,
+    setAssistantToolCall,
+  ]);
 
   useEffect(() => {
     const unsubChunk = window.harness.chat.onStreamChunk((cid, chunk) => {
@@ -594,6 +603,17 @@ export function ChatView({
       const signal = streamAbortRef.current?.signal;
       if (!assistantId || turnId == null || !isTurnCurrent(turnId, signal)) return;
       applyAssistantChunk(assistantId, (prev) => stripSentAtPrefix(prev + chunk));
+    });
+    const unsubReasoning = window.harness.chat.onStreamReasoning((cid, chunk) => {
+      if (cid !== conversationIdRef.current) return;
+      if (!isStreamingRef.current) return;
+      const assistantId = activeAssistantMessageIdRef.current;
+      const turnId = activeTurnIdRef.current;
+      const signal = streamAbortRef.current?.signal;
+      if (!assistantId || turnId == null || !isTurnCurrent(turnId, signal)) return;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, reasoning: (m.reasoning ?? "") + chunk } : m)),
+      );
     });
     const unsubEnd = window.harness.chat.onStreamEnd((cid) => {
       if (cid !== conversationIdRef.current) return;
@@ -614,6 +634,7 @@ export function ChatView({
     });
     return () => {
       unsubChunk();
+      unsubReasoning();
       unsubEnd();
     };
   }, [applyAssistantChunk, completeTurn, isTurnCurrent, syncAssistantFromStorage]);
@@ -980,14 +1001,6 @@ export function ChatView({
   /** Single user turn (dictation): suggested prompts in the reply strip. */
   const isDictationReplyStrip = awaitingReply && messages.length === 1;
 
-  const modePicker = (
-    <ChatModePicker
-      value={activeChatMode}
-      onChange={(mode) => void handleChatModeChange(mode)}
-      disabled={sending || modeSwitching}
-    />
-  );
-
   const lastAssistantForQa =
     activeChatMode === "qa" &&
     !sending &&
@@ -1194,7 +1207,6 @@ export function ChatView({
     focusComposerNonce,
     inputRef: composer.inputRef,
     placeholder: composerPlaceholder,
-    modeControl: modePicker,
     qaChoices: qaChoicesReady ? qaChoices : undefined,
     qaChoicesArrive: qaChoicesReady && qaArriveEpoch !== 0 && qaArriveEpoch === qaTurnEpoch,
     onQaChoiceSelect: handleOptionSelect,
@@ -1211,7 +1223,6 @@ export function ChatView({
     onClearCodingScope: async () => {
       await applyCodingScope(null);
     },
-    onCycleMode: handleCycleMode,
   };
 
   if (isComposeMode) {
