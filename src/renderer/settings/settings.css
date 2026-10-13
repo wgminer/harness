@@ -56,17 +56,7 @@
   border-color: var(--border-input-focus);
 }
 
-.settings-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.settings-content {
-  max-width: var(--page-width);
-  margin: 0 auto;
-  padding: var(--space-6) var(--page-pad-inline) var(--space-12);
-}
+/* Scroll + content padding come from .workspace-scroll / .workspace-content (same as Tasks). */
 
 .settings-segmented {
   display: flex;

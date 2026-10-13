@@ -1,6 +1,7 @@
 /*
  * Harness download site.
- * Reads like a post: one column of prose, screenshots a little wider than the text.
+ * Reads like a post: one column of prose, screenshots a little wider than the text,
+ * and one animated clip at the top that is wider still.
  * Black and chalk from the app icon; serif body, system sans for meta and captions.
  */
 
@@ -18,6 +19,7 @@
 
   --measure: 36rem;
   --wide: 52rem;
+  --hero: 64rem;
   --gutter: 1rem;
   --radius-window: 8px;
 }
@@ -174,6 +176,31 @@ a:focus-visible {
   border: 1px solid var(--rule);
   border-radius: var(--radius-window);
   background: #111;
+}
+
+/* The top clip gets the most room. */
+@media (min-width: 72rem) {
+  .post figure.hero {
+    margin-left: calc((var(--measure) - var(--hero)) / 2);
+    margin-right: calc((var(--measure) - var(--hero)) / 2);
+  }
+}
+
+.post__header + figure {
+  margin-top: 0;
+  margin-bottom: 2.5rem;
+}
+
+/* Phone screens sit side by side at phone proportions. */
+.phones__row {
+  display: flex;
+  justify-content: center;
+  gap: clamp(1rem, 4vw, 2.5rem);
+}
+
+.post figure .phones__row img {
+  width: min(16rem, 46%);
+  border-radius: clamp(1.25rem, 5vw, 2.25rem);
 }
 
 .post figcaption {

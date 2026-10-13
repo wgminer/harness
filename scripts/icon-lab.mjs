@@ -12,14 +12,17 @@
  *   OPENAI_API_KEY=… node scripts/icon-lab.mjs --name bold-bridle \
  *     --prompt "horse head facing left, thick bridle" [--n 4] \
  *     [--ref resources/mark/horse-head-source.png] [--model gpt-image-1] \
- *     [--quality high] [--style icon|crest]
+ *     [--quality high] [--style icon|crest] [--provider openai|google]
  *
  * With --ref the request goes to /images/edits (reference-guided); without,
  * to /images/generations. Re-sheet an existing folder with --sheet <dir>.
  *
+ * --provider google uses the Gemini API (GOOGLE_API_KEY) with a flat per-image
+ * price; --quality is ignored there. Pick the tier with --model.
+ *
  * Spend cap: every run is logged to _lab/spend.json (cost from the response's
- * token usage). A run whose worst-case estimate would push the total past the
- * budget (default $5, override with --budget or ICON_LAB_BUDGET_USD) is refused
+ * token usage, or the per-image price for Google). A run whose worst-case estimate would push the total past the
+ * budget (default $10, override with --budget or ICON_LAB_BUDGET_USD) is refused
  * before any request is sent. `--spend` prints the ledger total.
  */
 import fs from "node:fs";
@@ -43,7 +46,7 @@ Opinionated and rich in character: confident dynamic pose, crisp detailed contou
 };
 
 const spendPath = path.join(labRoot, "spend.json");
-const DEFAULT_BUDGET_USD = 5;
+const DEFAULT_BUDGET_USD = 10;
 
 /** USD per 1M tokens (gpt-image-1 list prices). */
 const RATES = { textIn: 5, imageIn: 10, imageOut: 40 };
@@ -53,6 +56,15 @@ const OUTPUT_TOKENS = { low: 272, medium: 1056, high: 4160, auto: 4160 };
 const REF_INPUT_TOKENS = 1600;
 const PROMPT_INPUT_TOKENS = 400;
 
+const DEFAULT_MODELS = { openai: "gpt-image-1", google: "gemini-3.1-flash-lite-image" };
+/** USD per 1024x1024 image (Gemini API list prices); unknown models use the fallback. */
+const GOOGLE_IMAGE_USD = {
+  "gemini-3.1-flash-lite-image": 0.0336,
+  "gemini-3.1-flash-image": 0.067,
+  "gemini-3-pro-image": 0.134,
+};
+const GOOGLE_IMAGE_USD_FALLBACK = 0.134;
+
 const SHEET_SIZES = [256, 128, 64, 32, 16];
 const PLATE_MARGIN = 100 / 1024;
 const PLATE_RADIUS = 180 / 1024;
@@ -61,7 +73,7 @@ function parseArgs(argv) {
   const args = {
     n: 4,
     refs: [],
-    model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
+    provider: "openai",
     quality: "high",
     style: "icon",
     budget: Number(process.env.ICON_LAB_BUDGET_USD) || DEFAULT_BUDGET_USD,
@@ -78,23 +90,27 @@ function parseArgs(argv) {
       case "--quality": args.quality = val; i++; break;
       case "--sheet": args.sheet = val; i++; break;
       case "--style": args.style = val; i++; break;
+      case "--provider": args.provider = val; i++; break;
       case "--budget": args.budget = Number(val); i++; break;
       case "--spend": args.spend = true; break;
       default: throw new Error(`Unknown argument: ${key}`);
     }
   }
+  if (!DEFAULT_MODELS[args.provider]) throw new Error(`Unknown --provider ${args.provider} (openai, google)`);
+  args.model ??= (args.provider === "openai" && process.env.OPENAI_IMAGE_MODEL) || DEFAULT_MODELS[args.provider];
   return args;
 }
 
-function loadApiKey() {
-  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+function loadApiKey(provider) {
+  const name = provider === "google" ? "GOOGLE_API_KEY" : "OPENAI_API_KEY";
+  if (process.env[name]) return process.env[name];
   for (const file of [".env.local", ".env"]) {
     const p = path.join(root, file);
     if (!fs.existsSync(p)) continue;
-    const m = fs.readFileSync(p, "utf8").match(/^(?:VITE_)?OPENAI_API_KEY=(.+)$/m);
+    const m = fs.readFileSync(p, "utf8").match(new RegExp(`^(?:VITE_)?${name}=(.+)$`, "m"));
     if (m) return m[1].trim().replace(/^["']|["']$/g, "");
   }
-  throw new Error("Set OPENAI_API_KEY (env or .env.local).");
+  throw new Error(`Set ${name} (env or .env.local).`);
 }
 
 function stamp() {
@@ -113,7 +129,8 @@ function writeLedger(ledger) {
   fs.writeFileSync(spendPath, `${JSON.stringify(ledger, null, 2)}\n`);
 }
 
-function estimateUsd({ n, quality, refs }) {
+function estimateUsd({ n, quality, refs, provider, model }) {
+  if (provider === "google") return n * (GOOGLE_IMAGE_USD[model] ?? GOOGLE_IMAGE_USD_FALLBACK);
   const out = (OUTPUT_TOKENS[quality] ?? OUTPUT_TOKENS.high) * n;
   const imageIn = refs.length * REF_INPUT_TOKENS;
   return (out * RATES.imageOut + imageIn * RATES.imageIn + PROMPT_INPUT_TOKENS * RATES.textIn) / 1e6;
@@ -156,8 +173,36 @@ async function requestImages({ apiKey, model, prompt, n, quality, refs }) {
   return { images: body.data.map((d) => Buffer.from(d.b64_json, "base64")), usage: body.usage };
 }
 
+/** One image per call, so `n` calls run in parallel. Results are normalized to 1024² PNG. */
+async function requestGoogleImages({ apiKey, model, prompt, n, refs }) {
+  const parts = [{ text: prompt }];
+  for (const ref of refs) {
+    const buf = fs.readFileSync(path.resolve(root, ref));
+    parts.push({ inlineData: { mimeType: "image/png", data: buf.toString("base64") } });
+  }
+  const one = async () => {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "1:1" } },
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(`Google ${res.status}: ${body?.error?.message ?? JSON.stringify(body)}`);
+    const image = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)?.inlineData;
+    if (!image) throw new Error(`Google returned no image (${body.candidates?.[0]?.finishReason ?? "unknown"})`);
+    const raw = Buffer.from(image.data, "base64");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><image href="${dataUri(raw)}" width="1024" height="1024"/></svg>`;
+    return new Resvg(svg).render().asPng();
+  };
+  return { images: await Promise.all(Array.from({ length: n }, one)) };
+}
+
 function dataUri(buf) {
-  return `data:image/png;base64,${buf.toString("base64")}`;
+  const mime = buf[0] === 0xff && buf[1] === 0xd8 ? "image/jpeg" : buf.subarray(8, 12).toString() === "WEBP" ? "image/webp" : "image/png";
+  return `data:${mime};base64,${buf.toString("base64")}`;
 }
 
 /** The generated square on the inset rounded plate, rendered at `size`. */
@@ -237,7 +282,7 @@ async function main() {
       `Budget: $${ledger.totalUsd.toFixed(2)} spent + ~$${estimate.toFixed(2)} for this run would exceed $${args.budget.toFixed(2)}.`
     );
   }
-  const apiKey = loadApiKey();
+  const apiKey = loadApiKey(args.provider);
   const base = BASE_PROMPTS[args.style];
   if (!base) throw new Error(`Unknown --style ${args.style} (${Object.keys(BASE_PROMPTS).join(", ")})`);
   const prompt = `${base}\n\n${args.prompt}`;
@@ -248,7 +293,8 @@ async function main() {
     `model: ${args.model}\nrefs: ${args.refs.join(", ") || "(none)"}\n\n${prompt}\n`
   );
 
-  const { images, usage } = await requestImages({ apiKey, prompt, ...args });
+  const request = args.provider === "google" ? requestGoogleImages : requestImages;
+  const { images, usage } = await request({ apiKey, ...args, prompt });
   const usd = usage ? usageUsd(usage) : estimate;
   // Re-read so concurrent runs don't overwrite each other's entries.
   const latest = readLedger();

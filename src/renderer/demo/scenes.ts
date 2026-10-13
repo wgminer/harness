@@ -32,39 +32,52 @@ const PHONE_REPLY = [
   "Still open: whether memory needs an expiry, and where long replies should land when no note is open.",
 ].join("\n");
 
-const GRILL_FIRST = [
-  "Before weighing anything: what would make staying feel like the right call a year from now?",
-  "",
-  "::::options",
-  ':::option{title="I learned more than I would have there"}',
-  ":::",
-  ':::option{title="The team I have now is the one I want"}',
-  ":::",
-  ':::option{title="I had more time for my own work"}',
-  ":::",
-  "::::",
-].join("\n");
-
-const GRILL_SECOND = [
-  "Then the question is less about the offer and more about your team. Have you told your manager you're looking?",
-  "",
-  "::::options",
-  ':::option{title="Yes, and they know why"}',
-  ":::",
-  ':::option{title="No, not yet"}',
-  ":::",
-  ':::option{title="They suspect"}',
-  ":::",
-  "::::",
-].join("\n");
+const PHONE_QUESTION = "What did I decide about the phone app last week, and what's still open?";
 
 export const DEMO_SCENES: DemoScene[] = [
+  {
+    // The site's top image: Fn from anywhere, a spoken question, an answer from a note, then the library.
+    id: "hero",
+    kind: "clip",
+    viewport: WIDE,
+    session: composeHome,
+    run: async (d) => {
+      d.title("Phone app decisions");
+      d.reply({ text: PHONE_REPLY, thinkMs: 2000 });
+      await d.wait(1200);
+      await d.dictate(PHONE_QUESTION, { speakMs: 4200 });
+      await d.wait(streamMs(PHONE_REPLY, 2000) + 1400);
+      d.showCursor({ x: 420, y: 520 });
+      await d.wait(300);
+      await d.click({ label: "Show sidebar" });
+      await d.moveTo({ x: 560, y: 600 }, { durationMs: 800 });
+      await d.wait(2600);
+    },
+  },
   {
     id: "library",
     kind: "still",
     viewport: WIDE,
     session: { view: "chat", conversationId: "conv_demo_harness" },
     run: openLibrary,
+  },
+  {
+    id: "dictation",
+    kind: "still",
+    viewport: WINDOW,
+    session: composeHome,
+    run: async (d) => {
+      await d.listen({ speakMs: 2600 });
+    },
+  },
+  {
+    id: "grill",
+    kind: "still",
+    viewport: WINDOW,
+    session: { view: "chat", conversationId: "conv_demo_qa" },
+    run: async (d) => {
+      await d.waitFor('[data-testid="qa-choice-1"]');
+    },
   },
   {
     id: "notes",
@@ -80,45 +93,6 @@ export const DEMO_SCENES: DemoScene[] = [
     session: { view: "tasks" },
     run: async (d) => {
       await d.waitFor({ text: "Call the dentist about Thursday" });
-    },
-  },
-  {
-    id: "dictation",
-    kind: "clip",
-    viewport: WINDOW,
-    session: composeHome,
-    run: async (d) => {
-      d.title("Phone app decisions");
-      d.reply({ text: PHONE_REPLY, thinkMs: 2400 });
-      await d.wait(1600);
-      await d.dictate("What did I decide about the phone app last week, and what's still open?", {
-        speakMs: 3800,
-      });
-      await d.wait(streamMs(PHONE_REPLY, 2400) + 2200);
-    },
-  },
-  {
-    id: "grill",
-    kind: "clip",
-    viewport: WINDOW,
-    session: composeHome,
-    run: async (d) => {
-      d.title("Take the offer or stay");
-      d.reply({ text: GRILL_FIRST, thinkMs: 1800 });
-      d.reply({ text: GRILL_SECOND, thinkMs: 1600 });
-      d.showCursor({ x: 820, y: 640 });
-      await d.wait(700);
-      await d.click('[data-testid="chat-mode-qa"]');
-      await d.click("textarea");
-      await d.type("I have an offer from another team. Should I take it or stay?");
-      await d.wait(300);
-      await d.click({ label: "Send message" });
-      await d.moveTo({ x: 860, y: 420 }, { durationMs: 900 });
-      await d.waitFor('[data-testid="qa-choice-1"]', 15000);
-      await d.wait(900);
-      await d.click('[data-testid="qa-choice-1"]');
-      await d.moveTo({ x: 880, y: 300 }, { durationMs: 900 });
-      await d.wait(streamMs(GRILL_SECOND) + 2000);
     },
   },
 ];

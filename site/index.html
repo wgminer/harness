@@ -6,7 +6,7 @@
     <title>Harness</title>
     <meta
       name="description"
-      content="A Mac app I made for myself. It started as voice dictation and grew into a personal agent harness, with all the data kept local. Open source."
+      content="A Mac app I made for myself, with an iPhone app for capturing on the go. It started as voice dictation and grew into a personal agent harness, with all the data kept local. Open source."
     />
     <meta property="og:title" content="Harness" />
     <meta property="og:description" content="A Mac app I made for myself. It started as voice dictation and grew into a personal agent harness." />
@@ -34,14 +34,34 @@
         <img class="post__icon" src="./assets/icon.png" alt="" width="48" height="48" />
         <h1>Harness</h1>
         <p class="post__meta">
-          <span id="release">A Mac app, free and open source</span>
+          <span id="release">For Mac and iPhone, free and open source</span>
         </p>
       </header>
+
+      <figure class="hero">
+        <video
+          src="./assets/hero.mp4"
+          poster="./assets/hero-poster.jpg"
+          width="2160"
+          height="1350"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          aria-label="Pressing Fn starts a recording pill while a question is spoken. The question lands in a new chat, an answer citing a note streams in, and the library opens with the new conversation at the top."
+        ></video>
+        <figcaption>
+          Fn, a question out loud, and an answer pulled from one of my notes.
+          The chat lands in the library with everything else.
+        </figcaption>
+      </figure>
 
       <p>
         Harness is a Mac app I made for myself. It started as my attempt to
         improve on Wispr Flow and other voice dictation tools, and it's grown
-        into a full agent harness: chat, notes, tasks, memory, and tools.
+        into a full agent harness: chat, notes, tasks, memory, and tools, with
+        an <a href="#phone">iPhone app</a> for capturing away from the desk.
       </p>
 
       <p>
@@ -55,21 +75,7 @@
         <a id="download" href="https://github.com/wgminer/harness/releases/latest">download the latest build</a>
         (Apple silicon, macOS 12 or later) or
         <a href="https://github.com/wgminer/harness">read the source</a>.
-        Here's what it looks like.
       </p>
-
-      <figure>
-        <img
-          src="./assets/library.png"
-          alt="Harness with the library open: chats and notes grouped by day beside a conversation about what a personal LLM app should optimize for."
-          width="2880"
-          height="1800"
-        />
-        <figcaption>
-          Chats and notes share one library, grouped by day. It stays closed
-          until I want it.
-        </figcaption>
-      </figure>
 
       <h2>Dictation</h2>
       <p>
@@ -88,42 +94,67 @@
       </p>
 
       <figure>
-        <video
-          src="./assets/dictation.mp4"
-          poster="./assets/dictation-poster.jpg"
-          width="1560"
-          height="1170"
-          autoplay
-          muted
-          loop
-          playsinline
-          preload="metadata"
-          aria-label="Pressing Fn opens a full-screen sound field while a question is spoken. After a moment of transcribing, the question appears in a new chat and an answer citing a note streams in."
-        ></video>
-        <figcaption>Asking a question out loud. The answer pulls from one of my notes.</figcaption>
+        <img
+          src="./assets/dictation.png"
+          alt="A new chat with a recording pill at the top of the window showing a live level meter, the elapsed time, and buttons to cancel or finish."
+          width="2080"
+          height="1560"
+          loading="lazy"
+        />
+        <figcaption>Mid-take. The pill shows the level and the time, and stays out of the way.</figcaption>
+      </figure>
+
+      <h2 id="phone">On the phone</h2>
+      <p>
+        The iPhone app does one thing first: record. Open it and it's already
+        listening. The home screen is a single circle, and a lock screen widget
+        opens straight into a take.
+      </p>
+
+      <p>
+        A finished take is saved as a capture and synced to the Mac, along with
+        chats and tasks, through a Cloudflare R2 bucket that I own. The phone
+        app isn't on the App Store. It
+        <a href="https://github.com/wgminer/harness/tree/main/ios">builds from the same repo</a>
+        with Xcode.
+      </p>
+
+      <figure class="phones">
+        <div class="phones__row">
+          <img
+            src="./assets/phone-home.png"
+            alt="The iPhone home screen of Harness: a single white circle on black, with a small menu button at the bottom."
+            width="804"
+            height="1748"
+            loading="lazy"
+          />
+          <img
+            src="./assets/phone-recording.png"
+            alt="Harness on iPhone while recording: a timer at the top, a field of dots that moves with the voice, and a stop button."
+            width="804"
+            height="1748"
+            loading="lazy"
+          />
+        </div>
+        <figcaption>The whole home screen, and what it turns into when I start talking.</figcaption>
       </figure>
 
       <h2>Grill mode</h2>
       <p>
-        Switch a conversation to Grill and it interviews you instead of
-        answering, one question at a time, with the choices in the composer. I
-        reach for it when the hard part is knowing what I think.
+        Ask to be grilled and it interviews you instead of answering, one
+        question at a time, with the choices in the composer. I reach for it
+        when the hard part is knowing what I think.
       </p>
 
       <figure>
-        <video
-          src="./assets/grill.mp4"
-          poster="./assets/grill-poster.jpg"
-          width="1560"
-          height="1170"
-          autoplay
-          muted
-          loop
-          playsinline
-          preload="metadata"
-          aria-label="Switching to Grill, typing a question about a job offer, and picking one of three suggested answers. The next question follows."
-        ></video>
-        <figcaption>Talking through a job offer. Each answer leads to the next question.</figcaption>
+        <img
+          src="./assets/grill.png"
+          alt="A Grill conversation: a short reply ending in a question, with three lettered answers in the composer and room to answer in your own words."
+          width="2080"
+          height="1560"
+          loading="lazy"
+        />
+        <figcaption>Each answer leads to the next question.</figcaption>
       </figure>
 
       <h2>Notes</h2>
@@ -146,14 +177,14 @@
 
       <h2>Tasks</h2>
       <p>
-        Ask in chat or dictate, and tasks land in a plain list with tags. There's
+        Ask in chat or dictate, and tasks land in a plain list. There's
         nothing to set up and no project hierarchy.
       </p>
 
       <figure>
         <img
           src="./assets/tasks.png"
-          alt="The task list: four active tasks tagged errands and harness, and two completed."
+          alt="The task list: one task under Now, three more active, and two completed."
           width="2080"
           height="1560"
           loading="lazy"
@@ -189,7 +220,7 @@
         })
         .catch(() => {});
 
-      // Clips autoplay like GIFs; with reduced motion they wait for a click instead.
+      // The clip autoplays like a GIF; with reduced motion it waits for a click instead.
       if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
         for (const video of document.querySelectorAll("video")) {
           video.removeAttribute("autoplay");

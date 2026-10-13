@@ -14,6 +14,8 @@ export type DemoRuntime = {
   type: (text: string, options?: { charsPerSecond?: number }) => Promise<void>;
   /** Fn dictation from another app: the full-screen field, then transcription, then the composer. */
   dictate: (text: string, options?: { speakMs?: number; transcribeMs?: number }) => Promise<void>;
+  /** Press Fn and start talking, then leave the field open and moving: for a still of dictation in progress. */
+  listen: (options?: { speakMs?: number }) => Promise<void>;
   reply: (reply: DemoReply | string) => void;
   title: (title: string) => void;
   showCursor: (at: DemoPoint) => void;
@@ -200,8 +202,8 @@ export function createDemoRuntime(backend: DemoBackend): DemoRuntime & { cursor:
     return key;
   };
 
-  const dictate: DemoRuntime["dictate"] = async (text, options = {}) => {
-    const speakMs = options.speakMs ?? 3200;
+  /** Press Fn and feed speech-like levels for `speakMs`; with `hold`, the levels keep looping afterward. */
+  const speak = async (speakMs: number, hold: boolean) => {
     const levelAt = speechLevels(speakMs, Math.random);
     const key = showKey("fn");
     await sleep(30);
@@ -215,12 +217,17 @@ export function createDemoRuntime(backend: DemoBackend): DemoRuntime & { cursor:
     await new Promise<void>((resolve) => {
       const tick = () => {
         const elapsed = performance.now() - start;
-        backend.recording.level(levelAt(elapsed));
-        if (elapsed < speakMs) setTimeout(tick, 33);
-        else resolve();
+        backend.recording.level(levelAt(elapsed % speakMs));
+        if (elapsed >= speakMs) resolve();
+        if (elapsed < speakMs || hold) setTimeout(tick, 33);
       };
       tick();
     });
+    return key;
+  };
+
+  const dictate: DemoRuntime["dictate"] = async (text, options = {}) => {
+    const key = await speak(options.speakMs ?? 3200, false);
     backend.recording.level(0);
     key.dataset.state = "down";
     await sleep(120);
@@ -232,6 +239,10 @@ export function createDemoRuntime(backend: DemoBackend): DemoRuntime & { cursor:
     backend.recording.transcriptReady(text);
   };
 
+  const listen: DemoRuntime["listen"] = async (options = {}) => {
+    await speak(options.speakMs ?? 3200, true);
+  };
+
   return {
     wait: sleep,
     waitFor,
@@ -239,6 +250,7 @@ export function createDemoRuntime(backend: DemoBackend): DemoRuntime & { cursor:
     click,
     type,
     dictate,
+    listen,
     reply: (reply) => backend.queueReply(typeof reply === "string" ? { text: reply } : reply),
     title: (title) => backend.setTitle(title),
     showCursor,
