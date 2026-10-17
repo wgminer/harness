@@ -820,6 +820,8 @@ export function NotesView({
     return () => window.removeEventListener("pointerdown", onPointerDown, true);
   }, [asideExpanded, dismissAside]);
 
+  const hasNoteLinks = Boolean(returnToTitle) || linkedConversations.length > 0;
+
   return (
     <div className="workspace-page notes-surface">
       <div
@@ -834,7 +836,41 @@ export function NotesView({
             </div>
           ) : (
             <>
-              <div className="notes-surface__toolbar">
+              <div
+                className={`notes-surface__header${hasNoteLinks ? "" : " notes-surface__header--floating"}`}
+              >
+                {hasNoteLinks ? (
+                  <nav className="note-links" aria-label="Linked conversations">
+                    {returnToTitle && returnToConversationId ? (
+                      <button
+                        type="button"
+                        className="note-links__back"
+                        onClick={() => onOpenConversation?.(returnToConversationId)}
+                        title="Back to conversation"
+                      >
+                        <ArrowLeft size={13} aria-hidden />
+                        <span className="note-links__title">{returnToTitle}</span>
+                      </button>
+                    ) : null}
+                    {linkedConversations.length > 0 ? (
+                      <span className="note-links__label">From</span>
+                    ) : null}
+                    {linkedConversations.slice(0, 3).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="note-links__chip"
+                        onClick={() => onOpenConversation?.(c.id)}
+                        title={`Open “${c.title}”`}
+                      >
+                        <span className="note-links__title">{c.title}</span>
+                      </button>
+                    ))}
+                    {linkedConversations.length > 3 ? (
+                      <span className="note-links__label">+{linkedConversations.length - 3}</span>
+                    ) : null}
+                  </nav>
+                ) : null}
                 <div className="notes-surface__toolbar-actions">
                   {voiceError ? <div className="notes-surface__voice-error">{voiceError}</div> : null}
                   {voiceState === "recording" ? (
@@ -880,21 +916,6 @@ export function NotesView({
                       aria-label="Cancel dictation"
                     >
                       <X size={15} aria-hidden />
-                    </button>
-                  ) : null}
-                  {onDiscussNote ? (
-                    <button
-                      type="button"
-                      className="btn btn-icon notes-surface__details-btn"
-                      onClick={() => {
-                        if (selectedNoteId) onDiscussNote({ id: selectedNoteId, title: noteTitle });
-                      }}
-                      disabled={selectedNoteId == null || status.kind === "loading"}
-                      title="Discuss in chat"
-                      aria-label="Discuss in chat"
-                      data-testid="notes-discuss"
-                    >
-                      <MessageSquareText size={15} aria-hidden />
                     </button>
                   ) : null}
                   <div className="notes-surface__toolbar-menu-wrap">
@@ -1003,38 +1024,6 @@ export function NotesView({
                   </div>
                 </div>
               </div>
-              {returnToTitle || linkedConversations.length > 0 ? (
-                <nav className="note-links" aria-label="Linked conversations">
-                  {returnToTitle && returnToConversationId ? (
-                    <button
-                      type="button"
-                      className="note-links__back"
-                      onClick={() => onOpenConversation?.(returnToConversationId)}
-                      title="Back to conversation"
-                    >
-                      <ArrowLeft size={13} aria-hidden />
-                      <span className="note-links__title">{returnToTitle}</span>
-                    </button>
-                  ) : null}
-                  {linkedConversations.length > 0 ? (
-                    <span className="note-links__label">From</span>
-                  ) : null}
-                  {linkedConversations.slice(0, 3).map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className="note-links__chip"
-                      onClick={() => onOpenConversation?.(c.id)}
-                      title={`Open “${c.title}”`}
-                    >
-                      <span className="note-links__title">{c.title}</span>
-                    </button>
-                  ))}
-                  {linkedConversations.length > 3 ? (
-                    <span className="note-links__label">+{linkedConversations.length - 3}</span>
-                  ) : null}
-                </nav>
-              ) : null}
               {noteSync.conflict ? (
                 <NoteConflictBar
                   onReload={noteSync.reloadFromConflict}

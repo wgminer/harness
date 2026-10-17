@@ -4,7 +4,7 @@ import NIOCore
 import SotoCore
 import SotoS3
 
-struct R2Config: Sendable {
+struct R2Config: Sendable, Equatable {
     let accountId: String
     let bucket: String
     let prefix: String
@@ -38,8 +38,10 @@ final class RemoteBackupStore: @unchecked Sendable {
     /// `HTTPClient.shared` enables gzip and fails on precompressed `bundle.json.gz` from R2
     /// (`NIOHTTPDecompression.ExtraDecompressionError`).
     private let httpClient: HTTPClient
+    let config: R2Config
 
     init(config: R2Config) {
+        self.config = config
         bucket = config.bucket.trimmingCharacters(in: .whitespacesAndNewlines)
         prefix = R2SettingsStore.normalizePrefix(config.prefix)
         httpClient = HTTPClient(
@@ -63,8 +65,13 @@ final class RemoteBackupStore: @unchecked Sendable {
     }
 
     deinit {
-        try? awsClient.syncShutdown()
-        try? httpClient.syncShutdown()
+        // `syncShutdown` blocks the releasing thread and traps on an event loop; shut down off to the side.
+        let awsClient = awsClient
+        let httpClient = httpClient
+        Task.detached(priority: .utility) {
+            try? await awsClient.shutdown()
+            try? await httpClient.shutdown()
+        }
     }
 
     static func r2Endpoint(accountId: String) -> String {
@@ -80,17 +87,21 @@ final class RemoteBackupStore: @unchecked Sendable {
     }
 
     static func makeConfigured() throws -> RemoteBackupStore {
+        RemoteBackupStore(config: try currentConfig())
+    }
+
+    static func currentConfig() throws -> R2Config {
         guard R2SettingsStore.isConfigured,
               let secret = KeychainStore.loadR2SecretAccessKey() else {
             throw RemoteBackupStoreError.notConfigured
         }
-        return RemoteBackupStore(config: R2Config(
+        return R2Config(
             accountId: R2SettingsStore.accountId,
             bucket: R2SettingsStore.bucket,
             prefix: R2SettingsStore.prefix,
             accessKeyId: R2SettingsStore.accessKeyId,
             secretAccessKey: secret
-        ))
+        )
     }
 
     func manifestKey() -> String {
@@ -149,11 +160,11 @@ final class RemoteBackupStore: @unchecked Sendable {
             key: addressedKey
         ))
 
-        // Compat mirror for clients that still read the fixed key.
-        _ = try? await s3.putObject(.init(
-            body: AWSHTTPBody(bytes: bundleBytes),
+        // Compat mirror for clients that still read the fixed key: a server-side copy,
+        // so the bundle is uploaded once.
+        _ = try? await s3.copyObject(.init(
             bucket: bucket,
-            contentType: "application/gzip",
+            copySource: "\(bucket)/\(addressedKey)",
             key: legacyBundleKey()
         ))
 

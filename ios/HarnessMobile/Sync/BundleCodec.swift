@@ -16,7 +16,7 @@ struct BundleDocument: Codable, Equatable {
 struct BuiltBundle: Equatable {
     let bytes: Data
     let bundleHash: String
-    let entries: [BundleEntry]
+    let entryCount: Int
 }
 
 enum BundleCodecError: LocalizedError {
@@ -40,10 +40,12 @@ enum BundleCodecError: LocalizedError {
 }
 
 enum BundleCodec {
+    /// Scoped files under `localDataDir`, plus any under `fallbackDir` (the passthrough store,
+    /// laid out by the same relative paths) that the phone does not keep locally.
     static func listScopedFiles(
         localDataDir: URL,
         scopes: [SyncScopes.Scope] = SyncScopes.defaultScopes,
-        supplementalPaths: [String] = []
+        fallbackDir: URL? = nil
     ) throws -> [String] {
         var all = Set<String>()
         for scope in scopes {
@@ -59,8 +61,11 @@ enum BundleCodec {
                 }
             }
         }
-        for path in supplementalPaths where SyncScopes.isInScope(path, scopes: scopes) {
-            all.insert(path)
+        if let fallbackDir {
+            for path in try walkFiles(root: fallbackDir, base: fallbackDir)
+            where SyncScopes.isInScope(path, scopes: scopes) {
+                all.insert(path)
+            }
         }
         return all.sorted()
     }
@@ -77,19 +82,22 @@ enum BundleCodec {
     private static func readScopedFileData(
         localDataDir: URL,
         relativePath: String,
-        fallbackData: [String: Data]
+        fallbackDir: URL?
     ) throws -> Data {
         let url = LocalDataLayout.fileURL(in: localDataDir, relativePath: relativePath)
         if let data = try? LocalDataLayout.readRegularFileData(at: url) {
             return data
         }
-        if let data = fallbackData[relativePath] {
-            return data
+        if let fallbackDir {
+            let fallback = LocalDataLayout.fileURL(in: fallbackDir, relativePath: relativePath)
+            if let data = try? Data(contentsOf: fallback, options: .mappedIfSafe) {
+                return data
+            }
         }
         throw LocalDataLayoutError.unreadableFile(url.lastPathComponent)
     }
 
-    private static func walkFiles(root: URL, base: URL) throws -> [String] {
+    static func walkFiles(root: URL, base: URL) throws -> [String] {
         guard FileManager.default.fileExists(atPath: root.path) else { return [] }
         var out: [String] = []
         let enumerator = FileManager.default.enumerator(
@@ -109,19 +117,15 @@ enum BundleCodec {
     static func computeRevision(
         localDataDir: URL,
         scopes: [SyncScopes.Scope] = SyncScopes.defaultScopes,
-        fallbackData: [String: Data] = [:]
+        fallbackDir: URL? = nil
     ) throws -> String {
-        let files = try listScopedFiles(
-            localDataDir: localDataDir,
-            scopes: scopes,
-            supplementalPaths: Array(fallbackData.keys)
-        )
+        let files = try listScopedFiles(localDataDir: localDataDir, scopes: scopes, fallbackDir: fallbackDir)
         var hasher = SHA256()
         for rel in files {
             let data = try readScopedFileData(
                 localDataDir: localDataDir,
                 relativePath: rel,
-                fallbackData: fallbackData
+                fallbackDir: fallbackDir
             )
             hasher.update(data: Data(rel.utf8))
             hasher.update(data: Data([0]))
@@ -129,6 +133,34 @@ enum BundleCodec {
             hasher.update(data: Data([0]))
         }
         return hasher.finalize().hexString
+    }
+
+    /// Full and user-content revisions in one pass over the files, instead of reading
+    /// everything once per revision.
+    static func computeSyncRevisions(
+        localDataDir: URL,
+        fallbackDir: URL? = nil
+    ) throws -> (revision: String, contentRevision: String) {
+        let files = try listScopedFiles(
+            localDataDir: localDataDir,
+            scopes: SyncScopes.defaultScopes,
+            fallbackDir: fallbackDir
+        )
+        var full = SHA256()
+        var content = SHA256()
+        for rel in files {
+            let data = try readScopedFileData(
+                localDataDir: localDataDir,
+                relativePath: rel,
+                fallbackDir: fallbackDir
+            )
+            let isContent = SyncScopes.isInScope(rel, scopes: SyncScopes.userContentScopes)
+            for part in [Data(rel.utf8), Data([0]), data, Data([0])] {
+                full.update(data: part)
+                if isContent { content.update(data: part) }
+            }
+        }
+        return (full.finalize().hexString, content.finalize().hexString)
     }
 
     static func computeContentRevisionFromBundle(_ doc: BundleDocument) -> String {
@@ -160,39 +192,39 @@ enum BundleCodec {
         return maxMtime
     }
 
+    /// Streams each file through base64 and gzip, so the bundle is never held uncompressed:
+    /// peak memory is the compressed output plus one file.
     static func buildBundle(
         localDataDir: URL,
         scopes: [SyncScopes.Scope] = SyncScopes.defaultScopes,
-        passthroughData: [String: Data] = [:]
+        fallbackDir: URL? = nil
     ) throws -> BuiltBundle {
-        let files = try listScopedFiles(
-            localDataDir: localDataDir,
-            scopes: scopes,
-            supplementalPaths: Array(passthroughData.keys)
-        )
-        var entries: [BundleEntry] = []
-        for rel in files {
-            var data = try readScopedFileData(
-                localDataDir: localDataDir,
-                relativePath: rel,
-                fallbackData: passthroughData
-            )
-            if rel == "settings/settings.json" {
-                data = SettingsSecrets.redactSettingsJsonBytes(data)
+        let files = try listScopedFiles(localDataDir: localDataDir, scopes: scopes, fallbackDir: fallbackDir)
+        guard let gzip = GzipWriter() else { throw BundleCodecError.gzipFailed }
+        let encoder = JSONEncoder()
+        try gzip.write(Data("{\"version\":\(SyncScopes.bundleFormatVersion),\"entries\":[".utf8))
+        for (index, rel) in files.enumerated() {
+            try autoreleasepool {
+                var data = try readScopedFileData(
+                    localDataDir: localDataDir,
+                    relativePath: rel,
+                    fallbackDir: fallbackDir
+                )
+                if rel == "settings/settings.json" {
+                    data = SettingsSecrets.redactSettingsJsonBytes(data)
+                }
+                var entry = Data(index == 0 ? "{\"path\":".utf8 : ",{\"path\":".utf8)
+                entry.append(try encoder.encode(rel))
+                entry.append(Data(",\"contents\":\"".utf8))
+                try gzip.write(entry)
+                try gzip.write(data.base64EncodedData())
+                try gzip.write(Data("\",\"size\":\(data.count)}".utf8))
             }
-            entries.append(BundleEntry(
-                path: rel,
-                contents: data.base64EncodedString(),
-                size: data.count
-            ))
         }
-        let doc = BundleDocument(version: SyncScopes.bundleFormatVersion, entries: entries)
-        let json = try JSONEncoder().encode(doc)
-        guard let gzipped = gzipEncode(json) else {
-            throw BundleCodecError.gzipFailed
-        }
+        try gzip.write(Data("]}".utf8))
+        let gzipped = try gzip.finish()
         let bundleHash = SHA256.hash(data: gzipped).hexString
-        return BuiltBundle(bytes: gzipped, bundleHash: bundleHash, entries: entries)
+        return BuiltBundle(bytes: gzipped, bundleHash: bundleHash, entryCount: files.count)
     }
 
     static func parseBundleFromEntryMap(_ entryMap: [String: Data]) -> BundleDocument {
@@ -330,6 +362,68 @@ enum BundleCodec {
                 if have > 0 { output.append(buffer, count: have) }
             } while status != Z_STREAM_END
             return output
+        }
+    }
+}
+
+/// Incremental gzip (RFC 1952, readable by Node `gunzipSync` and Rust `flate2`).
+final class GzipWriter {
+    private var stream = z_stream()
+    private var output = Data()
+    private var buffer = [UInt8](repeating: 0, count: 65_536)
+    private var finished = false
+
+    init?() {
+        let status = deflateInit2_(
+            &stream,
+            Z_DEFAULT_COMPRESSION,
+            Z_DEFLATED,
+            MAX_WBITS + 16,
+            MAX_MEM_LEVEL,
+            Z_DEFAULT_STRATEGY,
+            ZLIB_VERSION,
+            Int32(MemoryLayout<z_stream>.size)
+        )
+        guard status == Z_OK else { return nil }
+    }
+
+    deinit {
+        deflateEnd(&stream)
+    }
+
+    func write(_ data: Data) throws {
+        guard !data.isEmpty else { return }
+        try run(data, flush: Z_NO_FLUSH)
+    }
+
+    func finish() throws -> Data {
+        guard !finished else { return output }
+        try run(Data(), flush: Z_FINISH)
+        finished = true
+        return output
+    }
+
+    private func run(_ data: Data, flush: Int32) throws {
+        try data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            stream.next_in = UnsafeMutablePointer<Bytef>(
+                mutating: raw.bindMemory(to: Bytef.self).baseAddress
+            )
+            stream.avail_in = uInt(raw.count)
+            var status: Int32
+            repeat {
+                let capacity = buffer.count
+                status = buffer.withUnsafeMutableBufferPointer { out -> Int32 in
+                    stream.next_out = out.baseAddress
+                    stream.avail_out = uInt(capacity)
+                    return deflate(&stream, flush)
+                }
+                guard status == Z_OK || status == Z_STREAM_END || status == Z_BUF_ERROR else {
+                    throw BundleCodecError.gzipFailed
+                }
+                let have = capacity - Int(stream.avail_out)
+                if have > 0 { output.append(buffer, count: have) }
+            } while stream.avail_out == 0 && status != Z_STREAM_END
+            stream.next_in = nil
         }
     }
 }

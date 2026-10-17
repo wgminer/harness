@@ -18,6 +18,8 @@ export interface AccountsSettingsTabProps {
   setApiKey: (value: string) => void;
   tavilyApiKey: string;
   setTavilyApiKey: (value: string) => void;
+  googleApiKey: string;
+  setGoogleApiKey: (value: string) => void;
   r2AccountId: string;
   setR2AccountId: (value: string) => void;
   r2Bucket: string;
@@ -39,6 +41,8 @@ export function AccountsSettingsTab({
   setApiKey,
   tavilyApiKey,
   setTavilyApiKey,
+  googleApiKey,
+  setGoogleApiKey,
   r2AccountId,
   setR2AccountId,
   r2Bucket,
@@ -198,6 +202,30 @@ export function AccountsSettingsTab({
               onChange={(e) => setTavilyApiKey(e.target.value)}
               onBlur={() => void persistSettings()}
               ariaLabel="Tavily API key"
+            />
+          </SettingsField>
+        </SettingsSubsection>
+
+        <SettingsSubsection
+          title="Google AI"
+          description={
+            <>
+              Optional, for image generation. Without a key, images use OpenAI. Get a key at{" "}
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer noopener">
+                aistudio.google.com
+              </a>
+              .
+            </>
+          }
+        >
+          <SettingsField label="API key" htmlFor="settings-google-key">
+            <SecretField
+              id="settings-google-key"
+              testId="settings-google-key"
+              value={googleApiKey}
+              onChange={(e) => setGoogleApiKey(e.target.value)}
+              onBlur={() => void persistSettings()}
+              ariaLabel="Google AI API key"
             />
           </SettingsField>
         </SettingsSubsection>

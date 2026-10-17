@@ -144,6 +144,11 @@ pub(super) fn parse_version_obj(obj: &serde_json::Map<String, serde_json::Value>
             .unwrap_or("png")
             .to_string(),
         created_at,
+        provider: obj
+            .get("provider")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string()),
     })
 }
 
@@ -212,6 +217,7 @@ pub(super) fn ensure_root_from_file_name(entry: &mut ImagesIndexEntry) -> bool {
         background: entry.background.clone(),
         output_format: entry.output_format.clone(),
         created_at: entry.updated_at.max(entry.created_at),
+        provider: None,
     });
     entry.active_version_id = id;
     apply_active_version_mirror(entry);

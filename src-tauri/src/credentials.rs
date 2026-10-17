@@ -13,6 +13,7 @@ pub const SERVICE: &str = "com.harness.credentials";
 pub const KEY_OPENAI_API_KEY: &str = "openai.apiKey";
 pub const KEY_TAVILY_API_KEY: &str = "search.tavilyApiKey";
 pub const KEY_R2_SECRET_ACCESS_KEY: &str = "r2.secretAccessKey";
+pub const KEY_GOOGLE_API_KEY: &str = "google.apiKey";
 pub const KEY_GOOGLE_CLIENT_ID: &str = "google.clientId";
 pub const KEY_GOOGLE_CLIENT_SECRET: &str = "google.clientSecret";
 pub const KEY_GMAIL_REFRESH_TOKEN: &str = "gmail.refreshToken";
@@ -23,6 +24,7 @@ pub enum CredentialKey {
     OpenAiApiKey,
     TavilyApiKey,
     R2SecretAccessKey,
+    GoogleApiKey,
     GoogleClientId,
     GoogleClientSecret,
     GmailRefreshToken,
@@ -35,6 +37,7 @@ impl CredentialKey {
             Self::OpenAiApiKey => KEY_OPENAI_API_KEY,
             Self::TavilyApiKey => KEY_TAVILY_API_KEY,
             Self::R2SecretAccessKey => KEY_R2_SECRET_ACCESS_KEY,
+            Self::GoogleApiKey => KEY_GOOGLE_API_KEY,
             Self::GoogleClientId => KEY_GOOGLE_CLIENT_ID,
             Self::GoogleClientSecret => KEY_GOOGLE_CLIENT_SECRET,
             Self::GmailRefreshToken => KEY_GMAIL_REFRESH_TOKEN,
@@ -47,6 +50,7 @@ impl CredentialKey {
             KEY_OPENAI_API_KEY => Some(Self::OpenAiApiKey),
             KEY_TAVILY_API_KEY => Some(Self::TavilyApiKey),
             KEY_R2_SECRET_ACCESS_KEY => Some(Self::R2SecretAccessKey),
+            KEY_GOOGLE_API_KEY => Some(Self::GoogleApiKey),
             KEY_GOOGLE_CLIENT_ID => Some(Self::GoogleClientId),
             KEY_GOOGLE_CLIENT_SECRET => Some(Self::GoogleClientSecret),
             KEY_GMAIL_REFRESH_TOKEN => Some(Self::GmailRefreshToken),
@@ -63,6 +67,8 @@ pub struct CredentialStatus {
     pub has_open_ai_api_key: bool,
     pub has_tavily_api_key: bool,
     pub has_r2_secret_access_key: bool,
+    /// Includes a key supplied through the environment.
+    pub has_google_api_key: bool,
     pub encryption_available: bool,
 }
 
@@ -75,6 +81,8 @@ pub struct SettingsSecrets {
     pub tavily_api_key: String,
     #[serde(rename = "r2SecretAccessKey")]
     pub r2_secret_access_key: String,
+    #[serde(rename = "googleApiKey")]
+    pub google_api_key: String,
 }
 
 fn entry_for(key: CredentialKey) -> Result<Entry, keyring::Error> {
@@ -126,6 +134,7 @@ fn migrate_keyring_to_file_once() {
             CredentialKey::OpenAiApiKey,
             CredentialKey::TavilyApiKey,
             CredentialKey::R2SecretAccessKey,
+            CredentialKey::GoogleApiKey,
             CredentialKey::GoogleClientId,
             CredentialKey::GoogleClientSecret,
             CredentialKey::GmailRefreshToken,
@@ -244,6 +253,7 @@ pub async fn get_secrets_for_settings() -> SettingsSecrets {
         openai_api_key: get_credential(CredentialKey::OpenAiApiKey).unwrap_or_default(),
         tavily_api_key: get_credential(CredentialKey::TavilyApiKey).unwrap_or_default(),
         r2_secret_access_key: get_credential(CredentialKey::R2SecretAccessKey).unwrap_or_default(),
+        google_api_key: get_credential(CredentialKey::GoogleApiKey).unwrap_or_default(),
     }
 }
 
@@ -253,6 +263,7 @@ pub async fn get_credential_status() -> CredentialStatus {
         has_open_ai_api_key: !secrets.openai_api_key.trim().is_empty(),
         has_tavily_api_key: !secrets.tavily_api_key.trim().is_empty(),
         has_r2_secret_access_key: !secrets.r2_secret_access_key.trim().is_empty(),
+        has_google_api_key: !resolve_google_api_key().await.trim().is_empty(),
         encryption_available: encryption_available(),
     }
 }
@@ -303,6 +314,34 @@ pub async fn resolve_tavily_api_key() -> String {
     get_credential(CredentialKey::TavilyApiKey).unwrap_or_default()
 }
 
+/// Dev builds also read `GOOGLE_API_KEY` from the repo's `.env.local`.
+#[cfg(debug_assertions)]
+fn google_api_key_from_env_local() -> Option<String> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env.local");
+    let raw = fs::read_to_string(path).ok()?;
+    raw.lines()
+        .find_map(|line| line.trim().strip_prefix("GOOGLE_API_KEY="))
+        .map(|value| value.trim().trim_matches(['"', '\'']).to_string())
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg(not(debug_assertions))]
+fn google_api_key_from_env_local() -> Option<String> {
+    None
+}
+
+/// Saved key first, then the `GOOGLE_API_KEY` environment variable.
+pub async fn resolve_google_api_key() -> String {
+    get_credential(CredentialKey::GoogleApiKey)
+        .or_else(|| {
+            std::env::var("GOOGLE_API_KEY")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
+        .or_else(google_api_key_from_env_local)
+        .unwrap_or_default()
+}
+
 pub async fn resolve_r2_secret_access_key() -> String {
     get_credential(CredentialKey::R2SecretAccessKey).unwrap_or_default()
 }
@@ -317,6 +356,7 @@ mod tests {
             openai_api_key: "sk-test".into(),
             tavily_api_key: "tvly-test".into(),
             r2_secret_access_key: "r2-test".into(),
+            google_api_key: "g-test".into(),
         };
         let json = serde_json::to_value(secrets).expect("serialize");
         assert_eq!(json.get("openaiApiKey").and_then(|v| v.as_str()), Some("sk-test"));

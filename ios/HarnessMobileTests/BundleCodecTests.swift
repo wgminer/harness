@@ -108,11 +108,94 @@ final class BundleCodecTests: XCTestCase {
                 ),
             ]
         )
-        let fallback = BundleCodec.entryDataMap(from: doc)
+        let passthrough = PassthroughStore(localDataDir: localDataDir)
+        try passthrough.replace(with: doc, bundleHash: "hash-1")
 
         let withoutNote = try BundleCodec.computeRevision(localDataDir: localDataDir)
-        let withNote = try BundleCodec.computeRevision(localDataDir: localDataDir, fallbackData: fallback)
+        let withNote = try BundleCodec.computeRevision(
+            localDataDir: localDataDir,
+            fallbackDir: passthrough.filesDir
+        )
         XCTAssertNotEqual(withoutNote, withNote)
+
+        let both = try BundleCodec.computeSyncRevisions(
+            localDataDir: localDataDir,
+            fallbackDir: passthrough.filesDir
+        )
+        XCTAssertEqual(both.revision, withNote)
+        XCTAssertEqual(
+            both.contentRevision,
+            try BundleCodec.computeRevision(
+                localDataDir: localDataDir,
+                scopes: SyncScopes.userContentScopes,
+                fallbackDir: passthrough.filesDir
+            )
+        )
+    }
+
+    func testPassthroughStoreHoldsOnlyRelayedFilesAndRoundTripsThroughPush() throws {
+        try write("app-state/conversations.json", contents: "{\"a\":1}")
+        try write("settings/settings.json", contents: "{\"version\":1}")
+
+        let image = Data((0 ..< 5000).map { UInt8($0 % 251) })
+        let note = Data("# Note \"quoted\"\nhello".utf8)
+        let doc = BundleDocument(
+            version: SyncScopes.bundleFormatVersion,
+            entries: [
+                BundleEntry(
+                    path: "app-state/conversations.json",
+                    contents: Data("{\"a\":1}".utf8).base64EncodedString(),
+                    size: 7
+                ),
+                BundleEntry(path: "app-state/images/pic.png", contents: image.base64EncodedString(), size: image.count),
+                BundleEntry(
+                    path: "app-state/chat-attachments/conv_1/desktop.jpg",
+                    contents: image.base64EncodedString(),
+                    size: image.count
+                ),
+                BundleEntry(path: "app-state/notes/trip.md", contents: note.base64EncodedString(), size: note.count),
+            ]
+        )
+        let passthrough = PassthroughStore(localDataDir: localDataDir)
+        XCTAssertNil(passthrough.bundleHash())
+        try passthrough.replace(with: doc, bundleHash: "hash-1")
+        XCTAssertEqual(passthrough.bundleHash(), "hash-1")
+        XCTAssertTrue(passthrough.contains("app-state/images/pic.png"))
+        XCTAssertTrue(passthrough.contains("app-state/chat-attachments/conv_1/desktop.jpg"))
+        XCTAssertFalse(passthrough.contains("app-state/conversations.json"))
+
+        // A pull keeps relayed files out of local-data.
+        try BundleCodec.extractBundle(localDataDir: localDataDir, doc: doc)
+        for rel in ["app-state/images/pic.png", "app-state/chat-attachments/conv_1/desktop.jpg"] {
+            XCTAssertFalse(
+                FileManager.default.fileExists(atPath: LocalDataLayout.fileURL(in: localDataDir, relativePath: rel).path)
+            )
+        }
+
+        // A push hands every one of them back, byte for byte.
+        let built = try BundleCodec.buildBundle(localDataDir: localDataDir, fallbackDir: passthrough.filesDir)
+        XCTAssertEqual(BundleCodec.hashBundleBytes(built.bytes), built.bundleHash)
+        let pushed = BundleCodec.entryDataMap(from: try BundleCodec.parseBundle(built.bytes))
+        XCTAssertEqual(built.entryCount, pushed.count)
+        XCTAssertEqual(pushed["app-state/images/pic.png"], image)
+        XCTAssertEqual(pushed["app-state/chat-attachments/conv_1/desktop.jpg"], image)
+        XCTAssertEqual(pushed["app-state/notes/trip.md"], note)
+        XCTAssertEqual(pushed["app-state/conversations.json"], Data("{\"a\":1}".utf8))
+
+        // A missing relayed file invalidates the store, which forces a fresh download.
+        try FileManager.default.removeItem(
+            at: LocalDataLayout.fileURL(in: passthrough.filesDir, relativePath: "app-state/images/pic.png")
+        )
+        XCTAssertNil(passthrough.bundleHash())
+    }
+
+    func testAttachmentsCreatedOnThisPhoneStayLocal() throws {
+        let rel = "app-state/chat-attachments/conv_\(UUID().uuidString)/mine.jpg"
+        XCTAssertFalse(SyncScopes.materializesLocally(rel))
+        XCTAssertTrue(SyncScopes.isPassthroughBlob(rel))
+        LocalAttachmentIndex.insert(rel)
+        XCTAssertTrue(SyncScopes.materializesLocally(rel))
+        XCTAssertFalse(SyncScopes.isPassthroughBlob(rel))
     }
 
     func testExtractBundleSkipsDesktopNotesLocally() throws {

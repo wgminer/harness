@@ -235,16 +235,24 @@
   flex-shrink: 0;
 }
 
-.notes-surface__toolbar {
+/* One header row: linked conversations on the left, dictation + note actions on the right. */
+.notes-surface__header {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-2) var(--space-1) var(--space-3);
+}
+
+/* Without links the header takes no space and floats over the editor's top padding. */
+.notes-surface__header--floating {
   position: absolute;
   top: 0;
   right: 0;
-  z-index: 3;
-  margin: 0;
-  padding: var(--space-2);
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
+  left: 0;
+  padding-bottom: 0;
   pointer-events: none;
 }
 
@@ -253,14 +261,19 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  margin-left: auto;
+  flex-shrink: 0;
   pointer-events: auto;
 }
 
 .notes-surface__voice-timer,
 .notes-surface__voice-status {
+  height: var(--space-6);
+  padding: 0;
   margin-right: var(--space-1);
   font-size: var(--font-size-caption);
-  line-height: var(--line-height-caption);
+  line-height: var(--space-6);
+  font-variant-numeric: tabular-nums;
   color: var(--fg-muted);
   white-space: nowrap;
 }
@@ -729,9 +742,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  flex: 1;
   min-width: 0;
-  /* Leave room for the floating toolbar on the right. */
-  padding: var(--space-2) 160px var(--space-1) var(--space-3);
   font-size: var(--font-size-caption);
   color: var(--fg-muted);
 }

@@ -32,11 +32,27 @@ enum SyncScopes {
     /// Chat MVP push scope: app-state + settings (desktop-compatible bundle).
     static let mobilePushScopes: [Scope] = defaultScopes
 
-    /// Desktop note files synced in the bundle but not kept on device (chat-only MVP).
+    /// Desktop files that ride in the bundle but are never kept in `local-data` on the phone:
+    /// note bodies, the image library, and chat attachments this phone did not create.
+    /// They live in `PassthroughStore` only so a push can hand them back unchanged.
     static func materializesLocally(_ relPath: String) -> Bool {
         if relPath == "app-state/writing.md" { return false }
         if relPath.hasPrefix("app-state/notes/") && relPath.hasSuffix(".md") { return false }
+        if relPath.hasPrefix("app-state/images/") { return false }
+        if relPath.hasPrefix(chatAttachmentsPrefix) {
+            return LocalAttachmentIndex.contains(relPath)
+        }
         return true
+    }
+
+    static let chatAttachmentsPrefix = "app-state/chat-attachments/"
+
+    /// Binary files the phone only relays: never loaded for a merge, only streamed into a push.
+    static func isPassthroughBlob(_ relPath: String) -> Bool {
+        guard relPath.hasPrefix("app-state/images/") || relPath.hasPrefix(chatAttachmentsPrefix) else {
+            return false
+        }
+        return !materializesLocally(relPath)
     }
 
     static func isInScope(_ relPath: String, scopes: [Scope]) -> Bool {

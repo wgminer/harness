@@ -7,13 +7,30 @@ import {
   formatImageSize,
   imageRenderModeFromSettings,
   parseImageSize,
+  resolveImageProvider,
   settingsForRenderMode,
   sizeFromLegacyAspect,
+  transparencyBlockedReason,
   validateImageSize,
 } from "./imageOptions";
 import { getDisplayImageTitle, titleFromImagePrompt } from "./images";
 
 describe("imageOptions", () => {
+  it("defaults to Google and falls back to a provider that has a key", () => {
+    const both = { google: true, openai: true };
+    expect(resolveImageProvider(null, both)).toBe("google");
+    expect(resolveImageProvider("openai", both)).toBe("openai");
+    expect(resolveImageProvider("google", { google: false, openai: true })).toBe("openai");
+    expect(resolveImageProvider(null, { google: false, openai: false })).toBeNull();
+  });
+
+  it("explains why transparency is unavailable", () => {
+    expect(transparencyBlockedReason("openai", "png")).toBeNull();
+    expect(transparencyBlockedReason(null, "webp")).toBeNull();
+    expect(transparencyBlockedReason("google", "png")).toContain("Google");
+    expect(transparencyBlockedReason("openai", "jpeg")).toContain("JPEG");
+  });
+
   it("maps legacy aspect presets to sizes", () => {
     expect(sizeFromLegacyAspect("square")).toBe("1024x1024");
     expect(sizeFromLegacyAspect("landscape")).toBe("1536x1024");

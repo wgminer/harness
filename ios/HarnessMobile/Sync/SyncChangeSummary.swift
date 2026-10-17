@@ -162,6 +162,10 @@ enum PendingSyncTracker {
         return try? JSONDecoder().decode([String: ConversationSnapshot].self, from: data)
     }
 
+    static var hasBaseline: Bool {
+        UserDefaults.standard.data(forKey: baselineKey) != nil
+    }
+
     static func clearBaseline() {
         UserDefaults.standard.removeObject(forKey: baselineKey)
     }

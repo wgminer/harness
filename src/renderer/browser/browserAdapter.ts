@@ -83,6 +83,7 @@ export function createBrowserAdapter(): HarnessAPI {
         hasOpenAIApiKey: store.secrets().openaiApiKey.trim().length > 0,
         hasTavilyApiKey: store.secrets().tavilyApiKey.trim().length > 0,
         hasR2SecretAccessKey: false,
+        hasGoogleApiKey: false,
         encryptionAvailable: false,
       }),
       getSecretsForSettings: async () => ({ ...store.secrets() }),
@@ -91,6 +92,9 @@ export function createBrowserAdapter(): HarnessAPI {
       },
       setTavilyApiKey: async (value) => {
         store.setSecret("tavilyApiKey", value.trim());
+      },
+      setGoogleApiKey: async (value) => {
+        store.setSecret("googleApiKey", value.trim());
       },
       setR2SecretAccessKey: async () => {},
     },

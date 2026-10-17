@@ -5,6 +5,7 @@
  */
 import { bootApp } from "../bootApp";
 import { createDemoAdapter } from "./demoAdapter";
+import { mountDemoDesktop } from "./demoDesktop";
 import { createDemoRuntime, type DemoPoint } from "./demoRuntime";
 import { seedDemoStore } from "./demoSeed";
 import { DEMO_SCENES, findScene } from "./scenes";
@@ -36,8 +37,9 @@ const recording = params.has("record");
 
 seedDemoStore(scene.session);
 const backend = createDemoAdapter();
+const desktop = scene.desktop ? mountDemoDesktop(scene.desktop) : null;
 bootApp(backend.harness, { web: true });
-const runtime = createDemoRuntime(backend);
+const runtime = createDemoRuntime(backend, desktop);
 
 const animationStart = new WeakMap<Animation, number>();
 let started = false;

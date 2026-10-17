@@ -23,6 +23,12 @@ body::after {
   visibility: hidden;
 }
 
+/* Exploration jigs are dev chrome too. */
+.rim-jig,
+.rim-jig-tab {
+  display: none;
+}
+
 .demo-cursor {
   position: fixed;
   top: 0;

@@ -75,6 +75,7 @@ const SAVED_TOAST_VISIBLE_MS = 3000;
 type PersistedFormState = {
   apiKey: string;
   tavilyApiKey: string;
+  googleApiKey: string;
   r2SecretAccessKey: string;
   autoSend: boolean;
   globalFnHotkey: boolean;
@@ -251,6 +252,7 @@ export function SettingsView({
     initialNonSecret?.selectionImageLookup ?? D.chat!.selectionImageLookup,
   );
   const [tavilyApiKey, setTavilyApiKey] = useState(initialSecrets?.tavilyApiKey ?? "");
+  const [googleApiKey, setGoogleApiKey] = useState(initialSecrets?.googleApiKey ?? "");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [r2AccountId, setR2AccountId] = useState(initialNonSecret?.r2AccountId ?? D.sync!.accountId);
   const [r2Bucket, setR2Bucket] = useState(initialNonSecret?.r2Bucket ?? D.sync!.bucket);
@@ -294,6 +296,7 @@ export function SettingsView({
     (overrides?: Partial<PersistedFormState>): PersistedFormState => ({
       apiKey,
       tavilyApiKey,
+      googleApiKey,
       r2SecretAccessKey,
       autoSend,
       globalFnHotkey,
@@ -315,6 +318,7 @@ export function SettingsView({
     [
       apiKey,
       tavilyApiKey,
+      googleApiKey,
       r2SecretAccessKey,
       autoSend,
       globalFnHotkey,
@@ -360,12 +364,14 @@ export function SettingsView({
     skipAutosaveRef.current = true;
     setApiKey(secrets.openaiApiKey);
     setTavilyApiKey(secrets.tavilyApiKey);
+    setGoogleApiKey(secrets.googleApiKey);
     setR2SecretAccessKey(secrets.r2SecretAccessKey);
     setCachedHasOpenAIApiKey(secrets.openaiApiKey.trim().length > 0);
     lastPersistedRef.current = serializeFormState(
       getFormSnapshotRef.current({
         apiKey: secrets.openaiApiKey,
         tavilyApiKey: secrets.tavilyApiKey,
+        googleApiKey: secrets.googleApiKey,
         r2SecretAccessKey: secrets.r2SecretAccessKey,
       }),
     );
@@ -393,6 +399,7 @@ export function SettingsView({
       const hydrated: PersistedFormState = {
         apiKey: secrets?.openaiApiKey ?? "",
         tavilyApiKey: secrets?.tavilyApiKey ?? "",
+        googleApiKey: secrets?.googleApiKey ?? "",
         r2SecretAccessKey: secrets?.r2SecretAccessKey ?? "",
         autoSend: nonSecret.autoSend,
         globalFnHotkey: nonSecret.globalFnHotkey,
@@ -413,6 +420,7 @@ export function SettingsView({
       if (secrets) {
         setApiKey(hydrated.apiKey);
         setTavilyApiKey(hydrated.tavilyApiKey);
+        setGoogleApiKey(hydrated.googleApiKey);
         setR2SecretAccessKey(hydrated.r2SecretAccessKey);
         secretsLoadedRef.current = true;
         setSecretsLoaded(true);
@@ -573,6 +581,9 @@ export function SettingsView({
       if (next.tavilyApiKey !== (prev.tavilyApiKey ?? "")) {
         await window.harness.credentials.setTavilyApiKey(next.tavilyApiKey.trim());
       }
+      if (next.googleApiKey !== (prev.googleApiKey ?? "")) {
+        await window.harness.credentials.setGoogleApiKey(next.googleApiKey.trim());
+      }
       if (next.r2SecretAccessKey !== (prev.r2SecretAccessKey ?? "")) {
         await window.harness.credentials.setR2SecretAccessKey(next.r2SecretAccessKey.trim());
       }
@@ -615,6 +626,7 @@ export function SettingsView({
         setCachedSecrets({
           openaiApiKey: next.apiKey,
           tavilyApiKey: next.tavilyApiKey,
+          googleApiKey: next.googleApiKey,
           r2SecretAccessKey: next.r2SecretAccessKey,
         });
       }
@@ -671,7 +683,7 @@ export function SettingsView({
     }, SECRETS_SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [apiKey, tavilyApiKey, r2SecretAccessKey, persistSettings]);
+  }, [apiKey, tavilyApiKey, googleApiKey, r2SecretAccessKey, persistSettings]);
 
   useEffect(() => {
     if (!settingsHydratedRef.current) return;
@@ -944,6 +956,8 @@ export function SettingsView({
               setApiKey={setApiKey}
               tavilyApiKey={tavilyApiKey}
               setTavilyApiKey={setTavilyApiKey}
+              googleApiKey={googleApiKey}
+              setGoogleApiKey={setGoogleApiKey}
               r2AccountId={r2AccountId}
               setR2AccountId={setR2AccountId}
               r2Bucket={r2Bucket}

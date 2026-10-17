@@ -112,13 +112,14 @@ a:focus-visible {
 
 .post__header {
   margin-bottom: 2rem;
+  text-align: center;
 }
 
+/* The bare mark in white: resources/mark/draft-horse.svg, cropped to the drawing. */
 .post__icon {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 1.25rem;
-  border-radius: 11px;
+  width: 88px;
+  height: auto;
+  margin: 0 auto 1.25rem;
 }
 
 .post h1 {

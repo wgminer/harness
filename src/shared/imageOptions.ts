@@ -1,9 +1,47 @@
 import type {
   ImageBackground,
   ImageOutputFormat,
+  ImageProvider,
   ImageQuality,
   ImageSize,
 } from "./images";
+
+/** Google first: it is the default whenever it has a key. */
+export const IMAGE_PROVIDER_OPTIONS: {
+  value: ImageProvider;
+  label: string;
+  /** One line on what choosing this model changes. */
+  note: string;
+  supportsTransparency: boolean;
+}[] = [
+  {
+    value: "google",
+    label: "Google",
+    note: "Follows edits closely. Opaque backgrounds only.",
+    supportsTransparency: false,
+  },
+  {
+    value: "openai",
+    label: "OpenAI",
+    note: "Supports transparent backgrounds.",
+    supportsTransparency: true,
+  },
+];
+
+export type ImageProviderAvailability = Record<ImageProvider, boolean>;
+
+/** The chosen provider when it has a key, otherwise the first one that does. */
+export function resolveImageProvider(
+  choice: ImageProvider | null,
+  available: ImageProviderAvailability,
+): ImageProvider | null {
+  if (choice && available[choice]) return choice;
+  return IMAGE_PROVIDER_OPTIONS.find((option) => available[option.value])?.value ?? null;
+}
+
+export function imageProviderLabel(provider: ImageProvider | null | undefined): string | null {
+  return IMAGE_PROVIDER_OPTIONS.find((option) => option.value === provider)?.label ?? null;
+}
 
 /** User-facing quality mode — maps to API quality only. */
 export type ImageRenderMode = "draft" | "final";
@@ -230,4 +268,17 @@ export function backgroundAllowedForFormat(
 ): ImageBackground {
   if (format === "jpeg" && background === "transparent") return "opaque";
   return background;
+}
+
+/** Why a transparent background is unavailable for these settings, or null when it is. */
+export function transparencyBlockedReason(
+  provider: ImageProvider | null,
+  format: ImageOutputFormat,
+): string | null {
+  const option = IMAGE_PROVIDER_OPTIONS.find((o) => o.value === provider);
+  if (option && !option.supportsTransparency) {
+    return `${option.label} has no transparent output. Switch the model to use it.`;
+  }
+  if (format === "jpeg") return "JPEG has no transparency. Pick PNG or WebP.";
+  return null;
 }

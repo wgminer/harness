@@ -7,6 +7,9 @@ export type ImageVersionKind = "generate" | "edit" | "finalize";
 /** API `size` string: `"auto"` or `"WIDTHxHEIGHT"`. */
 export type ImageSize = string;
 
+/** Which service renders an image. */
+export type ImageProvider = "google" | "openai";
+
 export interface ImageVersion {
   id: string;
   parentId: string | null;
@@ -22,6 +25,8 @@ export interface ImageVersion {
   background: ImageBackground;
   outputFormat: ImageOutputFormat;
   createdAt: number;
+  /** Absent for stubs and versions made before the provider switch. */
+  provider?: ImageProvider;
 }
 
 export interface GeneratedImage {
@@ -68,6 +73,8 @@ export interface ImageGenerateInput {
    * Marker edits: `[annotatedCanvas, sourceImage]` before the model call.
    */
   extraImageDataUrls?: string[];
+  /** Omit to use the default: Google when it has a key, else OpenAI. */
+  provider?: ImageProvider;
 }
 
 const UNTITLED_IMAGE_TITLE = "Untitled image";

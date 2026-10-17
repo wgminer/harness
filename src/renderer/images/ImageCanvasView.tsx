@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ChevronRight,
   ClipboardCopy,
   FolderOpen,
   Image as ImageIcon,
@@ -10,19 +11,23 @@ import {
   X,
 } from "lucide-react";
 import {
-  IMAGE_BACKGROUND_OPTIONS,
   IMAGE_DEFAULTS,
   IMAGE_OUTPUT_FORMAT_OPTIONS,
+  IMAGE_PROVIDER_OPTIONS,
   IMAGE_RENDER_MODE_OPTIONS,
   IMAGE_SHAPE_OPTIONS,
   backgroundAllowedForFormat,
   formatImageSize,
+  imageProviderLabel,
   imageRenderModeFromSettings,
   parseImageSize,
   qualityForRenderMode,
+  resolveImageProvider,
   shapeFromSize,
   sizeForShape,
+  transparencyBlockedReason,
   validateImageSize,
+  type ImageProviderAvailability,
   type ImageRenderMode,
   type ImageShape,
 } from "../../shared/imageOptions";
@@ -31,6 +36,7 @@ import type {
   ImageBackground,
   ImageOperation,
   ImageOutputFormat,
+  ImageProvider,
   ImageSize,
   ImageVersion,
 } from "../../shared/images";
@@ -108,6 +114,25 @@ function stripMarkerPrefix(prompt: string): string {
   return prompt.trim();
 }
 
+const PROVIDER_STORAGE_KEY = "harness.images.provider";
+
+function loadProviderChoice(): ImageProvider | null {
+  try {
+    const stored = window.localStorage.getItem(PROVIDER_STORAGE_KEY);
+    return stored === "google" || stored === "openai" ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveProviderChoice(provider: ImageProvider) {
+  try {
+    window.localStorage.setItem(PROVIDER_STORAGE_KEY, provider);
+  } catch {
+    // Storage unavailable — the choice still holds for this view.
+  }
+}
+
 function versionHasMarker(version: ImageVersion): boolean {
   return version.prompt.startsWith(IMAGE_MARKER_PROMPT_PREFIX);
 }
@@ -148,6 +173,8 @@ export function ImageCanvasView({
   const [versionUrls, setVersionUrls] = useState<Map<string, string>>(new Map());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [stubImages, setStubImages] = useState(false);
+  const [providerKeys, setProviderKeys] = useState<ImageProviderAvailability | null>(null);
+  const [providerChoice, setProviderChoice] = useState<ImageProvider | null>(loadProviderChoice);
   const [marking, setMarking] = useState(false);
   const [markerStrokes, setMarkerStrokes] = useState<MarkerStroke[]>([]);
   const [peekParent, setPeekParent] = useState(false);
@@ -167,6 +194,10 @@ export function ImageCanvasView({
     let cancelled = false;
     void window.harness.env.isStubImages().then((on) => {
       if (!cancelled) setStubImages(on);
+    });
+    void window.harness.credentials.getStatus().then((keys) => {
+      if (cancelled) return;
+      setProviderKeys({ google: keys.hasGoogleApiKey, openai: keys.hasOpenAIApiKey });
     });
     return () => {
       cancelled = true;
@@ -350,7 +381,10 @@ export function ImageCanvasView({
   }, [marking, markerStrokes, previewUrl, peekParent]);
 
   const effectiveSize = shape === "custom" ? formatImageSize(customWidth, customHeight) : size;
-  const effectiveBackground = backgroundAllowedForFormat(outputFormat, background);
+  const provider =
+    stubImages || !providerKeys ? null : resolveImageProvider(providerChoice, providerKeys);
+  const transparencyBlocked = transparencyBlockedReason(provider, outputFormat);
+  const effectiveBackground = transparencyBlocked ? "opaque" : background;
   const sizeError = validateImageSize(effectiveSize);
   const orderedVersions = image ? orderedImageVersions(image) : [];
   const activeParentId = image ? parentVersionId(image, image.activeVersionId) : null;
@@ -421,6 +455,7 @@ export function ImageCanvasView({
         background: effectiveBackground,
         outputFormat,
         extraImageDataUrls,
+        provider: provider ?? undefined,
       });
       applyImageState(result);
       if (result.hasFile) {
@@ -804,6 +839,7 @@ export function ImageCanvasView({
                 const hoverTitle = [
                   displayVersionLabel(image, version.id),
                   parentLabel ? `from ${parentLabel}` : null,
+                  imageProviderLabel(version.provider),
                   version.prompt ? promptSnippet(version.prompt, 80) : null,
                   formatRelativeTime(version.createdAt),
                 ]
@@ -866,7 +902,7 @@ export function ImageCanvasView({
         <div className="image-canvas__panel-body">
           {stubImages ? (
             <p className="image-canvas__stub-banner" role="status">
-              Stub images on — colored PNGs, no OpenAI. Use the filmstrip to browse v1, v2, … and
+              Stub images on — colored PNGs, no provider call. Use the filmstrip to browse v1, v2, … and
               the marker tool to highlight edit regions.
             </p>
           ) : null}
@@ -876,6 +912,7 @@ export function ImageCanvasView({
                 const versionPrompt = stripMarkerPrefix(version.prompt);
                 const snippet = promptSnippet(versionPrompt);
                 const parentId = version.parentId ?? null;
+                const madeWith = imageProviderLabel(version.provider);
                 const isActive = version.id === image.activeVersionId;
                 return (
                   <li
@@ -899,6 +936,12 @@ export function ImageCanvasView({
                           <span>from {displayVersionLabel(image, parentId)}</span>
                         </>
                       ) : null}
+                      {madeWith ? (
+                        <>
+                          <span aria-hidden> · </span>
+                          <span>{madeWith}</span>
+                        </>
+                      ) : null}
                       {snippet ? (
                         <>
                           <span aria-hidden> · </span>
@@ -914,21 +957,36 @@ export function ImageCanvasView({
             </ul>
           ) : null}
 
-          <div className="image-canvas__option-group">
-            <span className="image-canvas__label">Quality</span>
-            <div className="image-canvas__segmented" role="group" aria-label="Quality">
-              {IMAGE_RENDER_MODE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`image-canvas__segment${mode === option.value ? " image-canvas__segment--active" : ""}`}
-                  onClick={() => setMode(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
+          {providerKeys && !stubImages ? (
+            <div className="image-canvas__option-group">
+              <span className="image-canvas__label">Model</span>
+              <div className="image-canvas__segmented" role="group" aria-label="Model">
+                {IMAGE_PROVIDER_OPTIONS.map((option) => {
+                  const missingKey = !providerKeys[option.value];
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`image-canvas__segment${provider === option.value ? " image-canvas__segment--active" : ""}`}
+                      disabled={missingKey}
+                      aria-pressed={provider === option.value}
+                      title={missingKey ? `Add a ${option.label} key in Settings` : undefined}
+                      onClick={() => {
+                        setProviderChoice(option.value);
+                        saveProviderChoice(option.value);
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="image-canvas__hint">
+                {IMAGE_PROVIDER_OPTIONS.find((option) => option.value === provider)?.note ??
+                  "Add a Google AI or OpenAI key in Settings, under Accounts."}
+              </p>
             </div>
-          </div>
+          ) : null}
 
           <div className="image-canvas__option-group">
             <span className="image-canvas__label">Shape</span>
@@ -991,17 +1049,14 @@ export function ImageCanvasView({
           {sizeError ? <p className="image-canvas__error">{sizeError}</p> : null}
 
           <div className="image-canvas__option-group">
-            <span className="image-canvas__label">File type</span>
-            <div className="image-canvas__segmented" role="group" aria-label="File type">
-              {IMAGE_OUTPUT_FORMAT_OPTIONS.map((option) => (
+            <span className="image-canvas__label">Quality</span>
+            <div className="image-canvas__segmented" role="group" aria-label="Quality">
+              {IMAGE_RENDER_MODE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
-                  className={`image-canvas__segment${outputFormat === option.value ? " image-canvas__segment--active" : ""}`}
-                  onClick={() => {
-                    setOutputFormat(option.value);
-                    setBackground(backgroundAllowedForFormat(option.value, background));
-                  }}
+                  className={`image-canvas__segment${mode === option.value ? " image-canvas__segment--active" : ""}`}
+                  onClick={() => setMode(option.value)}
                 >
                   {option.label}
                 </button>
@@ -1009,27 +1064,46 @@ export function ImageCanvasView({
             </div>
           </div>
 
-          <div className="image-canvas__option-group">
-            <span className="image-canvas__label">Transparency</span>
-            <div className="image-canvas__segmented" role="group" aria-label="Transparency">
-              {IMAGE_BACKGROUND_OPTIONS.map((option) => {
-                const disabled = option.value === "transparent" && outputFormat === "jpeg";
-                return (
+          <details className="image-canvas__output">
+            <summary className="image-canvas__output-summary">
+              <ChevronRight size={12} className="image-canvas__output-chevron" aria-hidden />
+              <span className="image-canvas__label">Output</span>
+              <span className="image-canvas__output-value">
+                {IMAGE_OUTPUT_FORMAT_OPTIONS.find((option) => option.value === outputFormat)?.label}
+                {effectiveBackground === "transparent" ? ", transparent" : ""}
+              </span>
+            </summary>
+            <div className="image-canvas__output-body">
+              <div className="image-canvas__segmented" role="group" aria-label="File type">
+                {IMAGE_OUTPUT_FORMAT_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
-                    className={`image-canvas__segment${effectiveBackground === option.value ? " image-canvas__segment--active" : ""}`}
-                    disabled={disabled}
-                    title={disabled ? "JPEG does not support transparency" : undefined}
-                    onClick={() => setBackground(option.value)}
+                    className={`image-canvas__segment${outputFormat === option.value ? " image-canvas__segment--active" : ""}`}
+                    aria-pressed={outputFormat === option.value}
+                    onClick={() => setOutputFormat(option.value)}
                   >
                     {option.label}
                   </button>
-                );
-              })}
+                ))}
+              </div>
+              <label className="image-canvas__check">
+                <input
+                  type="checkbox"
+                  checked={effectiveBackground === "transparent"}
+                  disabled={Boolean(transparencyBlocked)}
+                  onChange={(e) => setBackground(e.target.checked ? "transparent" : "opaque")}
+                />
+                Transparent background
+              </label>
+              {transparencyBlocked ? (
+                <p className="image-canvas__hint">{transparencyBlocked}</p>
+              ) : null}
             </div>
-          </div>
+          </details>
+        </div>
 
+        <div className="image-canvas__panel-footer">
           <div className="image-canvas__compose">
             <label className="image-canvas__field">
               <span className="image-canvas__label">
@@ -1049,7 +1123,7 @@ export function ImageCanvasView({
                     void generate();
                   }
                 }}
-                rows={5}
+                rows={3}
                 placeholder={hasImage ? "Describe changes…" : "Describe the image to generate"}
               />
             </label>

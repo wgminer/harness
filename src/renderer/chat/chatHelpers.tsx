@@ -5,7 +5,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
-import { Check, Copy, SquarePen } from "lucide-react";
+import { Check, Copy, StickyNote } from "lucide-react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -22,6 +22,7 @@ import { isEditableTextPath } from "../../shared/files";
 import { stripLayoutDirectives } from "../../shared/layoutDirectives";
 import { stripQaOptions } from "../../shared/qaOptions";
 import { scheduleCopyFeedbackClear, useCopyFeedback } from "../hooks/useCopyFeedback";
+import toolLabelsContract from "../../../resources/contracts/toolLabels.json";
 
 export type { MemorySearchHit };
 export { memorySearchHitsFromPayload };
@@ -288,7 +289,7 @@ function CodeBlock({
             title={justSaved ? "Open saved note" : "Save as note"}
             aria-label={justSaved ? "Open saved note" : "Save code as note"}
           >
-            {justSaved ? <Check size={12} /> : <SquarePen size={12} />}
+            {justSaved ? <Check size={12} /> : <StickyNote size={12} />}
           </button>
         ) : null}
         <button
@@ -447,7 +448,7 @@ export function summarizeToolCalls(calls: ToolCallDisplay[]): string {
 export function toolCallLabel(call: ToolCallDisplay): string {
   if (call.toolName === "note_create" || call.toolName === "open_long_response") {
     const title = noteTitleFromCreateToolCall(call);
-    return title ? `Created “${title}”` : "Created note";
+    return title ? `Created “${title}”` : toolLabel(call.toolName);
   }
   if (call.toolName === "set_chat_mode") {
     const mode = (call.payload as { mode?: string } | undefined)?.mode;
@@ -474,45 +475,11 @@ function codingToolDetail(call: ToolCallDisplay): string | null {
   return payload.isError ? `${short} (failed)` : short;
 }
 
+/** Display labels shared with iOS via resources/contracts/toolLabels.json (includes aliases for older tool IDs in chat history). */
+const TOOL_LABELS: Record<string, string> = toolLabelsContract.labels;
+
 export function toolLabel(name: string): string {
-  const labels: Record<string, string> = {
-    task_list: "Reviewed tasks",
-    task_create: "Created task",
-    task_update: "Updated task",
-    task_delete: "Deleted task",
-    task_clear_completed: "Cleared completed",
-    memory_set: "Updated context",
-    memory_list: "Listed context",
-    // Display aliases for older tool IDs in chat history.
-    memory_set_fact: "Updated context",
-    memory_list_facts: "Listed context",
-    memory_search_conversations: "Searched library",
-    get_datetime: "Checked date & time",
-    note_list: "Listed notes",
-    note_create: "Created note",
-    note_read: "Read note",
-    note_save: "Saved note",
-    note_delete: "Deleted note",
-    set_layout: "Updated layout",
-    set_chat_mode: "Switched mode",
-    ws_list_tree: "Listed project files",
-    ws_search: "Searched project",
-    ws_read: "Read file",
-    ws_edit: "Edit file",
-    ws_write: "Write file",
-    ws_delete: "Delete file",
-    run_command: "Run command",
-    git_status: "Git status",
-    git_diff: "Git diff",
-    git_checkout_branch: "Checkout branch",
-    gmail_search: "Searched Gmail",
-    gmail_read_thread: "Read email",
-    gmail_list_labels: "Listed Gmail labels",
-    gmail_create_draft: "Draft email",
-    gmail_send: "Send email",
-    gmail_modify_threads: "Update Gmail labels",
-  };
-  return labels[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  return TOOL_LABELS[name] ?? name.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
 export function toolIcon() {
@@ -576,7 +543,7 @@ export function SaveToNotesButton({
       title={justSaved ? "Open saved note" : "Save as note"}
       aria-label={justSaved ? "Open saved note" : "Save message as note"}
     >
-      {justSaved ? <Check size={12} /> : <SquarePen size={12} />}
+      {justSaved ? <Check size={12} /> : <StickyNote size={12} />}
     </button>
   );
 }

@@ -22,6 +22,7 @@ export type BrowserSecrets = {
   openaiApiKey: string;
   tavilyApiKey: string;
   r2SecretAccessKey: string;
+  googleApiKey: string;
 };
 
 export type BrowserConversation = {
@@ -51,6 +52,7 @@ const EMPTY_SECRETS: BrowserSecrets = {
   openaiApiKey: "",
   tavilyApiKey: "",
   r2SecretAccessKey: "",
+  googleApiKey: "",
 };
 
 export function generateBrowserId(prefix: string, now = Date.now(), random = Math.random): string {

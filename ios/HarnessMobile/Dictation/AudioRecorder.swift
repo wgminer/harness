@@ -27,9 +27,13 @@ enum AudioRecorderMetering {
     static let silenceFloor: Float = -55
     static let speechCeiling: Float = -14
     static let compressionExponent: Float = 1.25
-    static let attack: Float = 0.85
-    static let release: Float = 0.28
-    static let peakHoldTicks = 2
+    /// Per metering tick (`tickInterval`); the visuals do their own slower easing on top.
+    static let attack: Float = 0.95
+    static let release: Float = 0.42
+    static let peakHoldTicks = 1
+    /// One display frame. Faster only burned main-thread time: nothing samples the meter
+    /// more often than this, and the timer label shows tenths.
+    static let tickInterval: TimeInterval = 1.0 / 60.0
 
     static func normalizedLevel(fromDecibels power: Float) -> CGFloat {
         if power <= silenceFloor { return 0 }
@@ -97,6 +101,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     /// Not `@Published` — peak tracking for post-stop validation only.
     private(set) var peakLevelDuringSession: CGFloat = 0
     private(set) var currentMeterLevel: CGFloat = 0
+    /// Raw meter in dBFS (louder of peak and average), for visuals that map level themselves.
+    private(set) var currentMeterDecibels: Float = -160
     /// File preserved after unexpected teardown for retry/share.
     private(set) var preservedRecordingURL: URL?
     /// True for user stop/cancel so the sheet watchdog ignores the drop.
@@ -193,8 +199,10 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         return capture.url
     }
 
+    /// Finalizing the file and releasing the audio session can take hundreds of milliseconds,
+    /// so that part runs on the session queue while the UI moves on.
     @discardableResult
-    func stop() throws -> URL {
+    func stop() async throws -> URL {
         guard let recorder, let url = outputURL else { throw AudioRecorderError.notRecording }
         intentionalStop = true
         if let startedAt {
@@ -210,9 +218,13 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         resetMeteringLevels()
         peakLevelDuringSession = max(peakLevelDuringSession, level)
 
-        Self.sessionQueue.sync {
-            recorder.stop()
-            Self.deactivateSession()
+        let finished = CaptureStartResult(recorder: recorder, url: url)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            Self.sessionQueue.async {
+                finished.recorder.stop()
+                Self.deactivateSession()
+                continuation.resume()
+            }
         }
         return url
     }
@@ -380,18 +392,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
                     startTimer()
                     return
                 }
-                let resumed = Self.sessionQueue.sync { () -> Bool in
-                    do {
-                        try AVAudioSession.sharedInstance().setActive(true)
-                        return recorder.record()
-                    } catch {
-                        return false
-                    }
-                }
-                if resumed {
-                    startTimer()
-                    return
-                }
+                resumeCapture(recorder)
+                return
             }
             cancel(intentional: false)
         @unknown default:
@@ -417,18 +419,29 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
         if reason == .oldDeviceUnavailable {
             if let recorder, !recorder.isRecording {
-                let resumed = Self.sessionQueue.sync { () -> Bool in
-                    do {
-                        try AVAudioSession.sharedInstance().setActive(true)
-                        return recorder.record()
-                    } catch {
-                        return false
-                    }
-                }
+                resumeCapture(recorder)
+            }
+        }
+    }
+
+    /// Reactivates the session and restarts capture off the main thread; gives up on the
+    /// take if the system will not hand the microphone back.
+    private func resumeCapture(_ recorder: AVAudioRecorder) {
+        let capture = CaptureStartResult(recorder: recorder, url: recorder.url)
+        Self.sessionQueue.async { [weak self] in
+            let resumed: Bool
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+                resumed = capture.recorder.record()
+            } catch {
+                resumed = false
+            }
+            Task { @MainActor in
+                guard let self, self.recorder === capture.recorder, self.isRecording else { return }
                 if resumed {
-                    startTimer()
+                    self.startTimer()
                 } else {
-                    cancel(intentional: false)
+                    self.cancel(intentional: false)
                 }
             }
         }
@@ -475,11 +488,11 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     private func startTimer() {
         stopTimer()
-        // ~10ms so the recording sheet can show live milliseconds.
-        let timer = Timer(timeInterval: 0.01, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            DispatchQueue.main.async { self.timerFired() }
+        let timer = Timer(timeInterval: AudioRecorderMetering.tickInterval, repeats: true) { [weak self] _ in
+            // Scheduled on the main run loop, so this is already the main actor.
+            MainActor.assumeIsolated { self?.timerFired() }
         }
+        timer.tolerance = AudioRecorderMetering.tickInterval / 4
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
@@ -487,7 +500,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private func timerFired() {
         guard let startedAt else { return }
         let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
-        if ms != elapsedMs {
+        // The label shows tenths; publishing every tick re-rendered it for nothing.
+        if ms / 100 != elapsedMs / 100 {
             elapsedMs = ms
         }
         tickMetering()
@@ -503,8 +517,9 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         recorder.updateMeters()
         let peak = recorder.peakPower(forChannel: 0)
         let average = recorder.averagePower(forChannel: 0)
+        currentMeterDecibels = max(peak, average)
         let target = Float(
-            AudioRecorderMetering.normalizedLevel(fromDecibels: max(peak, average))
+            AudioRecorderMetering.normalizedLevel(fromDecibels: currentMeterDecibels)
         )
 
         if target >= heldPeak {
@@ -534,5 +549,6 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         heldPeak = 0
         peakHoldRemaining = 0
         currentMeterLevel = 0
+        currentMeterDecibels = -160
     }
 }

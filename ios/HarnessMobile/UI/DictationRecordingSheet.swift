@@ -41,7 +41,8 @@ struct DictationRecordingSheet: View {
     @State private var showFailedRecordingShareSheet = false
     /// Local mic-live latch — parent does not observe AudioRecorder for meter churn.
     @State private var isMicLive = false
-    @AppStorage(CaptureVisualizerStyle.storageKey) private var visualizerStyle: CaptureVisualizerStyle = .ring
+    @AppStorage(CaptureVisualizerStyle.storageKey) private var visualizerStyle: CaptureVisualizerStyle = .dots
+    @State private var showDotsTuning = false
 
     init(
         app: AppModel,
@@ -152,7 +153,9 @@ struct DictationRecordingSheet: View {
                 CaptureVisualizer(recorder: recorder, style: visualizerStyle)
                     .frame(maxWidth: .infinity)
                     .frame(height: 380)
-                    .offset(y: CaptureRing.centerShift(insets))
+                    // The tuning panel takes the lower part of the screen; lift the visual clear of it.
+                    .offset(y: CaptureRing.centerShift(insets) - (dotsTuningOpen ? 150 : 0))
+                    .animation(.easeOut(duration: 0.2), value: dotsTuningOpen)
                     .background {
                         DictationCaptureWatchdog(recorder: recorder, onUnexpectedEnd: handleUnexpectedEnd)
                     }
@@ -165,7 +168,7 @@ struct DictationRecordingSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .top) {
-            if phase == .recording {
+            if phase == .recording, !dotsTuningOpen {
                 DictationElapsedLabel(
                     recorder: recorder,
                     font: .system(size: 52, weight: .light),
@@ -215,6 +218,17 @@ struct DictationRecordingSheet: View {
             .frame(height: CaptureShutter.diameter)
             .padding(.bottom, CaptureShutter.bottomInset)
         }
+        .overlay {
+            if phase == .recording, visualizerStyle == .dots {
+                DotsTuningJig(isOpen: $showDotsTuning)
+                    // Stops above the control row, so stop and discard stay reachable.
+                    .padding(.bottom, CaptureShutter.bottomInset + CaptureShutter.diameter + 16)
+            }
+        }
+    }
+
+    private var dotsTuningOpen: Bool {
+        showDotsTuning && visualizerStyle == .dots && phase == .recording
     }
 
     private static let timerHeight: CGFloat = 62
@@ -447,7 +461,7 @@ struct DictationRecordingSheet: View {
         let elapsedSeconds = TimeInterval(recorder.elapsedMs) / 1000.0
 
         do {
-            let url = try recorder.stop()
+            let url = try await recorder.stop()
             await recordingSession.endRecordingSession()
             guard generation == operationGeneration else { return }
             savedAudioURL = url

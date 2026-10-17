@@ -1,4 +1,5 @@
 import type { DemoBackend, DemoReply } from "./demoAdapter";
+import type { DemoApp, DemoDesktop } from "./demoDesktop";
 
 /** A CSS selector, an accessible name, or visible text (optionally inside a selector). */
 export type DemoTarget = string | { label: string } | { text: string; within?: string };
@@ -14,6 +15,18 @@ export type DemoRuntime = {
   type: (text: string, options?: { charsPerSecond?: number }) => Promise<void>;
   /** Fn dictation from another app: the full-screen field, then transcription, then the composer. */
   dictate: (text: string, options?: { speakMs?: number; transcribeMs?: number }) => Promise<void>;
+  /**
+   * Fn dictation while another app has focus (desktop scenes): the tray shows the take,
+   * the transcript is saved as a dictation, then pasted into the app in front.
+   */
+  dictateElsewhere: (
+    text: string,
+    options?: { speakMs?: number; transcribeMs?: number; title?: string },
+  ) => Promise<void>;
+  /** Desktop scenes: click `at` to bring that app's window to the front. */
+  activate: (app: DemoApp, at: DemoPoint) => Promise<void>;
+  /** The suggested prompt offered under the next dictation ("run" or a vocabulary word). */
+  suggest: (action: string) => void;
   /** Press Fn and start talking, then leave the field open and moving: for a still of dictation in progress. */
   listen: (options?: { speakMs?: number }) => Promise<void>;
   reply: (reply: DemoReply | string) => void;
@@ -99,7 +112,10 @@ function speechLevels(durationMs: number, random: () => number): (ms: number) =>
   };
 }
 
-export function createDemoRuntime(backend: DemoBackend): DemoRuntime & { cursor: () => DemoPoint | null } {
+export function createDemoRuntime(
+  backend: DemoBackend,
+  desktop: DemoDesktop | null = null,
+): DemoRuntime & { cursor: () => DemoPoint | null } {
   let cursorEl: HTMLDivElement | null = null;
   let pos: DemoPoint | null = null;
 
@@ -212,6 +228,7 @@ export function createDemoRuntime(backend: DemoBackend): DemoRuntime & { cursor:
     key.dataset.state = "down";
     await sleep(120);
     key.dataset.state = "up";
+    desktop?.tray("recording");
     backend.recording.started({ focused: false });
     const start = performance.now();
     await new Promise<void>((resolve) => {
@@ -226,17 +243,54 @@ export function createDemoRuntime(backend: DemoBackend): DemoRuntime & { cursor:
     return key;
   };
 
-  const dictate: DemoRuntime["dictate"] = async (text, options = {}) => {
-    const key = await speak(options.speakMs ?? 3200, false);
+  /** Press Fn again to end the take, then hold on "Transcribing" for `transcribeMs`. */
+  const finishTake = async (key: HTMLElement, transcribeMs: number) => {
     backend.recording.level(0);
     key.dataset.state = "down";
     await sleep(120);
     key.dataset.state = "hidden";
     setTimeout(() => key.remove(), 400);
+    desktop?.tray("processing");
     backend.recording.stopped();
     backend.recording.transcribing({ recordingPath: null });
-    await sleep(options.transcribeMs ?? 1100);
+    await sleep(transcribeMs);
+  };
+
+  const dictate: DemoRuntime["dictate"] = async (text, options = {}) => {
+    const key = await speak(options.speakMs ?? 3200, false);
+    await finishTake(key, options.transcribeMs ?? 1100);
+    desktop?.tray("ready");
     backend.recording.transcriptReady(text);
+  };
+
+  const dictateElsewhere: DemoRuntime["dictateElsewhere"] = async (text, options = {}) => {
+    if (!desktop) throw new Error("Demo dictateElsewhere(): the scene needs `desktop: true`.");
+    const key = await speak(options.speakMs ?? 3200, false);
+    await finishTake(key, options.transcribeMs ?? 1100);
+    // Same order as deliver_unfocused in global_effects.rs: save the take, then paste.
+    const { memory } = backend.harness;
+    const conversationId = await memory.createConversation();
+    await memory.appendMessage(conversationId, "user", text);
+    desktop.paste(text);
+    desktop.tray("ready");
+    backend.recording.transcriptDelivered(conversationId);
+    const { title } = options;
+    if (title) {
+      backend.setTitle(title);
+      // The title lands a beat later, as the real one does; the scene carries on meanwhile.
+      setTimeout(() => void memory.setConversationTitle(conversationId, title), 900);
+    }
+  };
+
+  const activate: DemoRuntime["activate"] = async (app, at) => {
+    if (!desktop) throw new Error("Demo activate(): the scene needs `desktop: true`.");
+    await moveTo(at);
+    await sleep(90);
+    place(at, 0.86);
+    await sleep(80);
+    desktop.activate(app);
+    place(at, 1);
+    await sleep(120);
   };
 
   const listen: DemoRuntime["listen"] = async (options = {}) => {
@@ -250,6 +304,9 @@ export function createDemoRuntime(backend: DemoBackend): DemoRuntime & { cursor:
     click,
     type,
     dictate,
+    dictateElsewhere,
+    activate,
+    suggest: (action) => backend.setReplyAction(action),
     listen,
     reply: (reply) => backend.queueReply(typeof reply === "string" ? { text: reply } : reply),
     title: (title) => backend.setTitle(title),

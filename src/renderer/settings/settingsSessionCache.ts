@@ -17,6 +17,7 @@ import type { SettingsTabId } from "./settingsNavConfig";
 export type CachedSettingsSecrets = {
   openaiApiKey: string;
   tavilyApiKey: string;
+  googleApiKey: string;
   r2SecretAccessKey: string;
 };
 

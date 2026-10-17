@@ -285,6 +285,7 @@ final class ConversationStore: ObservableObject {
             withIntermediateDirectories: true
         )
         try jpegData.write(to: url, options: .atomic)
+        LocalAttachmentIndex.insert(relativePath)
         return MessageAttachment(id: attachmentId, mimeType: "image/jpeg", relativePath: relativePath)
     }
 
@@ -392,10 +393,22 @@ final class ConversationStore: ObservableObject {
         return key
     }
 
-    func markSynced(revision: String) {
+    /// `contentChanged` is false for a no-op sync, where the saved baseline is still current
+    /// and re-reading every messages file to rebuild it would be wasted work.
+    func markSynced(revision: String, contentChanged: Bool = true) {
         hasLocalEdits = false
         UserDefaults.standard.set(revision, forKey: SyncEngine.lastSyncedRevisionKey)
-        saveSyncedBaselineInBackground()
+        if contentChanged || !PendingSyncTracker.hasBaseline {
+            saveSyncedBaselineInBackground()
+        }
+    }
+
+    /// A local write happened: flag the pending upload without re-hashing the library.
+    func markLocalEdits() {
+        guard UserDefaults.standard.string(forKey: SyncEngine.lastSyncedContentRevisionKey)?.isEmpty == false else {
+            return
+        }
+        if !hasLocalEdits { hasLocalEdits = true }
     }
 
     func setUserTitle(conversationId: String, title: String) throws {
@@ -443,7 +456,8 @@ final class ConversationStore: ObservableObject {
             localRevision = try await Task.detached(priority: .utility) {
                 try BundleCodec.computeRevision(
                     localDataDir: dir,
-                    scopes: SyncScopes.userContentScopes
+                    scopes: SyncScopes.userContentScopes,
+                    fallbackDir: PassthroughStore(localDataDir: dir).filesDir
                 )
             }.value
         } catch {

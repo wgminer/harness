@@ -66,6 +66,8 @@ To import a memo recorded in Voice Memos: open the memo → **Share** → **Save
 
 Backgrounding the app **flushes composer drafts** and allows an in-flight sync to finish via a short background task. It does **not** start a new sync by itself. Dictation uses the `audio` background mode so lock/home during a take can keep capture alive.
 
+The phone does not keep desktop note bodies, the image library, or chat attachments it did not create in `local-data`. The bundle is a single object, so a push still has to send them back: they sit in a relay copy next to `local-data` (`local-data.passthrough/`, see `PassthroughStore`) that is only read while building a push. The bundle is downloaded only when the remote `bundleHash` differs from that copy, and a sync requested during a capture waits until the capture ends.
+
 If both Mac and phone edited since the last sync, the app **auto-merges** both sides (combining conversations, messages, tasks, notes, and settings) and pushes the result. Mergeable JSON stores are unioned; binary files that cannot be merged keep this device's copy.
 
 ## Device QA

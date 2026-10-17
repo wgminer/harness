@@ -89,6 +89,7 @@ pub(super) fn heal_images_index_in_memory(app_state_dir: &Path, index: &mut Imag
                     background: entry.background.clone(),
                     output_format: format.clone(),
                     created_at: entry.updated_at.max(entry.created_at),
+                    provider: None,
                 });
                 entry.output_format = format;
                 entry.file_name = Some(found);

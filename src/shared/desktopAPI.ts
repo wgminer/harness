@@ -107,7 +107,7 @@ export interface HarnessAPI {
   env: {
     isHarnessE2E: () => Promise<boolean>;
     isHarnessDev: () => Promise<boolean>;
-    /** When true, image generate/adjust writes stub PNGs (no OpenAI). */
+    /** When true, image generate/adjust writes stub PNGs (no provider call). */
     isStubImages: () => Promise<boolean>;
     /** True when the renderer is running as the browser debug shell (no Tauri). */
     isHarnessWeb: () => Promise<boolean>;
@@ -135,15 +135,19 @@ export interface HarnessAPI {
       hasOpenAIApiKey: boolean;
       hasTavilyApiKey: boolean;
       hasR2SecretAccessKey: boolean;
+      /** True when a Google AI key is saved or supplied by the environment; images then use Google. */
+      hasGoogleApiKey: boolean;
       encryptionAvailable: boolean;
     }>;
     getSecretsForSettings: () => Promise<{
       openaiApiKey: string;
       tavilyApiKey: string;
       r2SecretAccessKey: string;
+      googleApiKey: string;
     }>;
     setOpenAIApiKey: (value: string) => Promise<void>;
     setTavilyApiKey: (value: string) => Promise<void>;
+    setGoogleApiKey: (value: string) => Promise<void>;
     setR2SecretAccessKey: (value: string) => Promise<void>;
   };
   gmail: {

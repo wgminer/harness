@@ -81,8 +81,9 @@ struct CaptureHomeView: View {
             }
             .overlay(alignment: .bottom) {
                 Button(action: openList) {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 20, weight: .medium))
+                    // Points the way the swipe goes: the list sits above the capture screen.
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(HarnessPalette.textMuted)
                         .frame(width: 72, height: 56)
                         .contentShape(Rectangle())

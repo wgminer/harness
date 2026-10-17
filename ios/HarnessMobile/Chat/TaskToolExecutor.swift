@@ -130,27 +130,21 @@ final class TaskToolExecutor {
 enum ToolCallLabels {
     static let compressThreshold = 2
 
-    static func label(for toolName: String) -> String {
-        switch toolName {
-        case "task_list": return "Reviewed tasks"
-        case "task_create": return "Created task"
-        case "task_update": return "Updated task"
-        case "task_delete": return "Deleted task"
-        case "task_clear_completed": return "Cleared completed"
-        case "memory_set", "memory_set_fact": return "Updated context"
-        case "memory_list", "memory_list_facts": return "Listed context"
-        case "memory_search_conversations": return "Searched library"
-        case "get_datetime": return "Checked date & time"
-        case "web_search": return "Searched the web"
-        case "note_list": return "Listed notes"
-        case "note_create": return "Created note"
-        case "note_read": return "Read note"
-        case "note_save": return "Saved note"
-        case "note_delete": return "Deleted note"
-        case "set_layout": return "Updated layout"
-        default:
-            return fallbackLabel(for: toolName)
+    /// Display labels from bundled `resources/contracts/toolLabels.json`, shared with desktop.
+    private static let labels: [String: String] = {
+        guard let url = Bundle.main.url(forResource: "toolLabels", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let labels = json["labels"] as? [String: String]
+        else {
+            assertionFailure("resources/contracts/toolLabels.json failed to load or parse from the app bundle")
+            return [:]
         }
+        return labels
+    }()
+
+    static func label(for toolName: String) -> String {
+        labels[toolName] ?? fallbackLabel(for: toolName)
     }
 
     /// Mirrors `toolLabel` fallback in `src/renderer/chat/chatHelpers.tsx` (first char only).

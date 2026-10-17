@@ -82,7 +82,17 @@ final class AppModel: ObservableObject {
     @Published private(set) var setupNoticeDismissed = false
     @Published var lastSuccessfulSyncAt: Date?
     @Published private(set) var hasCompletedInitialLoad = false
-    @Published var activeDictation: ActiveDictation?
+    @Published var activeDictation: ActiveDictation? {
+        didSet {
+            // A sync held back by a capture runs once the capture is over.
+            if activeDictation == nil, syncDeferredByCapture {
+                syncDeferredByCapture = false
+                scheduleSyncAfterLocalChange()
+            }
+        }
+    }
+    /// Sync competes with the microphone and transcription for CPU and memory, so it waits.
+    private var syncDeferredByCapture = false
 
     let localDataDir: URL
     let store: ConversationStore
@@ -116,12 +126,10 @@ final class AppModel: ObservableObject {
     }
 
     private static let autoSyncDelayNs: UInt64 = 2_500_000_000
-    private static let pendingStateRefreshDelayNs: UInt64 = 200_000_000
     private static let draftPersistDelayNs: UInt64 = 300_000_000
     /// Skip Control Center flickers; still require a real background.
 
     private var scheduledSyncTask: Task<Void, Never>?
-    private var pendingStateRefreshTask: Task<Void, Never>?
     private var threadDraftPersistTask: Task<Void, Never>?
     private var composeDraftPersistTask: Task<Void, Never>?
     private var syncBackgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -132,7 +140,7 @@ final class AppModel: ObservableObject {
 
     private func wireContentChangeHandlers() {
         let onLocalContentChanged: () -> Void = { [weak self] in
-            self?.schedulePendingStateRefresh()
+            self?.store.markLocalEdits()
             self?.scheduleSyncAfterLocalChange()
         }
         store.onContentChanged = onLocalContentChanged
@@ -158,19 +166,6 @@ final class AppModel: ObservableObject {
             // otherwise cancel this very task and abort the R2 requests mid-flight.
             await self?.clearScheduledSync()
             await self?.performSync()
-        }
-    }
-
-    private func schedulePendingStateRefresh() {
-        pendingStateRefreshTask?.cancel()
-        pendingStateRefreshTask = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: Self.pendingStateRefreshDelayNs)
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            await self?.store.refreshPendingSyncState()
         }
     }
 
@@ -424,6 +419,10 @@ final class AppModel: ObservableObject {
             syncNotConfigured = true
             return
         }
+        if activeDictation != nil {
+            syncDeferredByCapture = true
+            return
+        }
         while let inFlightSync {
             await inFlightSync.value
         }
@@ -443,10 +442,13 @@ final class AppModel: ObservableObject {
             endSyncBackgroundTaskIfNeeded()
         }
 
-        let beforePull = (try? await store.snapshotConversationsAsync()) ?? [:]
+        // Parses every messages file, so it is only taken when a pull or merge is about to land.
+        var beforePull: [String: ConversationSnapshot] = [:]
 
         do {
-            let outcome = try await syncEngine.syncNow(forcePull: forcePull)
+            let outcome = try await syncEngine.syncNow(forcePull: forcePull) { [store] in
+                beforePull = (try? await store.snapshotConversationsAsync()) ?? [:]
+            }
             applyOutcome(outcome)
             if outcome.localDataChanged {
                 try await store.reloadAsync()
@@ -457,7 +459,6 @@ final class AppModel: ObservableObject {
                     )
                 }
             }
-            await store.refreshPendingSyncState()
             if outcome.localDataChanged {
                 chatService.refreshClient()
             }

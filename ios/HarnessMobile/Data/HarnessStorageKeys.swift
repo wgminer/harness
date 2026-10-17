@@ -9,6 +9,7 @@ enum HarnessStorageKeys {
     static let lastSyncedRevision = "harness.lastSyncedRevision"
     static let lastSyncedContentRevision = "harness.lastSyncedContentRevision"
     static let syncBaselineConversations = "harness.syncBaselineConversations"
+    static let localAttachmentPaths = "harness.localAttachmentPaths"
     static let importedOpenAIKeyFromSync = "harness.importedOpenAIKeyFromSync"
     static let r2AccountId = "harness.r2.accountId"
     static let r2Bucket = "harness.r2.bucket"

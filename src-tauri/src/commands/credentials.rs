@@ -35,3 +35,8 @@ pub fn credentials_set_tavily_api_key(value: String) -> Result<(), String> {
 pub fn credentials_set_r2_secret_access_key(value: String) -> Result<(), String> {
     set_credential(CredentialKey::R2SecretAccessKey, &value).map_err(map_err)
 }
+
+#[command(rename_all = "camelCase")]
+pub fn credentials_set_google_api_key(value: String) -> Result<(), String> {
+    set_credential(CredentialKey::GoogleApiKey, &value).map_err(map_err)
+}

@@ -32,6 +32,8 @@ final class JoyDivisionWaveformView: UIView {
     private var rows: [RidgeRow] = []
     private var pushSeed: UInt64 = 0xC0FF_EE00_D15C_AFE
     private var lastPushAt: TimeInterval = 0
+    /// Jittered around `pushInterval` so rows do not scroll in lockstep.
+    private var nextPushGap: TimeInterval = 0.045
     private var lastFrameAt: TimeInterval = 0
     private var displayLink: CADisplayLink?
     /// Capped at ~40 fps while recording to leave headroom for metering on the main run loop.
@@ -125,8 +127,9 @@ final class JoyDivisionWaveformView: UIView {
         if rows.count != rowCount {
             seedRowsIfNeeded()
         }
-        guard now - lastPushAt >= pushInterval else { return }
+        guard now - lastPushAt >= nextPushGap else { return }
         lastPushAt = now
+        nextPushGap = pushInterval * Double.random(in: 0.7 ... 1.4)
 
         let amplitude = displayAmplitude(for: raw, at: now)
         pushSeed = pushSeed &* 0xBF58_476D_1CE4_E5B9 &+ 0x9E37_79B9_7F4A_7C15
@@ -313,8 +316,9 @@ struct RidgelineWaveform: UIViewRepresentable {
 
     func makeUIView(context: Context) -> JoyDivisionWaveformView {
         let view = JoyDivisionWaveformView()
-        view.rowCount = 26
-        view.pointsPerRow = 40
+        view.rowCount = 36
+        view.pointsPerRow = 34
+        view.peakRowMultiples = 7.5
         return view
     }
 

@@ -14,6 +14,8 @@ export type DemoRecordingBus = {
   transcribing: (info: { recordingPath: string | null }) => void;
   level: (level: number) => void;
   transcriptReady: (text: string) => void;
+  /** An unfocused take was saved as `conversationId` and pasted into the app in front. */
+  transcriptDelivered: (conversationId: string) => void;
 };
 
 export type DemoBackend = {
@@ -23,6 +25,8 @@ export type DemoBackend = {
   queueReply: (reply: DemoReply) => void;
   /** Title returned for the next title request. */
   setTitle: (title: string) => void;
+  /** The suggested prompt offered under a dictation (the real one comes from a classifier call). */
+  setReplyAction: (action: string) => void;
 };
 
 const OPENAI_PREFIX = "/openai/";
@@ -48,6 +52,7 @@ export function createDemoAdapter(): DemoBackend {
 
   const replies: DemoReply[] = [];
   let nextTitle = "";
+  let replyAction = "run";
   installScriptedOpenAi(
     () => replies.shift() ?? { text: "" },
     () => nextTitle,
@@ -57,6 +62,7 @@ export function createDemoAdapter(): DemoBackend {
     ...base,
     app: { ...base.app, getVersion: async () => pkg.version },
     env: { ...base.env, isHarnessDev: async () => false },
+    chat: { ...base.chat, ensureDictationReplyAction: async () => replyAction },
     recording: {
       ...base.recording,
       requestMicrophoneAccess: async () => true,
@@ -81,10 +87,14 @@ export function createDemoAdapter(): DemoBackend {
       transcribing: (info) => emit("transcribing", info),
       level: (level) => emit("level", level),
       transcriptReady: (text) => emit("transcriptReady", text),
+      transcriptDelivered: (conversationId) => emit("transcriptDelivered", conversationId),
     },
     queueReply: (reply) => replies.push(reply),
     setTitle: (title) => {
       nextTitle = title;
+    },
+    setReplyAction: (action) => {
+      replyAction = action;
     },
   };
 }

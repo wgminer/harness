@@ -1,4 +1,5 @@
 mod format;
+mod google;
 mod index_store;
 mod stub_png;
 mod version_tree;
@@ -66,6 +67,9 @@ pub struct ImageVersion {
     pub background: String,
     pub output_format: String,
     pub created_at: i64,
+    /// `"google"` or `"openai"`; absent for stubs and versions made before the switch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,6 +149,9 @@ pub struct ImageGenerateInput {
     /// Extra reference/annotation images as data URLs (`data:image/...;base64,...`).
     #[serde(default)]
     pub extra_image_data_urls: Vec<String>,
+    /// `"google"` or `"openai"`. Absent → Google when it has a key, else OpenAI.
+    #[serde(default)]
+    pub provider: Option<String>,
 }
 
 fn title_from_prompt(prompt: &str) -> String {
@@ -371,6 +378,39 @@ fn decode_data_url_image(data_url: &str, index: usize) -> Result<crate::openai::
     })
 }
 
+enum ImageProvider {
+    Google(String),
+    OpenAi(String),
+}
+
+impl ImageProvider {
+    fn id(&self) -> &'static str {
+        match self {
+            Self::Google(_) => "google",
+            Self::OpenAi(_) => "openai",
+        }
+    }
+}
+
+/// Uses the requested provider; with none requested, Google is the default and
+/// OpenAI is used when no Google key is set.
+async fn resolve_image_provider(requested: Option<&str>) -> Result<ImageProvider, String> {
+    let google = crate::credentials::resolve_google_api_key().await;
+    let google = google.trim();
+    let openai = crate::credentials::resolve_openai_api_key().await;
+    let openai = openai.trim();
+    match requested.map(str::trim).filter(|s| !s.is_empty()) {
+        Some("google") if google.is_empty() => Err("Google AI API key required.".into()),
+        Some("google") => Ok(ImageProvider::Google(google.to_string())),
+        Some("openai") if openai.is_empty() => Err("OpenAI API key required.".into()),
+        Some("openai") => Ok(ImageProvider::OpenAi(openai.to_string())),
+        Some(_) => Err("Provider must be \"google\" or \"openai\".".into()),
+        None if !google.is_empty() => Ok(ImageProvider::Google(google.to_string())),
+        None if !openai.is_empty() => Ok(ImageProvider::OpenAi(openai.to_string())),
+        None => Err("Google AI or OpenAI API key required.".into()),
+    }
+}
+
 fn map_openai_image_error(err: crate::openai::OpenAIError) -> String {
     if matches!(err, crate::openai::OpenAIError::Cancelled) {
         "Image generation cancelled.".into()
@@ -445,17 +485,10 @@ pub async fn generate_image(
         }
 
         let stub = is_stub_images();
-        let api_key = if stub {
-            String::new()
+        let provider = if stub {
+            None
         } else {
-            let key = crate::credentials::resolve_openai_api_key()
-                .await
-                .trim()
-                .to_string();
-            if key.is_empty() {
-                return Err("OpenAI API key required.".into());
-            }
-            key
+            Some(resolve_image_provider(input.provider.as_deref()).await?)
         };
 
         let app_state_dir = get_app_state_dir();
@@ -464,7 +497,12 @@ pub async fn generate_image(
             .map_err(|e| e.to_string())?;
 
         let size = normalize_size(&input.size)?;
-        let background = background_allowed_for_format(&input.output_format, &input.background);
+        // Google image models have no transparent output.
+        let background = if matches!(provider, Some(ImageProvider::Google(_))) {
+            "opaque"
+        } else {
+            background_allowed_for_format(&input.output_format, &input.background)
+        };
         let options = crate::openai::ImageGenerateOptions {
             size: size.clone(),
             quality: quality.clone(),
@@ -525,29 +563,35 @@ pub async fn generate_image(
         let use_edits = !edit_parts.is_empty();
         let operation = if use_edits { "adjust" } else { "new" };
 
-        let bytes = if stub {
-            eprintln!(
-                "[harness] stub images: {} ({}) — no OpenAI call",
-                operation, prompt
-            );
-            if cancel_token.is_cancelled() {
-                return Err("Image generation cancelled.".into());
+        let bytes = match &provider {
+            None => {
+                eprintln!(
+                    "[harness] stub images: {} ({}) — no provider call",
+                    operation, prompt
+                );
+                if cancel_token.is_cancelled() {
+                    return Err("Image generation cancelled.".into());
+                }
+                stub_image_png(prompt, operation)
             }
-            stub_image_png(prompt, operation)
-        } else if use_edits {
-            crate::openai::edit_image(
-                &api_key,
+            Some(ImageProvider::Google(api_key)) => {
+                google::generate_image(api_key, prompt, &edit_parts, &options, &cancel_token)
+                    .await?
+            }
+            Some(ImageProvider::OpenAi(api_key)) if use_edits => crate::openai::edit_image(
+                api_key,
                 prompt,
                 &edit_parts,
                 &options,
                 Some(&cancel_token),
             )
             .await
-            .map_err(map_openai_image_error)?
-        } else {
-            crate::openai::generate_image(&api_key, prompt, &options, Some(&cancel_token))
-                .await
-                .map_err(map_openai_image_error)?
+            .map_err(map_openai_image_error)?,
+            Some(ImageProvider::OpenAi(api_key)) => {
+                crate::openai::generate_image(api_key, prompt, &options, Some(&cancel_token))
+                    .await
+                    .map_err(map_openai_image_error)?
+            }
         };
 
         if cancel_token.is_cancelled() {
@@ -589,6 +633,7 @@ pub async fn generate_image(
             background: background.to_string(),
             output_format: output_format.clone(),
             created_at: now,
+            provider: provider.as_ref().map(|p| p.id().to_string()),
         };
 
         let index_path = images_index_path(&app_state_dir);
@@ -810,6 +855,7 @@ mod tests {
             background: "opaque".into(),
             output_format: "png".into(),
             created_at: index as i64,
+            provider: None,
         }
     }
 
@@ -843,6 +889,7 @@ mod tests {
                 background: "opaque".into(),
                 output_format: "png".into(),
                 created_at: 1,
+                provider: None,
             },
             ImageVersion {
                 id: String::new(),
@@ -857,6 +904,7 @@ mod tests {
                 background: "opaque".into(),
                 output_format: "png".into(),
                 created_at: 2,
+                provider: None,
             },
         ];
         assert!(migrate_versions_to_tree(&mut entry, Some(0)));

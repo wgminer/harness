@@ -37,7 +37,7 @@ import {
 } from "../../shared/dictationSuggestedPrompts";
 import type { ConversationSessionKind } from "../../shared/conversationSession";
 import { ComposeCornerMeta, ComposeHeaderQuote } from "./ComposeHome";
-import "./composerRim/composerRim.css";
+import { ComposerRimJig, useComposerRim } from "./composerRim/ComposerRimJig";
 import { useChatModeState } from "./useChatModeState";
 import { useConversationTitleModal } from "./useConversationTitleModal";
 import { TerminalPanel } from "../terminal/TerminalPanel";
@@ -994,12 +994,12 @@ export function ChatView({
       try {
         const title =
           messageTimestamp != null ? formatMessageNoteTitle(messageTimestamp) : undefined;
-        // Stay in the conversation; the button flips to "Open saved note".
         const note = await window.harness.notes.create(title, trimmed, {
           conversationId: conversationIdRef.current ?? undefined,
         });
         setSavedNoteIds((prev) => ({ ...prev, [messageId]: note.id }));
         onNotesChanged?.();
+        onOpenNotesView?.(note.id);
       } catch {
         // Ignore; user can retry.
       }
@@ -1243,25 +1243,31 @@ export function ChatView({
     onToggleTerminal: effectiveConversationId ? toggleTerminal : undefined,
   };
 
+  const composerRim = useComposerRim();
+
   if (isComposeMode) {
     return (
-      <div className="new-chat-pane">
-        <ComposeCornerMeta />
-        <div className="new-chat-center">
-          <div className="new-chat-center-stack">
-            <div
-              ref={composerRef}
-              className="new-chat-composer"
-              data-testid="chat-composer"
-              role="group"
-              aria-label="Message composer"
-            >
-              <ChatComposer {...composerProps} layout="stacked" />
+      <>
+        <div className="new-chat-pane">
+          <ComposeCornerMeta />
+          <div className="new-chat-center">
+            <div className="new-chat-center-stack">
+              <div
+                ref={composerRef}
+                className="new-chat-composer"
+                data-testid="chat-composer"
+                role="group"
+                aria-label="Message composer"
+                {...composerRim.hostProps}
+              >
+                <ChatComposer {...composerProps} layout="stacked" />
+              </div>
+              <ComposeHeaderQuote />
             </div>
-            <ComposeHeaderQuote />
           </div>
         </div>
-      </div>
+        <ComposerRimJig settings={composerRim.settings} onChange={composerRim.setSettings} />
+      </>
     );
   }
 

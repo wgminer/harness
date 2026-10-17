@@ -8,9 +8,8 @@ enum CaptureVisualizerStyle: String, CaseIterable, Identifiable {
     case string
     case ring
     case dots
-    case ripples
 
-    static let storageKey = "dev.captureVisualizerStyle.v2"
+    static let storageKey = "dev.captureVisualizerStyle.v3"
 
     var id: String { rawValue }
 
@@ -20,7 +19,6 @@ enum CaptureVisualizerStyle: String, CaseIterable, Identifiable {
         case .string: return "String"
         case .ring: return "Ring"
         case .dots: return "Dots"
-        case .ripples: return "Ripples"
         }
     }
 }
@@ -29,7 +27,7 @@ enum CaptureVisualizerStyle: String, CaseIterable, Identifiable {
 /// draws at the same size and place so the circle itself comes alive.
 enum CaptureRing {
     static let radius: CGFloat = 78
-    static let lineWidth: CGFloat = 2
+    static let lineWidth: CGFloat = 3.5
 
     /// Offset from the safe-area center to the physical screen center.
     static func centerShift(_ insets: EdgeInsets) -> CGFloat {
@@ -51,9 +49,11 @@ struct CaptureVisualizer: View {
                 stroke: HarnessPalette.textStrong,
                 occlusion: HarnessPalette.background
             )
+            // A narrow, tall stack; it overflows the shared visual frame on purpose.
+            .frame(width: 230, height: 470)
             // The ridgeline reserves headroom above its first row for tall peaks, which leaves
             // the stack sitting low; lift it so the rows themselves are centered.
-            .offset(y: -30)
+            .offset(y: -40)
         } else {
             CaptureField(recorder: recorder, style: style, stroke: HarnessPalette.textStrong)
         }
@@ -109,6 +109,8 @@ final class CaptureFieldView: UIView {
         var origin: CGPoint
         var born: TimeInterval
         var strength: CGFloat
+        /// Per-ripple speed factor, so successive rings drift apart instead of marching in step.
+        var pace: CGFloat
     }
 
     private let haptics = CaptureHaptics()
@@ -117,7 +119,20 @@ final class CaptureFieldView: UIView {
 
     private var ripples: [Ripple] = []
     private var lastVoiceRippleAt: TimeInterval = 0
+    /// Gap before the next voice ripple; redrawn each time so the cadence never settles.
+    private var nextVoiceRippleGap: TimeInterval = 0.3
+    /// Motion clocks that run faster with the voice, so loud passages churn and quiet ones drift.
+    private var ringPhase: CGFloat = 0
+    private var flowPhase: CGFloat = 0
+    /// The string's visible amplitude: smoother than `energy`, so loudness reads as height.
+    private var stringLevel: CGFloat = 0
     private var lastTouchRippleAt: TimeInterval = 0
+
+    /// Resting dot positions, rebuilt only when the view size or spacing changes.
+    private var dotLayout: (size: CGSize, spacing: CGFloat, points: [CGPoint]) = (.zero, 0, [])
+    /// Lets one last frame draw the settled field before redraws pause in silence.
+    private var drewAtRest = false
+    private var drawnTuning = DotsTuning()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -157,30 +172,55 @@ final class CaptureFieldView: UIView {
         displacement = [CGFloat](repeating: 0, count: Self.nodeCount)
         velocity = [CGFloat](repeating: 0, count: Self.nodeCount)
         ripples.removeAll()
+        drewAtRest = false
     }
 
     @objc private func tick(_ link: CADisplayLink) {
         MainActor.assumeIsolated {
-            let level = meterSource?.currentMeterLevel ?? 0
             let dt = lastTimestamp == 0 ? 1.0 / 60.0 : min(link.timestamp - lastTimestamp, 1.0 / 30.0)
             lastTimestamp = link.timestamp
             time += dt
 
-            // Room noise sits near 0.08 and speech near 0.4+; lift speech off the floor.
-            let target = min(pow(max(0, (level - 0.1) / 0.9), 0.6), 1)
+            let target: CGFloat
             // Quick to rise, slow to fall, so syllables read as swells rather than flicker.
-            let rate: CGFloat = target > energy ? 9 : 3.5
+            var attack: CGFloat = 9
+            var release: CGFloat = 3.5
+            if style == .dots {
+                let store = DotsTuningStore.shared
+                let decibels = store.input(liveDecibels: meterSource?.currentMeterDecibels ?? -160, dt: dt)
+                target = store.tuning.energy(forDecibels: decibels)
+                attack = CGFloat(store.tuning.attack)
+                release = CGFloat(store.tuning.release)
+            } else {
+                let level = meterSource?.currentMeterLevel ?? 0
+                // Room noise sits near 0.08 and speech near 0.4+; lift speech off the floor.
+                target = min(pow(max(0, (level - 0.1) / 0.9), 0.6), 1)
+            }
+            let rate = target > energy ? attack : release
             energy += (target - energy) * min(1, CGFloat(dt) * rate)
             slowEnergy += (energy - slowEnergy) * min(1, CGFloat(dt) * 2.5)
             touchPull += ((touchPoint == nil ? 0 : 1) - touchPull) * min(1, CGFloat(dt) * 9)
+            ringPhase += CGFloat(dt) * (1.8 + 5 * energy)
+            flowPhase += CGFloat(dt) * (0.9 + 3.2 * energy)
+            let stringRate: CGFloat = target > stringLevel ? 5 : 1.8
+            stringLevel += (target - stringLevel) * min(1, CGFloat(dt) * stringRate)
 
             switch style {
             case .string:
                 stepString()
-            case .dots, .ripples:
+            case .dots:
                 stepRipples()
             case .ring, .ridges:
                 break
+            }
+            if style == .dots {
+                DotsTuningStore.shared.lastEnergy = energy
+                // A silent, untouched field does not change; skip the redraw until it does.
+                let tuning = DotsTuningStore.shared.tuning
+                let atRest = ripples.isEmpty && energy < 0.002 && touchPoint == nil
+                if atRest, drewAtRest, tuning == drawnTuning { return }
+                drewAtRest = atRest
+                drawnTuning = tuning
             }
             setNeedsDisplay()
         }
@@ -200,8 +240,6 @@ final class CaptureFieldView: UIView {
             haptics.tick(intensity: 0.4, sharpness: 0.3)
         case .dots:
             haptics.tick(intensity: 0.7, sharpness: 0.9)
-        case .ripples:
-            haptics.tick(intensity: 0.8, sharpness: 0.1)
         case .ridges:
             break
         }
@@ -226,15 +264,12 @@ final class CaptureFieldView: UIView {
             case .dots:
                 // One bump per dot the finger passes.
                 haptics.tick(intensity: 0.35, sharpness: 0.8)
-            case .ripples, .ridges:
+            case .ridges:
                 break
             }
         }
         if time - lastTouchRippleAt > 0.11 {
             emitTouchRipple(at: point, strength: 0.55)
-            if style == .ripples {
-                haptics.tick(intensity: 0.3, sharpness: 0.15)
-            }
         }
     }
 
@@ -266,7 +301,7 @@ final class CaptureFieldView: UIView {
             let radius = CaptureRing.radius
             let distance = hypot(point.x - bounds.midX, point.y - bounds.midY)
             return min(abs(distance - radius) / max(radius * 0.8, 1), 1)
-        case .dots, .ripples, .ridges:
+        case .dots, .ridges:
             return 0
         }
     }
@@ -279,21 +314,22 @@ final class CaptureFieldView: UIView {
             let radius = CaptureRing.radius
             return Int(abs(hypot(point.x - bounds.midX, point.y - bounds.midY) - radius) / 12)
         case .dots:
-            return Int(point.x / 22) &* 1000 &+ Int(point.y / 22)
-        case .ripples, .ridges:
+            let spacing = max(CGFloat(DotsTuningStore.shared.tuning.spacing), 1)
+            return Int(point.x / spacing) &* 1000 &+ Int(point.y / spacing)
+        case .ridges:
             return 0
         }
     }
 
     private func emitTouchRipple(at point: CGPoint, strength: CGFloat) {
-        guard style == .dots || style == .ripples else { return }
+        guard style == .dots else { return }
         lastTouchRippleAt = time
-        ripples.append(Ripple(origin: point, born: time, strength: strength))
+        ripples.append(Ripple(origin: point, born: time, strength: strength, pace: 1))
     }
 
     // MARK: - Simulation
 
-    /// A taut string: the voice drives a few harmonics, a finger pins a point and lets it ring.
+    /// A taut string a finger can pin and pluck; the voice is drawn on top in `drawString`.
     private func stepString() {
         let n = Self.nodeCount
         let limit = bounds.height * 0.44
@@ -302,17 +338,10 @@ final class CaptureFieldView: UIView {
             let unit = min(max((point.x - inset) / max(bounds.width - inset * 2, 1), 0), 1)
             return (unit * CGFloat(n - 1), min(max(point.y - bounds.midY, -limit), limit))
         }
-        let t = CGFloat(time)
-
         for _ in 0 ..< 6 {
             for i in 1 ..< n - 1 {
-                let x = CGFloat(i) / CGFloat(n - 1)
                 let tension = 0.32 * (displacement[i - 1] - 2 * displacement[i] + displacement[i + 1])
-                let drive = sin(2 * .pi * x) * sin(t * 5.0)
-                    + sin(3 * .pi * x) * sin(t * 7.3)
-                    + 0.8 * sin(5 * .pi * x) * sin(t * 11.1)
-                    + 0.6 * sin(7 * .pi * x) * sin(t * 13.7)
-                velocity[i] = (velocity[i] + tension + energy * 0.08 * drive) * 0.9965
+                velocity[i] = (velocity[i] + tension) * 0.9965
             }
             for i in 1 ..< n - 1 {
                 displacement[i] = min(max(displacement[i] + velocity[i], -limit), limit)
@@ -327,14 +356,24 @@ final class CaptureFieldView: UIView {
     }
 
     private func stepRipples() {
-        ripples.removeAll { time - $0.born > 2.6 }
-        // A steady cadence keeps the rings evenly spaced; only their strength follows the voice.
-        let interval = style == .dots ? 0.34 : 0.22
-        if energy > 0.1, time - lastVoiceRippleAt > interval {
+        let tuning = DotsTuningStore.shared.tuning
+        ripples.removeAll { time - $0.born > tuning.rippleLife }
+        // Speech is not a metronome: a rising syllable fires a ring early, and the gap, origin,
+        // speed and strength of each ring vary a little so the field never settles into a pattern.
+        let interval = tuning.rippleInterval
+        let sinceLast = time - lastVoiceRippleAt
+        let onset = energy - slowEnergy > 0.07 && sinceLast > interval * 0.45
+        if energy > 0.1, onset || sinceLast > nextVoiceRippleGap {
             lastVoiceRippleAt = time
-            let strength = style == .dots ? energy * 0.7 : energy
+            nextVoiceRippleGap = interval * Double.random(in: 0.6 ... 1.7)
+            let wander = CGFloat(tuning.spacing) * 0.9
+            let origin = CGPoint(
+                x: bounds.midX + CGFloat.random(in: -wander ... wander),
+                y: bounds.midY + CGFloat.random(in: -wander ... wander)
+            )
+            let strength = energy * CGFloat(tuning.rippleGain) * CGFloat.random(in: 0.65 ... 1.15)
             ripples.append(
-                Ripple(origin: CGPoint(x: bounds.midX, y: bounds.midY), born: time, strength: strength)
+                Ripple(origin: origin, born: time, strength: strength, pace: CGFloat.random(in: 0.8 ... 1.2))
             )
         }
         if ripples.count > 16 {
@@ -356,8 +395,6 @@ final class CaptureFieldView: UIView {
             drawRing(in: context, color: color)
         case .dots:
             drawDots(in: context, color: color)
-        case .ripples:
-            drawRipples(in: context, color: color)
         case .ridges:
             break
         }
@@ -368,13 +405,17 @@ final class CaptureFieldView: UIView {
         let inset = bounds.width * 0.08
         let width = bounds.width - inset * 2
         let midY = bounds.midY
-        // The simulated string rings slowly; this standing wave follows the voice instantly.
-        let voice = energy * bounds.height * 0.2
-        let t = CGFloat(time)
+        // Height is the voice level, smoothed so it reads as loudness rather than flicker. The
+        // shape is a few slow waves at unrelated rates, so it wanders instead of repeating.
+        let voice = stringLevel * bounds.height * 0.3
+        let p = flowPhase
         func point(_ i: Int) -> CGPoint {
             let x = CGFloat(i) / CGFloat(n - 1)
-            let buzz = sin(.pi * x) * (0.6 * sin(3 * .pi * x - t * 9) + 0.4 * sin(5 * .pi * x + t * 14))
-            return CGPoint(x: inset + width * x, y: midY + displacement[i] + voice * buzz)
+            let shape = 0.6 * sin(2 * .pi * x - p * 1.3)
+                + 0.3 * sin(3.4 * .pi * x + p * 0.83 + 1.1)
+                + 0.15 * sin(5.7 * .pi * x - p * 2.1 + 0.4)
+            let wave = pow(sin(.pi * x), 1.4) * shape
+            return CGPoint(x: inset + width * x, y: midY + displacement[i] + voice * wave)
         }
 
         context.beginPath()
@@ -413,7 +454,7 @@ final class CaptureFieldView: UIView {
                     wobble += sin(harmonic * angle + phase * (0.6 + harmonic * 0.35) + harmonic * 1.7) / harmonic
                 }
                 // A fine, fast shiver on top of the slow wobble: the part that reads as vibrating.
-                let shiver = sin(11 * angle - phase * 17) * 0.5 + sin(17 * angle + phase * 23) * 0.3
+                let shiver = sin(11 * angle - phase * 5) * 0.5 + sin(17 * angle + phase * 7) * 0.3
                 var delta = angle - fingerAngle
                 delta = atan2(sin(delta), cos(delta))
                 let bump = reach * exp(-(delta * delta) / 0.3)
@@ -430,80 +471,85 @@ final class CaptureFieldView: UIView {
             context.strokePath()
         }
 
-        let t = CGFloat(time)
+        let t = ringPhase
         // Silent, it is exactly the idle circle; the echo only appears once there is a voice.
         context.setLineWidth(1)
-        strokeRing(energy: slowEnergy * 1.5, phase: t - 0.5, alpha: 0.3 * min(1, slowEnergy * 3))
+        strokeRing(energy: slowEnergy * 1.5, phase: t - 0.9, alpha: 0.3 * min(1, slowEnergy * 3))
         context.setLineWidth(CaptureRing.lineWidth)
         strokeRing(energy: energy, phase: t, alpha: 1)
     }
 
-    private func rippleWave(_ ripple: Ripple, at point: CGPoint) -> (wave: CGFloat, direction: CGPoint) {
-        let age = CGFloat(time - ripple.born)
-        let dx = point.x - ripple.origin.x
-        let dy = point.y - ripple.origin.y
-        let distance = max(hypot(dx, dy), 0.001)
-        let front = (distance - age * 200) / 26
-        let wave = ripple.strength * exp(-front * front) * max(0, 1 - age / 2.6)
-        return (wave, CGPoint(x: dx / distance, y: dy / distance))
-    }
-
     /// Dots on concentric rings, so the field is a disc and waves leave the center evenly.
-    private func drawDots(in context: CGContext, color: UIColor) {
-        let spacing: CGFloat = 22
+    private func dotPoints(spacing: CGFloat) -> [CGPoint] {
+        if dotLayout.size == bounds.size, dotLayout.spacing == spacing {
+            return dotLayout.points
+        }
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         let ringCount = max(Int((min(bounds.width, bounds.height) / 2 - 8) / spacing), 1)
-
+        var points: [CGPoint] = []
         for ring in 0 ... ringCount {
             let ringRadius = CGFloat(ring) * spacing
             let count = ring == 0 ? 1 : Int((2 * .pi * ringRadius / spacing).rounded())
             for index in 0 ..< count {
                 let angle = CGFloat(index) / CGFloat(count) * 2 * .pi + CGFloat(ring) * 0.5
-                var position = CGPoint(
-                    x: center.x + cos(angle) * ringRadius,
-                    y: center.y + sin(angle) * ringRadius
-                )
-                var lift: CGFloat = 0
-                var push = CGPoint.zero
-                for ripple in ripples {
-                    let (wave, direction) = rippleWave(ripple, at: position)
-                    lift += wave
-                    push.x += direction.x * wave
-                    push.y += direction.y * wave
-                }
-                lift = min(lift, 1)
-                position.x += push.x * 4
-                position.y += push.y * 4
-                let radius = 1.1 + 2 * lift
-                context.setFillColor(color.withAlphaComponent(0.24 + 0.66 * lift).cgColor)
-                context.fillEllipse(
-                    in: CGRect(x: position.x - radius, y: position.y - radius, width: radius * 2, height: radius * 2)
-                )
+                points.append(CGPoint(x: center.x + cos(angle) * ringRadius, y: center.y + sin(angle) * ringRadius))
             }
         }
+        dotLayout = (bounds.size, spacing, points)
+        return points
     }
 
-    private func drawRipples(in context: CGContext, color: UIColor) {
-        context.setLineWidth(1.25)
-        for ripple in ripples {
-            let age = CGFloat(time - ripple.born)
-            let fade = pow(max(0, 1 - age / 2.6), 1.5)
-            let radius = 10 + age * 72
-            context.setStrokeColor(color.withAlphaComponent(min(1, 0.25 + ripple.strength) * fade).cgColor)
-            context.strokeEllipse(
-                in: CGRect(
-                    x: ripple.origin.x - radius,
-                    y: ripple.origin.y - radius,
-                    width: radius * 2,
-                    height: radius * 2
-                )
-            )
+    private func drawDots(in context: CGContext, color: UIColor) {
+        let tuning = DotsTuningStore.shared.tuning
+        let spacing = max(CGFloat(tuning.spacing), 8)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let discRadius = max(min(bounds.width, bounds.height) / 2 - 8, 1)
+        let speed = CGFloat(tuning.rippleSpeed)
+        let width = max(CGFloat(tuning.rippleWidth), 1)
+        let life = max(CGFloat(tuning.rippleLife), 0.1)
+        let reach = max(CGFloat(tuning.directReach) * discRadius, 1)
+        let swell = energy * CGFloat(tuning.direct)
+        let dim = CGFloat(tuning.dimAlpha)
+        let now = time
+        // Age and fade are per ripple, not per dot.
+        let waves = ripples.map { ripple -> (origin: CGPoint, front: CGFloat, strength: CGFloat) in
+            let age = CGFloat(now - ripple.born)
+            return (ripple.origin, age * speed * ripple.pace, ripple.strength * max(0, 1 - age / life))
         }
-        let core = 3 + energy * 9
-        context.setFillColor(color.cgColor)
-        context.fillEllipse(
-            in: CGRect(x: bounds.midX - core, y: bounds.midY - core, width: core * 2, height: core * 2)
-        )
+        let t = CGFloat(now)
+
+        var red: CGFloat = 1, green: CGFloat = 1, blue: CGFloat = 1, alpha: CGFloat = 1
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        for (index, rest) in dotPoints(spacing: spacing).enumerated() {
+            // Each dot flickers on its own clock while there is a voice, so the swell is grainy
+            // rather than a uniform glow.
+            let seed = CGFloat(index)
+            let rate = 2.4 + (seed * 0.618).truncatingRemainder(dividingBy: 1) * 4.2
+            let flicker = 0.5 + 0.5 * sin(t * rate + seed * 2.399)
+            var lift: CGFloat = energy * 0.3 * flicker * flicker
+            var push = CGPoint.zero
+            for wave in waves {
+                let dx = rest.x - wave.origin.x
+                let dy = rest.y - wave.origin.y
+                let distance = max(hypot(dx, dy), 0.001)
+                let offset = (distance - wave.front) / width
+                let amount = wave.strength * exp(-offset * offset)
+                lift += amount
+                push.x += dx / distance * amount
+                push.y += dy / distance * amount
+            }
+            if swell > 0 {
+                let fromCenter = hypot(rest.x - center.x, rest.y - center.y) / reach
+                lift += swell * exp(-fromCenter * fromCenter)
+            }
+            lift = min(lift, 1)
+            let x = rest.x + push.x * CGFloat(tuning.push)
+            let y = rest.y + push.y * CGFloat(tuning.push)
+            let radius = CGFloat(tuning.dotSize) + CGFloat(tuning.dotGrow) * lift
+            context.setFillColor(red: red, green: green, blue: blue, alpha: dim + (0.9 - dim) * lift)
+            context.fillEllipse(in: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
+        }
     }
 }
 

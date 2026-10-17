@@ -79,13 +79,13 @@ function searchHitKindLabel(kind: MemorySearchHit["kind"]): string {
 function searchHitIcon(kind: MemorySearchHit["kind"]) {
   switch (kind) {
     case "dictation":
-      return <Mic size={18} aria-hidden />;
+      return <Mic size={12} aria-hidden />;
     case "note":
-      return <StickyNote size={18} aria-hidden />;
+      return <StickyNote size={12} aria-hidden />;
     case "image":
-      return <ImageIcon size={18} aria-hidden />;
+      return <ImageIcon size={12} aria-hidden />;
     default:
-      return <MessageCircle size={18} aria-hidden />;
+      return <MessageCircle size={12} aria-hidden />;
   }
 }
 
