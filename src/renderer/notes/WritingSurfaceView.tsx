@@ -175,7 +175,7 @@ export function NotesView({
   >(() => false);
 
   const applyNoteTranscript = useCallback(
-    (text: string, result?: VoiceTranscriptResult): boolean => {
+    (text: string, _result?: VoiceTranscriptResult): boolean => {
       const editor = editorRef.current;
       if (!editor || selectedNoteId == null) return false;
       const applied = insertNoteDictation(editor, text);
