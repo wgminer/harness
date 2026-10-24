@@ -11,7 +11,13 @@ Tool-agnostic guardrails for AI-assisted work in this repo (Cursor, Claude Code,
 
 ## How this repo is usually worked
 
-- Prefer **small, shippable slices**; commit **only when asked**.
+- Prefer **small, shippable slices**.
+- **Work on a branch, not in the main checkout.** The main checkout is for merging. Each piece of work gets its own branch or worktree, however small.
+- **Commit to your branch when a slice is done**, without being asked. **Push, merge, or open a PR only when asked.** Never leave a session with finished work uncommitted; if you stop mid-slice, commit it as `WIP:` with what is left.
+- **Sync with main** at the start of a session on an existing branch.
+- **Cross-cutting refactors** (paths, data layout, IPC, shared settings) land first and alone, before features build on them.
+- **Two-client changes** (sync format, contracts read by iOS) are not done until both clients handle them; don't merge one side.
+- **No release from a dirty tree**: main must be committed and clean before a version bump.
 - Local + cloud agents often run **in parallel** — expect Settings / renderer / contracts collisions.
 - “Bring in cloud work” means: fetch, merge ready `cursor/*` PRs (or their branches), resolve conflicts keeping **current product UX** over stale cloud UI, then push.
 - Cross-language values go in [`resources/contracts/`](resources/contracts/) — never hand-copy.
