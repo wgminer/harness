@@ -4,6 +4,7 @@ import type {
   CodingScopeMeta,
   ExternalButtonStatus,
   GlobalRecordingStatus,
+  DictationTiming,
   RecentRecording,
   RecordingChime,
   TerminalDataChunk,
@@ -366,6 +367,8 @@ export function createHarnessAdapter(): HarnessAPI {
       wordsDictated: () => invoke<number>(cmd("recording:wordsDictated")),
       listRecent: (limit?: number) =>
         invoke<RecentRecording[]>(cmd("recording:listRecent"), { limit }),
+      listDictationTimings: () =>
+        invoke<DictationTiming[]>(cmd("recording:listDictationTimings")),
       transcribe: (data: ArrayBuffer, options?: { requestId?: string }) =>
         invoke(cmd("recording:transcribe"), { data, requestId: options?.requestId }),
       cancelTranscription: (requestId: string) =>

@@ -4,6 +4,7 @@ pub mod coding;
 pub mod commands;
 pub mod credentials;
 pub mod customization;
+pub mod dictation_timing;
 pub mod env_util;
 pub mod gmail;
 pub mod memory;
@@ -217,6 +218,7 @@ pub fn run() {
             recording::recording_cancel_transcription,
             recording::recording_play_chime,
             recording::recording_transcribe,
+            recording::recording_list_dictation_timings,
             recording::recording_transcription_engine_status,
             recording::recording_prepare_transcription_engine,
             recording::recording_paste_text,

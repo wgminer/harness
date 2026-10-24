@@ -119,6 +119,10 @@ export const SETTINGS_NAV: Array<{
       "folder",
       "system prompt",
       "prompt",
+      "timing",
+      "latency",
+      "slow",
+      "dictation",
     ],
   },
 ];

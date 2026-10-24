@@ -153,6 +153,7 @@ pub async fn finalize_voice_dictation_session(
   conversation_id: &str,
 ) -> Result<String, std::io::Error> {
   mark_voice_dictation_session(state, conversation_id).await?;
+  crate::dictation_timing::link_conversation(conversation_id);
   schedule_conversation_title_refinement(app.clone(), state.clone(), conversation_id.to_string());
   crate::recording::suggested_prompts::schedule_dictation_reply_action(
     app,
@@ -244,6 +245,11 @@ pub fn schedule_conversation_title_refinement(
         .as_deref()
         .filter(|t| !t.trim().is_empty() && !is_time_placeholder_title(Some(t)));
 
+      let timer = crate::dictation_timing::StepTimer::for_conversation(
+        &conversation_id,
+        "Title",
+        crate::openai::openai_title_model(),
+      );
       let raw_title = generate_thread_title_with_openai(
         &openai_key,
         previous_title,
@@ -251,6 +257,7 @@ pub fn schedule_conversation_title_refinement(
       )
       .await
       .map_err(|e| e.to_string())?;
+      timer.ok();
       let mut title = clean_title(raw_title.as_deref().unwrap_or(""));
       if title.is_empty() {
         // UNCHANGED / empty model output: keep an existing real title; only fall back

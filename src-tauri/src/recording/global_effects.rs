@@ -221,12 +221,30 @@ async fn deliver_unfocused(
     if let Some(path) = recording_path {
         let _ = dictation_index::link(&conversation_id, path);
     }
+    let paste_timer = crate::dictation_timing::StepTimer::start("Paste", "");
     paste_text_impl(app, text, paste_target_pid).await?;
+    paste_timer.ok();
     Ok(conversation_id)
 }
 
 /// Run stop/transcribe pipeline; `existing_path` skips re-saving when retrying.
 pub async fn run_stop_pipeline_from_path(
+    app: AppHandle,
+    runtime: Arc<GlobalRecordingRuntime>,
+    was_focused: bool,
+    wav: Vec<u8>,
+    existing_path: Option<PathBuf>,
+    paste_target_pid: Option<i32>,
+) {
+    let audio_ms = crate::dictation_timing::wav_duration_ms(&wav);
+    crate::dictation_timing::track(
+        audio_ms,
+        stop_pipeline(app, runtime, was_focused, wav, existing_path, paste_target_pid),
+    )
+    .await;
+}
+
+async fn stop_pipeline(
     app: AppHandle,
     runtime: Arc<GlobalRecordingRuntime>,
     was_focused: bool,

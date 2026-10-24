@@ -109,6 +109,29 @@ export interface ExternalButtonStatus {
   message: string | null;
 }
 
+/** One timed step of a dictation (transcribe, cleanup, paste, title, ...). */
+export interface DictationStep {
+  name: string;
+  /** Engine or model. */
+  detail?: string;
+  /** Offset from the dictation's `startedAt`. */
+  startMs: number;
+  durationMs: number;
+  outcome: "ok" | "error" | "cancelled";
+}
+
+/** Step timings for one dictation, recorded by the desktop app. */
+export interface DictationTiming {
+  id: string;
+  /** When processing began (recording stopped), unix ms. */
+  startedAt: number;
+  audioMs?: number;
+  /** Time from stop until the text was delivered. */
+  readyMs?: number;
+  conversationId?: string;
+  steps: DictationStep[];
+}
+
 export interface HarnessAPI {
   app: {
     getVersion: () => Promise<string>;
@@ -428,6 +451,8 @@ export interface HarnessAPI {
     wordsDictated: () => Promise<number>;
     /** Newest saved takes (default 3) for the Settings retry list. */
     listRecent: (limit?: number) => Promise<RecentRecording[]>;
+    /** Step timings for the last few dictations, newest first. */
+    listDictationTimings: () => Promise<DictationTiming[]>;
     transcribe: (
       data: ArrayBuffer,
       options?: { requestId?: string }
