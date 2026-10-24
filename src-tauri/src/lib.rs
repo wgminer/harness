@@ -8,6 +8,7 @@ pub mod env_util;
 pub mod gmail;
 pub mod memory;
 pub mod images;
+pub mod llm;
 pub mod files;
 pub mod notes;
 pub mod openai;
