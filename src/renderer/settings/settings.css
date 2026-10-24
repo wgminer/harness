@@ -235,6 +235,12 @@
   margin-top: 0;
 }
 
+.settings-group__hint--busy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .settings-group__content .settings-section {
   margin-bottom: 0;
 }

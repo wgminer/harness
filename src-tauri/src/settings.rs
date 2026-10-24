@@ -24,7 +24,8 @@ pub fn default_settings() -> Value {
                 "enabled": false,
                 "prompt": default_transcription_prompt()
             },
-            "glossary": []
+            "glossary": [],
+            "engine": crate::recording::DEFAULT_TRANSCRIPTION_ENGINE
         },
         "search": { "tavilyApiKey": "" },
         "notes": {
@@ -172,9 +173,14 @@ fn parse_transcription(raw: Option<&Value>, defaults: &Value) -> Value {
             .unwrap_or(""),
     );
 
+    let engine = crate::recording::TranscriptionEngine::parse(
+        raw.and_then(|v| v.get("engine")).and_then(|v| v.as_str()),
+    );
+
     json!({
         "cleanup": { "enabled": enabled, "prompt": prompt },
-        "glossary": glossary_value(raw)
+        "glossary": glossary_value(raw),
+        "engine": engine.as_str()
     })
 }
 
@@ -548,6 +554,9 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
         if transcription.get("glossary").is_some() || transcription.get("dictionary").is_some() {
             overlay["glossary"] = json!(crate::recording::transcript_cleanup::resolve_glossary(Some(transcription)));
         }
+        if let Some(engine) = transcription.get("engine") {
+            overlay["engine"] = engine.clone();
+        }
         if let Some(obj) = overlay.as_object_mut() {
             obj.remove("dictionary");
         }
@@ -614,4 +623,26 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
     let normalized = parse_settings(&next);
     save_settings(chains, &normalized).await?;
     Ok(normalized)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transcription_engine_defaults_to_apple() {
+        let defaults = default_settings();
+        assert_eq!(defaults["transcription"]["engine"], "apple");
+        let parsed = parse_transcription(Some(&json!({ "engine": "whisper" })), &defaults);
+        assert_eq!(parsed["engine"], "apple");
+        let parsed = parse_transcription(None, &defaults);
+        assert_eq!(parsed["engine"], "apple");
+    }
+
+    #[test]
+    fn transcription_engine_keeps_parakeet() {
+        let defaults = default_settings();
+        let parsed = parse_transcription(Some(&json!({ "engine": "parakeet" })), &defaults);
+        assert_eq!(parsed["engine"], "parakeet");
+    }
 }

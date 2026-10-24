@@ -21,6 +21,7 @@ import type {
 } from "../shared/writing";
 import type { ImageCreateInput, ImageGenerateInput } from "../shared/images";
 import type { SyncResult, SyncStatus } from "../shared/sync";
+import type { TranscriptionEngineStatus } from "../shared/transcriptionEngines";
 import type { UpdateStatus } from "../shared/updateStatus";
 import { tauriCommandName, tauriEventName } from "../shared/ipcNames";
 import { subscribeToWire } from "./tauriEventHub";
@@ -368,6 +369,10 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("recording:transcribe"), { data, requestId: options?.requestId }),
       cancelTranscription: (requestId: string) =>
         invoke(cmd("recording:cancelTranscription"), { requestId }),
+      transcriptionEngineStatus: (engine) =>
+        invoke<TranscriptionEngineStatus>(cmd("recording:transcriptionEngineStatus"), { engine }),
+      prepareTranscriptionEngine: (engine) =>
+        invoke(cmd("recording:prepareTranscriptionEngine"), { engine }),
       playChime: (kind: RecordingChime) => invoke(cmd("recording:playChime"), { kind }),
       pasteText: (text: string) => invoke(cmd("recording:pasteText"), { text }),
       getGlobalStatus: () =>

@@ -1,6 +1,7 @@
 import { DEFAULT_NOTE_TEMPLATES, DEFAULT_NOTE_TEMPLATE_ID } from "./writing";
 import { DEFAULT_ACCENT } from "./accent";
 import { DEFAULT_TRANSCRIPT_CLEANUP_PROMPT } from "./transcriptCleanup";
+import { DEFAULT_TRANSCRIPTION_ENGINE, type TranscriptionEngineId } from "./transcriptionEngines";
 
 export type MessageRole = "user" | "assistant" | "system";
 
@@ -138,6 +139,8 @@ export interface Settings {
     };
     /** Canonical names/terms injected into transcript cleanup (not a mechanical replace). */
     glossary: string[];
+    /** Desktop on-device speech-to-text engine; Apple Speech is the fallback. */
+    engine?: TranscriptionEngineId;
   };
   /** Optional Tavily API key for the `web_search` assistant tool. */
   search?: {
@@ -214,6 +217,7 @@ export const DEFAULT_SETTINGS: Settings = {
       prompt: DEFAULT_TRANSCRIPT_CLEANUP_PROMPT,
     },
     glossary: [],
+    engine: DEFAULT_TRANSCRIPTION_ENGINE,
   },
   search: {
     tavilyApiKey: "",

@@ -1,4 +1,5 @@
 import AVFoundation
+import FluidAudio
 import Foundation
 import Speech
 
@@ -9,6 +10,7 @@ enum ExitCode: Int32 {
   case recognizerUnavailable = 3
   case emptyTranscript = 4
   case audioNotReady = 5
+  case modelsNotReady = 6
 }
 
 enum TranscriptionError: LocalizedError {
@@ -16,6 +18,7 @@ enum TranscriptionError: LocalizedError {
   case recognizerUnavailable
   case emptyTranscript
   case audioNotReady
+  case modelsNotReady
   case failed(String)
 
   var exitCode: ExitCode {
@@ -24,6 +27,7 @@ enum TranscriptionError: LocalizedError {
     case .recognizerUnavailable: return .recognizerUnavailable
     case .emptyTranscript: return .emptyTranscript
     case .audioNotReady: return .audioNotReady
+    case .modelsNotReady: return .modelsNotReady
     case .failed: return .general
     }
   }
@@ -38,45 +42,93 @@ enum TranscriptionError: LocalizedError {
       return "No speech was detected in the recording."
     case .audioNotReady:
       return "The recording file is not ready yet. Try again in a moment."
+    case .modelsNotReady:
+      return "Parakeet models are not downloaded yet."
     case .failed(let message):
       return message
     }
   }
 }
 
-struct CLIArgs {
-  let audioURL: URL
-  let locale: Locale
+enum Engine: String {
+  case apple
+  case parakeet
 }
+
+enum Mode {
+  case transcribe(URL)
+  /// Download and compile the engine's models, then exit.
+  case prepare
+  /// Exit 0 when the engine's models are on disk, `modelsNotReady` otherwise.
+  case check
+}
+
+struct CLIArgs {
+  let mode: Mode
+  let engine: Engine
+  let locale: Locale
+  let modelsDir: URL?
+}
+
+let usage = "Usage: HarnessSpeech <wav-path> [--locale <id>] [--engine apple|parakeet] [--models-dir <path>]\n"
+  + "       HarnessSpeech --prepare|--check --engine parakeet [--locale <id>] [--models-dir <path>]"
 
 func parseArgs() throws -> CLIArgs {
   let args = CommandLine.arguments.dropFirst()
   var positional: [String] = []
   var locale = Locale.current
+  var engine = Engine.apple
+  var modelsDir: URL?
+  var prepare = false
+  var check = false
+
+  func value(for option: String, _ iterator: inout IndexingIterator<ArraySlice<String>>) throws -> String {
+    guard let value = iterator.next(), !value.isEmpty else {
+      throw TranscriptionError.failed("Missing value for \(option).")
+    }
+    return value
+  }
 
   var iterator = args.makeIterator()
   while let arg = iterator.next() {
-    if arg == "--locale" {
-      guard let value = iterator.next(), !value.isEmpty else {
-        throw TranscriptionError.failed("Missing value for --locale.")
+    switch arg {
+    case "--locale":
+      locale = Locale(identifier: try value(for: arg, &iterator))
+    case "--engine":
+      let raw = try value(for: arg, &iterator)
+      guard let parsed = Engine(rawValue: raw) else {
+        throw TranscriptionError.failed("Unknown engine: \(raw)")
       }
-      locale = Locale(identifier: value)
-      continue
+      engine = parsed
+    case "--models-dir":
+      modelsDir = URL(fileURLWithPath: try value(for: arg, &iterator), isDirectory: true)
+    case "--prepare":
+      prepare = true
+    case "--check":
+      check = true
+    default:
+      if arg.hasPrefix("-") {
+        throw TranscriptionError.failed("Unknown option: \(arg)")
+      }
+      positional.append(arg)
     }
-    if arg.hasPrefix("-") {
-      throw TranscriptionError.failed("Unknown option: \(arg)")
+  }
+
+  if prepare || check {
+    guard engine == .parakeet else {
+      throw TranscriptionError.failed("--prepare and --check need --engine parakeet.")
     }
-    positional.append(arg)
+    return CLIArgs(mode: prepare ? .prepare : .check, engine: engine, locale: locale, modelsDir: modelsDir)
   }
 
   guard let path = positional.first else {
-    throw TranscriptionError.failed("Usage: HarnessSpeech <wav-path> [--locale <id>]")
+    throw TranscriptionError.failed(usage)
   }
   let url = URL(fileURLWithPath: path)
   guard FileManager.default.fileExists(atPath: url.path) else {
     throw TranscriptionError.failed("Audio file not found: \(path)")
   }
-  return CLIArgs(audioURL: url, locale: locale)
+  return CLIArgs(mode: .transcribe(url), engine: engine, locale: locale, modelsDir: modelsDir)
 }
 
 func requestAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
@@ -248,6 +300,68 @@ func transcribeWithLegacyRecognizer(at url: URL, locale: Locale) async throws ->
   return combined
 }
 
+/// English uses Parakeet v2 (fastest); other languages use the multilingual Ultra model.
+func parakeetVersion(for locale: Locale) -> (version: AsrModelVersion, folder: String) {
+  if locale.language.languageCode?.identifier == "en" {
+    return (.v2, "parakeet-tdt-0.6b-v2")
+  }
+  return (.ultra, "parakeet-ultra")
+}
+
+/// Model folder in the app's data dir; FluidAudio's own cache location when none is given.
+func parakeetModelDirectory(modelsDir: URL?, locale: Locale) -> URL {
+  let (version, folder) = parakeetVersion(for: locale)
+  guard let modelsDir else { return AsrModels.defaultCacheDirectory(for: version) }
+  return modelsDir.appendingPathComponent(folder, isDirectory: true)
+}
+
+func parakeetModelsExist(modelsDir: URL?, locale: Locale) -> Bool {
+  let version = parakeetVersion(for: locale).version
+  return AsrModels.modelsExist(at: parakeetModelDirectory(modelsDir: modelsDir, locale: locale), version: version)
+}
+
+func loadParakeetModels(modelsDir: URL?, locale: Locale) async throws -> AsrModels {
+  let version = parakeetVersion(for: locale).version
+  let directory = parakeetModelDirectory(modelsDir: modelsDir, locale: locale)
+  return try await AsrModels.downloadAndLoad(to: directory, version: version)
+}
+
+/// CoreML's E5RT runtime prints warnings to stdout, which is the transcript channel.
+/// Point fd 1 at stderr while Parakeet runs.
+func withStdoutOnStderr<T>(_ body: () async throws -> T) async rethrows -> T {
+  fflush(stdout)
+  let saved = dup(STDOUT_FILENO)
+  dup2(STDERR_FILENO, STDOUT_FILENO)
+  defer {
+    fflush(stdout)
+    dup2(saved, STDOUT_FILENO)
+    close(saved)
+  }
+  return try await body()
+}
+
+func transcribeWithParakeet(at url: URL, locale: Locale, modelsDir: URL?) async throws -> String {
+  // Downloads are left to `--prepare` so a dictation never waits on a first-run fetch.
+  guard parakeetModelsExist(modelsDir: modelsDir, locale: locale) else {
+    throw TranscriptionError.modelsNotReady
+  }
+  try await ensureAudioFileReady(at: url)
+
+  let result = try await withStdoutOnStderr {
+    let models = try await loadParakeetModels(modelsDir: modelsDir, locale: locale)
+    let manager = AsrManager(config: .default)
+    try await manager.loadModels(models)
+    var decoderState = try TdtDecoderState(decoderLayers: models.version.decoderLayers)
+    return try await manager.transcribe(url, decoderState: &decoderState)
+  }
+
+  let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+  if text.isEmpty {
+    throw TranscriptionError.emptyTranscript
+  }
+  return text
+}
+
 func transcribe(at url: URL, locale: Locale) async throws -> String {
   let auth = await requestAuthorization()
   guard auth == .authorized else { throw TranscriptionError.permissionDenied }
@@ -284,8 +398,25 @@ struct HarnessSpeech {
   static func main() async {
     do {
       let args = try parseArgs()
-      let text = try await transcribe(at: args.audioURL, locale: args.locale)
-      FileHandle.standardOutput.write(Data((text + "\n").utf8))
+      switch args.mode {
+      case .check:
+        guard parakeetModelsExist(modelsDir: args.modelsDir, locale: args.locale) else {
+          throw TranscriptionError.modelsNotReady
+        }
+      case .prepare:
+        _ = try await withStdoutOnStderr {
+          try await loadParakeetModels(modelsDir: args.modelsDir, locale: args.locale)
+        }
+      case .transcribe(let url):
+        let text: String
+        switch args.engine {
+        case .apple:
+          text = try await transcribe(at: url, locale: args.locale)
+        case .parakeet:
+          text = try await transcribeWithParakeet(at: url, locale: args.locale, modelsDir: args.modelsDir)
+        }
+        FileHandle.standardOutput.write(Data((text + "\n").utf8))
+      }
       exit(ExitCode.success.rawValue)
     } catch {
       fail(error)

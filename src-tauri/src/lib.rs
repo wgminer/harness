@@ -216,6 +216,8 @@ pub fn run() {
             recording::recording_cancel_transcription,
             recording::recording_play_chime,
             recording::recording_transcribe,
+            recording::recording_transcription_engine_status,
+            recording::recording_prepare_transcription_engine,
             recording::recording_paste_text,
             recording::global::recording_signal_frontend_ready,
             recording::global::recording_get_global_status,

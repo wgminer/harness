@@ -1,6 +1,12 @@
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { Loader2 } from "lucide-react";
+import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { settingsSection } from "../../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../../shared/types";
+import {
+  TRANSCRIPTION_ENGINES,
+  type TranscriptionEngineId,
+  type TranscriptionEngineStatus,
+} from "../../shared/transcriptionEngines";
 import { Modal } from "../ui/Modal";
 import { RecentRecordingsSection } from "./RecentRecordingsSection";
 import { SettingsActions } from "./SettingsActions";
@@ -13,6 +19,50 @@ import { SettingsTabPanel } from "./SettingsTabPanel";
 
 const D = DEFAULT_SETTINGS;
 
+const ENGINE_STATUS_POLL_MS = 2000;
+
+/** Parakeet model readiness; starts the one-time download when models are missing. */
+function useEngineStatus(engine: TranscriptionEngineId) {
+  const [status, setStatus] = useState<TranscriptionEngineStatus | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (engine === "apple") {
+      setStatus(null);
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const api = window.harness.recording;
+    const poll = async () => {
+      try {
+        let next = await api.transcriptionEngineStatus(engine);
+        if (next.state === "missing") {
+          await api.prepareTranscriptionEngine(engine);
+          next = { state: "downloading" };
+        }
+        if (cancelled) return;
+        setStatus(next);
+        if (next.state === "downloading") timer = setTimeout(poll, ENGINE_STATUS_POLL_MS);
+      } catch (err) {
+        if (!cancelled) setStatus({ state: "failed", error: String(err) });
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [engine, attempt]);
+
+  const retry = async () => {
+    await window.harness.recording.prepareTranscriptionEngine(engine);
+    setAttempt((n) => n + 1);
+  };
+
+  return { status, retry };
+}
+
 export interface VoiceSettingsTabProps {
   cleanupEnabled: boolean;
   setCleanupEnabled: (value: boolean) => void;
@@ -20,6 +70,8 @@ export interface VoiceSettingsTabProps {
   setCleanupPrompt: (value: string) => void;
   transcriptGlossary: string[];
   setTranscriptGlossary: Dispatch<SetStateAction<string[]>>;
+  transcriptionEngine: TranscriptionEngineId;
+  setTranscriptionEngine: (value: TranscriptionEngineId) => void;
   /** True when OpenAI key is known configured (before secrets hydrate). */
   openAIConfigured: boolean;
   secretsLoaded: boolean;
@@ -35,6 +87,8 @@ export function VoiceSettingsTab({
   setCleanupPrompt,
   transcriptGlossary,
   setTranscriptGlossary,
+  transcriptionEngine,
+  setTranscriptionEngine,
   openAIConfigured,
   secretsLoaded,
   apiKey,
@@ -45,6 +99,8 @@ export function VoiceSettingsTab({
   const [glossaryModalOpen, setGlossaryModalOpen] = useState(false);
   const [editingGlossaryTerm, setEditingGlossaryTerm] = useState<string | null>(null);
   const [glossaryDraft, setGlossaryDraft] = useState("");
+  const { status: engineStatus, retry: retryEngineDownload } = useEngineStatus(transcriptionEngine);
+  const engineDefinition = TRANSCRIPTION_ENGINES.find((e) => e.id === transcriptionEngine);
 
   const openCleanupPromptModal = () => {
     setCleanupPromptDraft(cleanupPrompt);
@@ -104,6 +160,53 @@ export function VoiceSettingsTab({
     <>
       <SettingsTabPanel id="voice">
         {children}
+        <SettingsGroup title="Transcription">
+          <div className="settings-section" data-testid="settings-transcription-engine">
+            <div
+              className="settings-system-prompt-toggle"
+              role="radiogroup"
+              aria-label="Transcription engine"
+            >
+              {TRANSCRIPTION_ENGINES.map((engine) => {
+                const selected = transcriptionEngine === engine.id;
+                return (
+                  <button
+                    key={engine.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={`settings-system-prompt-toggle__btn${
+                      selected ? " settings-system-prompt-toggle__btn--active" : ""
+                    }`}
+                    onClick={() => setTranscriptionEngine(engine.id)}
+                  >
+                    {engine.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {engineDefinition ? <SettingsHint>{engineDefinition.description}</SettingsHint> : null}
+          {engineStatus?.state === "downloading" ? (
+            <SettingsHint className="settings-group__hint--busy">
+              <Loader2 size={14} className="voice-spinner" aria-hidden />
+              Downloading the model. Apple Speech is used until it's ready.
+            </SettingsHint>
+          ) : null}
+          {engineStatus?.state === "failed" ? (
+            <>
+              <SettingsHint>
+                Model download failed{engineStatus.error ? `: ${engineStatus.error}` : "."} Apple
+                Speech is used instead.
+              </SettingsHint>
+              <SettingsActions>
+                <button type="button" className="btn" onClick={() => void retryEngineDownload()}>
+                  Retry download
+                </button>
+              </SettingsActions>
+            </>
+          ) : null}
+        </SettingsGroup>
         <SettingsGroup title="Cleanup">
           <SettingsSwitch
             id="transcriptCleanupToggle"

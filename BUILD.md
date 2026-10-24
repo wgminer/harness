@@ -59,7 +59,9 @@ npm install
 
 ### On-device speech transcription
 
-Voice is transcribed locally with Apple's **Speech** framework via the `HarnessSpeech` helper (`native/HarnessSpeech`). No separate transcription API or model download is required.
+Voice is transcribed locally via the `HarnessSpeech` helper (`native/HarnessSpeech`, macOS 14+). The default engine is Apple's **Speech** framework, with no model download. Settings → Voice → Transcription can switch to **Parakeet** (NVIDIA, via [FluidAudio](https://github.com/FluidInference/FluidAudio)); its models (about 450 MB) download once in the background into `Harness/speech-models/`, shared by Dev and installed builds. Apple Speech is used until they are ready and whenever Parakeet fails.
+
+The first `swift build` also downloads FluidAudio's prebuilt `NemoTextProcessing` xcframework (about 87 MB, cached by SwiftPM afterwards). SwiftPM fetches every binary target a package declares, even trait-disabled ones; `traits: []` keeps it out of the linked helper.
 
 - **macOS 26+:** `SpeechAnalyzer` + `SpeechTranscriber` for long-form recordings
 - **Older macOS:** `SFSpeechRecognizer` with on-device recognition and chunked audio

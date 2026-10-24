@@ -8,6 +8,10 @@ import {
 } from "../../shared/types";
 import { migrateCleanupPrompt, resolveGlossary } from "../../shared/transcriptCleanup";
 import {
+  normalizeTranscriptionEngine,
+  type TranscriptionEngineId,
+} from "../../shared/transcriptionEngines";
+import {
   normalizeDefaultNoteTemplateId,
   normalizeNoteTemplates,
   type NoteTemplateConfig,
@@ -30,6 +34,7 @@ export type NonSecretSettingsHydration = {
   cleanupEnabled: boolean;
   cleanupPrompt: string;
   transcriptGlossary: string[];
+  transcriptionEngine: TranscriptionEngineId;
   r2AccountId: string;
   r2Bucket: string;
   r2Prefix: string;
@@ -129,6 +134,7 @@ export function nonSecretHydrationFromSettings(S: Settings): NonSecretSettingsHy
     cleanupEnabled: S.transcription?.cleanup?.enabled ?? D.transcription?.cleanup?.enabled ?? false,
     cleanupPrompt: migrateCleanupPrompt(S.transcription?.cleanup?.prompt ?? D.transcription?.cleanup?.prompt ?? ""),
     transcriptGlossary: resolveGlossary(S.transcription),
+    transcriptionEngine: normalizeTranscriptionEngine(S.transcription?.engine),
     r2AccountId: S.sync?.accountId ?? D.sync!.accountId,
     r2Bucket: S.sync?.bucket ?? D.sync!.bucket,
     r2Prefix: S.sync?.prefix ?? D.sync!.prefix,

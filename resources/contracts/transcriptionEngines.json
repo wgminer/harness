@@ -1,0 +1,15 @@
+{
+  "default": "apple",
+  "engines": [
+    {
+      "id": "apple",
+      "label": "Apple Speech",
+      "description": "Built into macOS. No download."
+    },
+    {
+      "id": "parakeet",
+      "label": "Parakeet",
+      "description": "NVIDIA's on-device model, about 3x faster on long recordings. Downloads once (about 450 MB); Apple Speech is used until it's ready."
+    }
+  ]
+}
