@@ -23,13 +23,3 @@ pub fn env_is_harness_e2e() -> bool {
 pub fn env_is_stub_images() -> bool {
     is_stub_images()
 }
-
-#[command(rename_all = "camelCase")]
-pub fn llm_timing_list(limit: Option<usize>) -> Vec<crate::llm_timing::LlmTiming> {
-    crate::llm_timing::list(limit.unwrap_or(50))
-}
-
-#[command(rename_all = "camelCase")]
-pub fn llm_timing_clear() {
-    crate::llm_timing::clear();
-}

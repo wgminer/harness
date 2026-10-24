@@ -122,7 +122,7 @@ export const SETTINGS_NAV: Array<{
       "timing",
       "latency",
       "slow",
-      "requests",
+      "dictation",
     ],
   },
 ];

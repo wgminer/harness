@@ -65,10 +65,6 @@ export function createBrowserAdapter(): HarnessAPI {
     app: {
       getVersion: async () => `${pkg.version}-web`,
     },
-    llmTiming: {
-      list: async () => [],
-      clear: async () => {},
-    },
     env: {
       isHarnessE2E: async () => false,
       isHarnessDev: async () => true,
@@ -390,6 +386,7 @@ export function createBrowserAdapter(): HarnessAPI {
       countFiles: async () => 0,
       archiveStats: async () => ({ fileCount: 0, durationMs: 0 }),
       listRecent: async () => [],
+      listDictationTimings: async () => [],
       transcribe: async () => ({ error: WEB_UNSUPPORTED }),
       cancelTranscription: async () => {},
       transcriptionEngineStatus: async () => ({ state: "ready" as const }),

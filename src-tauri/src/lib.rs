@@ -4,9 +4,9 @@ pub mod coding;
 pub mod commands;
 pub mod credentials;
 pub mod customization;
+pub mod dictation_timing;
 pub mod env_util;
 pub mod gmail;
-pub mod llm_timing;
 pub mod memory;
 pub mod images;
 pub mod files;
@@ -109,8 +109,6 @@ pub fn run() {
             commands::app::env_is_harness_dev,
             commands::app::env_is_harness_e2e,
             commands::app::env_is_stub_images,
-            commands::app::llm_timing_list,
-            commands::app::llm_timing_clear,
             commands::settings::settings_get,
             commands::settings::settings_set,
             commands::settings::settings_get_system_prompt_preview,
@@ -219,6 +217,7 @@ pub fn run() {
             recording::recording_cancel_transcription,
             recording::recording_play_chime,
             recording::recording_transcribe,
+            recording::recording_list_dictation_timings,
             recording::recording_transcription_engine_status,
             recording::recording_prepare_transcription_engine,
             recording::recording_paste_text,

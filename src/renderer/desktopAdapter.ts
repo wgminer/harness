@@ -4,7 +4,7 @@ import type {
   CodingScopeMeta,
   ExternalButtonStatus,
   GlobalRecordingStatus,
-  LlmTiming,
+  DictationTiming,
   RecentRecording,
   RecordingChime,
   TerminalDataChunk,
@@ -41,10 +41,6 @@ export function createHarnessAdapter(): HarnessAPI {
   return {
     app: {
       getVersion: () => invoke<string>(cmd("app:getVersion")),
-    },
-    llmTiming: {
-      list: (limit?: number) => invoke<LlmTiming[]>(cmd("llmTiming:list"), { limit }),
-      clear: () => invoke<void>(cmd("llmTiming:clear")),
     },
     env: {
       isHarnessE2E: () => invoke<boolean>(cmd("env:isHarnessE2E")),
@@ -370,6 +366,8 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke<{ fileCount: number; durationMs: number }>(cmd("recording:archiveStats")),
       listRecent: (limit?: number) =>
         invoke<RecentRecording[]>(cmd("recording:listRecent"), { limit }),
+      listDictationTimings: () =>
+        invoke<DictationTiming[]>(cmd("recording:listDictationTimings")),
       transcribe: (data: ArrayBuffer, options?: { requestId?: string }) =>
         invoke(cmd("recording:transcribe"), { data, requestId: options?.requestId }),
       cancelTranscription: (requestId: string) =>

@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter};
 use crate::credentials::resolve_openai_api_key;
 use crate::env_util::is_harness_e2e;
 use crate::state::AppState;
+use crate::dictation_timing::StepTimer;
 use crate::openai::{chat_completion_json, openai_title_model, OpenAIError};
 
 const CONTRACT_JSON: &str =
@@ -184,8 +185,16 @@ pub fn schedule_dictation_reply_action(
                         .unwrap_or_default(),
                     Err(_) => String::new(),
                 };
+                let timer = StepTimer::for_conversation(
+                    &conversation_id,
+                    "Reply action",
+                    openai_title_model(),
+                );
                 match classify_dictation_reply_action(key.trim(), &transcript).await {
-                    Ok(a) => a,
+                    Ok(a) => {
+                        timer.ok();
+                        a
+                    }
                     Err(_) => fallback_dictation_reply_action(),
                 }
             }
@@ -237,9 +246,14 @@ pub async fn ensure_dictation_reply_action(
     let action = if api_key.trim().is_empty() {
         fallback_dictation_reply_action()
     } else {
-        classify_dictation_reply_action(api_key.trim(), &transcript)
-            .await
-            .unwrap_or_else(|_| fallback_dictation_reply_action())
+        let timer = StepTimer::for_conversation(conversation_id, "Reply action", openai_title_model());
+        match classify_dictation_reply_action(api_key.trim(), &transcript).await {
+            Ok(a) => {
+                timer.ok();
+                a
+            }
+            Err(_) => fallback_dictation_reply_action(),
+        }
     };
 
     crate::memory::patch_conversation_dictation_reply_action(state, conversation_id, &action)

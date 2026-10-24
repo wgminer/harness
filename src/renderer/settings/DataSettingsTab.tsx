@@ -1,7 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { appDataFolderButtonLabel } from "../../shared/dataStorageLayout";
 import { ClaudeImportModal } from "./ClaudeImportModal";
-import { LlmTimingSection } from "./LlmTimingSection";
+import { DictationTimingSection } from "./DictationTimingSection";
 import { SettingsActions } from "./SettingsActions";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";
@@ -142,7 +142,7 @@ export function DataSettingsTab({ platform, onImportComplete }: DataSettingsTabP
           )}
         </SettingsGroup>
 
-        <LlmTimingSection />
+        <DictationTimingSection />
       </SettingsTabPanel>
 
       <ClaudeImportModal

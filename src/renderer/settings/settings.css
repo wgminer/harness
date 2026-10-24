@@ -1120,6 +1120,70 @@
   word-break: normal;
 }
 
+.dictation-timing__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.dictation-timing__row {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-caption);
+}
+
+.dictation-timing__label {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--fg);
+  min-width: 0;
+}
+
+.dictation-timing__duration {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dictation-timing__track {
+  position: relative;
+  height: var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--bg-secondary);
+}
+
+.dictation-timing__bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+}
+
+.dictation-timing__bar[data-after-ready] {
+  background: color-mix(in oklab, var(--accent) 50%, var(--bg-secondary));
+}
+
+.dictation-timing__bar[data-outcome="error"] {
+  background: var(--danger);
+}
+
+.dictation-timing__bar[data-outcome="cancelled"] {
+  background: var(--fg-muted);
+}
+
+.dictation-timing__ready {
+  position: absolute;
+  top: calc(var(--space-1) * -1);
+  bottom: calc(var(--space-1) * -1);
+  width: 1px;
+  background: var(--fg-muted);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .settings-entry-row--actions-on-hover:not(:hover):not(:focus-within)
     .settings-entry-row__actions {

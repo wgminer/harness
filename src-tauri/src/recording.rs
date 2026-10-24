@@ -17,6 +17,8 @@ pub mod transcription_engine;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+use crate::dictation_timing::{self, StepTimer};
 use std::sync::Arc;
 
 use serde::Serialize;
@@ -201,6 +203,26 @@ fn harness_speech_exe() -> Result<PathBuf, String> {
     Ok(exe)
 }
 
+async fn timed_speech_run(
+    exe: &PathBuf,
+    wav_path: &PathBuf,
+    engine: TranscriptionEngine,
+    cancel: &mut tokio::sync::watch::Receiver<bool>,
+) -> Result<String, SpeechRunError> {
+    let label = match engine {
+        TranscriptionEngine::Apple => "Apple Speech",
+        TranscriptionEngine::Parakeet => "Parakeet",
+    };
+    let timer = StepTimer::start("Transcribe", label);
+    let result = run_harness_speech(exe, wav_path, engine, cancel).await;
+    match &result {
+        Ok(_) => timer.ok(),
+        Err(SpeechRunError::Cancelled) => timer.cancelled(),
+        Err(_) => {}
+    }
+    result
+}
+
 /// Transcribe on device with the engine from settings. Parakeet falls back to
 /// Apple Speech when it fails or its models are still downloading.
 async fn transcribe_on_device(
@@ -216,7 +238,7 @@ async fn transcribe_on_device(
         .map_err(|e| e.to_string())?;
 
     let engine = TranscriptionEngine::from_settings(settings);
-    let mut result = run_harness_speech(&exe, &wav_path, engine, cancel).await;
+    let mut result = timed_speech_run(&exe, &wav_path, engine, cancel).await;
     if engine == TranscriptionEngine::Parakeet {
         match &result {
             Err(SpeechRunError::ModelsNotReady) => start_parakeet_prepare(&exe),
@@ -226,7 +248,7 @@ async fn transcribe_on_device(
             _ => {}
         }
         if matches!(result, Err(SpeechRunError::ModelsNotReady | SpeechRunError::Failed(_))) {
-            result = run_harness_speech(&exe, &wav_path, TranscriptionEngine::Apple, cancel).await;
+            result = timed_speech_run(&exe, &wav_path, TranscriptionEngine::Apple, cancel).await;
         }
     }
 
@@ -313,7 +335,7 @@ async fn run_transcript_cleanup(
     let user_message = build_cleanup_user_message(text);
 
     let client = reqwest::Client::new();
-    let timer = crate::llm_timing::RequestTimer::start("cleanup", OPENAI_TRANSCRIPT_CLEANUP_MODEL);
+    let timer = StepTimer::start("Cleanup", OPENAI_TRANSCRIPT_CLEANUP_MODEL);
     let body = serde_json::json!({
         "model": OPENAI_TRANSCRIPT_CLEANUP_MODEL,
         "messages": [
@@ -706,7 +728,7 @@ pub async fn recording_transcribe(
             .insert(id, cancel_tx);
     }
 
-    let result = async {
+    let result = dictation_timing::track(dictation_timing::wav_duration_ms(&data), async {
         let settings = get_settings(&runtime.app_state.write_chains).await;
         let text = transcribe_on_device(&settings, &data, &mut cancel_rx).await?;
         let polished = polish_transcript(&settings, text).await;
@@ -715,7 +737,7 @@ pub async fn recording_transcribe(
             error: None,
             cleanup_skipped: polished.cleanup_skipped,
         })
-    }
+    })
     .await;
 
     if let Some(id) = request_id {
@@ -730,6 +752,12 @@ pub async fn recording_transcribe(
             cleanup_skipped: None,
         }),
     }
+}
+
+/// Step timings for the last few dictations, newest first.
+#[tauri::command(rename_all = "camelCase")]
+pub fn recording_list_dictation_timings() -> Vec<dictation_timing::DictationTiming> {
+    dictation_timing::list()
 }
 
 /// Model readiness for an on-device engine (`apple` is always ready).

@@ -109,28 +109,32 @@ export interface ExternalButtonStatus {
   message: string | null;
 }
 
-/** One OpenAI request, recorded by the desktop app for latency checks. */
-export interface LlmTiming {
-  /** Request start, unix ms. */
-  startedAt: number;
-  kind: "chat" | "title" | "json" | "cleanup" | "image" | "imageEdit";
-  model: string;
-  /** 1-based model round within one chat turn (tool calls add rounds). */
-  round?: number;
-  /** Time until the first streamed delta (chat only). */
-  firstTokenMs?: number;
-  totalMs: number;
+/** One timed step of a dictation (transcribe, cleanup, paste, title, ...). */
+export interface DictationStep {
+  name: string;
+  /** Engine or model. */
+  detail?: string;
+  /** Offset from the dictation's `startedAt`. */
+  startMs: number;
+  durationMs: number;
   outcome: "ok" | "error" | "cancelled";
+}
+
+/** Step timings for one dictation, recorded by the desktop app. */
+export interface DictationTiming {
+  id: string;
+  /** When processing began (recording stopped), unix ms. */
+  startedAt: number;
+  audioMs?: number;
+  /** Time from stop until the text was delivered. */
+  readyMs?: number;
+  conversationId?: string;
+  steps: DictationStep[];
 }
 
 export interface HarnessAPI {
   app: {
     getVersion: () => Promise<string>;
-  };
-  llmTiming: {
-    /** Newest first. */
-    list: (limit?: number) => Promise<LlmTiming[]>;
-    clear: () => Promise<void>;
   };
   env: {
     isHarnessE2E: () => Promise<boolean>;
@@ -445,6 +449,8 @@ export interface HarnessAPI {
     archiveStats: () => Promise<{ fileCount: number; durationMs: number }>;
     /** Newest saved takes (default 3) for the Settings retry list. */
     listRecent: (limit?: number) => Promise<RecentRecording[]>;
+    /** Step timings for the last few dictations, newest first. */
+    listDictationTimings: () => Promise<DictationTiming[]>;
     transcribe: (
       data: ArrayBuffer,
       options?: { requestId?: string }

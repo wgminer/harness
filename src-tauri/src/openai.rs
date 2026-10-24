@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
-use crate::llm_timing::RequestTimer;
-
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
 const OPENAI_RESPONSES_URL: &str = "https://api.openai.com/v1/responses";
 const OPENAI_IMAGES_GENERATIONS_URL: &str = "https://api.openai.com/v1/images/generations";
@@ -151,10 +149,8 @@ If the previous title still fits the recent conversation, reply with exactly: UN
         context
     );
 
-    let model = openai_title_model();
-    let timer = RequestTimer::start("title", model.clone());
     let body = json!({
-        "model": model,
+        "model": openai_title_model(),
         "messages": [
             { "role": "system", "content": system },
             { "role": "user", "content": user_block }
@@ -176,7 +172,6 @@ If the previous title still fits the recent conversation, reply with exactly: UN
     }
 
     let parsed: Value = response.json().await?;
-    timer.ok();
     let raw = parsed
         .pointer("/choices/0/message/content")
         .and_then(|v| v.as_str())
@@ -205,7 +200,6 @@ pub async fn chat_completion_json(
     let client = Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
         .build()?;
-    let timer = RequestTimer::start("json", model);
     let body = json!({
         "model": model,
         "messages": [
@@ -230,7 +224,6 @@ pub async fn chat_completion_json(
     }
 
     let parsed: Value = response.json().await?;
-    timer.ok();
     Ok(parsed
         .pointer("/choices/0/message/content")
         .and_then(|v| v.as_str())
@@ -292,9 +285,7 @@ pub async fn generate_image(
     cancel: Option<&CancellationToken>,
 ) -> Result<Vec<u8>, OpenAIError> {
     let client = Client::builder().timeout(Duration::from_secs(120)).build()?;
-    let model = openai_image_model();
-    let timer = RequestTimer::start("image", model.clone()).cancel_token(cancel);
-    let body = build_image_request_body(&model, prompt, options);
+    let body = build_image_request_body(&openai_image_model(), prompt, options);
 
     let response = send_cancellable(
         cancel,
@@ -312,7 +303,6 @@ pub async fn generate_image(
     }
 
     let parsed: Value = response.json().await?;
-    timer.ok();
     decode_image_b64_response(&parsed)
 }
 
@@ -337,10 +327,8 @@ pub async fn edit_image(
         ));
     }
     let client = Client::builder().timeout(Duration::from_secs(120)).build()?;
-    let model = openai_image_model();
-    let timer = RequestTimer::start("imageEdit", model.clone()).cancel_token(cancel);
     let mut form = reqwest::multipart::Form::new()
-        .text("model", model)
+        .text("model", openai_image_model())
         .text("prompt", prompt.to_string())
         .text("size", options.size.clone())
         .text("quality", options.quality.clone())
@@ -373,7 +361,6 @@ pub async fn edit_image(
     }
 
     let parsed: Value = response.json().await?;
-    timer.ok();
     decode_image_b64_response(&parsed)
 }
 
@@ -928,12 +915,8 @@ impl OpenAIChatClient {
                 return Err(OpenAIError::Cancelled);
             }
 
-            let model = openai_chat_model();
-            let mut timer = RequestTimer::start("chat", model.clone())
-                .round(iteration as u32)
-                .cancel_token(Some(cancel));
             let mut body = json!({
-                "model": model,
+                "model": openai_chat_model(),
                 "input": responses_input(&messages),
                 "stream": true,
                 "store": false,
@@ -992,11 +975,7 @@ impl OpenAIChatClient {
                         let Ok(parsed) = serde_json::from_str::<Value>(data) else {
                             continue;
                         };
-                        let delta = partial.apply(&parsed);
-                        if delta.is_some() {
-                            timer.mark_first_token();
-                        }
-                        match delta {
+                        match partial.apply(&parsed) {
                             Some(StreamDelta::Text(delta)) => {
                                 full_content.push_str(&delta);
                                 on_content(&delta);
@@ -1019,7 +998,6 @@ impl OpenAIChatClient {
             if let Some(message) = partial.error.take() {
                 return Err(OpenAIError::Api(message));
             }
-            timer.ok();
 
             let tool_calls = partial.tool_calls();
             if tool_calls.is_empty() {
