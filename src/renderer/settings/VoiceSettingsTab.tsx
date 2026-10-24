@@ -1,3 +1,4 @@
+import { Loader2 } from "lucide-react";
 import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { settingsSection } from "../../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../../shared/types";
@@ -187,7 +188,10 @@ export function VoiceSettingsTab({
           </div>
           {engineDefinition ? <SettingsHint>{engineDefinition.description}</SettingsHint> : null}
           {engineStatus?.state === "downloading" ? (
-            <SettingsHint>Downloading the model. Apple Speech is used until it's ready.</SettingsHint>
+            <SettingsHint className="settings-group__hint--busy">
+              <Loader2 size={14} className="voice-spinner" aria-hidden />
+              Downloading the model. Apple Speech is used until it's ready.
+            </SettingsHint>
           ) : null}
           {engineStatus?.state === "failed" ? (
             <>
