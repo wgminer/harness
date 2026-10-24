@@ -96,16 +96,17 @@
       </p>
 
       <figure class="files">
-        <pre aria-label="The Harness data folder: conversations, notes, tasks and memory in local-data/app-state, and every take as a WAV file in audio-recordings."><span class="files__dir">~/Library/Application Support/Harness/</span>
-├─ <span class="files__dir">local-data/app-state/</span>
-│  ├─ conversations.json
-│  ├─ messages_conv_….json      <span class="files__note">one per conversation</span>
-│  ├─ notes/….md                <span class="files__note">one per note</span>
-│  ├─ tasks.json
-│  └─ user_memory.json          <span class="files__note">what it remembers about me</span>
-└─ <span class="files__dir">audio-recordings/</span>
-   ├─ dictation_recordings.json
-   └─ rec_….wav                 <span class="files__note">every take, as recorded</span></pre>
+        <pre aria-label="The Harness data folder: one JSON file per conversation in Conversations, one Markdown file per note in Notes, every take as a WAV file in Recordings, and tasks and memory in a hidden .harness folder."><span class="files__dir">~/Library/Application Support/Harness/</span>
+├─ <span class="files__dir">Conversations/</span>
+│  └─ conv_….json               <span class="files__note">one per conversation</span>
+├─ <span class="files__dir">Notes/</span>
+│  └─ ….md                      <span class="files__note">one per note</span>
+├─ <span class="files__dir">Recordings/</span>
+│  ├─ dictation_recordings.json
+│  └─ rec_….wav                 <span class="files__note">every take, as recorded</span>
+└─ <span class="files__dir">.harness/app-state/</span>
+   ├─ tasks.json
+   └─ user_memory.json          <span class="files__note">what it remembers about me</span></pre>
       </figure>
 
       <h2>Dictation</h2>
