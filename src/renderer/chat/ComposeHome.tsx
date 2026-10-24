@@ -55,3 +55,19 @@ export function ComposeCornerMeta() {
     </a>
   );
 }
+
+/** Total words dictated, bare, in the bottom-left corner of the compose splash. */
+export function ComposeWordsDictated() {
+  const [words, setWords] = useState<number | null>(null);
+
+  useEffect(() => {
+    window.harness.recording.wordsDictated().then(setWords).catch(() => setWords(null));
+  }, []);
+
+  if (words === null) return null;
+  return (
+    <p className="new-chat-corner new-chat-corner--bottom-left" title="Words dictated">
+      {words.toLocaleString()}
+    </p>
+  );
+}

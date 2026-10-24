@@ -385,6 +385,7 @@ export function createBrowserAdapter(): HarnessAPI {
       openFolder: async () => {},
       countFiles: async () => 0,
       archiveStats: async () => ({ fileCount: 0, durationMs: 0 }),
+      wordsDictated: async () => 0,
       listRecent: async () => [],
       transcribe: async () => ({ error: WEB_UNSUPPORTED }),
       cancelTranscription: async () => {},

@@ -424,6 +424,8 @@ export interface HarnessAPI {
     countFiles: () => Promise<number>;
     /** File count + summed WAV duration under audio-recordings/. */
     archiveStats: () => Promise<{ fileCount: number; durationMs: number }>;
+    /** Running total of transcribed words (local to this Mac; not synced). */
+    wordsDictated: () => Promise<number>;
     /** Newest saved takes (default 3) for the Settings retry list. */
     listRecent: (limit?: number) => Promise<RecentRecording[]>;
     transcribe: (
