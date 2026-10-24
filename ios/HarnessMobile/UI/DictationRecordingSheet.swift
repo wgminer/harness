@@ -41,8 +41,6 @@ struct DictationRecordingSheet: View {
     @State private var showFailedRecordingShareSheet = false
     /// Local mic-live latch — parent does not observe AudioRecorder for meter churn.
     @State private var isMicLive = false
-    @AppStorage(CaptureVisualizerStyle.storageKey) private var visualizerStyle: CaptureVisualizerStyle = .dots
-    @State private var showDotsTuning = false
 
     init(
         app: AppModel,
@@ -150,12 +148,10 @@ struct DictationRecordingSheet: View {
                 immersiveStatus("Starting microphone…")
             case .recording:
                 // Centered on the physical screen, so the ring lands exactly on the idle circle.
-                CaptureVisualizer(recorder: recorder, style: visualizerStyle)
+                CaptureVisualizer(recorder: recorder)
                     .frame(maxWidth: .infinity)
                     .frame(height: 380)
-                    // The tuning panel takes the lower part of the screen; lift the visual clear of it.
-                    .offset(y: CaptureRing.centerShift(insets) - (dotsTuningOpen ? 150 : 0))
-                    .animation(.easeOut(duration: 0.2), value: dotsTuningOpen)
+                    .offset(y: CaptureRing.centerShift(insets))
                     .background {
                         DictationCaptureWatchdog(recorder: recorder, onUnexpectedEnd: handleUnexpectedEnd)
                     }
@@ -168,7 +164,7 @@ struct DictationRecordingSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .top) {
-            if phase == .recording, !dotsTuningOpen {
+            if phase == .recording {
                 DictationElapsedLabel(
                     recorder: recorder,
                     font: .system(size: 52, weight: .light),
@@ -209,26 +205,12 @@ struct DictationRecordingSheet: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(phase == .recording ? "Discard recording" : "Close")
                     Spacer()
-                    if phase == .recording {
-                        CaptureVisualizerMenu(style: $visualizerStyle)
-                    }
                 }
                 .padding(.horizontal, 32)
             }
             .frame(height: CaptureShutter.diameter)
             .padding(.bottom, CaptureShutter.bottomInset)
         }
-        .overlay {
-            if phase == .recording, visualizerStyle == .dots {
-                DotsTuningJig(isOpen: $showDotsTuning)
-                    // Stops above the control row, so stop and discard stay reachable.
-                    .padding(.bottom, CaptureShutter.bottomInset + CaptureShutter.diameter + 16)
-            }
-        }
-    }
-
-    private var dotsTuningOpen: Bool {
-        showDotsTuning && visualizerStyle == .dots && phase == .recording
     }
 
     private static let timerHeight: CGFloat = 62
