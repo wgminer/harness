@@ -3,7 +3,7 @@ pub mod merge;
 pub mod remote_store;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,6 +33,7 @@ use crate::env_util::is_harness_e2e;
 
 const STATE_FILE: &str = "state.json";
 const LOCAL_BACKUP_DIR: &str = "backups";
+const LOCAL_BACKUP_KEEP: usize = 20;
 const MANIFEST_VERSION: i32 = 1;
 const POLL_INTERVAL_MS: u64 = 30_000;
 const SYNC_DEBOUNCE_MS: u64 = 2_500;
@@ -226,6 +227,24 @@ fn state_path() -> PathBuf {
 
 fn local_backups_root() -> PathBuf {
     get_local_data_sync_dir().join(LOCAL_BACKUP_DIR)
+}
+
+/// Keeps the newest `keep` snapshot folders (numeric ms timestamps) under `root`
+/// and deletes the rest. Anything with a non-numeric name is left alone.
+fn prune_local_backups(root: &Path, keep: usize) -> std::io::Result<()> {
+    let mut snapshots: Vec<(u64, PathBuf)> = std::fs::read_dir(root)?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .filter_map(|entry| {
+            let stamp = entry.file_name().to_str()?.parse::<u64>().ok()?;
+            Some((stamp, entry.path()))
+        })
+        .collect();
+    snapshots.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, path) in snapshots.into_iter().skip(keep) {
+        std::fs::remove_dir_all(path)?;
+    }
+    Ok(())
 }
 
 async fn load_state(_app_state: &AppState) -> Result<PersistedState, std::io::Error> {
@@ -473,6 +492,7 @@ async fn merge_conflict_resolution(
     backup_scoped_files(&local_data, &backup_snapshot_dir, DEFAULT_SYNC_SCOPES)
         .await
         .map_err(|e| e.to_string())?;
+    let _ = prune_local_backups(&local_backups_root(), LOCAL_BACKUP_KEEP);
     apply_merged_files(&local_data, &merged_files, DEFAULT_SYNC_SCOPES)
         .await
         .map_err(|e| e.to_string())?;
@@ -523,6 +543,7 @@ async fn pull_remote_into_local(
     backup_scoped_files(&local_data, &backup_snapshot_dir, DEFAULT_SYNC_SCOPES)
         .await
         .map_err(|e| e.to_string())?;
+    let _ = prune_local_backups(&local_backups_root(), LOCAL_BACKUP_KEEP);
     extract_bundle(&local_data, &doc, DEFAULT_SYNC_SCOPES)
         .await
         .map_err(|e| e.to_string())
@@ -978,5 +999,25 @@ mod tests {
             local_max_mtime_ms: 0,
         });
         assert_eq!(decision, SyncDecision::Push);
+    }
+
+    #[test]
+    fn prune_local_backups_keeps_newest_numeric_snapshots() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        for stamp in [9, 100, 20, 3000, 1000] {
+            std::fs::create_dir(root.join(stamp.to_string())).unwrap();
+        }
+        std::fs::create_dir(root.join("keep-me")).unwrap();
+        std::fs::write(root.join("5"), "not a dir").unwrap();
+
+        prune_local_backups(root, 2).unwrap();
+
+        let mut left: Vec<String> = std::fs::read_dir(root)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(left, vec!["1000", "3000", "5", "keep-me"]);
     }
 }
