@@ -22,6 +22,7 @@ Tool-agnostic guardrails for AI-assisted work in this repo (Cursor, Claude Code,
 - “Bring in cloud work” means: fetch, merge ready `cursor/*` PRs (or their branches), resolve conflicts keeping **current product UX** over stale cloud UI, then push.
 - Cross-language values go in [`resources/contracts/`](resources/contracts/) — never hand-copy.
 - Desktop UI iteration often uses `npm run dev:browser` (debug shell, not a product client).
+- **Stay inside the slice.** Don't reformat, rename, or tidy code the task doesn't need. Put an unrelated fix you spot in its own slice, or mention it; don't bundle it in.
 
 ## Vocabulary
 
@@ -46,6 +47,17 @@ If code cannot share a file (logic mirrors), add a **parity test** that reads th
 
 - **Renderer (`src/renderer/`)** is grouped by feature: `chat/`, `notes/`, `tasks/`, `images/`, `search/`, `sidebar/`, `recording/`, `setup/`, `settings/`. Shared primitives live in `ui/`, shared hooks in `hooks/`. Each feature keeps its components, CSS, hooks, and tests together. `App.tsx` composes per-feature hooks (`useConversations`, `useNotesLibrary`, `useImageLibrary`, `useSetupState`, ...) — add new state to the owning hook, not to `App`.
 - **Rust (`src-tauri/src/`)** groups domains as a parent file plus a folder of children (same as `chat.rs` + `chat/`): `recording`, `memory`, `sync`, `notes`, `chat`, `images`. Tauri command handlers live in `commands/<domain>.rs`; process-wide state is `state.rs`.
+- **Keep files small.** Don't grow a component or module past ~800 lines. If a change would push it over, first split it in its own slice: move state into the feature's hook, or pull out a subcomponent or child module. `ChatView.tsx`, `WritingSurfaceView.tsx`, and `ImageCanvasView.tsx` are already over; shrink them when you touch them, don't add to them.
+
+## Where new things go
+
+Touch these in order. Where a check catches a missed step, it's named in parentheses.
+
+- **IPC command:** Rust handler in `src-tauri/src/commands/<domain>.rs` → register in `generate_handler!` in `lib.rs` → method on `HarnessAPI` in `src/shared/desktopAPI.ts` → call in `desktopAdapter.ts` (`ipcNames.test.ts`) → stub in `src/renderer/browser/browserAdapter.ts` (`npm run typecheck`).
+- **Shared value (TS + Rust + Swift):** JSON file in `resources/contracts/` → load it from each side → register it in `ios/HarnessMobile.xcodeproj` under `SharedContracts` → add it to the **Today** list above.
+- **Setting:** field on `Settings` and `DEFAULT_SETTINGS` in `src/shared/types.ts` → matching default in `default_settings()` in `src-tauri/src/settings.rs` → UI in the right tab under `src/renderer/settings/`.
+- **Renderer feature:** new folder under `src/renderer/<feature>/` with its own hook, components, CSS, and tests; `App.tsx` only composes the hook.
+- **Rust domain:** `src-tauri/src/<domain>.rs` + `<domain>/` for children; commands in `commands/<domain>.rs`.
 
 ## IPC naming (desktop)
 
@@ -53,15 +65,25 @@ Frontend uses `namespace:method` strings in [`src/renderer/desktopAdapter.ts`](s
 
 Rust handlers must appear in `tauri::generate_handler![...]` in [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs). **`ipcNames.test.ts` scans `lib.rs` and `desktopAdapter.ts` and fails if they diverge** — do not maintain a duplicate handler list in TS.
 
-## Drift checks
+## Checks before you commit
 
-Before landing cross-surface changes:
+Run what CI runs, so a green local run means a green CI run:
 
 ```bash
-npm test
+npm run lint && npm run typecheck && npm test
 ```
 
-Vitest covers version parity, ipcNames ↔ `generate_handler!`, sync-merge fixtures, and other guards under `src/shared/*.test.ts`. CI runs the same `npm test` in the static job.
+If you touched `src-tauri/`, also run `cargo test --lib` from `src-tauri/`. If you added a contract file, confirm it's registered in the checked-in Xcode project (CI regenerates the project with xcodegen, but local Xcode builds don't).
+
+Vitest covers version parity, ipcNames ↔ `generate_handler!`, sync-merge fixtures, and other drift guards under `src/shared/*.test.ts`. If a guard fails, fix the drift; don't loosen the guard or silence the lint rule. If the guard itself is wrong, say why in the commit message.
+
+While iterating, run only the tests you're working against, then the full set once before committing:
+
+```bash
+npx vitest run src/shared/ipcNames.test.ts
+```
+
+In `src-tauri/`, `cargo test --lib <module_or_test_name>` does the same for Rust.
 
 ## Browser debug shell
 
