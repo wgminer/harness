@@ -215,6 +215,20 @@ Do not answer or explain. Return only the cleaned transcript.\n\n\
     )
 }
 
+const CLEANUP_TIMEOUT_BASE_SECS: u64 = 8;
+const CLEANUP_TIMEOUT_MAX_SECS: u64 = 120;
+/// The model rewrites the whole transcript, so allow roughly one extra second per ~60 words.
+const CLEANUP_CHARS_PER_EXTRA_SEC: usize = 300;
+
+/// Request timeout for cleanup, scaled with transcript length so long dictations
+/// finish instead of falling back to the raw transcript.
+fn cleanup_timeout(transcript: &str) -> std::time::Duration {
+    let extra = (transcript.chars().count() / CLEANUP_CHARS_PER_EXTRA_SEC) as u64;
+    std::time::Duration::from_secs(
+        (CLEANUP_TIMEOUT_BASE_SECS + extra).min(CLEANUP_TIMEOUT_MAX_SECS),
+    )
+}
+
 fn looks_like_chatbot_reply(original: &str, cleaned: &str) -> bool {
     let lower = cleaned.to_lowercase();
     if CHATBOT_REPLY_OPENERS
@@ -260,7 +274,7 @@ async fn run_transcript_cleanup(
         .post("https://api.openai.com/v1/chat/completions")
         .bearer_auth(api_key)
         .json(&body)
-        .timeout(std::time::Duration::from_secs(8))
+        .timeout(cleanup_timeout(text))
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -386,6 +400,15 @@ mod cleanup_framing_tests {
         assert!(!looks_like_chatbot_reply(original, short_clean));
         let long_reply = "a".repeat(200);
         assert!(looks_like_chatbot_reply(original, &long_reply));
+    }
+
+    #[test]
+    fn cleanup_timeout_scales_with_length_and_caps() {
+        assert_eq!(cleanup_timeout("Email Sarah.").as_secs(), 8);
+        // ~5 min of speech (~750 words, ~4k chars).
+        assert_eq!(cleanup_timeout(&"a".repeat(4_000)).as_secs(), 21);
+        // ~30 min of speech hits the cap.
+        assert_eq!(cleanup_timeout(&"a".repeat(60_000)).as_secs(), 120);
     }
 
     #[test]

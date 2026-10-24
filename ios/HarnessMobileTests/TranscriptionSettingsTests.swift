@@ -81,4 +81,10 @@ final class TranscriptionSettingsTests: XCTestCase {
         XCTAssertEqual(loaded.cleanup.prompt, "Keep it terse.")
         XCTAssertEqual(loaded.glossary, ["Harness"])
     }
+
+    func testCleanupTimeoutScalesWithLengthAndCaps() {
+        XCTAssertEqual(OpenAIEndpoint.cleanupTimeout(for: "Email Sarah."), 8)
+        XCTAssertEqual(OpenAIEndpoint.cleanupTimeout(for: String(repeating: "a", count: 4_000)), 21)
+        XCTAssertEqual(OpenAIEndpoint.cleanupTimeout(for: String(repeating: "a", count: 60_000)), 120)
+    }
 }

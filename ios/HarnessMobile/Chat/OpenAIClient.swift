@@ -6,7 +6,13 @@ enum OpenAIEndpoint {
     static let audioTranscriptions = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
     static let titleTimeout: TimeInterval = 10
     static let whisperTimeout: TimeInterval = 120
-    static let cleanupTimeout: TimeInterval = 8
+
+    /// Cleanup rewrites the whole transcript, so long dictations need longer than the base.
+    /// Keep in sync with Rust `recording::cleanup_timeout`: 8s + 1s per 300 chars, capped at 120s.
+    static func cleanupTimeout(for transcript: String) -> TimeInterval {
+        let extra = TimeInterval(transcript.count / 300)
+        return min(8 + extra, 120)
+    }
 }
 
 enum OpenAIModel {
@@ -415,7 +421,7 @@ final class OpenAIClient {
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = OpenAIEndpoint.cleanupTimeout
+        request.timeoutInterval = OpenAIEndpoint.cleanupTimeout(for: text)
 
         let body: [String: Any] = [
             "model": OpenAIModel.transcriptCleanup,
