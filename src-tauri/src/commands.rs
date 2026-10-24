@@ -5,6 +5,7 @@ pub mod chat;
 pub mod coding;
 pub mod credentials;
 pub mod files;
+pub mod external_button;
 pub mod gmail;
 pub mod images;
 pub mod memory;

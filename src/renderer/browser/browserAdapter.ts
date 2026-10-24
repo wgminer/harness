@@ -1,4 +1,9 @@
-import type { GmailStatus, HarnessAPI, TasksPayload } from "../../shared/desktopAPI";
+import type {
+  ExternalButtonStatus,
+  GmailStatus,
+  HarnessAPI,
+  TasksPayload,
+} from "../../shared/desktopAPI";
 import type { SearchResult } from "../../shared/conversationSearch";
 import { searchConversations, searchTitleOnly } from "../../shared/conversationSearch";
 import { IDLE_UPDATE_STATUS } from "../../shared/updateStatus";
@@ -13,6 +18,13 @@ import { createBrowserStore } from "./browserStore";
 
 const WEB_UNSUPPORTED = "This action is desktop-only. The browser shell keeps chat, notes, tasks, and settings in localStorage.";
 const gmailStub: GmailStatus = { clientConfigured: false, connected: false, email: null };
+const externalButtonStub: ExternalButtonStatus = {
+  enabled: false,
+  host: "voicepe.local",
+  keyConfigured: false,
+  state: "off",
+  message: null,
+};
 
 function browserSyncStatus(): SyncStatus {
   return {
@@ -97,6 +109,13 @@ export function createBrowserAdapter(): HarnessAPI {
         store.setSecret("googleApiKey", value.trim());
       },
       setR2SecretAccessKey: async () => {},
+    },
+    externalButton: {
+      getStatus: async () => externalButtonStub,
+      configure: async () => {
+        throw new Error(WEB_UNSUPPORTED);
+      },
+      onStatus: () => () => {},
     },
     gmail: {
       getStatus: async () => gmailStub,

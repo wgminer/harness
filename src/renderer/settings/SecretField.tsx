@@ -8,6 +8,7 @@ export interface SecretFieldProps {
   onBlur?: () => void;
   ariaLabel: string;
   testId?: string;
+  placeholder?: string;
 }
 
 export function SecretField({
@@ -17,6 +18,7 @@ export function SecretField({
   onBlur,
   ariaLabel,
   testId,
+  placeholder,
 }: SecretFieldProps) {
   const [show, setShow] = useState(false);
 
@@ -29,6 +31,7 @@ export function SecretField({
         value={value}
         onChange={onChange}
         onBlur={onBlur}
+        placeholder={placeholder}
         autoComplete="off"
         spellCheck={false}
         data-lpignore="true"

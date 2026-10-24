@@ -19,6 +19,7 @@ import {
 import type { GlobalRecordingStatus } from "../../shared/desktopAPI";
 import { SyncQrModal } from "./SyncQrModal";
 import { CliInstallSection } from "./CliInstallSection";
+import { ExternalButtonSettingsGroup } from "./ExternalButtonSettingsGroup";
 import { WorkspaceHeader } from "../ui/WorkspaceHeader";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import {
@@ -947,6 +948,7 @@ export function SettingsView({
                   </>
                 ) : null}
               </SettingsGroup>
+              {isMac ? <ExternalButtonSettingsGroup /> : null}
             </VoiceSettingsTab>
           )}
 

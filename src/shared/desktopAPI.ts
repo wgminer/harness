@@ -100,6 +100,14 @@ export interface GmailStatus {
   email: string | null;
 }
 
+export interface ExternalButtonStatus {
+  enabled: boolean;
+  host: string;
+  keyConfigured: boolean;
+  state: "off" | "searching" | "connected" | "error";
+  message: string | null;
+}
+
 export interface HarnessAPI {
   app: {
     getVersion: () => Promise<string>;
@@ -149,6 +157,13 @@ export interface HarnessAPI {
     setTavilyApiKey: (value: string) => Promise<void>;
     setGoogleApiKey: (value: string) => Promise<void>;
     setR2SecretAccessKey: (value: string) => Promise<void>;
+  };
+  /** Voice PE centre button over the ESPHome API, standing in for Fn. */
+  externalButton: {
+    getStatus: () => Promise<ExternalButtonStatus>;
+    /** Saves and reconnects. Omit `key` (or pass "") to keep the stored one. */
+    configure: (input: { enabled: boolean; host: string; key?: string }) => Promise<ExternalButtonStatus>;
+    onStatus: (cb: (status: ExternalButtonStatus) => void) => () => void;
   };
   gmail: {
     getStatus: () => Promise<GmailStatus>;

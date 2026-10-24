@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { HarnessAPI, TaskMatrixPatch } from "../shared/desktopAPI";
 import type {
   CodingScopeMeta,
+  ExternalButtonStatus,
   GlobalRecordingStatus,
   RecentRecording,
   RecordingChime,
@@ -80,6 +81,12 @@ export function createHarnessAdapter(): HarnessAPI {
         invoke(cmd("credentials:setGoogleApiKey"), { value }),
       setR2SecretAccessKey: (value: string) =>
         invoke(cmd("credentials:setR2SecretAccessKey"), { value }),
+    },
+    externalButton: {
+      getStatus: () => invoke(cmd("externalButton:getStatus")),
+      configure: ({ enabled, host, key }) =>
+        invoke(cmd("externalButton:configure"), { enabled, host, key: key ?? null }),
+      onStatus: (cb) => subscribe<ExternalButtonStatus>("externalButton:status", cb),
     },
     gmail: {
       getStatus: () => invoke(cmd("gmail:getStatus")),

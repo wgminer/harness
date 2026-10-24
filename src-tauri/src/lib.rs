@@ -74,6 +74,10 @@ pub fn run() {
                 app.handle().clone(),
                 global_recording_runtime.clone(),
             );
+            let external_button =
+                recording::external_button::ExternalButton::new(global_recording_runtime.clone());
+            external_button.restart(app.handle());
+            app.manage(external_button);
 
             let handle = app.handle().clone();
             if let Ok(cwd) = std::env::current_dir() {
@@ -113,6 +117,8 @@ pub fn run() {
             commands::credentials::credentials_set_tavily_api_key,
             commands::credentials::credentials_set_google_api_key,
             commands::credentials::credentials_set_r2_secret_access_key,
+            commands::external_button::external_button_get_status,
+            commands::external_button::external_button_configure,
             commands::gmail::gmail_get_status,
             commands::gmail::gmail_set_client,
             commands::gmail::gmail_connect,

@@ -18,6 +18,7 @@ pub const KEY_GOOGLE_CLIENT_ID: &str = "google.clientId";
 pub const KEY_GOOGLE_CLIENT_SECRET: &str = "google.clientSecret";
 pub const KEY_GMAIL_REFRESH_TOKEN: &str = "gmail.refreshToken";
 pub const KEY_GMAIL_ACCOUNT_EMAIL: &str = "gmail.accountEmail";
+pub const KEY_EXTERNAL_BUTTON_KEY: &str = "externalButton.encryptionKey";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CredentialKey {
@@ -29,6 +30,7 @@ pub enum CredentialKey {
     GoogleClientSecret,
     GmailRefreshToken,
     GmailAccountEmail,
+    ExternalButtonKey,
 }
 
 impl CredentialKey {
@@ -42,6 +44,7 @@ impl CredentialKey {
             Self::GoogleClientSecret => KEY_GOOGLE_CLIENT_SECRET,
             Self::GmailRefreshToken => KEY_GMAIL_REFRESH_TOKEN,
             Self::GmailAccountEmail => KEY_GMAIL_ACCOUNT_EMAIL,
+            Self::ExternalButtonKey => KEY_EXTERNAL_BUTTON_KEY,
         }
     }
 
@@ -55,6 +58,7 @@ impl CredentialKey {
             KEY_GOOGLE_CLIENT_SECRET => Some(Self::GoogleClientSecret),
             KEY_GMAIL_REFRESH_TOKEN => Some(Self::GmailRefreshToken),
             KEY_GMAIL_ACCOUNT_EMAIL => Some(Self::GmailAccountEmail),
+            KEY_EXTERNAL_BUTTON_KEY => Some(Self::ExternalButtonKey),
             _ => None,
         }
     }
@@ -139,6 +143,7 @@ fn migrate_keyring_to_file_once() {
             CredentialKey::GoogleClientSecret,
             CredentialKey::GmailRefreshToken,
             CredentialKey::GmailAccountEmail,
+            CredentialKey::ExternalButtonKey,
         ] {
             let Ok(entry) = entry_for(key) else {
                 continue;
