@@ -65,6 +65,10 @@ export function createBrowserAdapter(): HarnessAPI {
     app: {
       getVersion: async () => `${pkg.version}-web`,
     },
+    llmTiming: {
+      list: async () => [],
+      clear: async () => {},
+    },
     env: {
       isHarnessE2E: async () => false,
       isHarnessDev: async () => true,

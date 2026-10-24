@@ -4,6 +4,7 @@ import type {
   CodingScopeMeta,
   ExternalButtonStatus,
   GlobalRecordingStatus,
+  LlmTiming,
   RecentRecording,
   RecordingChime,
   TerminalDataChunk,
@@ -40,6 +41,10 @@ export function createHarnessAdapter(): HarnessAPI {
   return {
     app: {
       getVersion: () => invoke<string>(cmd("app:getVersion")),
+    },
+    llmTiming: {
+      list: (limit?: number) => invoke<LlmTiming[]>(cmd("llmTiming:list"), { limit }),
+      clear: () => invoke<void>(cmd("llmTiming:clear")),
     },
     env: {
       isHarnessE2E: () => invoke<boolean>(cmd("env:isHarnessE2E")),

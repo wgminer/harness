@@ -109,9 +109,28 @@ export interface ExternalButtonStatus {
   message: string | null;
 }
 
+/** One OpenAI request, recorded by the desktop app for latency checks. */
+export interface LlmTiming {
+  /** Request start, unix ms. */
+  startedAt: number;
+  kind: "chat" | "title" | "json" | "cleanup" | "image" | "imageEdit";
+  model: string;
+  /** 1-based model round within one chat turn (tool calls add rounds). */
+  round?: number;
+  /** Time until the first streamed delta (chat only). */
+  firstTokenMs?: number;
+  totalMs: number;
+  outcome: "ok" | "error" | "cancelled";
+}
+
 export interface HarnessAPI {
   app: {
     getVersion: () => Promise<string>;
+  };
+  llmTiming: {
+    /** Newest first. */
+    list: (limit?: number) => Promise<LlmTiming[]>;
+    clear: () => Promise<void>;
   };
   env: {
     isHarnessE2E: () => Promise<boolean>;

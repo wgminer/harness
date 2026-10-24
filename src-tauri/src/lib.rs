@@ -6,6 +6,7 @@ pub mod credentials;
 pub mod customization;
 pub mod env_util;
 pub mod gmail;
+pub mod llm_timing;
 pub mod memory;
 pub mod images;
 pub mod files;
@@ -108,6 +109,8 @@ pub fn run() {
             commands::app::env_is_harness_dev,
             commands::app::env_is_harness_e2e,
             commands::app::env_is_stub_images,
+            commands::app::llm_timing_list,
+            commands::app::llm_timing_clear,
             commands::settings::settings_get,
             commands::settings::settings_set,
             commands::settings::settings_get_system_prompt_preview,

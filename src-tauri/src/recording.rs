@@ -313,6 +313,7 @@ async fn run_transcript_cleanup(
     let user_message = build_cleanup_user_message(text);
 
     let client = reqwest::Client::new();
+    let timer = crate::llm_timing::RequestTimer::start("cleanup", OPENAI_TRANSCRIPT_CLEANUP_MODEL);
     let body = serde_json::json!({
         "model": OPENAI_TRANSCRIPT_CLEANUP_MODEL,
         "messages": [
@@ -332,6 +333,7 @@ async fn run_transcript_cleanup(
         .map_err(|e| e.to_string())?;
 
     let parsed: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    timer.ok();
     let cleaned = parsed
         .get("choices")
         .and_then(|v| v.get(0))
