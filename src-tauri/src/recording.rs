@@ -14,6 +14,7 @@ pub mod mic_permission;
 pub mod suggested_prompts;
 pub mod transcript_cleanup;
 pub mod transcription_engine;
+pub mod word_count;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -622,8 +623,8 @@ pub fn recording_archive_stats() -> Result<dictation_index::ArchiveStats, String
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn recording_words_dictated() -> Result<u64, String> {
-    Ok(dictation_index::words_dictated())
+pub async fn recording_words_dictated() -> Result<u64, String> {
+    Ok(word_count::words_dictated().await)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -665,7 +666,7 @@ pub async fn transcribe_wav_bytes(
     let settings = get_settings(&app_state.write_chains).await;
     let text = transcribe_on_device(&settings, data, cancel).await?;
     let polished = polish_transcript(&settings, text).await.text;
-    dictation_index::add_words_dictated(&polished);
+    word_count::add_words_dictated(&polished);
     Ok(polished)
 }
 
@@ -715,7 +716,7 @@ pub async fn recording_transcribe(
         let settings = get_settings(&runtime.app_state.write_chains).await;
         let text = transcribe_on_device(&settings, &data, &mut cancel_rx).await?;
         let polished = polish_transcript(&settings, text).await;
-        dictation_index::add_words_dictated(&polished.text);
+        word_count::add_words_dictated(&polished.text);
         Ok(TranscribeResult {
             text: Some(polished.text),
             error: None,

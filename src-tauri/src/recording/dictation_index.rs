@@ -10,10 +10,6 @@ use serde_json::Value;
 use crate::paths::get_recordings_dir;
 
 const INDEX_FILE_NAME: &str = "dictation_recordings.json";
-/// Running total of transcribed words; transcripts themselves are not kept.
-const WORD_COUNT_FILE_NAME: &str = "dictation_word_count.json";
-
-static WORD_COUNT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn index_file_in(recordings_dir: &Path) -> PathBuf {
     recordings_dir.join(INDEX_FILE_NAME)
@@ -190,7 +186,7 @@ pub fn archive_stats_in(recordings_dir: &Path) -> ArchiveStats {
         }
         let path = entry.path();
         let name = entry.file_name();
-        if matches!(name.to_str(), Some(INDEX_FILE_NAME | WORD_COUNT_FILE_NAME)) {
+        if name.to_str() == Some(INDEX_FILE_NAME) {
             continue;
         }
         file_count += 1;
@@ -208,35 +204,6 @@ pub fn archive_stats_in(recordings_dir: &Path) -> ArchiveStats {
 
 pub fn archive_stats() -> ArchiveStats {
     archive_stats_in(&get_recordings_dir())
-}
-
-pub fn words_dictated_in(recordings_dir: &Path) -> u64 {
-    std::fs::read_to_string(recordings_dir.join(WORD_COUNT_FILE_NAME))
-        .ok()
-        .and_then(|data| serde_json::from_str::<Value>(&data).ok())
-        .and_then(|v| v.get("words").and_then(Value::as_u64))
-        .unwrap_or(0)
-}
-
-pub fn words_dictated() -> u64 {
-    words_dictated_in(&get_recordings_dir())
-}
-
-/// Add a transcript's whitespace-separated words to the running total.
-pub fn add_words_dictated_in(recordings_dir: &Path, transcript: &str) -> Result<(), String> {
-    let words = transcript.split_whitespace().count() as u64;
-    if words == 0 {
-        return Ok(());
-    }
-    let _guard = WORD_COUNT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let total = words_dictated_in(recordings_dir).saturating_add(words);
-    std::fs::create_dir_all(recordings_dir).map_err(|e| e.to_string())?;
-    let data = serde_json::json!({ "words": total }).to_string();
-    std::fs::write(recordings_dir.join(WORD_COUNT_FILE_NAME), data).map_err(|e| e.to_string())
-}
-
-pub fn add_words_dictated(transcript: &str) {
-    let _ = add_words_dictated_in(&get_recordings_dir(), transcript);
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -303,18 +270,6 @@ mod tests {
         let recent = recent_in(&recordings, 2);
         let stamps: Vec<i64> = recent.iter().map(|r| r.recorded_at).collect();
         assert_eq!(stamps, vec![300, 200]);
-    }
-
-    #[test]
-    fn words_dictated_accumulates_and_skips_archive_stats() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let recordings = tmp.path().join("Recordings");
-        assert_eq!(words_dictated_in(&recordings), 0);
-        add_words_dictated_in(&recordings, "hello there  world").expect("add");
-        add_words_dictated_in(&recordings, "   ").expect("add empty");
-        add_words_dictated_in(&recordings, "again").expect("add again");
-        assert_eq!(words_dictated_in(&recordings), 4);
-        assert_eq!(archive_stats_in(&recordings).file_count, 0);
     }
 
     #[test]
