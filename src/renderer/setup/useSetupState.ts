@@ -63,6 +63,7 @@ export function useSetupState({ uiSessionReady }: { uiSessionReady: boolean }) {
 
   const dismissSetupNotice = useCallback(() => {
     setSetupNoticeOpen(false);
+    void window.harness.uiSession.set({ setupNoticeDismissed: true });
   }, []);
 
   const saveSetupApiKey = useCallback(

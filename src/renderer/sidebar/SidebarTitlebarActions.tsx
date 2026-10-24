@@ -94,10 +94,10 @@ interface TitlebarSettingsButtonProps {
   onViewChange: (v: View) => void;
 }
 
-/** Settings, pinned to the far right of the titlebar. Shows a dot when sync has an error. */
+/** Settings, pinned to the far right of the titlebar. Shows a dot when sync has an undismissed error. */
 export function TitlebarSettingsButton({ view, onViewChange }: TitlebarSettingsButtonProps) {
-  const { status: syncStatus, refresh: refreshSyncStatus } = useSyncStatus();
-  const syncHasError = Boolean(syncStatus?.lastError);
+  const { status: syncStatus, refresh: refreshSyncStatus, visibleError } = useSyncStatus();
+  const syncHasError = Boolean(visibleError);
 
   useEffect(() => {
     if (view === "settings") return;
@@ -117,7 +117,7 @@ export function TitlebarSettingsButton({ view, onViewChange }: TitlebarSettingsB
             ? sidebarSyncStatusTooltip({
                 busy: false,
                 configured: syncStatus?.configured ?? false,
-                lastError: syncStatus?.lastError ?? null,
+                lastError: visibleError,
                 lastSuccessAt: syncStatus?.lastSuccessAt ?? null,
               })
             : SETTINGS_PAGE_TITLE

@@ -11,10 +11,6 @@ export interface SetupGap {
   severity: "required" | "recommended";
 }
 
-export function transcriptCleanupSkippedMessage(): string {
-  return `Transcript cleanup needs an OpenAI API key (${settingsSection("Accounts")}). Using the raw transcription.`;
-}
-
 export function chatRequiresApiKeyMessage(): string {
   return `Chat needs an OpenAI API key in ${settingsSection("Accounts")}.`;
 }
@@ -63,7 +59,8 @@ export function collectSetupGaps(input: {
   return gaps;
 }
 
-/** Show the welcome setup notice only while chat still needs an API key. */
-export function shouldShowSetupNotice(gaps: SetupGap[], _setupNoticeDismissed: boolean): boolean {
+/** Show the welcome setup notice while chat still needs an API key, until the user dismisses it. */
+export function shouldShowSetupNotice(gaps: SetupGap[], setupNoticeDismissed: boolean): boolean {
+  if (setupNoticeDismissed) return false;
   return gaps.some((gap) => gap.severity === "required");
 }

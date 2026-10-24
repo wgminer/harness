@@ -107,8 +107,8 @@ export function SetupNoticeModal({ open, onSaveApiKey, onDismiss }: SetupNoticeM
     >
       <form id="setup-notice-api-key-form" className="setup-notice-form" onSubmit={onSubmit}>
         <p className={`setup-notice-lead ${enterClass(settled)}`} style={enterStyle(0)}>
-          Harness works locally on your Mac. Paste an OpenAI API key to start chatting — sync and
-          other options stay in Settings.
+          Harness works locally on your Mac. Notes, tasks, and dictation run without a key; paste an
+          OpenAI API key to chat. Sync and other options stay in Settings.
         </p>
         <label
           className={`app-modal-field ${enterClass(settled)}`}

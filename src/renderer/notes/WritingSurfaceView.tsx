@@ -32,7 +32,6 @@ import {
   type NoteTemplateConfig,
 } from "../../shared/writing";
 import { buildNotePrintHtml } from "../../shared/notePrint";
-import { transcriptCleanupSkippedMessage } from "../../shared/setupState";
 import { countWords, formatWordCount } from "../../shared/wordCount";
 import { formatMediumTimestamp } from "../../shared/formatMediumTimestamp";
 import { NotesCodeEditor, type NotesCodeEditorHandle } from "./NotesCodeEditor";
@@ -181,9 +180,6 @@ export function NotesView({
       if (!editor || selectedNoteId == null) return false;
       const applied = insertNoteDictation(editor, text);
       if (!applied) return false;
-      if (result?.cleanupSkipped === "no_api_key") {
-        setVoiceErrorRef.current(transcriptCleanupSkippedMessage());
-      }
       return true;
     },
     [selectedNoteId],

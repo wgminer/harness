@@ -38,8 +38,6 @@ const POLL_INTERVAL_MS: u64 = 30_000;
 const SYNC_DEBOUNCE_MS: u64 = 2_500;
 const SYNC_SUPPRESS_MS: u64 = 3_000;
 
-const SETTINGS_PAGE_TITLE: &str = "System";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SyncProvider {
@@ -361,10 +359,12 @@ async fn get_sync_config_status(app_state: &AppState) -> SyncConfigStatus {
 }
 
 fn build_status(state: &PersistedState, config: &SyncConfigStatus) -> SyncStatus {
-    let last_error = state
-        .last_error
-        .clone()
-        .or_else(|| config.config_error.clone());
+    // Sync that was never set up is not a failure; only a half-filled config is.
+    let last_error = if config.configured {
+        state.last_error.clone()
+    } else {
+        config.config_error.clone()
+    };
     SyncStatus {
         provider: SyncProvider::S3Backup,
         configured: config.configured,
@@ -597,12 +597,6 @@ async fn run_sync_now_inner(runtime: &SyncRuntime) -> SyncResult {
     state.last_error = None;
 
     if !config.configured {
-        state.last_error = Some(
-            config
-                .config_error
-                .clone()
-                .unwrap_or_else(|| format!("Configure R2 sync in {SETTINGS_PAGE_TITLE}.")),
-        );
         let _ = save_state(&runtime.app_state, &state).await;
         *runtime.persisted.lock().await = state.clone();
         return SyncResult {

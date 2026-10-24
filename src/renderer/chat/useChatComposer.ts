@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { audioFileToWav } from "../recording/audioFileToWav";
-import { transcriptCleanupSkippedMessage } from "../../shared/setupState";
 import type { Settings } from "../../shared/types";
 import type { TakeLanding } from "../recording/dictationTake";
 import { useVoiceCapture, type VoiceTranscriptResult } from "../recording/useVoiceCapture";
@@ -188,9 +187,6 @@ export function useChatComposer({
         });
       }
       setInput((prev) => (prev ? `${prev} ${trimmed}` : trimmed));
-      if (result?.cleanupSkipped === "no_api_key") {
-        setVoiceErrorRef.current(transcriptCleanupSkippedMessage());
-      }
       return true;
     },
     [pendingHotkeyDraftOnly],

@@ -48,8 +48,11 @@ describe("shouldShowSetupNotice", () => {
   });
 
   it("shows while a required gap remains", () => {
-    expect(shouldShowSetupNotice(requiredGap, true)).toBe(true);
     expect(shouldShowSetupNotice(requiredGap, false)).toBe(true);
+  });
+
+  it("stays away once dismissed, even without an API key", () => {
+    expect(shouldShowSetupNotice(requiredGap, true)).toBe(false);
   });
 
   it("does not interrupt for recommended-only gaps", () => {

@@ -357,8 +357,7 @@ export function SettingsView({
   });
   const [activeTab, setActiveTab] = useState<SettingsTabId>(normalizeSettingsTab(initialTab));
   const [syncQrOpen, setSyncQrOpen] = useState(false);
-  const { status: syncStatus } = useSyncStatus();
-  const syncError = syncStatus?.lastError ?? null;
+  const { visibleError: syncError, dismissError: dismissSyncError } = useSyncStatus();
   const [pendingSyncReview, setPendingSyncReview] = useState(false);
 
   const applySecretsToForm = useCallback((secrets: CachedSettingsSecrets) => {
@@ -829,6 +828,9 @@ export function SettingsView({
                 <strong>Sync failed</strong>
                 <span>{syncError}</span>
               </div>
+              <button type="button" className="btn btn-sm btn-ghost" onClick={dismissSyncError}>
+                Dismiss
+              </button>
               <button type="button" className="btn btn-sm" onClick={reviewSyncError}>
                 Review
               </button>
