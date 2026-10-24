@@ -129,6 +129,22 @@ a:focus-visible {
   color: var(--chalk);
 }
 
+/* Hex scramble on hover, as on the app's sidebar title: the hidden word sets the
+   width and the glyphs sit on top of it. */
+.scramble {
+  display: inline-grid;
+  justify-items: center;
+}
+
+.scramble__sizer,
+.scramble__glyphs {
+  grid-area: 1 / 1;
+}
+
+.scramble__sizer {
+  visibility: hidden;
+}
+
 .post__meta {
   margin-top: 0.375rem;
   font-family: var(--font-sans);
@@ -219,6 +235,78 @@ a:focus-visible {
 
 .post figure + h2 {
   margin-top: 3.5rem;
+}
+
+/* The data folder, as a plain tree. */
+.post figure.files {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.files pre {
+  margin: 0;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-window);
+  background: #0b0b0a;
+  color: var(--text);
+  font: 0.8125rem/1.7 ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.files__dir {
+  color: var(--chalk);
+}
+
+.files__note {
+  color: var(--quiet);
+}
+
+/* The recording screen, live: the screenshot's timer and dot field are painted over. */
+.phone-take {
+  position: relative;
+  width: min(16rem, 46%);
+  container-type: inline-size;
+}
+
+.post figure .phone-take img {
+  width: 100%;
+  border-radius: clamp(1.25rem, 5vw, 2.25rem);
+}
+
+.phone-take__timer {
+  position: absolute;
+  top: 10.6%;
+  left: 12%;
+  right: 12%;
+  padding: 0.2em 0;
+  background: #111;
+  color: #d4d4d4;
+  font: 300 12.6cqw/1 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* The ridgeline's iOS frame: 230 x 470 pt on a 402 x 874 pt screen, centred on the
+   visual area and lifted 40 pt (CaptureVisualizer.swift). The dot field underneath is
+   hidden by a separate patch so the narrow stack doesn't leave dots at its sides. */
+.phone-take::after {
+  content: "";
+  position: absolute;
+  top: 29%;
+  left: 4%;
+  width: 92%;
+  height: 42%;
+  background: #111;
+}
+
+.phone-take__waves {
+  position: absolute;
+  z-index: 1;
+  top: 13.27%;
+  left: 17.04%;
+  width: 65.92%;
+  height: 68.65%;
 }
 
 /* --- Footer --- */

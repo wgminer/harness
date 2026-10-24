@@ -6,7 +6,7 @@
     <title>Harness</title>
     <meta
       name="description"
-      content="A Mac app I made for myself, with an iPhone app for capturing on the go. It started as voice dictation and grew into a personal agent harness, with all the data kept local. Open source."
+      content="A Mac app I made for myself, with an iPhone app for recording on the go. It started as voice dictation and grew into a personal agent harness, with everything kept in plain files I own. Open source."
     />
     <meta property="og:title" content="Harness" />
     <meta property="og:description" content="A Mac app I made for myself. It started as voice dictation and grew into a personal agent harness." />
@@ -32,7 +32,11 @@
     <article class="post">
       <header class="post__header">
         <img class="post__icon" src="./assets/mark.svg" alt="" width="88" height="63" />
-        <h1>Harness</h1>
+        <!-- The real word holds the width; the scramble overlays it so nothing shifts. -->
+        <h1 class="scramble" aria-label="Harness">
+          <span class="scramble__sizer" aria-hidden="true">Harness</span>
+          <span class="scramble__glyphs" aria-hidden="true">Harness</span>
+        </h1>
         <p class="post__meta">
           <span id="release">For Mac and iPhone, free and open source</span>
         </p>
@@ -40,8 +44,8 @@
 
       <figure class="hero">
         <video
-          src="./assets/hero.mp4"
-          poster="./assets/hero-poster.jpg"
+          src="./assets/hero.mp4?v=3"
+          poster="./assets/hero-poster.jpg?v=3"
           width="1800"
           height="1126"
           autoplay
@@ -49,12 +53,12 @@
           loop
           playsinline
           preload="metadata"
-          aria-label="A desktop with a mail inbox in front and the Harness window behind it. Three messages are answered in a row: each time, pressing Fn turns the menu bar icon red while a reply is spoken, and the reply is pasted into the message at the cursor. A click then brings Harness forward, where the last reply is a conversation with a suggested prompt, Proofread. Clicking it streams a tidied version."
+          aria-label="A desktop with Mail, a terminal running a coding agent, and Harness. Two emails are answered by voice: each time, pressing Fn turns the menu bar icon red while the reply is spoken, and it is pasted at the cursor. A click brings the terminal forward, where a longer request for the agent is dictated the same way. A click then brings Harness forward, where that last take has a suggested prompt, Breakdown. Clicking it streams the request back as a short list of steps."
         ></video>
         <figcaption>
-          Three replies in a row without touching the keyboard: Fn, say it,
-          and it's pasted where the cursor is. Harness keeps every take, so
-          the one that came out blunt can be reworked before it goes.
+          Two emails and a coding agent without touching the keyboard: Fn, say
+          it, and it's pasted where the cursor is. Harness keeps every take, so
+          the long, rambling one can be broken into steps afterward.
         </figcaption>
       </figure>
 
@@ -62,13 +66,18 @@
         Harness is a Mac app I made for myself. It started as my attempt to
         improve on Wispr Flow and other voice dictation tools, and it's grown
         into a full agent harness: chat, notes, tasks, memory, and tools, with
-        an <a href="#phone">iPhone app</a> for capturing away from the desk.
+        an <a href="#phone">iPhone app</a> for recording away from the desk.
       </p>
 
       <p>
         It's my test bed for new ideas and interaction patterns. Just as
-        important, all the data is mine. It lives on my Mac, and I can see
-        exactly how it's used and when it isn't.
+        important, I understand how my data is used, and my thoughts and ideas
+        stay mine, in <a href="#files">plain files</a> I can take anywhere.
+      </p>
+
+      <p>
+        Speech runs on the Mac. The model is a setting, not a foundation: the
+        notes and conversations are files any model, hosted or local, can read.
       </p>
 
       <p>
@@ -78,38 +87,69 @@
         <a href="https://github.com/wgminer/harness">read the source</a>.
       </p>
 
+      <h2 id="files">Plain files</h2>
+      <p>
+        Everything Harness keeps is a file on my Mac, in a format I can open
+        without it. Conversations are JSON, notes are Markdown, and every
+        dictation is the original audio. If I stopped using Harness tomorrow,
+        nothing would be stuck in it.
+      </p>
+
+      <figure class="files">
+        <pre aria-label="The Harness data folder: conversations, notes, tasks and memory in local-data/app-state, and every take as a WAV file in audio-recordings."><span class="files__dir">~/Library/Application Support/Harness/</span>
+├─ <span class="files__dir">local-data/app-state/</span>
+│  ├─ conversations.json
+│  ├─ messages_conv_….json      <span class="files__note">one per conversation</span>
+│  ├─ notes/….md                <span class="files__note">one per note</span>
+│  ├─ tasks.json
+│  └─ user_memory.json          <span class="files__note">what it remembers about me</span>
+└─ <span class="files__dir">audio-recordings/</span>
+   ├─ dictation_recordings.json
+   └─ rec_….wav                 <span class="files__note">every take, as recorded</span></pre>
+      </figure>
+
       <h2>Dictation</h2>
       <p>
-        Press Fn from any app and say what you're thinking. Apple Speech
-        transcribes it on the Mac, it lands in a conversation, and the reply
-        streams back.
+        A desktop hotkey for dictating into the computer. Press Fn, talk, press
+        it again, and Apple Speech transcribes the take on the Mac. It works
+        offline and doesn't care if the Wi-Fi is spotty.
       </p>
 
       <p>
-        It's built to run for a long time, so I can talk for minutes on end
-        without worrying about losing anything. Nothing in the pipeline is a
-        black box, either. The audio file for every take is saved, even when
-        transcription fails, and I can rerun the transcription on it. The
-        prompt that cleans up the transcript afterward is editable, as is a list
-        of names and terms it should spell my way.
+        It's a full voice recorder, not a walkie-talkie. Push-to-talk trains
+        you into short commands. A recorder that's happy to run for minutes
+        makes room for the long, rambling prompt that actually has the context
+        in it.
+      </p>
+
+      <p>
+        The audio is saved before anything else happens, so if transcription
+        or the model fails, the take is still there to run again. After
+        transcription, an editable cleanup pass tidies the text and spells
+        names and terms my way.
       </p>
 
       <figure>
-        <img
-          src="./assets/dictation.png"
-          alt="A new chat with a recording pill at the top of the window showing a live level meter, the elapsed time, and buttons to cancel or finish."
-          width="2080"
-          height="1560"
-          loading="lazy"
-        />
-        <figcaption>Mid-take. The pill shows the level and the time, and stays out of the way.</figcaption>
+        <video
+          src="./assets/dictation.mp4?v=3"
+          poster="./assets/dictation-poster.jpg?v=3"
+          width="1560"
+          height="1170"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          aria-label="A long take in Harness: Fn starts recording, the pill at the top shows the level and the time as it runs, Fn again stops it, and after a moment of transcribing the cleaned-up text is sent as a message, with every name spelled right, and answered with a short agenda."
+        ></video>
+        <figcaption>One whole take: record, transcribe, clean up, and it's sent with every name spelled right.</figcaption>
       </figure>
 
       <h2 id="phone">On the phone</h2>
       <p>
-        The iPhone app does one thing first: record. Open it and it's already
-        listening. The home screen is a single circle, and a lock screen widget
-        opens straight into a take.
+        The iPhone app tries to do one thing well: record. Open it and it's
+        already listening. The home screen is a single circle, and a lock
+        screen widget opens straight into a take.
       </p>
 
       <p>
@@ -129,33 +169,13 @@
             height="1748"
             loading="lazy"
           />
-          <img
-            src="./assets/phone-recording.png"
-            alt="Harness on iPhone while recording: a timer at the top, a field of dots that moves with the voice, and a stop button."
-            width="804"
-            height="1748"
-            loading="lazy"
-          />
+          <div class="phone-take" role="img" aria-label="Harness on iPhone while recording: a running timer at the top, a stack of ridge lines that rise with the voice, and a stop button.">
+            <img src="./assets/phone-recording.png?v=3" alt="" width="804" height="1748" loading="lazy" />
+            <span class="phone-take__timer">0:07.0</span>
+            <canvas class="phone-take__waves"></canvas>
+          </div>
         </div>
         <figcaption>The whole home screen, and what it turns into when I start talking.</figcaption>
-      </figure>
-
-      <h2>Grill mode</h2>
-      <p>
-        Ask to be grilled and it interviews you instead of answering, one
-        question at a time, with the choices in the composer. I reach for it
-        when the hard part is knowing what I think.
-      </p>
-
-      <figure>
-        <img
-          src="./assets/grill.png"
-          alt="A Grill conversation: a short reply ending in a question, with three lettered answers in the composer and room to answer in your own words."
-          width="2080"
-          height="1560"
-          loading="lazy"
-        />
-        <figcaption>Each answer leads to the next question.</figcaption>
       </figure>
 
       <h2>Notes</h2>
@@ -195,9 +215,9 @@
 
       <footer class="post__footer">
         <p>
-          Harness needs macOS 12 or later on Apple silicon, microphone access
-          for dictation, and either an OpenAI API key or a local model through
-          Ollama. It's built with Tauri, Rust, React, and Swift.
+          Harness needs macOS 12 or later on Apple silicon and microphone
+          access for dictation. Chat uses an OpenAI API key today. It's built
+          with Tauri, Rust, React, and Swift.
         </p>
         <p>
           <a href="https://github.com/wgminer/harness">Source on GitHub</a>
@@ -221,14 +241,220 @@
         })
         .catch(() => {});
 
-      // The clip autoplays like a GIF; with reduced motion it waits for a click instead.
-      if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      // The clips autoplay like GIFs; with reduced motion they wait for a click instead.
+      if (reduceMotion) {
         for (const video of document.querySelectorAll("video")) {
           video.removeAttribute("autoplay");
           video.pause();
           video.controls = true;
         }
       }
+
+      // The app's hover scramble (src/renderer/setup/hexScrambleReveal.ts, HEX_SCRAMBLE_HOVER):
+      // every letter flips through hex digits every 48ms for 360ms, then settles on the word.
+      (() => {
+        const glyphs = document.querySelector(".scramble__glyphs");
+        const header = document.querySelector(".post__header");
+        if (!glyphs || reduceMotion) return;
+        const HEX = "0123456789ABCDEF";
+        const TICK_MS = 48;
+        const SPIN_MS = 360;
+        const word = glyphs.textContent;
+        let timer = 0;
+        header.addEventListener("pointerenter", () => {
+          clearInterval(timer);
+          const until = Date.now() + SPIN_MS;
+          const step = () => {
+            if (Date.now() >= until) {
+              clearInterval(timer);
+              glyphs.textContent = word;
+              return;
+            }
+            glyphs.textContent = [...word].map((ch) => (/\s/.test(ch) ? ch : HEX[Math.floor(Math.random() * 16)])).join("");
+          };
+          step();
+          timer = setInterval(step, TICK_MS);
+        });
+      })();
+
+      // The phone take, live: the iOS ridgeline (ios/HarnessMobile/UI/JoyDivisionWaveformView.swift,
+      // with the settings RidgelineWaveform gives it) fed speech-like levels, plus a running timer.
+      // Drawn only while the phone is on screen.
+      (() => {
+        const take = document.querySelector(".phone-take");
+        const canvas = take?.querySelector("canvas");
+        const timer = take?.querySelector(".phone-take__timer");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const LOOP_MS = 9000;
+
+        // Syllable bursts grouped into words with short gaps, as in src/renderer/demo/demoRuntime.ts.
+        let seed = 7;
+        const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+        const bursts = [];
+        for (let t = 150; t < LOOP_MS - 300; ) {
+          const syllables = 1 + Math.floor(random() * 3);
+          for (let i = 0; i < syllables; i++) {
+            const len = 120 + random() * 140;
+            bursts.push({ start: t, end: t + len, peak: 0.035 + random() * 0.06 });
+            t += len + 30 + random() * 50;
+          }
+          t += 120 + random() * 260;
+        }
+        const levelAt = (ms) => {
+          let level = 0.004;
+          for (const b of bursts) {
+            if (ms < b.start || ms > b.end) continue;
+            level = Math.max(level, b.peak * Math.sin((Math.PI * (ms - b.start)) / (b.end - b.start)));
+          }
+          return level;
+        };
+
+        // --- Same constants and shaping as the iOS view ---
+        const ROWS = 36;
+        const POINTS = 34;
+        const PUSH_INTERVAL_MS = 45;
+        const IDLE_AMPLITUDE = 0.045;
+        const IDLE_THRESHOLD = 0.1;
+        // iOS reads levels already normalized to 0..1; these speech levels are raw mic peaks.
+        const LEVEL_GAIN = 10;
+        const PEAK_ROW_MULTIPLES = 7.5;
+        /** The ridgeline's frame on iOS, in points; the stroke scales with it. */
+        const FRAME_WIDTH_PT = 265;
+        const MAX_PROFILE_VALUE = 1.55;
+        const STROKE_PAD = 2;
+        const hash01 = (s, i) => {
+          let z = (Math.imul(s ^ i, 0x9e3779b9) >>> 0) + 0x7f4a7c15;
+          z = Math.imul(z ^ (z >>> 16), 0x85ebca6b) >>> 0;
+          z = Math.imul(z ^ (z >>> 13), 0xc2b2ae35) >>> 0;
+          return ((z ^ (z >>> 16)) >>> 0) / 0x100000000;
+        };
+        const valueNoise = (t, s, smooth) => {
+          const i0 = Math.floor(t);
+          const f = t - i0;
+          const u = smooth ? f * f * (3 - 2 * f) : f;
+          const a = hash01(s, i0);
+          return a + (hash01(s, i0 + 1) - a) * u;
+        };
+        const jaggedNoise = (t, s) => {
+          const shaped =
+            Math.pow(valueNoise(t * 8.5, s, false), 1.35) * 0.35 +
+            valueNoise(t * 16 + 0.21, s ^ 0xa5a5a5a5, false) * 0.2 +
+            valueNoise(t * 28 + 0.37, s ^ 0xd1b54a32, false) * 0.15 +
+            Math.pow(Math.max(valueNoise(t * 4.2 + 1.1, s ^ 0x94d049bb, true), 0), 2.4) * 0.85;
+          return Math.max(0.02, Math.min(shaped, 1.55));
+        };
+        const makeProfile = (s) => {
+          const profile = new Float32Array(POINTS + 1);
+          for (let i = 0; i <= POINTS; i++) {
+            const c = (i / POINTS - 0.5) * 2;
+            profile[i] = (0.02 + 0.98 * Math.exp(-(c * c) / (2 * 0.3 * 0.3))) * jaggedNoise(i / POINTS, s);
+          }
+          return profile;
+        };
+        const displayAmplitude = (raw, now) => {
+          const boosted = Math.min(Math.max(raw, 0) * LEVEL_GAIN, 1);
+          if (boosted < IDLE_THRESHOLD) {
+            return IDLE_AMPLITUDE * (0.55 + 0.45 * (Math.sin((now / 1000) * 1.4) * 0.5 + 0.5));
+          }
+          return Math.min(Math.max(Math.pow(boosted, 0.55), IDLE_AMPLITUDE), 1);
+        };
+
+        let rows = Array.from({ length: ROWS }, (_, i) => ({
+          level: IDLE_AMPLITUDE * (0.4 + (0.6 * (i % 5)) / 4),
+          profile: makeProfile(Math.imul(i + 1, 0x9e3779b9) >>> 0),
+        }));
+        let pushSeed = 0xc0ffee00;
+        let lastPush = 0;
+        const pushRow = (raw, now) => {
+          if (now - lastPush < PUSH_INTERVAL_MS) return;
+          lastPush = now;
+          pushSeed = (Math.imul(pushSeed, 0xbf58476d) + 0x9e3779b9) >>> 0;
+          rows = rows.slice(1);
+          rows.push({ level: displayAmplitude(raw, now), profile: makeProfile(pushSeed) });
+        };
+
+        let width = 0;
+        let height = 0;
+        const resize = () => {
+          const rect = canvas.getBoundingClientRect();
+          const dpr = Math.max(1, Math.min(devicePixelRatio || 1, 2));
+          width = rect.width;
+          height = rect.height;
+          canvas.width = Math.round(width * dpr);
+          canvas.height = Math.round(height * dpr);
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        };
+        const draw = (now, raw) => {
+          const insetX = width * 0.06;
+          const insetY = height * 0.08;
+          const plotW = width - insetX * 2;
+          const plotH = height - insetY * 2;
+          const rowSpacing = Math.max(plotH - STROKE_PAD, 1) / (ROWS - 1 + PEAK_ROW_MULTIPLES * MAX_PROFILE_VALUE);
+          const peakScale = rowSpacing * PEAK_ROW_MULTIPLES;
+          const firstBaselineY = insetY + STROKE_PAD + peakScale * MAX_PROFILE_VALUE;
+          const fillDepth = peakScale + rowSpacing;
+          const liveAmp = displayAmplitude(raw, now);
+          ctx.clearRect(0, 0, width, height);
+          // 1.25pt on iOS, scaled to the size the phone is drawn at.
+          ctx.lineWidth = Math.max(0.5, (1.25 * width) / FRAME_WIDTH_PT);
+          ctx.lineJoin = "miter";
+          rows.forEach((row, index) => {
+            const baselineY = firstBaselineY + index * rowSpacing;
+            const amplitude = index === rows.length - 1 ? liveAmp : row.level;
+            const yAt = (i) => baselineY - row.profile[i] * amplitude * peakScale;
+            const fillBottom = Math.min(insetY + plotH + 2, baselineY + fillDepth);
+            ctx.beginPath();
+            ctx.moveTo(insetX, fillBottom);
+            for (let i = 0; i <= POINTS; i++) ctx.lineTo(insetX + (i / POINTS) * plotW, yAt(i));
+            ctx.lineTo(insetX + plotW, fillBottom);
+            ctx.closePath();
+            ctx.fillStyle = "#111111";
+            ctx.fill();
+            ctx.beginPath();
+            for (let i = 0; i <= POINTS; i++) ctx.lineTo(insetX + (i / POINTS) * plotW, yAt(i));
+            ctx.strokeStyle = "#ffffff";
+            ctx.stroke();
+          });
+        };
+        const showTime = (ms) => {
+          if (!timer) return;
+          const s = (ms % 60000) / 1000;
+          timer.textContent = `0:${String(Math.floor(s)).padStart(2, "0")}.${Math.floor((s % 1) * 10)}`;
+        };
+
+        resize();
+        addEventListener("resize", resize);
+        if (reduceMotion) {
+          // A settled field from a few seconds of talking, held still.
+          for (let ms = 0; ms < 7000; ms += PUSH_INTERVAL_MS) pushRow(levelAt(ms), ms);
+          draw(7000, levelAt(7000));
+          showTime(7000);
+          return;
+        }
+        let frame = 0;
+        let origin = 0;
+        let lastDraw = 0;
+        const tick = (now) => {
+          frame = requestAnimationFrame(tick);
+          const ms = now - origin;
+          const raw = levelAt(ms % LOOP_MS);
+          pushRow(raw, now);
+          if (now - lastDraw < 1000 / 24) return;
+          lastDraw = now;
+          draw(now, raw);
+          showTime(ms);
+        };
+        new IntersectionObserver(([entry]) => {
+          cancelAnimationFrame(frame);
+          if (!entry.isIntersecting) return;
+          if (!origin) origin = performance.now();
+          resize();
+          frame = requestAnimationFrame(tick);
+        }).observe(take);
+      })();
     </script>
   </body>
 </html>
