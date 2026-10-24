@@ -35,17 +35,17 @@ This guide walks you through creating a double-clickable, signed (and optionally
 
 ### What is separate (per profile)
 
-- App state under that folder: `local-data/` (conversations, messages, tasks, notes, memory, settings, sync state)
+- App state under that folder: `Conversations/` and `Notes/` at the top, everything else (indexes, tasks, memory, settings, sync state) in hidden `.harness/`. Older `local-data/` profiles migrate on first launch (`src-tauri/src/paths.rs`).
 - Dev may also write a plaintext `credentials.json` under the Dev folder (see [SECURITY.md](SECURITY.md)); production keeps secrets in the OS keychain
 
 ### What is shared
 
-- `audio-recordings/` under the **installed** Harness folder (`~/Library/Application Support/Harness/audio-recordings`) — Dev and Dist both read/write here (local-only; never synced). Opening either profile migrates leftover Dev-folder WAVs into this archive.
+- `Recordings/` under the **installed** Harness folder (`~/Library/Application Support/Harness/Recordings`, formerly `audio-recordings/`) — Dev and Dist both read/write here (local-only; never synced). Opening either profile migrates leftover Dev-folder WAVs into this archive.
 - R2 backup bucket (same credentials → same remote bundle)
 - OpenAI / Tavily API accounts (same keys work in both profiles once entered)
 - Signing / notarization env (`APPLE_SIGNING_IDENTITY`, `APPLE_*`, `TAURI_SIGNING_*`) — build-time only, not per profile
 
-Deleting or moving either Application Support folder forces a **fresh empty profile** on next launch (except shared `audio-recordings/` under installed Harness, which survives deleting only the Dev folder).
+Deleting or moving either Application Support folder forces a **fresh empty profile** on next launch (except shared `Recordings/` under installed Harness, which survives deleting only the Dev folder).
 
 ---
 

@@ -33,6 +33,9 @@
         "scope": [
           "$DATA/Harness/local-data/app-state/images/**",
           "$DATA/Harness Dev/local-data/app-state/images/**",
+          "$DATA/Harness/.harness/app-state/images/**",
+          "$DATA/Harness Dev/.harness/app-state/images/**",
+          "$DATA/Harness/Recordings/**",
           "$DATA/Harness/audio-recordings/**",
           "$DATA/Harness Dev/audio-recordings/**"
         ]

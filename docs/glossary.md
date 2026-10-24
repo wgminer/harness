@@ -53,7 +53,7 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 | **Fn dictation / global hotkey** | Background Fn shortcut (needs Accessibility); optional bring-to-front. |
 | **Transcript cleanup** | Optional post-pass via OpenAI to polish dictation. |
 | **Preferred spellings** | Canonical names/terms injected into cleanup (close variants included). Applied only when cleanup runs. |
-| **Recording** | Captured audio; local-only under shared `~/Library/Application Support/Harness/audio-recordings/` (Dev + Dist; not synced). |
+| **Recording** | Captured audio; local-only under shared `~/Library/Application Support/Harness/Recordings/` (Dev + Dist; not synced). |
 
 ## Notes & writing
 
@@ -68,7 +68,7 @@ A **surface** is a specific part of the app — typically a UI screen or focused
 | Term | Meaning |
 |---|---|
 | **App data / profile root** | On-disk home (`~/Library/Application Support/Harness` or `…/Harness Dev`). |
-| **local-data** | Primary store: `app-state` (conversations, messages, memory, tasks, notes) + settings + sync state. |
+| **Profile layout** | `Conversations/` (one JSON per conversation) and `Notes/` (one Markdown file per note) at the profile root; everything else (`app-state` indexes, memory, tasks, settings, sync state) in hidden `.harness/`. Sync bundles keep the older `app-state/messages_*` / `app-state/notes/*` paths. |
 | **Sync (R2)** | Optional Cloudflare R2 backup/sync of app-state + settings across devices. |
 | **Sync pairing / QR** | Desktop→iOS setup for shared R2 credentials. |
 | **Conflict review** | UI when sync pulls diverge from local. |

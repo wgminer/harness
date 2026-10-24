@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 
+use crate::paths::{sync_app_state_extra_dirs, sync_rel_to_disk};
 use crate::settings::strip_settings_secrets;
 
 pub const BUNDLE_FORMAT_VERSION: i32 = 1;
@@ -87,6 +88,15 @@ async fn walk_files(root: &Path, base_abs: &Path) -> std::io::Result<Vec<String>
     Ok(out)
 }
 
+/// Folders outside `local_data_dir` that also belong to a directory scope
+/// (v2 layout keeps conversations and notes at the profile root).
+fn scope_extra_dirs(local_data_dir: &Path, scope: &SyncScope) -> Vec<(std::path::PathBuf, &'static str)> {
+    if scope.kind != SyncScopeKind::Dir || scope.rel_path != "app-state" {
+        return Vec::new();
+    }
+    sync_app_state_extra_dirs(local_data_dir)
+}
+
 pub async fn list_scoped_files(
     local_data_dir: &Path,
     scopes: &[SyncScope],
@@ -103,6 +113,15 @@ pub async fn list_scoped_files(
             SyncScopeKind::Dir => {
                 let found = walk_files(&abs, local_data_dir).await?;
                 all.extend(found);
+                for (dir, prefix) in scope_extra_dirs(local_data_dir, scope) {
+                    for rel in walk_files(&dir, &dir).await? {
+                        // Conversations/ holds only messages JSON on the wire.
+                        if prefix.ends_with("messages_") && !rel.ends_with(".json") {
+                            continue;
+                        }
+                        all.push(format!("{prefix}{rel}"));
+                    }
+                }
             }
         }
     }
@@ -114,7 +133,7 @@ pub async fn compute_revision(local_data_dir: &Path, scopes: &[SyncScope]) -> st
     let files = list_scoped_files(local_data_dir, scopes).await?;
     let mut hasher = Sha256::new();
     for rel in files {
-        let abs = local_data_dir.join(&rel);
+        let abs = sync_rel_to_disk(local_data_dir, &rel);
         let data = tokio::fs::read(&abs).await?;
         hasher.update(rel.as_bytes());
         hasher.update([0u8]);
@@ -131,7 +150,7 @@ pub async fn compute_local_max_mtime(
     let files = list_scoped_files(local_data_dir, scopes).await?;
     let mut max = 0i64;
     for rel in files {
-        let abs = local_data_dir.join(&rel);
+        let abs = sync_rel_to_disk(local_data_dir, &rel);
         if let Ok(meta) = tokio::fs::metadata(&abs).await {
             if let Ok(modified) = meta.modified() {
                 let ms = modified
@@ -185,7 +204,7 @@ pub async fn build_bundle(local_data_dir: &Path, scopes: &[SyncScope]) -> std::i
     let files = list_scoped_files(local_data_dir, scopes).await?;
     let mut entries = Vec::new();
     for rel in files {
-        let abs = local_data_dir.join(&rel);
+        let abs = sync_rel_to_disk(local_data_dir, &rel);
         let mut data = tokio::fs::read(&abs).await?;
         if rel == "settings/settings.json" {
             data = redact_settings_json_bytes(&data);
@@ -244,7 +263,7 @@ pub async fn backup_scoped_files(
     let files = list_scoped_files(local_data_dir, scopes).await?;
     let mut count = 0usize;
     for rel in files {
-        let src = local_data_dir.join(&rel);
+        let src = sync_rel_to_disk(local_data_dir, &rel);
         let dst = backup_dir.join(&rel);
         if let Some(parent) = dst.parent() {
             tokio::fs::create_dir_all(parent).await?;
@@ -274,13 +293,18 @@ pub async fn extract_bundle(
             }
         }
     }
+    for scope in scopes {
+        for (dir, _) in scope_extra_dirs(local_data_dir, scope) {
+            let _ = tokio::fs::remove_dir_all(&dir).await;
+        }
+    }
 
     let mut count = 0usize;
     for entry in &doc.entries {
         if !is_in_scope(&entry.path, scopes) {
             continue;
         }
-        let abs = local_data_dir.join(&entry.path);
+        let abs = sync_rel_to_disk(local_data_dir, &entry.path);
         if let Some(parent) = abs.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
@@ -329,7 +353,7 @@ pub async fn apply_merged_files(
         if !is_in_scope(rel, scopes) {
             continue;
         }
-        let abs = local_data_dir.join(rel);
+        let abs = sync_rel_to_disk(local_data_dir, rel);
         if let Some(parent) = abs.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
@@ -341,7 +365,7 @@ pub async fn apply_merged_files(
         if merged_files.contains_key(&rel) {
             continue;
         }
-        let _ = tokio::fs::remove_file(local_data_dir.join(&rel)).await;
+        let _ = tokio::fs::remove_file(sync_rel_to_disk(local_data_dir, &rel)).await;
         files_removed += 1;
     }
     Ok((files_written, files_removed))
@@ -445,5 +469,91 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(conv, r#"{"keep":"me"}"#);
+    }
+
+    /// `<root>/.harness` with conversations and notes at the profile root.
+    async fn make_v2_profile(seed: HashMap<&str, &str>) -> (TempDir, PathBuf) {
+        let temp = TempDir::new().unwrap();
+        let local_data = temp.path().join(".harness");
+        for (rel, contents) in seed {
+            let abs = temp.path().join(rel);
+            if let Some(parent) = abs.parent() {
+                tokio::fs::create_dir_all(parent).await.unwrap();
+            }
+            tokio::fs::write(abs, contents).await.unwrap();
+        }
+        tokio::fs::create_dir_all(local_data.join("app-state"))
+            .await
+            .unwrap();
+        (temp, local_data)
+    }
+
+    #[tokio::test]
+    async fn v2_layout_keeps_v1_bundle_paths() {
+        let (_flat_dir, flat) = make_local_data(HashMap::from([
+            ("app-state/conversations.json", r#"{"a":1}"#),
+            ("app-state/messages_conv_1_ab.json", "[]"),
+            ("app-state/notes/n1.md", "# Note"),
+            ("settings/settings.json", r#"{"version":1}"#),
+        ]))
+        .await;
+        let (_v2_dir, v2) = make_v2_profile(HashMap::from([
+            (".harness/app-state/conversations.json", r#"{"a":1}"#),
+            ("Conversations/conv_1_ab.json", "[]"),
+            ("Conversations/.DS_Store", "x"),
+            ("Notes/n1.md", "# Note"),
+            (".harness/settings/settings.json", r#"{"version":1}"#),
+        ]))
+        .await;
+
+        let files = list_scoped_files(&v2, DEFAULT_SYNC_SCOPES).await.unwrap();
+        assert_eq!(
+            files,
+            vec![
+                "app-state/conversations.json",
+                "app-state/messages_conv_1_ab.json",
+                "app-state/notes/n1.md",
+                "settings/settings.json",
+            ]
+        );
+        assert_eq!(
+            compute_revision(&flat, DEFAULT_SYNC_SCOPES).await.unwrap(),
+            compute_revision(&v2, DEFAULT_SYNC_SCOPES).await.unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn v1_bundle_extracts_into_v2_layout() {
+        let (_src_dir, src) = make_local_data(HashMap::from([
+            ("app-state/conversations.json", r#"{"keep":"me"}"#),
+            ("app-state/messages_conv_2_cd.json", r#"[{"role":"user"}]"#),
+            ("app-state/notes/n2.md", "# Two"),
+        ]))
+        .await;
+        let built = build_bundle(&src, DEFAULT_SYNC_SCOPES).await.unwrap();
+        let (dst_dir, dst) = make_v2_profile(HashMap::from([
+            ("Conversations/conv_old.json", "[]"),
+            ("Notes/old.md", "# Old"),
+        ]))
+        .await;
+        let doc = parse_bundle(&built.bytes).unwrap();
+        extract_bundle(&dst, &doc, DEFAULT_SYNC_SCOPES)
+            .await
+            .unwrap();
+
+        let root = dst_dir.path();
+        assert_eq!(
+            tokio::fs::read_to_string(root.join("Conversations/conv_2_cd.json"))
+                .await
+                .unwrap(),
+            r#"[{"role":"user"}]"#
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(root.join("Notes/n2.md")).await.unwrap(),
+            "# Two"
+        );
+        assert!(!root.join("Conversations/conv_old.json").exists());
+        assert!(!root.join("Notes/old.md").exists());
+        assert!(!dst.join("app-state/messages_conv_2_cd.json").exists());
     }
 }

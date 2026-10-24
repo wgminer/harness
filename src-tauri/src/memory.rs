@@ -14,8 +14,9 @@ use serde_json::{json, Value};
 
 use crate::env_util::{generate_id, sanitize_conversation_id};
 use crate::paths::{
-    cleanup_legacy_memory_dir, get_app_state_dir, get_legacy_memory_dir, get_local_data_dir,
-    get_local_data_settings_path, get_recordings_dir, get_user_data_dir,
+    cleanup_legacy_memory_dir, conversations_dir_in, get_app_state_dir, get_legacy_memory_dir,
+    get_local_data_dir, get_local_data_settings_path, get_recordings_dir, get_user_data_dir,
+    is_messages_file_name_in, messages_file_in, notes_dir_in,
 };
 use crate::state::AppState;
 use crate::storage::{
@@ -179,7 +180,7 @@ fn conversations_path(memory_dir: &Path) -> PathBuf {
 
 pub fn get_messages_path_in(memory_dir: &Path, conversation_id: &str) -> PathBuf {
     let safe = sanitize_conversation_id(conversation_id);
-    memory_dir.join(format!("messages_{safe}.json"))
+    messages_file_in(memory_dir, &safe)
 }
 
 fn user_memory_path(memory_dir: &Path) -> PathBuf {
@@ -863,9 +864,10 @@ pub async fn get_data_status(state: &AppState) -> Result<DataStatusSnapshot, std
     let app_state_dir = get_memory_dir();
     let conv = load_conversations_map(state, &app_state_dir).await;
 
-    let app_state_files = if app_state_dir.exists() {
+    let conversations_dir = conversations_dir_in(&app_state_dir);
+    let conversation_files = if conversations_dir.exists() {
         let mut files = Vec::new();
-        let mut entries = tokio::fs::read_dir(&app_state_dir).await?;
+        let mut entries = tokio::fs::read_dir(&conversations_dir).await?;
         while let Some(entry) = entries.next_entry().await? {
             if let Ok(name) = entry.file_name().into_string() {
                 files.push(name);
@@ -876,7 +878,7 @@ pub async fn get_data_status(state: &AppState) -> Result<DataStatusSnapshot, std
         Vec::new()
     };
 
-    let note_dir = app_state_dir.join("notes");
+    let note_dir = notes_dir_in(&app_state_dir);
     let notes_files = if note_dir.exists() {
         let mut files = Vec::new();
         let mut entries = tokio::fs::read_dir(&note_dir).await?;
@@ -898,9 +900,9 @@ pub async fn get_data_status(state: &AppState) -> Result<DataStatusSnapshot, std
         app_state_dir: app_state_dir.display().to_string(),
         local_data_exists: local_data_dir.exists(),
         conversations_count: conv.len(),
-        message_files_count: app_state_files
+        message_files_count: conversation_files
             .iter()
-            .filter(|name| name.starts_with("messages_") && name.ends_with(".json"))
+            .filter(|name| is_messages_file_name_in(&app_state_dir, name))
             .count(),
         notes_files_count: notes_files.iter().filter(|name| name.ends_with(".md")).count(),
         has_settings_file: get_local_data_settings_path().exists(),

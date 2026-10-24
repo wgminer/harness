@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 
 use crate::credentials::{migrate_secrets_from_settings_raw, set_credential, CredentialKey};
-use crate::paths::{ensure_local_data_migration, get_local_data_settings_path};
+use crate::paths::{ensure_data_layout, get_local_data_settings_path};
 use crate::storage::{atomic_write_utf8, file_exists, read_json_object_file, WriteChains};
 use crate::recording::transcript_cleanup::{
     default_prompt as default_transcription_prompt, glossary_value, migrate_cleanup_prompt,
@@ -464,7 +464,7 @@ pub async fn load_settings_from_path(chains: &WriteChains, path: &std::path::Pat
 }
 
 async fn load_settings(chains: &WriteChains) -> Value {
-    ensure_local_data_migration();
+    ensure_data_layout();
     let path = get_local_data_settings_path();
     load_settings_from_path(chains, &path).await
 }
@@ -480,7 +480,7 @@ pub async fn save_settings_to_path(
 }
 
 async fn save_settings(chains: &WriteChains, settings: &Value) -> std::io::Result<()> {
-    ensure_local_data_migration();
+    ensure_data_layout();
     let path = get_local_data_settings_path();
     save_settings_to_path(chains, &path, settings).await
 }

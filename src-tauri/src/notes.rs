@@ -11,12 +11,11 @@ use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::state::AppState;
-use crate::paths::get_app_state_dir;
+use crate::paths::{get_app_state_dir, notes_dir_in};
 use crate::storage::{atomic_write_utf8, file_exists, write_json_pretty, JsonWriteStyle};
 
 const LEGACY_DOC_FILE: &str = "writing.md";
 const NOTES_INDEX_FILE: &str = "notes.json";
-const NOTES_DIR: &str = "notes";
 const LEGACY_IMPORTED_NOTE_TITLE: &str = "Imported note";
 const UNTITLED_NOTE_TITLE: &str = "Untitled";
 const NOTE_TEMPLATE_TODAY_TOKEN: &str = "{{today}}";
@@ -102,7 +101,7 @@ fn notes_index_path(memory_dir: &Path) -> PathBuf {
 }
 
 fn notes_dir_path(memory_dir: &Path) -> PathBuf {
-    memory_dir.join(NOTES_DIR)
+    notes_dir_in(memory_dir)
 }
 
 fn note_path(memory_dir: &Path, id: &str) -> PathBuf {

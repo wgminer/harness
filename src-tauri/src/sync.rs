@@ -15,7 +15,7 @@ use tokio::time::{interval, sleep};
 use crate::credentials::{set_credential, CredentialKey};
 use crate::credentials::resolve_r2_secret_access_key;
 use crate::state::AppState;
-use crate::paths::{get_local_data_dir, get_local_data_sync_dir};
+use crate::paths::{get_local_data_dir, get_local_data_sync_dir, sync_rel_to_disk};
 use crate::sync::remote_store::{is_r2_config_complete, BackupManifest, R2Config, RemoteBackupStore};
 use crate::settings::{get_settings, set_settings};
 use crate::storage::{atomic_write_utf8, file_exists};
@@ -404,7 +404,7 @@ async fn load_local_scoped_file_map() -> Result<HashMap<String, Vec<u8>>, std::i
     let files = list_scoped_files(&local_data_dir, DEFAULT_SYNC_SCOPES).await?;
     let mut out = HashMap::new();
     for rel in files {
-        out.insert(rel.clone(), tokio::fs::read(local_data_dir.join(&rel)).await?);
+        out.insert(rel.clone(), tokio::fs::read(sync_rel_to_disk(&local_data_dir, &rel)).await?);
     }
     Ok(out)
 }

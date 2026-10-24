@@ -1,4 +1,4 @@
-//! Local-only map from conversation id → recording filenames under audio-recordings/.
+//! Local-only map from conversation id → recording filenames under Recordings/.
 
 use std::collections::HashMap;
 use std::fs::File;
