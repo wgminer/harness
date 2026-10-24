@@ -5,12 +5,12 @@ import { DEFAULT_TRANSCRIPTION_ENGINE, type TranscriptionEngineId } from "./tran
 
 export type MessageRole = "user" | "assistant" | "system";
 
-/** Fixed dark chrome + accents, or a shell tinted from the local hour. */
-export type AppearanceTheme = "dark" | "time";
+/** Fixed dark or light chrome + accents, or a shell tinted from the local hour. */
+export type AppearanceTheme = "dark" | "light" | "time";
 export const DEFAULT_APPEARANCE_THEME: AppearanceTheme = "dark";
 
 export function normalizeAppearanceTheme(raw: unknown): AppearanceTheme {
-  return raw === "time" ? "time" : "dark";
+  return raw === "time" || raw === "light" ? raw : "dark";
 }
 
 export interface ContextPreviewMemory {

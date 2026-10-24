@@ -199,6 +199,10 @@ describe("timeOfDayBackground", () => {
     expect(props[todVarName("--bg")]).toBeUndefined();
     expect(dataset.appearance).toBe("dark");
     expect(dataset.todHour).toBeUndefined();
+    applyAppearanceTheme("light", new Date(2026, 8, 4, 18, 0, 0), root, "");
+    expect(isTimeThemeActive()).toBe(false);
+    expect(props["--bg"]).toBeUndefined();
+    expect(dataset.appearance).toBe("light");
     clearTimeOfDayBackground(root);
   });
 

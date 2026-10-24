@@ -1,5 +1,5 @@
 /**
- * Global design tokens — fixed dark palette and 16px type scale.
+ * Global design tokens — dark palette (light override below) and 16px type scale.
  */
 @property --bg {
   syntax: "<color>";
@@ -158,6 +158,10 @@
   --scrollbar-thumb: #6a6c6f;
   --scrollbar-track: #26282b;
 
+  /* --- Dictation waveform (canvas reads these once per session) --- */
+  --waveform-stroke: #fff;
+  --waveform-occlusion: #111;
+
   /* --- Semantic status (shared across themes) --- */
   --danger: #c0392b;
   --danger-fg: #e05353;
@@ -313,6 +317,52 @@ html[data-appearance="time"] {
   --hover-bg-strong: var(--tod-hover-bg-strong, #323437);
   --scrollbar-track: var(--tod-scrollbar-track, #26282b);
   --scrollbar-thumb: var(--tod-scrollbar-thumb, #6a6c6f);
+}
+
+/* Light theme: same roles, inverted brightness. Accent variants mix toward black for contrast. */
+html[data-appearance="light"] {
+  color-scheme: light;
+
+  --bg: #f4f4f2;
+  --bg-secondary: #fff;
+  --bg-elevated: #fff;
+  --fg: #222;
+  --fg-muted: #6b6b6b;
+
+  --accent-readable: color-mix(in oklab, var(--accent) 70%, black);
+
+  --border-light: #a0a0a0;
+  --border-edge: #e0e0de;
+  --border-input: #d2d2d0;
+
+  --btn-bg: #e8e8e6;
+  --btn-bg-hover: #dcdcda;
+  --btn-primary-bg: color-mix(in oklab, var(--accent) 22%, var(--bg));
+  --btn-primary-bg-hover: color-mix(in oklab, var(--accent) 32%, var(--bg));
+
+  --overlay-subtle: #efefed;
+  --overlay: #e6e6e4;
+  --overlay-strong: #d8d8d6;
+  --hover-bg: #eaeae8;
+  --hover-bg-strong: #e0e0de;
+
+  --selection-bg: color-mix(in oklab, var(--accent) 30%, white);
+
+  --scrollbar-thumb: #b4b4b2;
+  --scrollbar-track: #eaeae8;
+
+  --waveform-stroke: #222;
+  --waveform-occlusion: #f4f4f2;
+
+  --danger-fg: #b3261e;
+  --danger-muted: #e6a39b;
+  --danger-surface: #f9dedb;
+  --warning-fg: #a86400;
+  --success-fg: #1f7a35;
+
+  --scrim: rgba(0, 0, 0, 0.25);
+  --shadow-color: rgba(0, 0, 0, 0.12);
+  --shadow-drop: rgba(0, 0, 0, 0.08);
 }
 
 @media (prefers-reduced-motion: reduce) {

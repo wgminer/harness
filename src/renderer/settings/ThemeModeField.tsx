@@ -3,6 +3,7 @@ import { type AppearanceTheme } from "../../shared/types";
 
 const OPTIONS: ReadonlyArray<{ id: AppearanceTheme; label: string }> = [
   { id: "dark", label: "Dark" },
+  { id: "light", label: "Light" },
   { id: "time", label: "Time" },
 ];
 

@@ -414,11 +414,13 @@ export function applyAppearanceTheme(
   root: StyleTarget | null = typeof document !== "undefined" ? document.documentElement : null,
   search: string = typeof window !== "undefined" ? window.location.search : "",
 ): void {
-  if (normalizeAppearanceTheme(theme) === "time") {
+  const normalized = normalizeAppearanceTheme(theme);
+  if (normalized === "time") {
     timeThemeActive = true;
     // Follow the clock (and `?tod=`), not leftover debugger pin/mix in localStorage.
     applyTimeOfDayBackground(now, root, search, DEFAULT_TIME_OF_DAY_PREVIEW);
     return;
   }
   clearTimeOfDayBackground(root);
+  if (root) root.dataset.appearance = normalized;
 }

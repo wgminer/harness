@@ -276,6 +276,7 @@ fn normalize_accent_hex(raw: Option<&Value>) -> String {
 fn parse_appearance_theme(raw: Option<&Value>) -> &'static str {
     match raw.and_then(|v| v.as_str()) {
         Some("time") => "time",
+        Some("light") => "light",
         _ => "dark",
     }
 }
