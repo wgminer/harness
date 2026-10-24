@@ -1,24 +1,28 @@
 /**
  * A stand-in macOS desktop around the demo app: menu bar with the Harness tray
- * icon, the Harness window in the background, and a mail inbox in front.
+ * icon, the Harness window in the background, a mail inbox in front, and
+ * optionally a terminal running a coding agent.
  * Scenes use it to show Fn dictation pasting into whatever has focus.
  */
 import "./demoDesktop.css";
 
 export type DemoTrayState = "ready" | "recording" | "processing";
 
-export type DemoApp = "mail" | "harness";
+export type DemoApp = "mail" | "harness" | "terminal";
 
 /** A message waiting for a reply in the stand-in inbox. */
 export type DemoMailThread = { from: string; subject: string; body: string };
 
-export type DemoDesktopConfig = { mail: DemoMailThread[] };
+/** A terminal with a generic coding agent waiting at its prompt, in `cwd`. */
+export type DemoTerminalConfig = { cwd: string; branch: string };
+
+export type DemoDesktopConfig = { mail: DemoMailThread[]; terminal?: DemoTerminalConfig };
 
 export type DemoDesktop = {
   tray: (state: DemoTrayState) => void;
   /** Bring an app's window to the front, as a click on it would. */
   activate: (app: DemoApp) => void;
-  /** Insert `text` at the open reply's caret in one step, the way a paste lands. */
+  /** Insert `text` at the front app's caret in one step, the way a paste lands. */
   paste: (text: string) => void;
 };
 
@@ -32,6 +36,7 @@ const TRAY_ICONS: Record<DemoTrayState, string> = {
 const MENUS: Record<DemoApp, { name: string; items: string[] }> = {
   mail: { name: "Mail", items: ["File", "Edit", "View", "Mailbox", "Message", "Window", "Help"] },
   harness: { name: "Harness", items: ["File", "Edit", "View", "Window", "Help"] },
+  terminal: { name: "Terminal", items: ["Shell", "Edit", "View", "Window", "Help"] },
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
@@ -116,6 +121,26 @@ export function mountDemoDesktop(config: DemoDesktopConfig): DemoDesktop {
   const menus = el("div", "demo-menubar__group");
   document.body.append(menuBar(menus, tray), harnessWindow, mail);
 
+  // A coding agent at its prompt, so a take can land somewhere other than an email.
+  let terminalInput: HTMLElement | null = null;
+  if (config.terminal) {
+    const { cwd, branch } = config.terminal;
+    const terminal = el("div", "demo-window demo-window--terminal");
+    const bar = el("div", "demo-terminal__titlebar");
+    bar.append(el("div", "demo-window__lights"), el("span", "demo-terminal__title", `agent \u2014 ${cwd}`));
+    const screen = el("div", "demo-terminal__screen");
+    screen.append(
+      el("p", "demo-terminal__line demo-terminal__line--quiet", `${cwd}  (${branch})`),
+      el("p", "demo-terminal__line demo-terminal__line--quiet", "Agent ready. Describe the change you want."),
+    );
+    const prompt = el("p", "demo-terminal__prompt");
+    terminalInput = el("span", "demo-terminal__input");
+    prompt.append(el("span", "demo-terminal__chevron", "\u203a"), terminalInput, el("span", "demo-terminal__caret"));
+    screen.append(prompt);
+    terminal.append(bar, screen);
+    document.body.append(terminal);
+  }
+
   const activate = (app: DemoApp) => {
     document.body.dataset.demoFront = app;
     const { name, items } = MENUS[app];
@@ -138,7 +163,9 @@ export function mountDemoDesktop(config: DemoDesktopConfig): DemoDesktop {
     tray: setTray,
     activate,
     paste: (text) => {
-      pasted.textContent += text;
+      const front = document.body.dataset.demoFront;
+      const target = front === "terminal" && terminalInput ? terminalInput : pasted;
+      target.textContent += text;
     },
   };
 }

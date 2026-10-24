@@ -23,66 +23,103 @@ const composeHome: Partial<UiSession> = { view: "chat", conversationId: null };
 
 const openLibrary = (d: DemoRuntime) => d.click({ label: "Show sidebar" }, { instant: true });
 
-/** The inbox the hero works down, each with the reply said out loud and its title in the library. */
-const INBOX: Array<DemoMailThread & { reply: string; title: string; speakMs: number }> = [
+/** The inbox in the hero. The first two get answered by voice; the third waits. */
+const MAIL: DemoMailThread[] = [
   {
     from: "Sam Okafor",
     subject: "Thursday",
     body: "Are you free Thursday to go over the draft? Afternoon works best for me.",
-    reply: "Thursday works. Any time after two, and I'll bring the draft.",
-    title: "Thursday with Sam",
-    speakMs: 1900,
   },
   {
     from: "Priya Nair",
     subject: "Invoice 1042",
     body: "Did the September invoice go out? Finance is asking.",
-    reply: "It went out Monday. I'll forward you the confirmation.",
-    title: "September invoice",
-    speakMs: 1800,
   },
   {
     from: "Dana Whitfield",
     subject: "Launch date",
     body: "Can we pull the launch in to the 21st? Marketing would love the extra week.",
-    // Runs on the way speech does, so there is something to tidy afterward.
-    reply:
-      "No, the 21st is too early, we still have the sync bug open and I don't want to ship with that, the 28th is the earliest I'd be comfortable with.",
-    title: "Launch date pushback",
-    speakMs: 3000,
   },
 ];
 
-const LAUNCH_PROOFREAD = [
-  "The 21st is too early. The sync bug is still open, and I don't want to ship with it.",
+/**
+ * Each reply said out loud, with its title in the library. The clips are silent, so takes
+ * run far shorter than real speech would.
+ */
+const MAIL_REPLIES = [
+  {
+    reply: "Thursday works. Any time after two, and I'll bring the draft.",
+    title: "Thursday with Sam",
+    speakMs: 900,
+  },
+  {
+    reply: "It went out Monday. I'll forward you the confirmation.",
+    title: "September invoice",
+    speakMs: 850,
+  },
+];
+
+/** A longer ask for the coding agent, run on the way speech does, so there is something to break down. */
+const AGENT_ASK = {
+  reply:
+    "The sync badge gets stuck on syncing after the phone reconnects, can you find where the reconnect handler sets it and clear it once the reconnect actually succeeds, and add a test for that case, and don't touch the R2 client while you're in there.",
+  title: "Sync badge after reconnect",
+  speakMs: 1600,
+};
+
+const AGENT_BREAKDOWN = [
+  "- Find where the reconnect handler sets the sync badge.",
+  "- Clear the badge once the reconnect succeeds.",
+  "- Add a test for the reconnect case.",
+  "- Leave the R2 client alone.",
+].join("\n");
+
+/** One long take with names the cleanup pass has to get right. */
+const DICTATION_TAKE =
+  "Notes for Thursday with Sam Okafor. Start with the sync bug, then the Tauri upgrade. Ask Priya Nair whether finance needs the September numbers before the 28th, and if there's time, look at the lock screen widget.";
+
+const DICTATION_REPLY = [
+  "Agenda for Thursday with Sam:",
   "",
-  "The 28th is the earliest I'd be comfortable with.",
+  "1. The sync bug",
+  "2. The Tauri upgrade",
+  "3. Lock screen widget, if there's time",
+  "",
+  "Before then, ask Priya whether finance needs the September numbers before the 28th.",
 ].join("\n");
 
 export const DEMO_SCENES: DemoScene[] = [
   {
-    // The site's top image: working down an inbox by voice, each reply pasted at the caret,
-    // then over to Harness to tidy the last one with its suggested prompt.
+    // The site's top image: two emails answered by voice, each reply pasted at the caret,
+    // then a longer ask dictated into a coding agent, then over to Harness to break that one down.
     id: "hero",
     kind: "clip",
     viewport: DESKTOP,
-    desktop: { mail: INBOX },
+    desktop: { mail: MAIL, terminal: { cwd: "~/projects/harness", branch: "main" } },
     session: composeHome,
     run: async (d) => {
-      d.suggest("Proofread");
-      d.reply({ text: LAUNCH_PROOFREAD, thinkMs: 1300 });
+      d.suggest("Breakdown");
+      d.reply({ text: AGENT_BREAKDOWN, thinkMs: 1300 });
       await openLibrary(d);
-      d.showCursor({ x: 1010, y: 560 });
+      d.showCursor({ x: 960, y: 540 });
       await d.wait(900);
-      for (const [i, thread] of INBOX.entries()) {
-        await d.dictateElsewhere(thread.reply, { speakMs: thread.speakMs, transcribeMs: 650, title: thread.title });
-        if (i === INBOX.length - 1) break;
+      for (const take of MAIL_REPLIES) {
+        await d.dictateElsewhere(take.reply, { speakMs: take.speakMs, transcribeMs: 450, title: take.title });
         await d.wait(500);
         await d.click(".demo-mail__send");
         await d.wait(350);
       }
+      // The strip of terminal showing under the inbox.
+      await d.activate("terminal", { x: 820, y: 652 });
+      await d.wait(500);
+      await d.dictateElsewhere(AGENT_ASK.reply, {
+        speakMs: AGENT_ASK.speakMs,
+        transcribeMs: 550,
+        title: AGENT_ASK.title,
+      });
       await d.wait(1500);
-      await d.activate("harness", { x: 380, y: 72 });
+      // Harness's titlebar, above the other two windows.
+      await d.activate("harness", { x: 430, y: 78 });
       await d.wait(500);
       await d.click('[data-testid="dictation-suggested-prompt"]');
       await d.wait(4400);
@@ -96,12 +133,19 @@ export const DEMO_SCENES: DemoScene[] = [
     run: openLibrary,
   },
   {
+    // One whole take: Fn, a long stretch of talking, Fn again, transcription, and the
+    // cleaned-up text in the composer.
     id: "dictation",
-    kind: "still",
+    kind: "clip",
     viewport: WINDOW,
     session: composeHome,
     run: async (d) => {
-      await d.listen({ speakMs: 2600 });
+      // A focused take sends itself, so give it an answer and the loop closes.
+      d.reply({ text: DICTATION_REPLY, thinkMs: 900 });
+      d.title("Thursday with Sam");
+      await d.wait(600);
+      await d.dictate(DICTATION_TAKE, { speakMs: 2800, transcribeMs: 800 });
+      await d.wait(4200);
     },
   },
   {

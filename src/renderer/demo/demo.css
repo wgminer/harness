@@ -82,3 +82,14 @@ body::after {
     0 3px 10px rgb(0 0 0 / 0.5);
   transform: translate(-50%, 2px);
 }
+
+/* Clips stay model-agnostic: the reply footer shows the app's own "Assistant" fallback
+   in place of a model id. */
+.message-block-meta-model {
+  font-size: 0;
+}
+
+.message-block-meta-model::after {
+  content: "Assistant";
+  font-size: var(--font-size-caption, 12px);
+}
