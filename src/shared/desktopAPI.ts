@@ -20,6 +20,7 @@ import type {
 import type { GeneratedImage, ImageCreateInput, ImageGenerateInput } from "./images";
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
+import type { TranscriptionEngineId, TranscriptionEngineStatus } from "./transcriptionEngines";
 import type { UiSession } from "./uiSession";
 import type { UpdateStatus } from "./updateStatus";
 
@@ -415,6 +416,10 @@ export interface HarnessAPI {
       options?: { requestId?: string }
     ) => Promise<{ text: string; cleanupSkipped?: "no_api_key" } | { error: string }>;
     cancelTranscription: (requestId: string) => Promise<void>;
+    /** Whether an engine's on-device models are downloaded (Apple is always ready). */
+    transcriptionEngineStatus: (engine: TranscriptionEngineId) => Promise<TranscriptionEngineStatus>;
+    /** Start an engine's one-time model download in the background. */
+    prepareTranscriptionEngine: (engine: TranscriptionEngineId) => Promise<void>;
     /** Play a recording cue natively (not throttled with the webview). */
     playChime: (kind: RecordingChime) => Promise<void>;
     pasteText: (text: string) => Promise<void>;

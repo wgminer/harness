@@ -17,6 +17,10 @@ import {
   type NoteTemplateConfig,
 } from "../../shared/writing";
 import type { GlobalRecordingStatus } from "../../shared/desktopAPI";
+import {
+  DEFAULT_TRANSCRIPTION_ENGINE,
+  type TranscriptionEngineId,
+} from "../../shared/transcriptionEngines";
 import { SyncQrModal } from "./SyncQrModal";
 import { CliInstallSection } from "./CliInstallSection";
 import { WorkspaceHeader } from "../ui/WorkspaceHeader";
@@ -85,6 +89,7 @@ type PersistedFormState = {
   cleanupEnabled: boolean;
   cleanupPrompt: string;
   transcriptGlossary: string[];
+  transcriptionEngine: TranscriptionEngineId;
   r2AccountId: string;
   r2Bucket: string;
   r2Prefix: string;
@@ -230,6 +235,9 @@ export function SettingsView({
   const [transcriptGlossary, setTranscriptGlossary] = useState<string[]>(
     initialNonSecret?.transcriptGlossary ?? D.transcription?.glossary ?? [],
   );
+  const [transcriptionEngine, setTranscriptionEngine] = useState<TranscriptionEngineId>(
+    initialNonSecret?.transcriptionEngine ?? DEFAULT_TRANSCRIPTION_ENGINE,
+  );
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplateConfig[]>(
     initialNonSecret?.noteTemplates ?? DEFAULT_NOTE_TEMPLATES.map((t) => ({ ...t })),
   );
@@ -306,6 +314,7 @@ export function SettingsView({
       cleanupEnabled,
       cleanupPrompt,
       transcriptGlossary,
+      transcriptionEngine,
       r2AccountId,
       r2Bucket,
       r2Prefix,
@@ -328,6 +337,7 @@ export function SettingsView({
       cleanupEnabled,
       cleanupPrompt,
       transcriptGlossary,
+      transcriptionEngine,
       r2AccountId,
       r2Bucket,
       r2Prefix,
@@ -409,6 +419,7 @@ export function SettingsView({
         cleanupEnabled: nonSecret.cleanupEnabled,
         cleanupPrompt: nonSecret.cleanupPrompt,
         transcriptGlossary: nonSecret.transcriptGlossary,
+        transcriptionEngine: nonSecret.transcriptionEngine,
         r2AccountId: nonSecret.r2AccountId,
         r2Bucket: nonSecret.r2Bucket,
         r2Prefix: nonSecret.r2Prefix,
@@ -433,6 +444,7 @@ export function SettingsView({
       setCleanupEnabled(hydrated.cleanupEnabled);
       setCleanupPrompt(hydrated.cleanupPrompt);
       setTranscriptGlossary(hydrated.transcriptGlossary);
+      setTranscriptionEngine(hydrated.transcriptionEngine);
       setR2AccountId(hydrated.r2AccountId);
       setR2Bucket(hydrated.r2Bucket);
       setR2Prefix(hydrated.r2Prefix);
@@ -603,6 +615,7 @@ export function SettingsView({
             prompt: next.cleanupPrompt,
           },
           glossary: next.transcriptGlossary,
+          engine: next.transcriptionEngine,
         },
         sync: {
           accountId: next.r2AccountId.trim(),
@@ -710,6 +723,7 @@ export function SettingsView({
     cleanupEnabled,
     cleanupPrompt,
     transcriptGlossary,
+    transcriptionEngine,
     r2AccountId,
     r2Bucket,
     r2Prefix,
@@ -908,6 +922,8 @@ export function SettingsView({
               setCleanupPrompt={setCleanupPrompt}
               transcriptGlossary={transcriptGlossary}
               setTranscriptGlossary={setTranscriptGlossary}
+              transcriptionEngine={transcriptionEngine}
+              setTranscriptionEngine={setTranscriptionEngine}
               openAIConfigured={openAIConfigured}
               secretsLoaded={secretsLoaded}
               apiKey={apiKey}

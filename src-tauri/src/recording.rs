@@ -12,6 +12,7 @@ pub mod macos_paste;
 pub mod mic_permission;
 pub mod suggested_prompts;
 pub mod transcript_cleanup;
+pub mod transcription_engine;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -30,6 +31,8 @@ use crate::memory::show_item_in_folder;
 use crate::paths::{get_recordings_dir, resolve_bundled_resource};
 use crate::settings::{default_settings, get_settings};
 use crate::recording::transcript_cleanup::{append_preferred_spellings, resolve_glossary};
+pub use crate::recording::transcription_engine::{TranscriptionEngine, DEFAULT_TRANSCRIPTION_ENGINE};
+use crate::recording::transcription_engine::{parakeet_status, start_parakeet_prepare, EngineStatus};
 
 const OPENAI_TRANSCRIPT_CLEANUP_MODEL: &str = "gpt-6-luna";
 const HARNESS_E2E_TRANSCRIBE_TEXT: &str = "E2E transcribed text.";
@@ -38,6 +41,7 @@ const EXIT_PERMISSION_DENIED: i32 = 2;
 const EXIT_RECOGNIZER_UNAVAILABLE: i32 = 3;
 const EXIT_EMPTY_TRANSCRIPT: i32 = 4;
 const EXIT_AUDIO_NOT_READY: i32 = 5;
+const EXIT_MODELS_NOT_READY: i32 = 6;
 
 pub const HARNESS_SPEECH_BINARY: &str = "HarnessSpeech";
 
@@ -101,6 +105,7 @@ fn map_exit_code(code: Option<i32>, stderr: &str) -> String {
                 "The recording file is not ready yet. Try again in a moment.".into()
             }
         }
+        Some(EXIT_MODELS_NOT_READY) => "Parakeet models are not downloaded yet.".into(),
         other => {
             if !stderr.trim().is_empty() {
                 stderr.trim().to_string()
@@ -111,18 +116,37 @@ fn map_exit_code(code: Option<i32>, stderr: &str) -> String {
     }
 }
 
+enum SpeechRunError {
+    Cancelled,
+    /// Parakeet models are not on disk yet (helper exit 6).
+    ModelsNotReady,
+    Failed(String),
+}
+
+impl From<SpeechRunError> for String {
+    fn from(err: SpeechRunError) -> String {
+        match err {
+            SpeechRunError::Cancelled => "Transcription cancelled.".into(),
+            SpeechRunError::ModelsNotReady => map_exit_code(Some(EXIT_MODELS_NOT_READY), ""),
+            SpeechRunError::Failed(message) => message,
+        }
+    }
+}
+
 async fn run_harness_speech(
     exe: &PathBuf,
     wav_path: &PathBuf,
+    engine: TranscriptionEngine,
     cancel: &mut tokio::sync::watch::Receiver<bool>,
-) -> Result<String, String> {
+) -> Result<String, SpeechRunError> {
     let child = TokioCommand::new(exe)
         .arg(wav_path)
+        .args(engine.helper_args())
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| SpeechRunError::Failed(e.to_string()))?;
 
     let wait_task = tokio::spawn(async move { child.wait_with_output().await });
 
@@ -132,9 +156,11 @@ async fn run_harness_speech(
         changed = cancel.changed() => {
             let _ = changed;
             abort.abort();
-            return Err("Transcription cancelled.".into());
+            return Err(SpeechRunError::Cancelled);
         }
-        result = wait_task => result.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?,
+        result = wait_task => result
+            .map_err(|e| SpeechRunError::Failed(e.to_string()))?
+            .map_err(|e| SpeechRunError::Failed(e.to_string()))?,
     };
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -144,25 +170,25 @@ async fn run_harness_speech(
     if code == Some(EXIT_EMPTY_TRANSCRIPT) {
         return Ok(String::new());
     }
+    if code == Some(EXIT_MODELS_NOT_READY) {
+        return Err(SpeechRunError::ModelsNotReady);
+    }
     if code != Some(0) {
-        return Err(map_exit_code(code, &stderr));
+        return Err(SpeechRunError::Failed(map_exit_code(code, &stderr)));
     }
     if stdout.is_empty() {
-        return Err(if stderr.trim().is_empty() {
+        return Err(SpeechRunError::Failed(if stderr.trim().is_empty() {
             "Speech transcription returned no transcript.".into()
         } else {
             stderr.trim().to_string()
-        });
+        }));
     }
     Ok(stdout)
 }
 
-async fn transcribe_with_apple_speech(
-    audio: &[u8],
-    cancel: &mut tokio::sync::watch::Receiver<bool>,
-) -> Result<String, String> {
+fn harness_speech_exe() -> Result<PathBuf, String> {
     if !cfg!(target_os = "macos") {
-        return Err("On-device Apple speech transcription is only available on macOS.".into());
+        return Err("On-device speech transcription is only available on macOS.".into());
     }
     let exe = get_harness_speech_path();
     if !exe.exists() {
@@ -171,14 +197,40 @@ async fn transcribe_with_apple_speech(
             exe.display()
         ));
     }
+    Ok(exe)
+}
+
+/// Transcribe on device with the engine from settings. Parakeet falls back to
+/// Apple Speech when it fails or its models are still downloading.
+async fn transcribe_on_device(
+    settings: &serde_json::Value,
+    audio: &[u8],
+    cancel: &mut tokio::sync::watch::Receiver<bool>,
+) -> Result<String, String> {
+    let exe = harness_speech_exe()?;
 
     let wav_path = std::env::temp_dir().join(format!("harness-speech-{}.wav", Uuid::new_v4()));
     tokio::fs::write(&wav_path, audio)
         .await
         .map_err(|e| e.to_string())?;
-    let result = run_harness_speech(&exe, &wav_path, cancel).await;
+
+    let engine = TranscriptionEngine::from_settings(settings);
+    let mut result = run_harness_speech(&exe, &wav_path, engine, cancel).await;
+    if engine == TranscriptionEngine::Parakeet {
+        match &result {
+            Err(SpeechRunError::ModelsNotReady) => start_parakeet_prepare(&exe),
+            Err(SpeechRunError::Failed(err)) => {
+                eprintln!("Parakeet transcription failed; using Apple Speech. {err}");
+            }
+            _ => {}
+        }
+        if matches!(result, Err(SpeechRunError::ModelsNotReady | SpeechRunError::Failed(_))) {
+            result = run_harness_speech(&exe, &wav_path, TranscriptionEngine::Apple, cancel).await;
+        }
+    }
+
     let _ = tokio::fs::remove_file(&wav_path).await;
-    result
+    result.map_err(String::from)
 }
 
 const CLEANUP_SYSTEM_BASE: &str = "You are a transcript editor for dictation, not a chatbot or assistant.\n\
@@ -582,7 +634,7 @@ pub async fn transcribe_wav_bytes(
     }
 
     let settings = get_settings(&app_state.write_chains).await;
-    let text = transcribe_with_apple_speech(data, cancel).await?;
+    let text = transcribe_on_device(&settings, data, cancel).await?;
     Ok(polish_transcript(&settings, text).await.text)
 }
 
@@ -630,7 +682,7 @@ pub async fn recording_transcribe(
 
     let result = async {
         let settings = get_settings(&runtime.app_state.write_chains).await;
-        let text = transcribe_with_apple_speech(&data, &mut cancel_rx).await?;
+        let text = transcribe_on_device(&settings, &data, &mut cancel_rx).await?;
         let polished = polish_transcript(&settings, text).await;
         Ok(TranscribeResult {
             text: Some(polished.text),
@@ -652,6 +704,24 @@ pub async fn recording_transcribe(
             cleanup_skipped: None,
         }),
     }
+}
+
+/// Model readiness for an on-device engine (`apple` is always ready).
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_transcription_engine_status(engine: String) -> Result<EngineStatus, String> {
+    match TranscriptionEngine::parse(Some(&engine)) {
+        TranscriptionEngine::Apple => Ok(EngineStatus { state: "ready", error: None }),
+        TranscriptionEngine::Parakeet => Ok(parakeet_status(&harness_speech_exe()?).await),
+    }
+}
+
+/// Start the one-time model download for an engine in the background.
+#[tauri::command(rename_all = "camelCase")]
+pub async fn recording_prepare_transcription_engine(engine: String) -> Result<(), String> {
+    if TranscriptionEngine::parse(Some(&engine)) == TranscriptionEngine::Parakeet {
+        start_parakeet_prepare(&harness_speech_exe()?);
+    }
+    Ok(())
 }
 
 #[tauri::command(rename_all = "camelCase")]

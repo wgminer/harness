@@ -101,6 +101,14 @@ pub fn get_recordings_dir() -> PathBuf {
     next
 }
 
+/// On-device speech models (Parakeet), shared by Dev + installed profiles like
+/// `audio-recordings/` so the ~450 MB download happens once.
+pub fn get_speech_models_dir() -> PathBuf {
+    let path = shared_recordings_root().join("speech-models");
+    std::fs::create_dir_all(&path).ok();
+    path
+}
+
 /// Application Support root that owns `audio-recordings/` (installed Harness,
 /// unless `HARNESS_DATA_DIR` isolates the profile).
 fn shared_recordings_root() -> PathBuf {

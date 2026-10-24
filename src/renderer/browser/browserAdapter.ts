@@ -369,6 +369,8 @@ export function createBrowserAdapter(): HarnessAPI {
       listRecent: async () => [],
       transcribe: async () => ({ error: WEB_UNSUPPORTED }),
       cancelTranscription: async () => {},
+      transcriptionEngineStatus: async () => ({ state: "ready" as const }),
+      prepareTranscriptionEngine: async () => {},
       playChime: async (kind) => {
         await playWebChime(kind);
       },
