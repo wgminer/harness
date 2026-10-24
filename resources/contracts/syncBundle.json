@@ -1,0 +1,6 @@
+{
+  "bundleFormatVersion": 2,
+  "readableBundleFormatVersions": [1, 2],
+  "blobPathPrefixes": ["app-state/images/", "app-state/chat-attachments/"],
+  "blobObjectPrefix": "blobs/"
+}

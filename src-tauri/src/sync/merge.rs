@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 
 use crate::canonical_json::{to_string_compact_canonical, to_vec_pretty_canonical};
 use crate::settings::strip_settings_secrets;
+use crate::sync::bundle::BlobRef;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -88,6 +89,13 @@ fn note_id_from_body_path(path: &str) -> Option<&str> {
     path.strip_prefix(NOTES_DIR_PREFIX)?
         .strip_suffix(".md")
         .filter(|id| !id.is_empty())
+}
+
+/// Size of an image blob. The sync engine passes blob paths as `BlobRef` tokens, not bytes.
+fn blob_len(bytes: &[u8]) -> usize {
+    BlobRef::from_token(bytes)
+        .map(|blob| blob.size)
+        .unwrap_or(bytes.len())
 }
 
 fn file_bytes_equal(a: &[u8], b: &[u8]) -> bool {
@@ -672,7 +680,7 @@ fn apply_image_library_merge(
             (Some(local), Some(remote)) => {
                 merged.insert(
                     path,
-                    if local.len() >= remote.len() {
+                    if blob_len(local) >= blob_len(remote) {
                         local.clone()
                     } else {
                         remote.clone()

@@ -2,6 +2,9 @@ use s3::bucket::Bucket;
 use s3::creds::Credentials;
 use s3::region::Region;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+
+use crate::sync::bundle::{blob_object_prefix, is_blob_hash};
 
 /// Legacy fixed key (pre content-addressed). Still written for older clients; readers fall back to it.
 pub const LEGACY_BUNDLE_OBJECT_NAME: &str = "bundle.json.gz";
@@ -49,6 +52,12 @@ pub fn r2_endpoint(account_id: &str) -> String {
 /// Content-addressed object name for a bundle hash (`bundle-<sha256>.json.gz`).
 pub fn content_addressed_bundle_object_name(bundle_hash: &str) -> String {
     format!("bundle-{bundle_hash}.json.gz")
+}
+
+/// Content-addressed object name for a blob (`blobs/<sha256>`), shared by every bundle that
+/// references those bytes.
+pub fn blob_object_name(hash: &str) -> String {
+    format!("{}{hash}", blob_object_prefix())
 }
 
 fn object_key(prefix: &str, name: &str) -> String {
@@ -211,6 +220,48 @@ impl RemoteBackupStore {
         Ok(())
     }
 
+    pub fn blob_key(&self, hash: &str) -> String {
+        object_key(&self.prefix, &blob_object_name(hash))
+    }
+
+    /// Hashes of every blob object under this prefix.
+    pub async fn list_blob_hashes(&self) -> Result<HashSet<String>, String> {
+        let blobs_prefix = object_key(&self.prefix, blob_object_prefix());
+        let pages = self
+            .bucket
+            .list(blobs_prefix.clone(), None)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut out = HashSet::new();
+        for page in pages {
+            for object in page.contents {
+                if let Some(hash) = object.key.strip_prefix(&blobs_prefix) {
+                    if is_blob_hash(hash) {
+                        out.insert(hash.to_string());
+                    }
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    pub async fn read_blob(&self, hash: &str) -> Result<Vec<u8>, String> {
+        self.bucket
+            .get_object(&self.blob_key(hash))
+            .await
+            .map(|data| data.to_vec())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Blobs are immutable: the key is the hash of the bytes, so a repeat upload is harmless.
+    pub async fn write_blob(&self, hash: &str, bytes: &[u8]) -> Result<(), String> {
+        self.bucket
+            .put_object_with_content_type(&self.blob_key(hash), bytes, "application/octet-stream")
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
     pub async fn test_connection(&self) -> Result<(), String> {
         self.bucket
             .head_object(&self.manifest_key())
@@ -262,6 +313,11 @@ mod tests {
             content_addressed_bundle_object_name("abc123"),
             "bundle-abc123.json.gz"
         );
+    }
+
+    #[test]
+    fn blob_object_name_is_under_blobs_prefix() {
+        assert_eq!(blob_object_name("abc123"), "blobs/abc123");
     }
 
     #[test]

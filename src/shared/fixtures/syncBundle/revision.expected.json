@@ -1,0 +1,27 @@
+{
+  "description": "Blob paths contribute the hex sha256 of their bytes to a revision; every other path contributes its bytes. Asserted by the Rust and Swift bundle tests.",
+  "files": [
+    {
+      "path": "app-state/chat-attachments/c1/photo.jpg",
+      "text": "jpg-bytes"
+    },
+    {
+      "path": "app-state/conversations.json",
+      "text": "{\"a\":1}"
+    },
+    {
+      "path": "app-state/images/pic.png",
+      "text": "png-bytes"
+    },
+    {
+      "path": "settings/settings.json",
+      "text": "{\"version\":1}"
+    }
+  ],
+  "blobHashes": {
+    "app-state/chat-attachments/c1/photo.jpg": "e3b1eab3adc6afe720d7d9041ef2fbb7e356ffbed925de828e034725806da408",
+    "app-state/images/pic.png": "ea80334363eed145dfeee51ebae7dc3f1cd7d0c7879f8bfd2070c061d3c33f56"
+  },
+  "revision": "9f522fe524d0d79824768a1eb276b42695a69de256862ce5171accfaa134bb35",
+  "contentRevision": "c8a960486d77de0b5d0bd5fbbd2988ef7358a667c571e83c6affebff23bc529b"
+}

@@ -20,9 +20,11 @@ use crate::sync::remote_store::{is_r2_config_complete, BackupManifest, R2Config,
 use crate::settings::{get_settings, set_settings};
 use crate::storage::{atomic_write_utf8, file_exists};
 use crate::sync::bundle::{
-    apply_merged_files, backup_scoped_files, build_bundle, compute_content_revision_from_bundle,
-    compute_local_max_mtime, compute_revision, extract_bundle, hash_bundle_bytes, list_scoped_files,
-    parse_bundle, DEFAULT_SYNC_SCOPES, USER_CONTENT_SYNC_SCOPES,
+    apply_merged_files, atomic_write_file, backup_scoped_files, build_bundle, bundle_blob_refs,
+    compute_content_revision_from_bundle, compute_local_max_mtime, compute_revision,
+    extract_bundle, file_map_blob_refs, hash_bundle_bytes, is_blob_path, list_scoped_files,
+    local_blob_ref, missing_blobs, parse_bundle, sha256_hex, staged_blob_path, BlobRef, LocalBlob,
+    DEFAULT_SYNC_SCOPES, USER_CONTENT_SYNC_SCOPES,
 };
 use base64::Engine;
 use crate::sync::merge::{
@@ -33,6 +35,7 @@ use crate::env_util::is_harness_e2e;
 
 const STATE_FILE: &str = "state.json";
 const LOCAL_BACKUP_DIR: &str = "backups";
+const BLOB_STAGING_DIR: &str = "blob-staging";
 const MANIFEST_VERSION: i32 = 1;
 const POLL_INTERVAL_MS: u64 = 30_000;
 const SYNC_DEBOUNCE_MS: u64 = 2_500;
@@ -230,6 +233,11 @@ fn local_backups_root() -> PathBuf {
     get_local_data_sync_dir().join(LOCAL_BACKUP_DIR)
 }
 
+/// Downloaded blobs wait here until a pull or merge is applied; outside the sync scopes.
+fn blob_staging_dir() -> PathBuf {
+    get_local_data_sync_dir().join(BLOB_STAGING_DIR)
+}
+
 async fn load_state(_app_state: &AppState) -> Result<PersistedState, std::io::Error> {
     let path = state_path();
     if !file_exists(&path).await {
@@ -399,16 +407,25 @@ async fn read_remote_content_revision(
     Ok(compute_content_revision_from_bundle(&doc))
 }
 
+/// Local scoped files for a merge. Blob paths carry a [`BlobRef`] token instead of their bytes.
 async fn load_local_scoped_file_map() -> Result<HashMap<String, Vec<u8>>, std::io::Error> {
     let local_data_dir = get_local_data_dir();
     let files = list_scoped_files(&local_data_dir, DEFAULT_SYNC_SCOPES).await?;
     let mut out = HashMap::new();
     for rel in files {
-        out.insert(rel.clone(), tokio::fs::read(local_data_dir.join(&rel)).await?);
+        let abs = local_data_dir.join(&rel);
+        let bytes = if is_blob_path(&rel) {
+            local_blob_ref(&abs).await?.to_token()
+        } else {
+            tokio::fs::read(&abs).await?
+        };
+        out.insert(rel, bytes);
     }
     Ok(out)
 }
 
+/// Remote files for a merge, in the same shape as [`load_local_scoped_file_map`]. A format 1
+/// bundle embeds its blobs, so those are set aside in the staging directory.
 async fn load_remote_scoped_file_map(
     store: &RemoteBackupStore,
     manifest: &BackupManifest,
@@ -419,14 +436,96 @@ async fn load_remote_scoped_file_map(
         return Err("Remote bundle hash does not match its manifest.".into());
     }
     let doc = parse_bundle(&bytes)?;
+    let staging = blob_staging_dir();
     let mut out = HashMap::new();
     for entry in doc.entries {
+        if let Some(hash) = entry.blob {
+            let blob = BlobRef {
+                blob: hash,
+                size: entry.size,
+            };
+            out.insert(entry.path, blob.to_token());
+            continue;
+        }
         let data = base64::engine::general_purpose::STANDARD
-            .decode(&entry.contents)
+            .decode(entry.contents.as_deref().unwrap_or_default())
             .map_err(|e| e.to_string())?;
-        out.insert(entry.path, data);
+        if !is_blob_path(&entry.path) {
+            out.insert(entry.path, data);
+            continue;
+        }
+        let blob = BlobRef {
+            blob: sha256_hex(&data),
+            size: data.len(),
+        };
+        let staged = staged_blob_path(&staging, &blob.blob);
+        if !file_exists(&staged).await {
+            tokio::fs::create_dir_all(&staging)
+                .await
+                .map_err(|e| e.to_string())?;
+            atomic_write_file(&staged, &data)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        out.insert(entry.path, blob.to_token());
     }
     Ok(out)
+}
+
+/// Download into the staging directory every blob in `refs` that this device does not hold,
+/// verifying each against its hash.
+async fn fetch_missing_blobs(store: &RemoteBackupStore, refs: &[BlobRef]) -> Result<(), String> {
+    let staging = blob_staging_dir();
+    let missing = missing_blobs(&get_local_data_dir(), DEFAULT_SYNC_SCOPES, &staging, refs)
+        .await
+        .map_err(|e| e.to_string())?;
+    if missing.is_empty() {
+        return Ok(());
+    }
+    tokio::fs::create_dir_all(&staging)
+        .await
+        .map_err(|e| e.to_string())?;
+    for blob in missing {
+        let bytes = store
+            .read_blob(&blob.blob)
+            .await
+            .map_err(|e| format!("Could not download blob {}: {e}", blob.blob))?;
+        if bytes.len() != blob.size || sha256_hex(&bytes) != blob.blob {
+            return Err(format!("Blob {} failed its integrity check.", blob.blob));
+        }
+        atomic_write_file(&staged_blob_path(&staging, &blob.blob), &bytes)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Upload the blobs the bundle references that the remote does not have yet. Runs before the
+/// bundle is written, so a manifest never points at a bundle with missing blobs.
+async fn upload_missing_blobs(store: &RemoteBackupStore, blobs: &[LocalBlob]) -> Result<(), String> {
+    if blobs.is_empty() {
+        return Ok(());
+    }
+    let local_data = get_local_data_dir();
+    let mut remote = store.list_blob_hashes().await?;
+    for local in blobs {
+        if remote.contains(&local.blob.blob) {
+            continue;
+        }
+        let bytes = tokio::fs::read(local_data.join(&local.rel_path))
+            .await
+            .map_err(|e| e.to_string())?;
+        if sha256_hex(&bytes) != local.blob.blob {
+            return Err(format!("{} changed during sync.", local.rel_path));
+        }
+        store.write_blob(&local.blob.blob, &bytes).await?;
+        remote.insert(local.blob.blob.clone());
+    }
+    Ok(())
+}
+
+async fn clear_blob_staging() {
+    let _ = tokio::fs::remove_dir_all(blob_staging_dir()).await;
 }
 
 fn merge_warning_from_review(review: &SyncConflictReview) -> Option<String> {
@@ -468,14 +567,21 @@ async fn merge_conflict_resolution(
         .map_err(|e| e.to_string())?;
     let remote_files = load_remote_scoped_file_map(store, remote_manifest).await?;
     let merged_files = build_merged_file_map(&local_files, &remote_files, choices);
+    fetch_missing_blobs(store, &file_map_blob_refs(&merged_files)).await?;
     let local_data = get_local_data_dir();
     let backup_snapshot_dir = local_backups_root().join(now.to_string());
     backup_scoped_files(&local_data, &backup_snapshot_dir, DEFAULT_SYNC_SCOPES)
         .await
         .map_err(|e| e.to_string())?;
-    apply_merged_files(&local_data, &merged_files, DEFAULT_SYNC_SCOPES)
-        .await
-        .map_err(|e| e.to_string())?;
+    apply_merged_files(
+        &local_data,
+        &merged_files,
+        DEFAULT_SYNC_SCOPES,
+        &blob_staging_dir(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    clear_blob_staging().await;
     Ok(())
 }
 
@@ -489,6 +595,7 @@ async fn push_local_to_remote(
     let built = build_bundle(&local_data, DEFAULT_SYNC_SCOPES)
         .await
         .map_err(|e| e.to_string())?;
+    upload_missing_blobs(store, &built.blobs).await?;
     let content_revision = compute_revision(&local_data, USER_CONTENT_SYNC_SCOPES)
         .await
         .map_err(|e| e.to_string())?;
@@ -518,14 +625,18 @@ async fn pull_remote_into_local(
         return Err("Remote bundle hash does not match its manifest.".into());
     }
     let doc = parse_bundle(&bytes)?;
+    // Every blob is in hand before local files are touched.
+    fetch_missing_blobs(store, &bundle_blob_refs(&doc)).await?;
     let backup_snapshot_dir = local_backups_root().join(now.to_string());
     let local_data = get_local_data_dir();
     backup_scoped_files(&local_data, &backup_snapshot_dir, DEFAULT_SYNC_SCOPES)
         .await
         .map_err(|e| e.to_string())?;
-    extract_bundle(&local_data, &doc, DEFAULT_SYNC_SCOPES)
+    let written = extract_bundle(&local_data, &doc, DEFAULT_SYNC_SCOPES, &blob_staging_dir())
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    clear_blob_staging().await;
+    Ok(written)
 }
 
 async fn auto_merge_and_push(
@@ -984,5 +1095,51 @@ mod tests {
             local_max_mtime_ms: 0,
         });
         assert_eq!(decision, SyncDecision::Push);
+    }
+
+    fn manifest(revision: &str, content_revision: &str) -> BackupManifest {
+        BackupManifest {
+            version: MANIFEST_VERSION,
+            revision: revision.into(),
+            content_revision: Some(content_revision.into()),
+            updated_at: 100,
+            bundle_hash: "hash".into(),
+        }
+    }
+
+    /// Blob paths hash differently from bundle format 2 on, so the first sync after an upgrade
+    /// sees new local revisions against the ones recorded under format 1.
+    #[tokio::test]
+    async fn first_sync_after_format_upgrade_pushes_when_remote_is_unchanged() {
+        let remote = manifest("v1-rev", "v1-content");
+        let decision = resolve_sync_decision(
+            "v2-rev",
+            "v2-content",
+            &remote,
+            "v1-content",
+            Some("v1-rev"),
+            Some("v1-content"),
+            0,
+        )
+        .await
+        .unwrap();
+        assert_eq!(decision, SyncDecision::Push);
+    }
+
+    #[tokio::test]
+    async fn first_sync_after_format_upgrade_merges_when_remote_also_changed() {
+        let remote = manifest("v1-rev-b", "v1-content-b");
+        let decision = resolve_sync_decision(
+            "v2-rev",
+            "v2-content",
+            &remote,
+            "v1-content-b",
+            Some("v1-rev-a"),
+            Some("v1-content-a"),
+            0,
+        )
+        .await
+        .unwrap();
+        assert_eq!(decision, SyncDecision::Conflict);
     }
 }
