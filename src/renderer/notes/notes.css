@@ -74,7 +74,7 @@
   color: inherit;
   text-align: left;
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition:
     background-color var(--motion-duration-ui) var(--motion-ease-standard),
     border-color var(--motion-duration-ui) var(--motion-ease-standard);
@@ -185,7 +185,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font: inherit;
 }
 
@@ -379,7 +379,7 @@
   line-height: 20px;
   padding: var(--space-1) var(--space-3);
   border-radius: var(--menu-item-radius);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
   transition: background-color 60ms var(--motion-ease-out);
 }
@@ -762,7 +762,7 @@
   background: transparent;
   color: var(--fg-muted);
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .note-links__chip {

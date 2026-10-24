@@ -22,7 +22,7 @@
   color: var(--fg-muted);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .rim-jig-tab:hover {
@@ -73,7 +73,7 @@
   background: none;
   font: inherit;
   color: var(--fg-muted);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .rim-jig__link:hover {
@@ -95,7 +95,7 @@
   background: transparent;
   font: inherit;
   color: var(--fg-muted);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .rim-jig__chip--on {

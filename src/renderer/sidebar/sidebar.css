@@ -138,7 +138,7 @@
   background: transparent;
   font-family: var(--font-family);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition: color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
@@ -230,7 +230,7 @@
   color: var(--fg-muted);
   font: inherit;
   font-size: var(--font-size-caption);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .sidebar-list-more-btn:hover,
@@ -298,7 +298,7 @@
   box-sizing: border-box;
   border-radius: var(--radius-md);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   overflow: hidden;
   transition: background var(--motion-duration-ui) var(--motion-ease-standard);
 }
@@ -421,7 +421,7 @@ button.sidebar-item {
   border: none;
   background: var(--sidebar-item-delete-scrub);
   color: var(--fg-muted);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   opacity: 0;
   pointer-events: none;
   border-radius: var(--radius-xs);
@@ -496,7 +496,7 @@ button.sidebar-item {
 
 .sidebar-footer__update-btn:disabled {
   opacity: 0.7;
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .sidebar-footer__update-btn--error {

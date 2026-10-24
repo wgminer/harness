@@ -30,7 +30,7 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   writing-mode: vertical-rl;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   opacity: 0.6;
 }
 
@@ -62,7 +62,7 @@
   font: inherit;
   text-align: left;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .chat-font-jig__option:hover {

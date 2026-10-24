@@ -106,6 +106,12 @@
 :root {
   color-scheme: dark;
 
+  /* --- Cursors: riding crop replaces the arrow and whacks on click; clickable targets keep the system hand --- */
+  --cursor-default: url("./ui/cursors/crop.svg") 2 2, default;
+  --cursor-windup: url("./ui/cursors/crop-windup.svg") 10 14, default;
+  --cursor-strike: url("./ui/cursors/crop-strike.svg") 10 14, default;
+  --cursor-pointer: pointer;
+
   /* --- Surfaces (role, not brightness order) --- */
   --bg: #111; /* page shell: sidebar, main, workspace canvas; JS tints via time-of-day */
   --bg-secondary: #222; /* fields, cards, panels */
@@ -335,6 +341,7 @@ html {
 
 body {
   -webkit-font-smoothing: antialiased;
+  cursor: var(--cursor-default);
 }
 
 * {
@@ -421,7 +428,7 @@ hr {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
     background var(--motion-duration-ui) var(--motion-ease-standard),
@@ -595,7 +602,7 @@ hr {
 .list-item-base {
   padding: var(--space-2) var(--space-3);
   border-left: 2px solid transparent;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   overflow: hidden;
 }
 
@@ -650,7 +657,12 @@ hr {
   background: var(--bg);
   border-bottom: 1px solid var(--border-edge);
   user-select: none;
-  cursor: default;
+  /* Drag affordance: the empty titlebar moves the window. */
+  cursor: grab;
+}
+
+.app-titlebar:active {
+  cursor: grabbing;
 }
 
 .app-titlebar__sidebar-toggle {
@@ -667,7 +679,7 @@ hr {
   line-height: 0;
   background: transparent;
   color: color-mix(in oklab, var(--fg-muted) 55%, transparent);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .app-titlebar__sidebar-toggle:hover {
@@ -737,7 +749,7 @@ hr {
   background: transparent;
   /* Dim through color, not opacity: fading opacity re-rasterizes the icon and it visibly shifts. */
   color: color-mix(in oklab, var(--fg-muted) 55%, transparent);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
     background var(--motion-duration-ui) var(--motion-ease-standard);
@@ -800,7 +812,7 @@ hr {
   border: none;
   background: transparent;
   text-align: center;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .app-titlebar__title--action:hover {

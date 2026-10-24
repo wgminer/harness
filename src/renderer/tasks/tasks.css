@@ -61,7 +61,7 @@
   color: var(--fg-muted);
   background: none;
   border: none;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
 }
 
@@ -189,7 +189,7 @@
   background: transparent;
   border: none;
   color: var(--fg-muted);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   line-height: 0;
 }
 
@@ -225,7 +225,7 @@
   background: none;
   border: none;
   border-radius: var(--radius-sm);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   color: inherit;
   font: inherit;
 }
@@ -316,7 +316,7 @@
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--fg-muted);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tasks-tag-remove:hover:not(:disabled) {
@@ -390,7 +390,7 @@
 
 /* Now: a short focus list above the backlog. */
 .tasks-section-heading--static {
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .tasks-section-heading--static:hover {

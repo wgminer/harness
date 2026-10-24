@@ -1,0 +1,10 @@
+/* Whack-on-click: wind-up and strike frames while the crop arrow is showing (see whipCursor.ts). */
+html[data-whip="windup"],
+html[data-whip="windup"] * {
+  cursor: var(--cursor-windup) !important;
+}
+
+html[data-whip="strike"],
+html[data-whip="strike"] * {
+  cursor: var(--cursor-strike) !important;
+}

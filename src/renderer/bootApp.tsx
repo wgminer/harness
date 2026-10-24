@@ -8,10 +8,12 @@ import { initGlobalHotkeyController } from "./recording/globalHotkeyController";
 import { RootApp } from "./RootApp";
 import { setCachedSettings } from "./settings/settingsSessionCache";
 import { isCurrentStickyWindow } from "./notes/stickyWindow";
+import { initWhipCursor } from "./ui/cursors/whipCursor";
 import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource-variable/newsreader/opsz-italic.css";
 import "@fontsource/vt323/400.css";
 import "./base.css";
+import "./ui/cursors/cursors.css";
 import "./ui/modal.css";
 import "./ui/menu.css";
 import "./setup/setupNotice.css";
@@ -29,6 +31,7 @@ import "highlight.js/styles/github-dark.css";
 /** Install `harness` as the app's backend and render the app. Shared by the app and the demo page. */
 export function bootApp(harness: HarnessAPI, options: { web: boolean }): void {
   window.harness = harness;
+  initWhipCursor();
   if (options.web) {
     document.documentElement.dataset.harnessClient = "web";
   }

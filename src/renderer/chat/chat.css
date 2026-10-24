@@ -61,7 +61,7 @@
 .new-chat-corner--link {
   text-decoration: none;
   pointer-events: auto;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .new-chat-corner--link:hover,
@@ -358,7 +358,7 @@
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .message-pasted-card__header:hover,
@@ -448,7 +448,7 @@
   color: var(--fg-muted);
   background: none;
   border: none;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   opacity: 0.4;
   transition:
     opacity var(--motion-duration-ui) var(--motion-ease-standard),
@@ -772,7 +772,7 @@
   background: transparent;
   color: rgb(255 255 255 / 0.5);
   border-radius: var(--radius-control-sm);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   border: 1px solid rgb(255 255 255 / 0.04);
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
@@ -880,7 +880,7 @@
   color: var(--fg-muted);
   text-decoration: underline;
   text-underline-offset: 2px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
 }
 
@@ -939,7 +939,7 @@
   font-size: var(--font-size-caption);
   line-height: var(--line-height-normal);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tool-card-search-item:hover .tool-card-search-item__title {
@@ -953,7 +953,7 @@
 }
 
 .tool-card-search-item--static {
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .tool-card-search-item__icon {
@@ -1000,7 +1000,7 @@
   text-decoration: underline;
   text-underline-offset: 0.18em;
   text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
 }
 
@@ -1015,7 +1015,7 @@
 }
 
 .message-block .content .library-ref--static {
-  cursor: default;
+  cursor: var(--cursor-default);
   text-decoration-color: color-mix(in oklab, currentColor 28%, transparent);
 }
 
@@ -1037,7 +1037,7 @@
   color: var(--fg-muted);
   font-size: var(--font-size-caption);
   line-height: var(--line-height-normal);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   text-align: left;
 }
 
@@ -1146,7 +1146,7 @@
 
 /* Hovering the time swaps in its other reading (reply duration or gap since the last message). */
 .message-block-meta-time {
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .message-block-meta-model {
@@ -1188,7 +1188,7 @@
   /* The toolbar owns show/hide; buttons only dim at rest (through color, so the icon does not shift). */
   color: color-mix(in oklab, var(--fg-muted) 60%, transparent);
   border-radius: var(--radius-control-sm);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   border: 1px solid transparent;
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
@@ -1390,7 +1390,7 @@
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
     transform var(--motion-duration-fast) var(--motion-ease-out);
@@ -1527,7 +1527,7 @@
   font-size: var(--font-size);
   line-height: var(--line-height-snug);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition: background var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
@@ -1646,7 +1646,7 @@
   border-radius: var(--radius-xs);
   color: inherit;
   background: transparent;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   opacity: 0.65;
 }
 
@@ -1700,7 +1700,7 @@
 }
 
 button.chat-attach-card__main {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition: border-color 120ms ease;
 }
 
@@ -1714,7 +1714,7 @@ button.chat-attach-card__main:focus-visible {
 }
 
 button.chat-attach-card__main:disabled {
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .chat-attach-card__title {
@@ -1768,7 +1768,7 @@ button.chat-attach-card__main:disabled {
   border-radius: var(--radius-xs);
   color: var(--fg-muted);
   background: transparent;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   opacity: 0.65;
 }
 
@@ -2107,7 +2107,7 @@ button.chat-attach-card__main:disabled {
 
 .message-block .content .md-details__summary {
   padding: var(--space-2) var(--space-3);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   font-size: var(--font-size-caption);
   font-weight: 600;
   color: var(--fg);
@@ -2207,7 +2207,7 @@ button.chat-attach-card__main:disabled {
   color: var(--fg);
   font-family: var(--font-family);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition:
     color var(--motion-duration-ui) var(--motion-ease-standard),
     background var(--motion-duration-ui) var(--motion-ease-standard),
@@ -2220,7 +2220,7 @@ button.chat-attach-card__main:disabled {
 }
 
 .document-card__pill:disabled {
-  cursor: default;
+  cursor: var(--cursor-default);
 }
 
 .document-card__pill:focus-visible {
