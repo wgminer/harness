@@ -37,7 +37,7 @@ import {
 } from "../../shared/dictationSuggestedPrompts";
 import type { ConversationSessionKind } from "../../shared/conversationSession";
 import { ComposeCornerMeta, ComposeHeaderQuote } from "./ComposeHome";
-import { ComposerRimJig, useComposerRim } from "./composerRim/ComposerRimJig";
+import { useComposerRim } from "./composerRim/ComposerRimJig";
 import { useChatModeState } from "./useChatModeState";
 import { useConversationTitleModal } from "./useConversationTitleModal";
 import { TerminalPanel } from "../terminal/TerminalPanel";
@@ -1266,7 +1266,6 @@ export function ChatView({
             </div>
           </div>
         </div>
-        <ComposerRimJig settings={composerRim.settings} onChange={composerRim.setSettings} />
       </>
     );
   }

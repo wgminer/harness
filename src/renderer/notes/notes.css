@@ -444,15 +444,12 @@
   overflow: hidden;
   background-color: var(--bg);
   container-type: inline-size;
-  --notes-editor-inline-pad: max(var(--space-4), calc((100cqi - var(--notes-editor-content-width, 100cqi)) / 2));
+  /* Minimum matches the sidebar text inset so note text lines up with the list title. */
+  --notes-editor-inline-pad: max(var(--space-5), calc((100cqi - var(--notes-editor-content-width, 100cqi)) / 2));
 }
 
 .notes-surface__editor-wrap--narrow {
   --notes-editor-content-width: 100cqi;
-}
-
-.notes-surface__editor-wrap--narrow .notes-surface__editor {
-  padding-top: var(--space-4);
 }
 
 .notes-surface__editor-wrap--comfortable {
@@ -472,7 +469,11 @@
 }
 
 .notes-code-editor--line-numbers {
-  --notes-editor-gutter-width: 3.5ch;
+  --notes-editor-gutter-width: calc(3.5ch + var(--space-3));
+}
+
+.notes-code-editor--line-numbers .cm-content {
+  padding-inline-start: var(--space-3);
 }
 
 .notes-code-editor .cm-editor {
@@ -496,7 +497,6 @@
 .notes-code-editor .cm-content {
   padding-top: clamp(var(--space-4), var(--notes-editor-inline-pad), calc(var(--space-4) + var(--space-12)));
   padding-bottom: var(--space-4);
-  padding-inline: var(--space-3);
 }
 
 .notes-surface__editor-wrap--narrow .notes-code-editor .cm-content {
