@@ -58,6 +58,11 @@
   text-align: right;
 }
 
+.new-chat-corner--bottom-left {
+  bottom: var(--space-4);
+  left: var(--shell-pad-inline);
+}
+
 .new-chat-corner--link {
   text-decoration: none;
   pointer-events: auto;

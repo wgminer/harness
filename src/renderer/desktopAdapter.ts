@@ -363,6 +363,7 @@ export function createHarnessAdapter(): HarnessAPI {
       countFiles: () => invoke<number>(cmd("recording:countFiles")),
       archiveStats: () =>
         invoke<{ fileCount: number; durationMs: number }>(cmd("recording:archiveStats")),
+      wordsDictated: () => invoke<number>(cmd("recording:wordsDictated")),
       listRecent: (limit?: number) =>
         invoke<RecentRecording[]>(cmd("recording:listRecent"), { limit }),
       transcribe: (data: ArrayBuffer, options?: { requestId?: string }) =>

@@ -36,7 +36,7 @@ import {
   type DictationReplyAction,
 } from "../../shared/dictationSuggestedPrompts";
 import type { ConversationSessionKind } from "../../shared/conversationSession";
-import { ComposeCornerMeta, ComposeHeaderQuote } from "./ComposeHome";
+import { ComposeCornerMeta, ComposeHeaderQuote, ComposeWordsDictated } from "./ComposeHome";
 import { useComposerRim } from "./composerRim/ComposerRimJig";
 import { useChatModeState } from "./useChatModeState";
 import { useConversationTitleModal } from "./useConversationTitleModal";
@@ -1249,6 +1249,7 @@ export function ChatView({
     return (
       <>
         <div className="new-chat-pane">
+          <ComposeWordsDictated />
           <ComposeCornerMeta />
           <div className="new-chat-center">
             <div className="new-chat-center-stack">
