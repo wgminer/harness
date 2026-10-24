@@ -77,6 +77,8 @@ export function createHarnessAdapter(): HarnessAPI {
       getSecretsForSettings: () => invoke(cmd("credentials:getSecretsForSettings")),
       setOpenAIApiKey: (value: string) =>
         invoke(cmd("credentials:setOpenAIApiKey"), { value }),
+      setAnthropicApiKey: (value: string) =>
+        invoke(cmd("credentials:setAnthropicApiKey"), { value }),
       setTavilyApiKey: (value: string) =>
         invoke(cmd("credentials:setTavilyApiKey"), { value }),
       setGoogleApiKey: (value: string) =>

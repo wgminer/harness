@@ -21,6 +21,7 @@ import type { GeneratedImage, ImageCreateInput, ImageGenerateInput } from "./ima
 import type { SyncResult, SyncStatus } from "./sync";
 import type { TaskStatus } from "./taskStatus";
 import type { TranscriptionEngineId, TranscriptionEngineStatus } from "./transcriptionEngines";
+import type { ChatProviderId } from "./chatProviders";
 import type { UiSession } from "./uiSession";
 import type { UpdateStatus } from "./updateStatus";
 
@@ -165,19 +166,26 @@ export interface HarnessAPI {
   credentials: {
     getStatus: () => Promise<{
       hasOpenAIApiKey: boolean;
+      hasAnthropicApiKey: boolean;
       hasTavilyApiKey: boolean;
       hasR2SecretAccessKey: boolean;
       /** True when a Google AI key is saved or supplied by the environment; images then use Google. */
       hasGoogleApiKey: boolean;
       encryptionAvailable: boolean;
+      /** Provider picked in Settings > Model. */
+      chatProvider: ChatProviderId;
+      /** The picked provider can run: its key is saved, or it is local. */
+      chatModelReady: boolean;
     }>;
     getSecretsForSettings: () => Promise<{
       openaiApiKey: string;
+      anthropicApiKey: string;
       tavilyApiKey: string;
       r2SecretAccessKey: string;
       googleApiKey: string;
     }>;
     setOpenAIApiKey: (value: string) => Promise<void>;
+    setAnthropicApiKey: (value: string) => Promise<void>;
     setTavilyApiKey: (value: string) => Promise<void>;
     setGoogleApiKey: (value: string) => Promise<void>;
     setR2SecretAccessKey: (value: string) => Promise<void>;

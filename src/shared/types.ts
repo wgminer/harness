@@ -2,6 +2,12 @@ import { DEFAULT_NOTE_TEMPLATES, DEFAULT_NOTE_TEMPLATE_ID } from "./writing";
 import { DEFAULT_ACCENT } from "./accent";
 import { DEFAULT_TRANSCRIPT_CLEANUP_PROMPT } from "./transcriptCleanup";
 import { DEFAULT_TRANSCRIPTION_ENGINE, type TranscriptionEngineId } from "./transcriptionEngines";
+import {
+  DEFAULT_CHAT_PROVIDER,
+  DEFAULT_LOCAL_BASE_URL,
+  DEFAULT_LOCAL_MODEL,
+  type ChatProviderId,
+} from "./chatProviders";
 
 export type MessageRole = "user" | "assistant" | "system";
 
@@ -165,6 +171,14 @@ export interface Settings {
     /** When true, selecting text in chat looks up a Tavily image popover. */
     selectionImageLookup: boolean;
   };
+  /** Which provider runs chat and the other text calls (titles, cleanup, notes). */
+  model?: {
+    provider: ChatProviderId;
+    /** OpenAI-compatible endpoint for the local provider (Ollama, LM Studio). */
+    localBaseUrl: string;
+    /** Model name as the local server lists it, e.g. `qwen3:4b`. */
+    localModel: string;
+  };
   /** Desktop appearance (accent drives derived CSS tokens). */
   appearance?: {
     /** Accent hex (`#rrggbb`). */
@@ -235,6 +249,11 @@ export const DEFAULT_SETTINGS: Settings = {
   chat: {
     openToComposeOnLaunch: true,
     selectionImageLookup: false,
+  },
+  model: {
+    provider: DEFAULT_CHAT_PROVIDER,
+    localBaseUrl: DEFAULT_LOCAL_BASE_URL,
+    localModel: DEFAULT_LOCAL_MODEL,
   },
   appearance: {
     accent: DEFAULT_ACCENT,

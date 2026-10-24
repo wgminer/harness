@@ -18,16 +18,13 @@ pub const CHAT_REASONING_EFFORT: &str = "low";
 /// Reasoning effort for the small title/cleanup model, which reasons unless told not to.
 pub const SMALL_MODEL_REASONING_EFFORT: &str = "none";
 
-/// Chat and small-model calls now run on genai in `crate::llm`; re-exported here
-/// until the provider switch moves their callers.
-pub use crate::llm::{chat_completion_json, generate_thread_title_with_openai, OpenAIChatClient};
-
 pub fn tool_error_result(message: impl Into<String>) -> String {
     json!({ "error": message.into() }).to_string()
 }
 
 pub fn openai_chat_model() -> String {
-    std::env::var("OPENAI_CHAT_MODEL").unwrap_or_else(|_| "gpt-6.1-sol".into())
+    std::env::var("OPENAI_CHAT_MODEL")
+        .unwrap_or_else(|_| crate::llm::contract_models(crate::llm::ProviderKind::OpenAi).0.into())
 }
 
 pub fn openai_image_model() -> String {
@@ -35,11 +32,13 @@ pub fn openai_image_model() -> String {
 }
 
 pub fn openai_title_model() -> String {
-    std::env::var("OPENAI_TITLE_MODEL").unwrap_or_else(|_| "gpt-6-luna".into())
+    std::env::var("OPENAI_TITLE_MODEL")
+        .unwrap_or_else(|_| crate::llm::contract_models(crate::llm::ProviderKind::OpenAi).1.into())
 }
 
 pub fn openai_transcript_cleanup_model() -> String {
-    std::env::var("OPENAI_TRANSCRIPT_CLEANUP_MODEL").unwrap_or_else(|_| "gpt-6-luna".into())
+    std::env::var("OPENAI_TRANSCRIPT_CLEANUP_MODEL")
+        .unwrap_or_else(|_| crate::llm::contract_models(crate::llm::ProviderKind::OpenAi).1.into())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

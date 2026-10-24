@@ -1,29 +1,36 @@
-//! Streaming chat turn with tool rounds, on the OpenAI Responses API via genai.
+//! Streaming chat turn with tool rounds via genai: the OpenAI Responses API,
+//! Claude's Messages API, or a local model's Chat Completions.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use genai::adapter::AdapterKind;
-use genai::chat::{ChatOptions, ChatRequest, ChatStreamEvent, ContentPart};
+use genai::chat::{CacheControl, ChatOptions, ChatRequest, ChatStreamEvent, ContentPart, StopReason};
 use genai::Client;
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
-use super::messages::{genai_tools, response_items, to_genai_messages, tool_call_params};
+use super::messages::{genai_parts_item, genai_tools, response_items, to_genai_messages, tool_call_params};
 use super::raw_frames::{with_raw_frames, RawFrames};
-use super::{error_body, error_status, map_genai_error, openai_client, OPENAI_BASE_URL};
+use super::{error_body, error_status, genai_client, map_genai_error, ModelTier, Provider, ProviderKind};
 use crate::openai::{
-    openai_chat_model, ChatMessageParam, OpenAIError, ToolCallExecContext, ToolCallParam,
-    CHAT_REASONING_EFFORT, MAX_TOOL_CALL_ITERATIONS,
+    ChatMessageParam, OpenAIError, ToolCallExecContext, ToolCallParam, CHAT_REASONING_EFFORT,
+    MAX_TOOL_CALL_ITERATIONS,
 };
+
+/// Room for adaptive thinking plus a long reply; Claude requires `max_tokens`.
+const CLAUDE_CHAT_MAX_TOKENS: u32 = 64_000;
+
+/// Shown when Claude declines a request and wrote nothing.
+const CLAUDE_REFUSAL_TEXT: &str = "Claude declined to answer this request.";
 
 /// Cleared for the rest of the session if the API rejects reasoning summaries
 /// (they can require organization verification); chat then runs without them.
 static REASONING_SUMMARY_ENABLED: AtomicBool = AtomicBool::new(true);
 
-pub struct OpenAIChatClient {
+pub struct ChatClient {
     client: Client,
+    provider: Provider,
 }
 
 /// What one streamed response produced.
@@ -32,9 +39,49 @@ struct RoundOutput {
     text: String,
     signatures: Vec<String>,
     tool_calls: Vec<ToolCallParam>,
+    /// Everything genai captured, replayed as-is for non-OpenAI providers.
+    parts: Vec<ContentPart>,
+    refused: bool,
 }
 
-fn round_options(with_summary: bool, has_tools: bool, frames: &RawFrames) -> ChatOptions {
+fn base_options() -> ChatOptions {
+    ChatOptions::default()
+        .with_capture_content(true)
+        .with_capture_tool_calls(true)
+        .with_capture_reasoning_content(true)
+}
+
+fn round_options(
+    kind: ProviderKind,
+    with_summary: bool,
+    has_tools: bool,
+    frames: &RawFrames,
+) -> ChatOptions {
+    match kind {
+        ProviderKind::OpenAi => openai_round_options(with_summary, has_tools, frames),
+        // Thinking stays on (it can't be turned off on the current Opus); summaries
+        // stream into the reasoning panel. Low effort keeps chat replies quick.
+        ProviderKind::Claude => base_options()
+            .with_max_tokens(CLAUDE_CHAT_MAX_TOKENS)
+            .with_cache_control(CacheControl::Ephemeral)
+            .with_extra_body(json!({
+                "thinking": { "type": "adaptive", "display": "summarized" },
+                "output_config": { "effort": "low" }
+            })),
+        // Thinking models stream reasoning on their own; others would reject a level.
+        ProviderKind::Local => base_options(),
+    }
+}
+
+fn is_refusal(reason: &StopReason) -> bool {
+    match reason {
+        StopReason::ContentFilter(_) => true,
+        StopReason::Other(raw) => raw == "refusal",
+        _ => false,
+    }
+}
+
+fn openai_round_options(with_summary: bool, has_tools: bool, frames: &RawFrames) -> ChatOptions {
     let mut reasoning = json!({ "effort": CHAT_REASONING_EFFORT });
     if with_summary {
         reasoning["summary"] = json!("auto");
@@ -43,12 +90,8 @@ fn round_options(with_summary: bool, has_tools: bool, frames: &RawFrames) -> Cha
     if has_tools {
         extra["tool_choice"] = json!("auto");
     }
-    let options = ChatOptions::default()
-        .with_capture_content(true)
-        .with_capture_tool_calls(true)
-        // Also asks for `reasoning.encrypted_content`, replayed on the next round.
-        .with_capture_reasoning_content(true)
-        .with_extra_body(extra);
+    // Capturing reasoning also asks for `reasoning.encrypted_content`, replayed on the next round.
+    let options = base_options().with_extra_body(extra);
     with_raw_frames(options, frames)
 }
 
@@ -57,19 +100,11 @@ fn is_summary_rejection(err: &genai::Error) -> bool {
         && error_body(err).is_some_and(|body| body.contains("summary"))
 }
 
-impl OpenAIChatClient {
-    pub fn new(api_key: impl Into<String>) -> Result<Self, OpenAIError> {
-        Self::with_base_url(&api_key.into(), OPENAI_BASE_URL)
-    }
-
-    fn with_base_url(api_key: &str, base_url: &str) -> Result<Self, OpenAIError> {
+impl ChatClient {
+    pub fn new(provider: &Provider) -> Result<Self, OpenAIError> {
         Ok(Self {
-            client: openai_client(
-                AdapterKind::OpenAIResp,
-                api_key,
-                base_url,
-                Duration::from_secs(300),
-            )?,
+            client: genai_client(provider, true, Duration::from_secs(300))?,
+            provider: provider.clone(),
         })
     }
 
@@ -121,7 +156,8 @@ impl OpenAIChatClient {
         let mut full_content = initial_content;
         let mut iteration = 0usize;
         let mut reasoning_emitted = false;
-        let request_tools = genai_tools(&tools);
+        let kind = self.provider.kind;
+        let request_tools = genai_tools(&tools, kind);
 
         loop {
             if iteration >= MAX_TOOL_CALL_ITERATIONS {
@@ -133,7 +169,8 @@ impl OpenAIChatClient {
                 return Err(OpenAIError::Cancelled);
             }
 
-            let with_summary = REASONING_SUMMARY_ENABLED.load(Ordering::Relaxed);
+            let with_summary =
+                kind == ProviderKind::OpenAi && REASONING_SUMMARY_ENABLED.load(Ordering::Relaxed);
             let mut emit_text = |delta: &str, full_content: &mut String, round: &mut RoundOutput| {
                 full_content.push_str(delta);
                 round.text.push_str(delta);
@@ -153,13 +190,13 @@ impl OpenAIChatClient {
                 on_reasoning(delta);
             };
 
-            let mut request = ChatRequest::from_messages(to_genai_messages(&messages));
+            let mut request = ChatRequest::from_messages(to_genai_messages(&messages, kind));
             if !request_tools.is_empty() {
                 request = request.with_tools(request_tools.clone());
             }
             let frames = RawFrames::default();
-            let options = round_options(with_summary, !request_tools.is_empty(), &frames);
-            let model = openai_chat_model();
+            let options = round_options(kind, with_summary, !request_tools.is_empty(), &frames);
+            let model = self.provider.model(ModelTier::Chat);
 
             let started = tokio::select! {
                 res = self.client.exec_chat_stream(&model, request, Some(&options)) => res,
@@ -217,11 +254,13 @@ impl OpenAIChatClient {
                         emit_reasoning(&chunk.content, &mut round_reasoning);
                     }
                     ChatStreamEvent::End(end) => {
+                        round.refused = end.captured_stop_reason.as_ref().is_some_and(is_refusal);
                         let mut calls = Vec::new();
-                        for part in end.captured_content.map(|c| c.into_parts()).unwrap_or_default() {
+                        round.parts = end.captured_content.map(|c| c.into_parts()).unwrap_or_default();
+                        for part in &round.parts {
                             match part {
-                                ContentPart::ThoughtSignature(blob) => round.signatures.push(blob),
-                                ContentPart::ToolCall(call) => calls.push(call),
+                                ContentPart::ThoughtSignature(blob) => round.signatures.push(blob.clone()),
+                                ContentPart::ToolCall(call) => calls.push(call.clone()),
                                 _ => {}
                             }
                         }
@@ -257,6 +296,9 @@ impl OpenAIChatClient {
                 iteration -= 1;
                 continue;
             }
+            if round.refused && round.text.is_empty() {
+                emit_text(CLAUDE_REFUSAL_TEXT, &mut full_content, &mut round);
+            }
             if round.tool_calls.is_empty() {
                 break;
             }
@@ -270,11 +312,12 @@ impl OpenAIChatClient {
                 },
                 tool_calls: Some(round.tool_calls.clone()),
                 tool_call_id: None,
-                response_items: Some(response_items(
-                    &round.signatures,
-                    &round.text,
-                    &round.tool_calls,
-                )),
+                response_items: Some(match kind {
+                    ProviderKind::OpenAi => {
+                        response_items(&round.signatures, &round.text, &round.tool_calls)
+                    }
+                    _ => vec![genai_parts_item(kind, &round.parts)],
+                }),
             });
 
             let tool_calls = round.tool_calls;
@@ -360,7 +403,11 @@ mod tests {
     }
 
     async fn run(base_url: &str, tools: Value, cancel: &CancellationToken) -> Run {
-        let client = OpenAIChatClient::with_base_url("sk-test", base_url).unwrap();
+        run_with(Provider::for_test(ProviderKind::OpenAi, base_url, ""), tools, cancel).await
+    }
+
+    async fn run_with(provider: Provider, tools: Value, cancel: &CancellationToken) -> Run {
+        let client = ChatClient::new(&provider).unwrap();
         let content = Arc::new(Mutex::new(String::new()));
         let reasoning = Arc::new(Mutex::new(String::new()));
         let calls = Arc::new(Mutex::new(Vec::new()));
@@ -461,5 +508,120 @@ mod tests {
         cancel.cancel();
         let out = run("http://127.0.0.1:9/v1/", json!([]), &cancel).await;
         assert!(matches!(out.result, Err(OpenAIError::Cancelled)));
+    }
+
+    fn claude_tool_round_reply() -> Reply {
+        Reply::sse(&[
+            json!({ "type": "message_start", "message": { "id": "msg_1", "type": "message", "role": "assistant",
+                "model": "claude-opus-5-5", "content": [], "stop_reason": null,
+                "usage": { "input_tokens": 10, "output_tokens": 1 } } }),
+            json!({ "type": "content_block_start", "index": 0,
+                "content_block": { "type": "thinking", "thinking": "", "signature": "" } }),
+            json!({ "type": "content_block_delta", "index": 0,
+                "delta": { "type": "thinking_delta", "thinking": "Checking the date." } }),
+            json!({ "type": "content_block_delta", "index": 0,
+                "delta": { "type": "signature_delta", "signature": "sig_1" } }),
+            json!({ "type": "content_block_stop", "index": 0 }),
+            json!({ "type": "content_block_start", "index": 1,
+                "content_block": { "type": "tool_use", "id": "toolu_1", "name": "get_datetime", "input": {} } }),
+            json!({ "type": "content_block_delta", "index": 1,
+                "delta": { "type": "input_json_delta", "partial_json": "{\"timezone\":\"UTC\"}" } }),
+            json!({ "type": "content_block_stop", "index": 1 }),
+            json!({ "type": "message_delta", "delta": { "stop_reason": "tool_use" }, "usage": { "output_tokens": 20 } }),
+            json!({ "type": "message_stop" }),
+        ])
+    }
+
+    fn claude_text_reply(text: &str, stop_reason: &str) -> Reply {
+        let mut events = vec![json!({ "type": "message_start", "message": { "id": "msg_2", "type": "message",
+            "role": "assistant", "model": "claude-opus-5-5", "content": [], "stop_reason": null,
+            "usage": { "input_tokens": 10, "output_tokens": 1 } } })];
+        if !text.is_empty() {
+            events.push(json!({ "type": "content_block_start", "index": 0, "content_block": { "type": "text", "text": "" } }));
+            events.push(json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "text_delta", "text": text } }));
+            events.push(json!({ "type": "content_block_stop", "index": 0 }));
+        }
+        events.push(json!({ "type": "message_delta", "delta": { "stop_reason": stop_reason }, "usage": { "output_tokens": 5 } }));
+        events.push(json!({ "type": "message_stop" }));
+        Reply::sse(&events)
+    }
+
+    #[tokio::test]
+    async fn claude_tool_round_replays_its_thinking_block() {
+        let (base_url, bodies) =
+            serve(vec![claude_tool_round_reply(), claude_text_reply("It's noon.", "end_turn")]).await;
+        let provider = Provider::for_test(ProviderKind::Claude, &base_url, "");
+        let out = run_with(provider, crate::openai::tool_definitions(), &CancellationToken::new()).await;
+
+        assert_eq!(out.result.unwrap(), "It's noon.");
+        assert_eq!(out.reasoning, "Checking the date.");
+        assert_eq!(out.tool_calls, vec![("get_datetime".to_string(), json!({ "timezone": "UTC" }))]);
+
+        let bodies = bodies.lock().unwrap().clone();
+        let first = &bodies[0];
+        assert_eq!(first["model"], "claude-opus-5-5");
+        assert_eq!(first["max_tokens"], CLAUDE_CHAT_MAX_TOKENS);
+        assert_eq!(first["thinking"], json!({ "type": "adaptive", "display": "summarized" }));
+        assert_eq!(first["output_config"], json!({ "effort": "low" }));
+        assert!(first.get("temperature").is_none());
+        let tools = first["tools"].as_array().unwrap();
+        assert!(tools.iter().all(|t| t["input_schema"].is_object() && t.get("strict").is_none()), "{}", tools[0]);
+        let web_search = tools.iter().find(|t| t["name"] == "web_search").unwrap();
+        assert_eq!(web_search["type"], "custom");
+
+        let messages = bodies[1]["messages"].as_array().unwrap();
+        let assistant = messages.iter().find(|m| m["role"] == "assistant").unwrap();
+        let blocks = assistant["content"].as_array().unwrap();
+        assert_eq!(blocks[0]["type"], "thinking");
+        assert_eq!(blocks[0]["signature"], "sig_1");
+        assert!(blocks.iter().any(|b| b["type"] == "tool_use" && b["id"] == "toolu_1"));
+        let last = messages.last().unwrap();
+        assert_eq!(last["role"], "user");
+        assert_eq!(last["content"][0]["type"], "tool_result");
+        assert_eq!(last["content"][0]["tool_use_id"], "toolu_1");
+    }
+
+    #[tokio::test]
+    async fn claude_refusal_without_text_says_so() {
+        let (base_url, _) = serve(vec![claude_text_reply("", "refusal")]).await;
+        let provider = Provider::for_test(ProviderKind::Claude, &base_url, "");
+        let out = run_with(provider, json!([]), &CancellationToken::new()).await;
+        assert_eq!(out.result.unwrap(), CLAUDE_REFUSAL_TEXT);
+    }
+
+    #[tokio::test]
+    async fn local_tool_round_on_chat_completions() {
+        let chunk = |delta: Value, finish: Value| {
+            json!({ "id": "c1", "object": "chat.completion.chunk", "created": 0, "model": "qwen3:4b",
+                "choices": [{ "index": 0, "delta": delta, "finish_reason": finish }] })
+        };
+        let first = Reply::sse_data(&[
+            chunk(json!({ "role": "assistant", "reasoning": "Need the time." }), Value::Null),
+            chunk(json!({ "tool_calls": [{ "index": 0, "id": "call_1", "type": "function",
+                "function": { "name": "get_datetime", "arguments": "{}" } }] }), Value::Null),
+            chunk(json!({}), json!("tool_calls")),
+        ]);
+        let second = Reply::sse_data(&[
+            chunk(json!({ "role": "assistant", "content": "Noon." }), Value::Null),
+            chunk(json!({}), json!("stop")),
+        ]);
+        let (base_url, bodies) = serve(vec![first, second]).await;
+        let provider = Provider::for_test(ProviderKind::Local, &base_url, "qwen3:4b");
+        let out = run_with(provider, crate::openai::tool_definitions(), &CancellationToken::new()).await;
+
+        assert_eq!(out.result.unwrap(), "Noon.");
+        assert_eq!(out.reasoning, "Need the time.");
+        assert_eq!(out.tool_calls.len(), 1);
+
+        let bodies = bodies.lock().unwrap().clone();
+        assert_eq!(bodies[0]["model"], "qwen3:4b");
+        assert!(bodies[0].get("reasoning_effort").is_none());
+        let web_search = bodies[0]["tools"].as_array().unwrap().iter()
+            .find(|t| t["function"]["name"] == "web_search").cloned().unwrap();
+        assert_eq!(web_search["type"], "function");
+        let messages = bodies[1]["messages"].as_array().unwrap();
+        let last = messages.last().unwrap();
+        assert_eq!(last["role"], "tool");
+        assert_eq!(last["tool_call_id"], "call_1");
     }
 }

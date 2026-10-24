@@ -12,7 +12,7 @@ export interface SetupGap {
 }
 
 export function chatRequiresApiKeyMessage(): string {
-  return `Chat needs an OpenAI API key in ${settingsSection("Accounts")}.`;
+  return `Chat needs a model. Add an OpenAI API key in ${settingsSection("Accounts")}, or pick another provider in ${settingsSection("Model")}.`;
 }
 
 export function collectSetupGaps(input: {

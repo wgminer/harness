@@ -670,6 +670,27 @@ pub struct NoteEditProposal {
     pub proposed_text: String,
 }
 
+async fn note_completion(
+    provider: &crate::llm::Provider,
+    system: &str,
+    user: &str,
+) -> Result<String, String> {
+    crate::llm::complete(
+        provider,
+        crate::llm::Completion {
+            tier: crate::llm::ModelTier::Chat,
+            system,
+            user,
+            max_tokens: Some(4000),
+            reasoning_effort: crate::openai::CHAT_REASONING_EFFORT,
+            json: true,
+            timeout: std::time::Duration::from_secs(60),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
 pub async fn propose_note_edit(input: &serde_json::Value) -> Result<NoteEditProposal, String> {
     let selected = input
         .get("selectedText")
@@ -687,23 +708,10 @@ pub async fn propose_note_edit(input: &serde_json::Value) -> Result<NoteEditProp
     if prompt.is_empty() {
         return Err("Prompt is required.".into());
     }
-    let api_key = crate::credentials::resolve_openai_api_key().await.trim().to_string();
-    if api_key.is_empty() {
-        return Err("OpenAI API key required.".into());
-    }
+    let provider = crate::llm::Provider::active().await?;
     let system = "You edit note selections. Return only the revised text.";
     let user = format!("Instruction: {prompt}\n\nSelection:\n{selected}");
-    let text = crate::openai::chat_completion_json(
-        &api_key,
-        crate::openai::openai_chat_model().as_str(),
-        system,
-        &user,
-        4000,
-        crate::openai::CHAT_REASONING_EFFORT,
-        60,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let text = note_completion(&provider, system, &user).await?;
     Ok(NoteEditProposal {
         proposed_text: text,
     })
@@ -718,22 +726,9 @@ pub async fn propose_note_spell_check(input: &serde_json::Value) -> Result<NoteE
     if selected.is_empty() {
         return Err("Cannot spell check an empty selection.".into());
     }
-    let api_key = crate::credentials::resolve_openai_api_key().await.trim().to_string();
-    if api_key.is_empty() {
-        return Err("OpenAI API key required.".into());
-    }
+    let provider = crate::llm::Provider::active().await?;
     let system = "Fix spelling and grammar. Return only corrected text.";
-    let text = crate::openai::chat_completion_json(
-        &api_key,
-        crate::openai::openai_chat_model().as_str(),
-        system,
-        selected,
-        4000,
-        crate::openai::CHAT_REASONING_EFFORT,
-        60,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let text = note_completion(&provider, system, selected).await?;
     Ok(NoteEditProposal {
         proposed_text: text,
     })

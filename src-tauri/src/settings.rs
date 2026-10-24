@@ -42,6 +42,7 @@ pub fn default_settings() -> Value {
             "openToComposeOnLaunch": true,
             "selectionImageLookup": false
         },
+        "model": crate::llm::parse_model_settings(None),
         "appearance": {
             "accent": DEFAULT_ACCENT,
             "theme": "dark"
@@ -390,6 +391,7 @@ pub fn parse_settings(data: &Value) -> Value {
             "openToComposeOnLaunch": open_to_compose,
             "selectionImageLookup": selection_image_lookup
         },
+        "model": crate::llm::parse_model_settings(obj.and_then(|o| o.get("model"))),
         "appearance": parse_appearance(obj.and_then(|o| o.get("appearance"))),
         "weather": parse_weather(obj.and_then(|o| o.get("weather")), &defaults),
     })
@@ -467,6 +469,15 @@ pub async fn load_settings_from_path(chains: &WriteChains, path: &std::path::Pat
     }
     let parsed = read_json_object_file(path).await;
     parse_settings(&parsed.value)
+}
+
+/// Current settings without the migration pass, for code that has no write chains.
+pub async fn read_settings_snapshot() -> Value {
+    let path = get_local_data_settings_path();
+    if !file_exists(&path).await {
+        return default_settings();
+    }
+    parse_settings(&read_json_object_file(&path).await.value)
 }
 
 async fn load_settings(chains: &WriteChains) -> Value {
@@ -598,6 +609,14 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
             current.get("chat").unwrap_or(&json!({})),
             chat,
             &["openToComposeOnLaunch", "selectionImageLookup"],
+        );
+    }
+
+    if let Some(model) = partial.get("model") {
+        next["model"] = merge_object_fields(
+            current.get("model").unwrap_or(&json!({})),
+            model,
+            &["provider", "localBaseUrl", "localModel"],
         );
     }
 

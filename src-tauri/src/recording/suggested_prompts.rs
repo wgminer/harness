@@ -11,11 +11,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 
-use crate::credentials::resolve_openai_api_key;
 use crate::env_util::is_harness_e2e;
 use crate::state::AppState;
 use crate::dictation_timing::StepTimer;
-use crate::openai::{chat_completion_json, openai_title_model, OpenAIError};
+use crate::llm::{Completion, ModelTier, Provider};
+use crate::openai::OpenAIError;
 
 const CONTRACT_JSON: &str =
     include_str!("../../../resources/contracts/dictationSuggestedPrompts.json");
@@ -99,7 +99,7 @@ pub fn fallback_dictation_reply_action() -> String {
 }
 
 pub async fn classify_dictation_reply_action(
-    api_key: &str,
+    provider: &Provider,
     transcript: &str,
 ) -> Result<String, OpenAIError> {
     let cfg = contract();
@@ -108,14 +108,17 @@ pub async fn classify_dictation_reply_action(
         return Ok(fallback_dictation_reply_action());
     }
 
-    let content = chat_completion_json(
-        api_key,
-        &openai_title_model(),
-        &cfg.system_prompt,
-        &build_user_message(trimmed),
-        cfg.max_completion_tokens,
-        crate::openai::SMALL_MODEL_REASONING_EFFORT,
-        cfg.timeout_secs,
+    let content = crate::llm::complete(
+        provider,
+        Completion {
+            tier: ModelTier::Small,
+            system: &cfg.system_prompt,
+            user: &build_user_message(trimmed),
+            max_tokens: Some(cfg.max_completion_tokens),
+            reasoning_effort: crate::openai::SMALL_MODEL_REASONING_EFFORT,
+            json: true,
+            timeout: std::time::Duration::from_secs(cfg.timeout_secs),
+        },
     )
     .await?;
 
@@ -129,11 +132,12 @@ static IN_FLIGHT: Mutex<Option<HashMap<String, SharedAction>>> = Mutex::new(None
 /// Classify at most once at a time per conversation. The run scheduled when a
 /// dictation is saved and the chat view's ensure call usually overlap; the
 /// second joins the first instead of making its own request.
-async fn classify_shared(conversation_id: &str, api_key: String, transcript: String) -> String {
+async fn classify_shared(conversation_id: &str, provider: Provider, transcript: String) -> String {
     let timing_id = conversation_id.to_string();
     join_in_flight(conversation_id, move || async move {
-        let timer = StepTimer::for_conversation(&timing_id, "Reply action", openai_title_model());
-        match classify_dictation_reply_action(&api_key, &transcript).await {
+        let timer =
+            StepTimer::for_conversation(&timing_id, "Reply action", provider.model(ModelTier::Small));
+        match classify_dictation_reply_action(&provider, &transcript).await {
             Ok(a) => {
                 timer.ok();
                 a
@@ -227,9 +231,9 @@ pub fn schedule_dictation_reply_action(
             }
         }
 
-        let action = match resolve_openai_api_key().await {
-            key if key.trim().is_empty() => fallback_dictation_reply_action(),
-            key => {
+        let action = match Provider::active().await {
+            Err(_) => fallback_dictation_reply_action(),
+            Ok(provider) => {
                 let transcript = match crate::memory::get_messages(&state, &conversation_id).await {
                     Ok(msgs) => msgs
                         .iter()
@@ -238,7 +242,7 @@ pub fn schedule_dictation_reply_action(
                         .unwrap_or_default(),
                     Err(_) => String::new(),
                 };
-                classify_shared(&conversation_id, key.trim().to_string(), transcript).await
+                classify_shared(&conversation_id, provider, transcript).await
             }
         };
 
@@ -284,11 +288,9 @@ pub async fn ensure_dictation_reply_action(
         .map(|m| m.content.clone())
         .unwrap_or_default();
 
-    let api_key = resolve_openai_api_key().await;
-    let action = if api_key.trim().is_empty() {
-        fallback_dictation_reply_action()
-    } else {
-        classify_shared(conversation_id, api_key.trim().to_string(), transcript).await
+    let action = match Provider::active().await {
+        Err(_) => fallback_dictation_reply_action(),
+        Ok(provider) => classify_shared(conversation_id, provider, transcript).await,
     };
 
     crate::memory::patch_conversation_dictation_reply_action(state, conversation_id, &action)

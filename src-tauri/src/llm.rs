@@ -1,11 +1,11 @@
-//! Text-model calls (chat streaming, small JSON helpers) on top of the `genai` crate.
-//!
-//! Only OpenAI is wired today; the provider switch lands on this seam. Images stay
-//! on the hand-written client in `openai.rs`.
+//! Text-model calls (chat streaming, small JSON helpers) on top of the `genai` crate,
+//! sent to the provider picked in Settings > Model. Images stay on the hand-written
+//! client in `openai.rs`.
 
 mod chat_stream;
 mod json;
 mod messages;
+mod provider;
 mod raw_frames;
 #[cfg(test)]
 mod test_server;
@@ -18,21 +18,31 @@ use genai::{Client, ModelIden, ServiceTarget, WebConfig};
 
 use crate::openai::OpenAIError;
 
-pub use chat_stream::OpenAIChatClient;
-pub use json::{chat_completion_json, generate_thread_title_with_openai};
+pub use chat_stream::ChatClient;
+pub use json::{complete, generate_thread_title, Completion};
+pub use provider::{
+    chat_provider_status, contract_models, parse_model_settings, ModelTier, Provider, ProviderKind,
+};
 
 const OPENAI_BASE_URL: &str = "https://api.openai.com/v1/";
+const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com/v1/";
 
-/// A genai client that sends every model to OpenAI on the given API
-/// (`OpenAIResp` for the Responses API, `OpenAI` for Chat Completions).
-fn openai_client(
-    adapter: AdapterKind,
-    api_key: &str,
-    base_url: &str,
-    timeout: Duration,
-) -> Result<Client, OpenAIError> {
-    let api_key = api_key.to_string();
-    let base_url = base_url.to_string();
+/// A genai client that sends every model to the provider's endpoint on one API:
+/// OpenAI chat on the Responses API, its small calls on Chat Completions, Claude on
+/// Messages, and local models on their OpenAI-compatible Chat Completions.
+fn genai_client(provider: &Provider, streaming_chat: bool, timeout: Duration) -> Result<Client, OpenAIError> {
+    let adapter = match provider.kind {
+        ProviderKind::OpenAi if streaming_chat => AdapterKind::OpenAIResp,
+        ProviderKind::OpenAi | ProviderKind::Local => AdapterKind::OpenAI,
+        ProviderKind::Claude => AdapterKind::Anthropic,
+    };
+    // Ollama and LM Studio ignore the key, but genai wants one.
+    let api_key = if provider.api_key.is_empty() {
+        "local".to_string()
+    } else {
+        provider.api_key.clone()
+    };
+    let base_url = provider.base_url.clone();
     let target = ServiceTargetResolver::from_resolver_fn(
         move |target: ServiceTarget| -> Result<ServiceTarget, genai::resolver::Error> {
             Ok(ServiceTarget {

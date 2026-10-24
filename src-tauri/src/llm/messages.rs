@@ -1,17 +1,22 @@
 //! Conversion between Harness's stored chat messages and genai's types.
 //!
-//! An assistant tool round keeps its output as Responses API items in
-//! `ChatMessageParam::response_items` (reasoning, text, function calls), the same
-//! shape gated-tool checkpoints have always stored, so older checkpoints still load.
+//! An assistant tool round keeps its output in `ChatMessageParam::response_items`:
+//! OpenAI rounds as Responses API items (reasoning, text, function calls), the shape
+//! gated-tool checkpoints have always stored; other providers' rounds as one
+//! `harness.genai_parts` item holding genai's parts. Reasoning is only replayed to
+//! the provider that produced it.
 
 use genai::chat::{ChatMessage, ContentPart, MessageContent, Tool, ToolCall, ToolConfig, ToolResponse};
 use serde_json::{json, Value};
 
+use super::ProviderKind;
 use crate::openai::{ChatMessageParam, ToolCallParam, ToolFunctionParam};
+
+const GENAI_PARTS_ITEM: &str = "harness.genai_parts";
 
 /// Chat Completions-style tool definitions (`{type, function: {...}}`, the shape of
 /// `resources/contracts/tools.json`) as genai tools, never strict.
-pub(super) fn genai_tools(tools: &Value) -> Vec<Tool> {
+pub(super) fn genai_tools(tools: &Value, kind: ProviderKind) -> Vec<Tool> {
     let Some(defs) = tools.as_array() else {
         return Vec::new();
     };
@@ -24,29 +29,42 @@ pub(super) fn genai_tools(tools: &Value) -> Vec<Tool> {
                 .cloned()
                 .unwrap_or_else(|| json!({ "type": "object", "properties": {} }));
             let description = function.get("description").and_then(|v| v.as_str());
-            let mut tool = Tool::new(name.to_string())
-                .with_schema(parameters.clone())
-                .with_strict(false);
+            let mut tool = Tool::new(name.to_string()).with_schema(parameters.clone());
+            if kind != ProviderKind::Claude {
+                tool = tool.with_strict(false);
+            }
             if let Some(description) = description {
                 tool = tool.with_description(description.to_string());
             }
-            // genai sends a tool named `web_search` as OpenAI's hosted search; its
-            // config is merged over that, so spell out our own function instead.
+            // genai sends a tool named `web_search` as the provider's hosted search
+            // (OpenAI Responses, Anthropic); its config is merged over that, so spell
+            // out our own function instead.
             if name == "web_search" {
-                tool = tool.with_config(ToolConfig::Custom(json!({
-                    "type": "function",
-                    "name": name,
-                    "description": description,
-                    "parameters": parameters,
-                    "strict": false
-                })));
+                let own = match kind {
+                    ProviderKind::OpenAi => Some(json!({
+                        "type": "function",
+                        "name": name,
+                        "description": description,
+                        "parameters": parameters,
+                        "strict": false
+                    })),
+                    ProviderKind::Claude => Some(json!({
+                        "type": "custom",
+                        "description": description,
+                        "input_schema": parameters
+                    })),
+                    ProviderKind::Local => None,
+                };
+                if let Some(own) = own {
+                    tool = tool.with_config(ToolConfig::Custom(own));
+                }
             }
             Some(tool)
         })
         .collect()
 }
 
-pub(super) fn to_genai_messages(messages: &[ChatMessageParam]) -> Vec<ChatMessage> {
+pub(super) fn to_genai_messages(messages: &[ChatMessageParam], kind: ProviderKind) -> Vec<ChatMessage> {
     let mut out = Vec::new();
     for message in messages {
         let content = message.content.clone().unwrap_or_default();
@@ -58,7 +76,7 @@ pub(super) fn to_genai_messages(messages: &[ChatMessageParam]) -> Vec<ChatMessag
             "system" => out.push(ChatMessage::system(content)),
             "assistant" => {
                 let parts = match &message.response_items {
-                    Some(items) => parts_from_response_items(items),
+                    Some(items) => parts_from_response_items(items, kind),
                     None => {
                         let mut parts = Vec::new();
                         if !content.is_empty() {
@@ -84,10 +102,28 @@ pub(super) fn to_genai_messages(messages: &[ChatMessageParam]) -> Vec<ChatMessag
     out
 }
 
-fn parts_from_response_items(items: &[Value]) -> Vec<ContentPart> {
+fn parts_from_response_items(items: &[Value], kind: ProviderKind) -> Vec<ContentPart> {
     let mut parts = Vec::new();
     for item in items {
         match item.get("type").and_then(|v| v.as_str()) {
+            Some(GENAI_PARTS_ITEM) => {
+                let same_provider = item.get("provider").and_then(|v| v.as_str()) == Some(kind.as_str());
+                let stored: Vec<ContentPart> = item
+                    .get("parts")
+                    .cloned()
+                    .and_then(|v| serde_json::from_value(v).ok())
+                    .unwrap_or_default();
+                parts.extend(stored.into_iter().filter_map(|part| match part {
+                    _ if same_provider => Some(part),
+                    ContentPart::ThoughtSignature(_) | ContentPart::ReasoningContent(_) => None,
+                    ContentPart::ToolCall(call) => Some(ContentPart::ToolCall(ToolCall {
+                        thought_signatures: None,
+                        ..call
+                    })),
+                    other => Some(other),
+                }));
+            }
+            Some("reasoning") if kind != ProviderKind::OpenAi => {}
             Some("reasoning") => {
                 if let Some(blob) = item.get("encrypted_content").and_then(|v| v.as_str()) {
                     parts.push(ContentPart::ThoughtSignature(blob.to_string()));
@@ -158,7 +194,12 @@ pub(super) fn tool_call_params(calls: &[ToolCall]) -> Vec<ToolCallParam> {
         .collect()
 }
 
-/// One round's output as Responses API items, in the order the API emits them.
+/// A non-OpenAI round's output, kept as genai's own parts for replay.
+pub(super) fn genai_parts_item(kind: ProviderKind, parts: &[ContentPart]) -> Value {
+    json!({ "type": GENAI_PARTS_ITEM, "provider": kind.as_str(), "parts": parts })
+}
+
+/// One OpenAI round's output as Responses API items, in the order the API emits them.
 pub(super) fn response_items(
     signatures: &[String],
     text: &str,
@@ -208,7 +249,7 @@ mod tests {
     #[test]
     fn converts_tool_definitions_without_strict() {
         let defs = crate::openai::tool_definitions();
-        let tools = genai_tools(&defs);
+        let tools = genai_tools(&defs, ProviderKind::OpenAi);
         assert_eq!(tools.len(), defs.as_array().unwrap().len());
         for tool in &tools {
             assert_eq!(tool.strict, Some(false));
@@ -218,12 +259,15 @@ mod tests {
 
     #[test]
     fn converts_plain_messages_and_drops_empty_assistant() {
-        let out = to_genai_messages(&[
-            message("system", Some("sys")),
-            message("user", Some("hi")),
-            message("assistant", Some("")),
-            message("assistant", Some("hello")),
-        ]);
+        let out = to_genai_messages(
+            &[
+                message("system", Some("sys")),
+                message("user", Some("hi")),
+                message("assistant", Some("")),
+                message("assistant", Some("hello")),
+            ],
+            ProviderKind::OpenAi,
+        );
         assert_eq!(
             roles(&out),
             vec![ChatRole::System, ChatRole::User, ChatRole::Assistant]
@@ -242,7 +286,7 @@ mod tests {
         let mut tool = message("tool", Some("{\"ok\":true}"));
         tool.tool_call_id = Some("call_a".into());
 
-        let out = to_genai_messages(&[assistant, tool]);
+        let out = to_genai_messages(&[assistant, tool], ProviderKind::OpenAi);
         let parts = out[0].content.parts();
         assert!(matches!(&parts[0], ContentPart::ThoughtSignature(s) if s == "abc"));
         assert!(matches!(&parts[1], ContentPart::Text(t) if t == "On it."));
@@ -264,7 +308,7 @@ mod tests {
             { "role": "tool", "content": "done", "tool_call_id": "call_a" }
         ]))
         .unwrap();
-        let out = to_genai_messages(&legacy);
+        let out = to_genai_messages(&legacy, ProviderKind::OpenAi);
         assert_eq!(roles(&out), vec![ChatRole::Assistant, ChatRole::Tool]);
         let parts = out[0].content.parts();
         assert!(matches!(&parts[0], ContentPart::Text(t) if t == "On it."));
@@ -281,7 +325,7 @@ mod tests {
         }]);
         let items = response_items(&["sig".into()], "", &calls);
         assert_eq!(items.len(), 2);
-        let parts = parts_from_response_items(&items);
+        let parts = parts_from_response_items(&items, ProviderKind::OpenAi);
         assert!(matches!(&parts[0], ContentPart::ThoughtSignature(s) if s == "sig"));
         assert!(matches!(&parts[1], ContentPart::ToolCall(c) if c.fn_name == "get_datetime"));
     }

@@ -27,6 +27,13 @@ impl Reply {
         Self { status: 200, content_type: "text/event-stream", body }
     }
 
+    /// Chat Completions-style SSE: data lines only, then `[DONE]`.
+    pub fn sse_data(chunks: &[Value]) -> Self {
+        let mut body: String = chunks.iter().map(|chunk| format!("data: {chunk}\n\n")).collect();
+        body.push_str("data: [DONE]\n\n");
+        Self { status: 200, content_type: "text/event-stream", body }
+    }
+
     pub fn json(status: u16, body: Value) -> Self {
         Self { status, content_type: "application/json", body: body.to_string() }
     }
