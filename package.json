@@ -10,7 +10,9 @@
     "url": "https://github.com/wgminer/harness.git"
   },
   "scripts": {
+    "predev": "npm run build:speech-helper",
     "dev": "HARNESS_DEV=1 tauri dev --config src-tauri/tauri.dev.conf.json",
+    "predev:stub-images": "npm run build:speech-helper",
     "dev:stub-images": "HARNESS_DEV=1 HARNESS_STUB_IMAGES=1 tauri dev --config src-tauri/tauri.dev.conf.json",
     "dev:web": "vite",
     "dev:browser": "vite --open",
