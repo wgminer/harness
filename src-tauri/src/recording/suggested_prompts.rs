@@ -1,8 +1,11 @@
 //! Dictation reply-strip action (vocab word or run).
 //! Contract: `resources/contracts/dictationSuggestedPrompts.json`.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+
+use futures_util::future::{BoxFuture, FutureExt, Shared};
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -119,6 +122,56 @@ pub async fn classify_dictation_reply_action(
     Ok(clamp_dictation_reply_action(&content))
 }
 
+type SharedAction = Shared<BoxFuture<'static, String>>;
+
+static IN_FLIGHT: Mutex<Option<HashMap<String, SharedAction>>> = Mutex::new(None);
+
+/// Classify at most once at a time per conversation. The run scheduled when a
+/// dictation is saved and the chat view's ensure call usually overlap; the
+/// second joins the first instead of making its own request.
+async fn classify_shared(conversation_id: &str, api_key: String, transcript: String) -> String {
+    let timing_id = conversation_id.to_string();
+    join_in_flight(conversation_id, move || async move {
+        let timer = StepTimer::for_conversation(&timing_id, "Reply action", openai_title_model());
+        match classify_dictation_reply_action(&api_key, &transcript).await {
+            Ok(a) => {
+                timer.ok();
+                a
+            }
+            Err(_) => fallback_dictation_reply_action(),
+        }
+    })
+    .await
+}
+
+/// Await the in-flight run for `conversation_id`, or start one with `make`.
+async fn join_in_flight<F, Fut>(conversation_id: &str, make: F) -> String
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = String> + Send + 'static,
+{
+    let shared = {
+        let mut guard = IN_FLIGHT.lock().unwrap();
+        let map = guard.get_or_insert_with(HashMap::new);
+        map.entry(conversation_id.to_string())
+            .or_insert_with(|| {
+                let conversation_id = conversation_id.to_string();
+                let run = make();
+                async move {
+                    let action = run.await;
+                    if let Some(map) = IN_FLIGHT.lock().unwrap().as_mut() {
+                        map.remove(&conversation_id);
+                    }
+                    action
+                }
+                .boxed()
+                .shared()
+            })
+            .clone()
+    };
+    shared.await
+}
+
 static SUGGEST_GENERATION: Mutex<Option<std::collections::HashMap<String, u64>>> =
     Mutex::new(None);
 static SUGGEST_SEQ: AtomicU64 = AtomicU64::new(1);
@@ -185,18 +238,7 @@ pub fn schedule_dictation_reply_action(
                         .unwrap_or_default(),
                     Err(_) => String::new(),
                 };
-                let timer = StepTimer::for_conversation(
-                    &conversation_id,
-                    "Reply action",
-                    openai_title_model(),
-                );
-                match classify_dictation_reply_action(key.trim(), &transcript).await {
-                    Ok(a) => {
-                        timer.ok();
-                        a
-                    }
-                    Err(_) => fallback_dictation_reply_action(),
-                }
+                classify_shared(&conversation_id, key.trim().to_string(), transcript).await
             }
         };
 
@@ -246,14 +288,7 @@ pub async fn ensure_dictation_reply_action(
     let action = if api_key.trim().is_empty() {
         fallback_dictation_reply_action()
     } else {
-        let timer = StepTimer::for_conversation(conversation_id, "Reply action", openai_title_model());
-        match classify_dictation_reply_action(api_key.trim(), &transcript).await {
-            Ok(a) => {
-                timer.ok();
-                a
-            }
-            Err(_) => fallback_dictation_reply_action(),
-        }
+        classify_shared(conversation_id, api_key.trim().to_string(), transcript).await
     };
 
     crate::memory::patch_conversation_dictation_reply_action(state, conversation_id, &action)
@@ -266,6 +301,28 @@ pub async fn ensure_dictation_reply_action(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn overlapping_classifies_share_one_run() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::Arc;
+
+        let runs = Arc::new(AtomicUsize::new(0));
+        let start = |runs: Arc<AtomicUsize>| {
+            join_in_flight("conv-shared", move || async move {
+                runs.fetch_add(1, Ordering::SeqCst);
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                "note".to_string()
+            })
+        };
+        let (a, b) = tokio::join!(start(runs.clone()), start(runs.clone()));
+        assert_eq!((a.as_str(), b.as_str()), ("note", "note"));
+        assert_eq!(runs.load(Ordering::SeqCst), 1);
+
+        // Finished runs are cleared, so a later call classifies again.
+        start(runs.clone()).await;
+        assert_eq!(runs.load(Ordering::SeqCst), 2);
+    }
 
     #[test]
     fn contract_loads() {
