@@ -1,0 +1,587 @@
+<title>Chat Type Sprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<style>
+/* Layout: one reading column for the sprint narrative; the prototype breaks out to a Harness chat window with a direction tag on its edge. Dark-first, like Harness. */
+:root {
+  --bg: #111214;
+  --panel: #1b1c1f;
+  --raised: #24262a;
+  --line: #2c2e33;
+  --fg: #d2d4d8;
+  --muted: #8d9198;
+  --accent: #5b9cf5;
+  --accent-soft: color-mix(in oklab, #5b9cf5 18%, #111214);
+  --good: #4caf6a;
+  --bad: #e0675a;
+  --warn: #d99024;
+  --font-display: "VT323", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-body: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  --r: 6px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f3f4f6; --panel: #ffffff; --raised: #eceef1; --line: #dcdfe4;
+    --fg: #1d1f23; --muted: #5c6068; --accent: #2f6fd6;
+    --accent-soft: color-mix(in oklab, #2f6fd6 12%, #ffffff);
+    --good: #23863a; --bad: #b8402f; --warn: #a96a0c; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f3f4f6; --panel: #ffffff; --raised: #eceef1; --line: #dcdfe4;
+  --fg: #1d1f23; --muted: #5c6068; --accent: #2f6fd6;
+  --accent-soft: color-mix(in oklab, #2f6fd6 12%, #ffffff);
+  --good: #23863a; --bad: #b8402f; --warn: #a96a0c; color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body);
+  font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 80px;
+}
+.col { max-width: 760px; margin: 0 auto; display: grid; gap: 56px; }
+.wide { max-width: 1080px; margin: 0 auto; width: 100%; }
+h1, h2 { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+h1 { font-size: 64px; line-height: 0.95; }
+h2 { font-size: 34px; line-height: 1; }
+h3 { font-size: 15px; margin: 0; font-weight: 600; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-inline-start: 1.25em; display: grid; gap: 6px; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.stack { display: grid; gap: 14px; }
+.lede { font-size: 19px; line-height: 1.45; max-width: 60ch; }
+code, pre { font-family: var(--font-mono); font-size: 12.5px; }
+p code, li code, td code { background: var(--raised); padding: 1px 5px; border-radius: 4px; }
+section { display: grid; gap: 20px; min-width: 0; }
+.day { display: flex; align-items: baseline; gap: 12px; }
+.day .n { font-family: var(--font-display); font-size: 22px; color: var(--accent); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } h1 { font-size: 48px; } }
+.scroll { overflow-x: auto; min-width: 0; }
+
+/* Map */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 2px; }
+.stat b { font-family: var(--font-display); font-weight: 400; font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 13px; color: var(--muted); }
+.journey { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(128px, 1fr); gap: 8px; padding-bottom: 6px; }
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
+.step .k { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.step .spec { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.step.target { border-color: var(--accent); background: var(--accent-soft); }
+.find { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 4px 10px; }
+.find .i { font-family: var(--font-display); font-size: 22px; line-height: 1.1; color: var(--accent); }
+.hmw { display: grid; gap: 8px; }
+.hmw li::marker { color: var(--muted); }
+.target-box { border-left: 2px solid var(--accent); padding: 4px 0 4px 16px; display: grid; gap: 6px; }
+
+/* Sketches */
+.sketch { gap: 12px; }
+.sketch .art { background: #111; color: #ccc; border-radius: 4px; padding: 14px 16px; display: grid; gap: 8px; min-height: 150px; align-content: start; }
+.sketch .verdict { font-size: 13px; color: var(--muted); }
+.sketch .verdict b { color: var(--fg); font-weight: 600; }
+.sketch.pick { border-color: var(--accent); }
+.vt { font-family: var(--font-display); letter-spacing: 0.02em; }
+.sf { font-family: var(--font-body); }
+.tag { display: inline-block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; background: var(--raised); color: var(--muted); }
+.tag.go { background: var(--accent-soft); color: var(--accent); }
+
+/* Decide */
+table.spec { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+table.spec th, table.spec td { text-align: start; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.spec th { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; white-space: nowrap; }
+table.spec td:first-child { white-space: nowrap; font-weight: 600; }
+.vote { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: baseline; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.dot.open { background: transparent; border: 1.5px dashed var(--muted); }
+
+/* Prototype bench */
+.bench { display: grid; gap: 14px; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 2px; }
+.seg button { font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 0; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--raised); color: var(--fg); }
+.seg button:focus-visible, .dirtag button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg-label { font-size: 12px; color: var(--muted); margin-inline-end: 6px; }
+.bench-row { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; }
+@media (max-width: 900px) { .bench-row { grid-template-columns: 1fr; } }
+.tokens { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.tokens pre { margin: 0; white-space: pre-wrap; line-height: 1.6; color: var(--fg); }
+.tokens .note { font-size: 13px; color: var(--muted); }
+
+/* Harness window: tokens copied from src/renderer/base.css */
+.hx {
+  --h-bg: #111; --h-bg2: #222; --h-elev: #222; --h-fg: #ccc; --h-fg-bright: #ccc; --h-muted: #999;
+  --h-edge: #222; --h-light: #777; --h-accent: #5b9cf5;
+  --h-accent-r: color-mix(in oklab, #5b9cf5 72%, white);
+  --h-ui: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --h-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  --h-chat: "VT323", var(--h-mono);
+  position: relative; background: var(--h-bg); color: var(--h-fg);
+  border: 1px solid var(--line); border-radius: 10px;
+  font-family: var(--h-ui); font-size: 16px; line-height: 24px;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+.hx[data-skin="light"] {
+  --h-bg: #f4f4f2; --h-bg2: #fff; --h-elev: #fff; --h-fg: #222; --h-fg-bright: #222; --h-muted: #6b6b6b;
+  --h-edge: #e0e0de; --h-light: #a0a0a0;
+  --h-accent-r: color-mix(in oklab, #5b9cf5 70%, black);
+  color-scheme: light;
+}
+.hx-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--h-edge); font-size: 13px; color: var(--h-muted); }
+.hx-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--h-edge); display: inline-block; }
+.hx-bar .t { margin-inline-start: 8px; color: var(--h-fg); font-weight: 500; }
+.hx-thread { max-width: 600px; margin: 0 auto; padding: 28px 20px 12px; display: grid; gap: 20px; min-width: 0; }
+.u-card { background: var(--h-elev); border-radius: 8px; padding: 12px 16px; font-size: 16px; line-height: 24px; justify-self: end; max-width: 88%; }
+.meta { font-size: 12px; line-height: 16px; letter-spacing: 0.01em; color: var(--h-muted); font-variant-numeric: tabular-nums; display: flex; gap: 6px; }
+.u-meta { justify-self: end; margin-top: -14px; }
+.tools { display: grid; gap: 4px; font-size: 12px; line-height: 24px; color: var(--h-muted); opacity: 0.8; }
+.tools .row { display: flex; gap: 8px; align-items: center; }
+.tools .row svg { width: 12px; height: 12px; flex: none; }
+.tools .reason { border-inline-start: 2px solid var(--h-edge); padding-inline-start: 10px; }
+
+.reply { font-family: var(--h-chat); font-size: 21px; line-height: 24px; letter-spacing: 0.02em; text-wrap: pretty; hanging-punctuation: first; min-width: 0; display: grid; gap: 12px; }
+.reply > * { margin: 0; }
+.reply p + ul, .reply p + ol { margin-top: -4px; }
+.reply ul, .reply ol { padding-inline-start: 1.5em; gap: 4px; }
+.reply ol { padding-inline-start: 2em; }
+.reply li::marker { color: var(--h-muted); font-variant-numeric: tabular-nums; }
+.reply strong { font-weight: 400; text-decoration: underline; text-underline-offset: 3px; }
+.reply h4 { font: inherit; text-decoration: underline; text-underline-offset: 3px; margin-top: 8px; margin-bottom: -8px; text-wrap: balance; }
+.reply a { color: inherit; text-decoration: underline; text-underline-offset: 0.18em; text-decoration-color: color-mix(in oklab, var(--h-accent-r) 70%, transparent); }
+.reply code { font-family: var(--h-mono); font-size: 0.8em; padding: 0.1em 0.35em; background: var(--h-bg2); border-radius: 4px; letter-spacing: 0; }
+.reply pre { background: var(--h-bg2); border-radius: 6px; padding: 10px 12px; overflow-x: auto; margin: 0; }
+.reply pre code { font-size: 12px; line-height: 20px; padding: 0; background: none; }
+.reply table { display: block; width: max-content; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-family: var(--h-ui); font-size: 14px; line-height: 24px; font-variant-numeric: tabular-nums lining-nums; letter-spacing: 0; }
+.reply th, .reply td { padding: 6px 16px 6px 0; border-bottom: 1px solid var(--h-edge); text-align: start; }
+.reply th { font-size: 12px; font-weight: 600; letter-spacing: 0.02em; color: var(--h-muted); border-bottom-color: var(--h-light); white-space: nowrap; }
+.reply tr:last-child td { border-bottom: 0; }
+.reply td.num, .reply th.num { text-align: end; }
+.a-meta { margin-top: -8px; }
+.a-meta .model { font-family: var(--h-ui); }
+.composer { margin: 8px 20px 20px; max-width: 600px; margin-inline: auto; padding: 0 20px 20px; }
+.composer .box { background: var(--h-bg2); border: 1px solid var(--h-edge); border-radius: 12px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-end; }
+.composer .ph { flex: 1; font-size: 16px; line-height: 24px; color: var(--h-muted); }
+.composer .send { width: 28px; height: 28px; border-radius: 50%; background: var(--h-fg); flex: none; }
+.short-only { display: none; }
+.hx[data-len="short"] .long-only { display: none; }
+.hx[data-len="short"] .short-only { display: revert; }
+
+/* A. Tidy: same faces; headings get a size step, chrome loses the stacked opacity */
+.hx[data-dir="a"] .reply h4 { font-size: 28px; line-height: 32px; text-decoration: none; margin-top: 12px; margin-bottom: -6px; }
+.hx[data-dir="a"] .tools { opacity: 1; }
+
+/* B. Two voices: the person speaks in SF, the machine in VT323 */
+.hx[data-dir="b"] { --h-fg: #b9bcc0; --h-fg-bright: #f4f5f6; }
+.hx[data-dir="b"][data-skin="light"] { --h-fg: #3b3b3b; --h-fg-bright: #000; }
+.hx[data-dir="b"] .reply { line-height: 28px; gap: 16px; }
+.hx[data-dir="b"] .reply strong { text-decoration: none; color: var(--h-fg-bright); }
+.hx[data-dir="b"] .reply h4 { font-size: 28px; line-height: 32px; text-decoration: none; color: var(--h-fg-bright); margin-top: 12px; margin-bottom: -6px; }
+.hx[data-dir="b"] .reply pre code { font-size: 13px; }
+.hx[data-dir="b"] .tools, .hx[data-dir="b"] .a-meta, .hx[data-dir="b"] .u-meta { font-family: var(--h-chat); font-size: 18px; letter-spacing: 0.03em; opacity: 1; }
+.hx[data-dir="b"] .tools { line-height: 24px; }
+.hx[data-dir="b"] .a-meta .model { font-family: inherit; }
+.hx[data-dir="b"] .u-card, .hx[data-dir="b"] .composer .ph { color: var(--h-fg-bright); }
+
+/* C. Pixel display, sans body: VT323 for headings and one-line replies only */
+.hx[data-dir="c"] .reply { font-family: var(--h-ui); font-size: 16px; line-height: 26px; letter-spacing: 0; gap: 12px; }
+.hx[data-dir="c"] .reply strong { font-weight: 600; text-decoration: none; }
+.hx[data-dir="c"] .reply h4 { font-family: var(--h-chat); font-size: 28px; line-height: 32px; letter-spacing: 0.02em; text-decoration: none; margin-top: 12px; margin-bottom: -6px; }
+.hx[data-dir="c"] .reply code { font-size: 0.85em; }
+.hx[data-dir="c"] .tools { opacity: 1; }
+.hx[data-dir="c"][data-len="short"] .reply { font-family: var(--h-chat); font-size: 21px; line-height: 28px; letter-spacing: 0.02em; }
+
+/* Direction tag: a small tag on the window's right edge, not a corner */
+.dirtag { position: absolute; top: 50%; right: 0; transform: translate(50%, -50%); display: grid; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; z-index: 2; box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+.dirtag button { font-family: var(--font-display); font-size: 20px; line-height: 1; width: 32px; height: 30px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; }
+.dirtag button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+@media (max-width: 900px) {
+  .dirtag { top: 0; right: 50%; transform: translate(50%, -50%); grid-auto-flow: column; }
+}
+
+/* Test */
+.grid-notes { border-collapse: collapse; width: 100%; font-size: 13px; }
+.grid-notes th, .grid-notes td { border: 1px solid var(--line); padding: 8px 10px; text-align: start; vertical-align: top; }
+.grid-notes th { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--panel); white-space: nowrap; }
+.grid-notes td.empty { color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend b { font-weight: 600; }
+.g { color: var(--good); } .x { color: var(--bad); } .m { color: var(--warn); }
+.score { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 6px 10px; font-size: 14px; }
+.score .y { color: var(--good); } .score .n { color: var(--muted); }
+.slices { display: grid; gap: 10px; counter-reset: s; padding: 0; list-style: none; }
+.slices li { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 16px; display: grid; gap: 4px; }
+.slices li b { font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) { .seg button, .dirtag button { transition: background-color 120ms ease, color 120ms ease; } }
+</style>
+
+<div class="col">
+  <header class="stack">
+    <p class="eyebrow">Harness design sprint &middot; Chat typography &middot; Oct 24, 2026</p>
+    <h1>Chat Type Sprint</h1>
+    <p class="lede">The assistant answers in VT323, and that face is Harness. The trouble is everything around it: headings that look like bold, a tight line for long replies, and four type families sharing one thread. This sprint keeps the face and reworks the system around it.</p>
+  </header>
+
+  <section>
+    <div class="day"><span class="n">1</span><h2>Map</h2></div>
+    <div class="stack">
+      <p><b>Long-term goal.</b> A 600-word reply in Harness is as easy to read as a page in a good book, and it still looks like it came from Harness.</p>
+      <p><b>Sprint questions.</b></p>
+      <ul>
+        <li>Can VT323 carry a long, structured reply without tiring the reader?</li>
+        <li>Can someone tell a heading from a bold phrase in a face with one weight?</li>
+        <li>Should the thread have one voice for the machine and one for the person, or one for everything?</li>
+        <li>How many sizes does the chat UI actually need?</li>
+      </ul>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b>4</b><span>type families in one thread</span></div>
+      <div class="stat"><b>26</b><span>different font-size values written in renderer CSS</span></div>
+      <div class="stat"><b>13</b><span>line-height tokens for 6 actual values</span></div>
+      <div class="stat"><b>107</b><span>uses of the 12px caption size</span></div>
+    </div>
+
+    <div class="stack">
+      <h3>One reply, left to right</h3>
+      <p class="muted">What a person reads from send to follow-up, and the type each step uses today.</p>
+      <div class="scroll">
+        <div class="journey">
+          <div class="step"><span class="k">Send</span><span>Your message</span><span class="spec">SF 16/24</span></div>
+          <div class="step"><span class="k">Wait</span><span>Ticker</span><span class="spec">SF Mono 12, tracked</span></div>
+          <div class="step"><span class="k">Work</span><span>Tool cards</span><span class="spec">SF 12, muted, 80%</span></div>
+          <div class="step"><span class="k">Think</span><span>Reasoning</span><span class="spec">SF 12, muted, 80%</span></div>
+          <div class="step target"><span class="k">Read</span><span>The reply</span><span class="spec">VT323 21/24</span></div>
+          <div class="step target"><span class="k">Scan</span><span>Headings, lists, tables</span><span class="spec">VT323 + SF 14 + Mono</span></div>
+          <div class="step"><span class="k">Check</span><span>Time and model</span><span class="spec">SF 12 tabular</span></div>
+          <div class="step"><span class="k">Reply</span><span>Composer</span><span class="spec">SF 16/24</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <h3>What the code says</h3>
+      <div class="find">
+        <span class="i">1</span><p><b>Headings look like bold.</b> VT323 has one weight, so <code>strong</code> and <code>.md-heading</code> both become an underline at body size. A heading and a bold phrase are the same mark.</p>
+        <span class="i">2</span><p><b>The reply line is tight.</b> 21px on a 24px line is a ratio of 1.14. The user card next to it runs at 1.5. Long replies read as a dense block.</p>
+        <span class="i">3</span><p><b>Secondary text all collapses to 12px.</b> <code>--font-size-caption</code> and <code>--font-size-ui</code> are both 12px. Tool cards stack muted color and 80% opacity on top of that, which is the faintest text in the app.</p>
+        <span class="i">4</span><p><b>Too many tokens for the values.</b> <code>snug</code>, <code>normal</code> and <code>body</code> are all 24px. <code>tight</code>, <code>caption</code>, <code>ui</code> and <code>compact</code> are all 16px. Stray sizes (10, 11, 13, 0.65rem, 0.7rem, 0.95rem) sit outside the scale.</p>
+        <span class="i">5</span><p><b>Two tokens don't exist.</b> <code>--font-size-xs</code> (the selection-image footer and status) and <code>--font-mono</code> (four places in chat and settings) are never defined. The footer inherits its size instead of shrinking.</p>
+        <span class="i">6</span><p><b>Comments still describe the serif.</b> chat.css talks about an "18px serif reply" and a "title-size serif". The face moved from Newsreader to VT323 on Oct 11 and the notes stayed.</p>
+      </div>
+    </div>
+
+    <div class="stack">
+      <h3>How might we</h3>
+      <ul class="hmw">
+        <li>make a heading read as a heading in a face with one weight?</li>
+        <li>give long replies room to breathe without losing the CRT?</li>
+        <li>make the machine's chrome (tools, ticker, time) sound like the same machine as the reply?</li>
+        <li>cut the scale to steps a person could name from memory?</li>
+      </ul>
+    </div>
+
+    <div class="target-box">
+      <p class="eyebrow">Target</p>
+      <p><b>Reading a long, structured reply that arrived after two tool calls.</b> It's where every problem above shows up at once, and it's what people come back to Harness for. Short replies already work.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="day"><span class="n">2</span><h2>Sketch</h2></div>
+    <p>Four directions. Each one is a whole system for the thread, not just a font swap. The face itself was already explored in the dev font jig (twelve options, from Newsreader to blackletter), so all four keep VT323 somewhere.</p>
+    <div class="grid2">
+      <div class="card sketch">
+        <div class="art">
+          <span class="vt" style="font-size:24px;line-height:26px">Where Parakeet stands</span>
+          <span class="vt" style="font-size:16px;line-height:18px">Parakeet runs on-device and is <u>about 3x faster</u> on long clips.</span>
+          <span class="sf" style="font-size:10px;color:#999">Searched notes &middot; 3 results</span>
+        </div>
+        <h3>A. Tidy</h3>
+        <p>Same faces, same roles. Headings move up one step to 28px so they stop matching bold. The scale shrinks to five sizes and tool cards drop the extra opacity.</p>
+        <p class="verdict"><span class="tag go">Prototype</span> The cheapest fix. Leaves the tight line alone.</p>
+      </div>
+      <div class="card sketch pick">
+        <div class="art">
+          <span class="vt" style="font-size:24px;line-height:26px;color:#f4f5f6">Where Parakeet stands</span>
+          <span class="vt" style="font-size:16px;line-height:21px;color:#b9bcc0">Parakeet runs on-device and is <span style="color:#fff">about 3x faster</span> on long clips.</span>
+          <span class="vt" style="font-size:14px;color:#999">Searched notes &middot; 3 results</span>
+        </div>
+        <h3>B. Two voices</h3>
+        <p>The person speaks in SF, the machine in VT323. Tool cards, the ticker and the time move into VT323. Bold becomes bright intensity, the way a terminal shows it, and the reply line opens up to 28px.</p>
+        <p class="verdict"><span class="tag go">Prototype</span> One rule explains the whole thread.</p>
+      </div>
+      <div class="card sketch">
+        <div class="art">
+          <span class="vt" style="font-size:24px;line-height:26px">Where Parakeet stands</span>
+          <span class="sf" style="font-size:12px;line-height:19px">Parakeet runs on-device and is <b>about 3x faster</b> on long clips.</span>
+          <span class="sf" style="font-size:10px;color:#999">Searched notes &middot; 3 results</span>
+        </div>
+        <h3>C. Pixel display, sans body</h3>
+        <p>VT323 sets headings and one-line replies. Anything longer reads in SF at 16/26 with real bold. Character lives in the headlines; paragraphs are for reading.</p>
+        <p class="verdict"><span class="tag go">Prototype</span> The safe read. Risks Harness looking like everyone else.</p>
+      </div>
+      <div class="card sketch">
+        <div class="art">
+          <span class="vt" style="font-size:24px;line-height:26px">Where Parakeet stands</span>
+          <span class="vt" style="font-size:16px;line-height:18px">Parakeet runs on-device and is <u>about 3x faster</u> on long clips.</span>
+          <span class="vt" style="font-size:16px;line-height:18px;background:#222;padding:4px 6px;border-radius:4px">&gt; what's left before default?_</span>
+        </div>
+        <h3>D. Phosphor everywhere</h3>
+        <p>VT323 for everything, the user card and composer included. The whole window becomes a terminal.</p>
+        <p class="verdict"><span class="tag">Dropped</span> Typing and editing your own words in a pixel face gets old fast, and tables and code need real figures.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="day"><span class="n">3</span><h2>Decide</h2></div>
+    <div class="vote">
+      <span class="dot"></span><p><b>Straw poll (Claude): B.</b> It is the only direction where one sentence ("people in SF, the machine in VT323") predicts every style in the thread.</p>
+      <span class="dot open"></span><p><b>Supervote: Will.</b> You're the Decider. Pick in the prototype below, or tell me which parts of A or C to fold into B.</p>
+    </div>
+    <p>Three directions survived, so this is a Rumble: A, B and C go into one prototype behind the same content, and Friday tests them against each other.</p>
+
+    <div class="stack">
+      <h3>B, as a system</h3>
+      <div class="scroll">
+        <table class="spec">
+          <thead><tr><th>Role</th><th>Face</th><th>Size / line</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr><td>Reply</td><td>VT323</td><td>21 / 28</td><td>Assistant prose. Body at a dimmer phosphor.</td></tr>
+            <tr><td>Reply heading</td><td>VT323</td><td>28 / 32</td><td>Markdown headings. Full brightness, no underline.</td></tr>
+            <tr><td>Emphasis</td><td>VT323</td><td>inherit</td><td>Bold as bright intensity. Links keep the underline, so it means only "link".</td></tr>
+            <tr><td>Machine chrome</td><td>VT323</td><td>18 / 24</td><td>Tool cards, reasoning summary, wait ticker, time and model. No extra opacity.</td></tr>
+            <tr><td>Person</td><td>SF Pro</td><td>16 / 24</td><td>Your message and the composer.</td></tr>
+            <tr><td>Data</td><td>SF Pro</td><td>14 / 24</td><td>Tables, with tabular figures. Headers 12 / 16.</td></tr>
+            <tr><td>Code</td><td>SF Mono</td><td>13 / 20</td><td>Code blocks. Inline code at 0.8em of its host.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">Sizes come down to 12, 14, 16, 18, 21 and 28. Line heights come down to 16, 20, 24, 28 and 32, all on the 4px grid.</p>
+    </div>
+
+    <div class="stack">
+      <h3>Storyboard for the test</h3>
+      <ol>
+        <li>The tester opens Harness on a conversation they didn't write.</li>
+        <li>They read the question in the user card and see two tool cards finish.</li>
+        <li>The long reply is on screen: a heading, a decision in bold, a list, a table, a code block and a link.</li>
+        <li>They answer four questions from the reply, out loud, without scrolling back to the question.</li>
+        <li>The interviewer switches direction with the edge tag and asks the same kind of question about a second reply.</li>
+        <li>They switch to the short reply and say whether it still feels like the same app.</li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<section class="wide" style="margin-top:56px">
+  <div class="col" style="gap:20px">
+    <div class="day"><span class="n">4</span><h2>Prototype</h2></div>
+    <p>A facade of the Harness chat thread with tokens copied from <code>base.css</code> and <code>chat.css</code>. Switch directions on the tag at the window's edge. The conversation is an example, and the timings in it are made up.</p>
+  </div>
+  <div class="bench" style="margin-top:20px">
+    <div class="controls">
+      <span><span class="seg-label">Theme</span><span class="seg" data-ctl="skin"><button type="button" id="skin-dark" data-v="dark" aria-pressed="true">Dark</button><button type="button" id="skin-light" data-v="light" aria-pressed="false">Light</button></span></span>
+      <span><span class="seg-label">Reply</span><span class="seg" data-ctl="len"><button type="button" id="len-long" data-v="long" aria-pressed="true">Long</button><button type="button" id="len-short" data-v="short" aria-pressed="false">Short</button></span></span>
+    </div>
+    <div class="bench-row">
+      <div class="hx" id="hx" data-dir="b" data-skin="dark" data-len="long">
+        <div class="dirtag" role="group" aria-label="Direction">
+          <button type="button" id="dir-now" data-v="now" aria-pressed="false" title="Current">0</button>
+          <button type="button" id="dir-a" data-v="a" aria-pressed="false" title="A. Tidy">A</button>
+          <button type="button" id="dir-b" data-v="b" aria-pressed="true" title="B. Two voices">B</button>
+          <button type="button" id="dir-c" data-v="c" aria-pressed="false" title="C. Pixel display, sans body">C</button>
+        </div>
+        <div class="hx-bar"><i></i><i></i><i></i><span class="t">Parakeet rollout</span></div>
+        <div class="hx-thread">
+          <div class="u-card long-only">What did we decide about switching dictation to Parakeet, and what's left before it can be the default?</div>
+          <div class="u-card short-only">Is Parakeet on in my build?</div>
+          <div class="meta u-meta"><span>9:41 PM</span></div>
+          <div class="tools long-only">
+            <div class="row"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5" cy="5" r="3.5"/><path d="M8 8l2.5 2.5"/></svg><span>Searched notes &middot; "parakeet" &middot; 3 results</span></div>
+            <div class="row"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1.5h4.5L9.5 3.5v7h-6.5z"/></svg><span>Read note &middot; Dictation engine 1:1</span></div>
+            <div class="reason">Thought for 6s</div>
+          </div>
+          <div class="reply long-only">
+            <h4>Where Parakeet stands</h4>
+            <p><strong>Decision: ship Parakeet as opt-in in 0.9, then make it the default once the download flow is solid.</strong> You agreed on that in the <a href="#hx">Dictation engine 1:1</a> on Oct 17. Apple Speech stays as the fallback for anyone who skips the 450 MB download.</p>
+            <p>It runs on-device, and on long clips it's about three times faster than Apple Speech:</p>
+            <table>
+              <thead><tr><th>Clip</th><th class="num">Apple Speech</th><th class="num">Parakeet</th></tr></thead>
+              <tbody>
+                <tr><td>10 s note</td><td class="num">0.9 s</td><td class="num">0.6 s</td></tr>
+                <tr><td>45 s ramble</td><td class="num">2.8 s</td><td class="num">1.0 s</td></tr>
+                <tr><td>3 min memo</td><td class="num">9.4 s</td><td class="num">3.1 s</td></tr>
+              </tbody>
+            </table>
+            <h4>What's left</h4>
+            <ol>
+              <li>Show download progress in Voice settings instead of a spinner.</li>
+              <li>Fall back to Apple Speech when the model file is missing or corrupt.</li>
+              <li>Flip the default for <code>transcription.engine</code> in both <code>types.ts</code> and <code>settings.rs</code>.</li>
+            </ol>
+            <p>The default change itself is two lines:</p>
+            <pre><code>// src/shared/types.ts
+transcription: { engine: "parakeet", cleanup: { enabled: true } }</code></pre>
+            <p>The first two are the real work. Once they land, the flip is safe to ship on its own.</p>
+          </div>
+          <div class="reply short-only">
+            <p>Yes. Harness Dev is on Parakeet. The installed app still uses Apple Speech until you switch it in Voice settings.</p>
+          </div>
+          <div class="meta a-meta"><span>9:41 PM</span><span>&middot;</span><span class="model">gpt-5</span><span>&middot;</span><span class="long-only">14s</span><span class="short-only">2s</span></div>
+        </div>
+        <div class="composer"><div class="box"><span class="ph">Reply to Harness</span><span class="send" aria-hidden="true"></span></div></div>
+      </div>
+      <aside class="tokens" aria-live="polite">
+        <p class="eyebrow" id="tok-title">B. Two voices</p>
+        <pre id="tok-body"></pre>
+        <p class="note" id="tok-note"></p>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<div class="col" style="margin-top:56px">
+  <section>
+    <div class="day"><span class="n">5</span><h2>Test</h2></div>
+    <p>Five people, about 30 minutes each. Recruit people who read long answers from an assistant at least once a day and who haven't seen Harness. Each person sees two directions, rotated so A, B and C each get at least three looks. The interviewer doesn't say which direction is which, and doesn't explain the face.</p>
+
+    <div class="scroll">
+      <table class="spec">
+        <thead><tr><th>Task</th><th>What we learn</th></tr></thead>
+        <tbody>
+          <tr><td>"What's left before Parakeet is the default?"</td><td>Time to the answer. Do people find the list from the heading, or read from the top?</td></tr>
+          <tr><td>"Point to the headings in this reply."</td><td>Does a size step (A, B, C) beat an underline (today)? Does bright-intensity bold get mistaken for a heading?</td></tr>
+          <tr><td>"What did Harness do before it answered?"</td><td>Can people read the tool cards at all, and does VT323 chrome (B) read as part of the reply or as a status line?</td></tr>
+          <tr><td>"How much faster is Parakeet on the 3-minute memo?"</td><td>Does the SF table read cleanly next to VT323 prose?</td></tr>
+          <tr><td>Read the whole reply, then: "Would you read a reply twice this long here?"</td><td>Fatigue. This is the test C exists to win and B has to survive.</td></tr>
+          <tr><td>Switch to the short reply. "Is this the same app?"</td><td>Whether C's split (pixel short, sans long) reads as one product.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="stack">
+      <h3>Note grid</h3>
+      <div class="legend"><span><b class="g">&#10003;</b> worked</span><span><b class="x">&#10007;</b> failed</span><span><b class="m">~</b> mixed</span></div>
+      <div class="scroll">
+        <table class="grid-notes">
+          <thead><tr><th>Task</th><th>P1</th><th>P2</th><th>P3</th><th>P4</th><th>P5</th></tr></thead>
+          <tbody>
+            <tr><td>Find what's left</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr>
+            <tr><td>Point to headings</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr>
+            <tr><td>Read tool cards</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr>
+            <tr><td>Read the table</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr>
+            <tr><td>Long-read fatigue</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr>
+            <tr><td>Same app, short reply</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">Write the direction in each cell next to the mark (for example "B &#10003;"). Three of five failing the same row decides it.</p>
+    </div>
+
+    <div class="stack">
+      <h3>Risks to watch</h3>
+      <ul>
+        <li><b>Bright-intensity bold is subtle in light mode.</b> Black on #3b3b3b may not read as emphasis. If it fails, light mode gets the underline back.</li>
+        <li><b>VT323 at 18px for chrome.</b> Pixel faces break up at small sizes on non-Retina screens. 18px is the floor.</li>
+        <li><b>Mixed faces in one line.</b> Inline code (SF Mono) and links inside VT323 prose need to sit on the same baseline. Check on real replies, not just this one.</li>
+      </ul>
+    </div>
+
+    <div class="stack">
+      <h3>Sprint scorecard so far</h3>
+      <div class="score">
+        <span class="n">&ndash;</span><p>Decider committed: Will, supervote still open.</p>
+        <span class="y">&#10003;</span><p>Target customer and moment: a long, structured reply after tool calls.</p>
+        <span class="n">&ndash;</span><p>Hard time-boxes: not applicable to a single agent pass.</p>
+        <span class="n">&ndash;</span><p>Solo, anonymous sketches: one sketcher, so no anonymity.</p>
+        <span class="n">&ndash;</span><p>Decider supervote: open.</p>
+        <span class="y">&#10003;</span><p>Storyboard before prototype.</p>
+        <span class="n">&ndash;</span><p>Facade testable in 15 minutes: built; trial run with someone outside the sprint still to do.</p>
+        <span class="n">&ndash;</span><p>Five screened testers: not recruited.</p>
+        <span class="n">&ndash;</span><p>Five-Act interview: script above, not run.</p>
+        <span class="n">&ndash;</span><p>Debrief turns the grid into a decision: after the test.</p>
+      </div>
+      <p class="muted">2 of 10. Your supervote, a trial run, five sessions and the debrief bring it to 8. The last two need a team in a room.</p>
+    </div>
+
+    <div class="stack">
+      <h3>Next slices in the repo</h3>
+      <ol class="slices">
+        <li><b>1. Type token cleanup.</b> <span class="muted">Define or replace <code>--font-size-xs</code>, point <code>--font-mono</code> at <code>--font-family-mono</code>, fold the duplicate line-height tokens, fix the serif comments in chat.css. Lands first and alone, whichever direction wins. No visible change except the selection-image footer.</span></li>
+        <li><b>2. Reply rhythm.</b> <span class="muted">Heading size step and reply line height in <code>base.css</code> and <code>chat.css</code>. A, B and C all need some version of this.</span></li>
+        <li><b>3. The winning direction.</b> <span class="muted">For B: bright-intensity bold and VT323 chrome for tool cards, ticker and meta. For C: SF body with a short-reply rule in <code>StreamingAssistantContent</code>.</span></li>
+        <li><b>4. A direction tag in the dev font jig.</b> <span class="muted">Optional. Add A, B and C to <code>chatFontJig.tsx</code> so the test can run on real conversations instead of this facade.</span></li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var hx = document.getElementById("hx");
+  var TOKENS = {
+    now: {
+      title: "Current",
+      body: "--font-family-chat: VT323\n--font-size-chat: 21px\n--line-height-chat: 24px\nstrong, .md-heading: underline\n.tool-card: SF 12px, opacity 0.8\n.message-block-meta: SF 12px",
+      note: "What ships today. Headings and bold are the same underline."
+    },
+    a: {
+      title: "A. Tidy",
+      body: "--font-size-chat: 21px\n--line-height-chat: 24px\n+ --font-size-chat-heading: 28px\n+ --line-height-chat-heading: 32px\n.md-heading: no underline\n.tool-card: opacity 1",
+      note: "Two new tokens, one removed opacity. Bold keeps the underline."
+    },
+    b: {
+      title: "B. Two voices",
+      body: "--line-height-chat: 24px -> 28px\n+ --font-size-chat-heading: 28px\n+ --font-size-chat-chrome: 18px\n+ --fg-chat: dim phosphor\n+ --fg-chat-strong: bright\nstrong: color, no underline\n.tool-card, .message-block-meta,\n.chat-stream-wait-ticker: VT323",
+      note: "People in SF, the machine in VT323. Bold is brightness, the way a terminal shows it."
+    },
+    c: {
+      title: "C. Pixel display, sans body",
+      body: "--font-family-chat: SF Pro\n--font-size-chat: 16px\n--line-height-chat: 26px\n--font-weight-chat-strong: 600\n+ --font-family-chat-display: VT323\n.md-heading: VT323 28/32\nshort replies: VT323 21/28",
+      note: "VT323 for headings and one-line replies. Needs a length rule in the renderer."
+    }
+  };
+  var state = { dir: "b", skin: "dark", len: "long" };
+  try {
+    var saved = JSON.parse(localStorage.getItem("chat-type-sprint.v1") || "{}");
+    ["dir", "skin", "len"].forEach(function (k) { if (saved[k]) state[k] = saved[k]; });
+  } catch (e) {}
+
+  function render() {
+    hx.dataset.dir = state.dir;
+    hx.dataset.skin = state.skin;
+    hx.dataset.len = state.len;
+    document.querySelectorAll(".dirtag button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.v === state.dir)); });
+    document.querySelectorAll(".seg").forEach(function (seg) {
+      var key = seg.dataset.ctl;
+      seg.querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.v === state[key])); });
+    });
+    var t = TOKENS[state.dir];
+    document.getElementById("tok-title").textContent = t.title;
+    document.getElementById("tok-body").textContent = t.body;
+    document.getElementById("tok-note").textContent = t.note;
+    try { localStorage.setItem("chat-type-sprint.v1", JSON.stringify(state)); } catch (e) {}
+  }
+
+  document.querySelectorAll(".dirtag button").forEach(function (b) {
+    b.addEventListener("click", function () { state.dir = b.dataset.v; render(); });
+  });
+  document.querySelectorAll(".seg").forEach(function (seg) {
+    seg.querySelectorAll("button").forEach(function (b) {
+      b.addEventListener("click", function () { state[seg.dataset.ctl] = b.dataset.v; render(); });
+    });
+  });
+  render();
+})();
+</script>
