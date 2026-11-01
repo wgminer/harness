@@ -13,6 +13,14 @@ export function normalizeAppearanceTheme(raw: unknown): AppearanceTheme {
   return raw === "time" || raw === "light" ? raw : "dark";
 }
 
+/** Which of the base font stacks assistant replies use in the chat thread. */
+export type ChatFont = "sans" | "serif" | "mono";
+export const DEFAULT_CHAT_FONT: ChatFont = "sans";
+
+export function normalizeChatFont(raw: unknown): ChatFont {
+  return raw === "serif" || raw === "mono" ? raw : "sans";
+}
+
 export interface ContextPreviewMemory {
   key: string;
   value: string;
@@ -173,6 +181,8 @@ export interface Settings {
     theme?: AppearanceTheme;
     /** Riding-crop mouse cursor in place of the system arrow. */
     cropCursor?: boolean;
+    /** Font stack for assistant replies in the chat thread. */
+    chatFont?: ChatFont;
   };
   /** Defaults for compose ambient weather (US ZIP → Open-Meteo). */
   weather?: {
@@ -242,6 +252,7 @@ export const DEFAULT_SETTINGS: Settings = {
     accent: DEFAULT_ACCENT,
     theme: DEFAULT_APPEARANCE_THEME,
     cropCursor: false,
+    chatFont: DEFAULT_CHAT_FONT,
   },
   weather: {
     defaultZip: "12528",

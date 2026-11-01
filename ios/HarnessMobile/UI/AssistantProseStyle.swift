@@ -1,21 +1,18 @@
 import SwiftUI
 import UIKit
 
-/// Assistant message typography: desktop's reply face, VT323 (`--font-family-chat` in base.css).
-/// Desktop sets 21/24; the phone keeps the same proportions and scales with Dynamic Type.
+/// Assistant message typography: the system face at body size, on desktop's 16/24 rhythm
+/// (`--font-size-chat` / `--line-height-chat` in base.css). Scales with Dynamic Type.
 enum AssistantProseStyle {
-    /// PostScript name of the bundled face (`Resources/Fonts/VT323-Regular.ttf`).
-    static let fontName = "VT323-Regular"
-    /// 21pt at default Dynamic Type (UIKit body = 17pt).
-    static let sizeScale: CGFloat = 21.0 / 17.0
-    /// Desktop's 24px line on 21px type.
-    static let lineHeightMultiple: CGFloat = 24.0 / 21.0
+    /// Body size at default Dynamic Type (UIKit body = 17pt).
+    static let sizeScale: CGFloat = 1
+    /// Desktop's 24px line on 16px type.
+    static let lineHeightMultiple: CGFloat = 24.0 / 16.0
     /// Absolute size at default Dynamic Type (UIKit body = 17pt); MarkdownUI scales via `@ScaledMetric`.
     static let basePointSize: CGFloat = 17 * sizeScale
 
     static func uiFont(ofSize pointSize: CGFloat) -> UIFont {
-        UIFont(name: fontName, size: pointSize)
-            ?? .monospacedSystemFont(ofSize: pointSize, weight: .regular)
+        .systemFont(ofSize: pointSize)
     }
 
     static func font(size: CGFloat) -> Font {
@@ -47,7 +44,7 @@ enum AssistantProseStyle {
 }
 
 extension View {
-    /// Desktop reply face + desktop-like size/line-height; tracks Dynamic Type.
+    /// Desktop-like size/line-height for assistant prose; tracks Dynamic Type.
     func assistantProseStyle() -> some View {
         modifier(AssistantProseModifier())
     }

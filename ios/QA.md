@@ -18,7 +18,7 @@ Short manual checklist after iOS stability changes. Run on a physical device whe
 - [ ] Cold launch with mic permission granted opens straight into recording; with **Record when the app opens** off it lands on the list
 - [ ] Cold launch before mic permission or setup is done does not auto-record
 - [ ] Tapping the circle on home starts recording with no sheet; a tap anywhere else does nothing; the circle becomes a ring that moves with your voice
-- [ ] Assistant replies render in VT323 (the desktop reply face); bold shows as an underline
+- [ ] Assistant replies render in the system font; bold shows as semibold
 - [ ] Stop → Transcribing… → "Saved" → empty home; the capture is at the top of the list (no chat thread)
 - [ ] Lock screen **Record** widget (mic) opens the app recording, from cold launch and from background, including when the list sheet was open
 - [ ] Start dictation in a thread, go back to the list — transcript still lands in that thread

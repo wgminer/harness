@@ -45,7 +45,8 @@ pub fn default_settings() -> Value {
         "appearance": {
             "accent": DEFAULT_ACCENT,
             "theme": "dark",
-            "cropCursor": false
+            "cropCursor": false,
+            "chatFont": "sans"
         },
         "weather": {
             "defaultZip": "12528"
@@ -282,6 +283,14 @@ fn parse_appearance_theme(raw: Option<&Value>) -> &'static str {
     }
 }
 
+fn parse_chat_font(raw: Option<&Value>) -> &'static str {
+    match raw.and_then(|v| v.as_str()) {
+        Some("serif") => "serif",
+        Some("mono") => "mono",
+        _ => "sans",
+    }
+}
+
 fn parse_appearance(raw: Option<&Value>) -> Value {
     json!({
         "accent": normalize_accent_hex(raw.and_then(|v| v.get("accent"))),
@@ -290,6 +299,7 @@ fn parse_appearance(raw: Option<&Value>) -> Value {
             .and_then(|v| v.get("cropCursor"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        "chatFont": parse_chat_font(raw.and_then(|v| v.get("chatFont"))),
     })
 }
 
@@ -611,7 +621,7 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
         next["appearance"] = merge_object_fields(
             current.get("appearance").unwrap_or(&json!({})),
             appearance,
-            &["accent", "theme", "cropCursor"],
+            &["accent", "theme", "cropCursor", "chatFont"],
         );
     }
 

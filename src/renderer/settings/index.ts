@@ -20,6 +20,7 @@ export {
 } from "./MemorySettingsTab";
 export { AccentColorField, type AccentColorFieldProps } from "./AccentColorField";
 export { ThemeModeField, type ThemeModeFieldProps } from "./ThemeModeField";
+export { ChatFontField, type ChatFontFieldProps } from "./ChatFontField";
 export { VoiceSettingsTab, type VoiceSettingsTabProps } from "./VoiceSettingsTab";
 export { NotesTemplatesTab, type NotesTemplatesTabProps } from "./NotesTemplatesTab";
 export {

@@ -183,17 +183,13 @@
   --focus-ring: 2px solid var(--focus-ring-color);
 
   /* --- Typography --- */
-  --font-family: -apple-system, "system-ui", "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-family-serif: "New York", ui-serif, Georgia, "Times New Roman", serif;
-  --font-family-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
-  /* Assistant prose in the chat thread: VT323 (bundled via @fontsource), a phosphor-CRT pixel face.
-     It has one weight, so emphasis is underlined rather than bolded (see chat.css). */
-  --font-family-chat: "VT323", var(--font-family-mono);
-  --font-size-chat: 21px;
+  --font-family: system-ui, -apple-system, sans-serif;
+  --font-family-serif: ui-serif, Georgia, serif;
+  --font-family-mono: ui-monospace, Menlo, monospace;
+  /* Assistant prose in the chat thread: one of the three stacks above, picked in Appearance. */
+  --font-family-chat: var(--font-family);
+  --font-size-chat: 16px;
   --line-height-chat: 24px;
-  --font-weight-chat: 400;
-  --font-weight-chat-strong: 400;
-  --letter-spacing-chat: 0.02em;
   --font-size: var(--font-size-body);
   --font-size-caption: 12px;
   --font-size-sidebar: 14px;
@@ -387,6 +383,14 @@ html, body, #root {
 
 html {
   overflow: hidden;
+}
+
+html[data-chat-font="serif"] {
+  --font-family-chat: var(--font-family-serif);
+}
+
+html[data-chat-font="mono"] {
+  --font-family-chat: var(--font-family-mono);
 }
 
 html[data-crop-cursor] {
