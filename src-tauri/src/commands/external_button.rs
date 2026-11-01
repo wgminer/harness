@@ -21,7 +21,9 @@ pub fn external_button_configure(
     enabled: bool,
     host: String,
     key: Option<String>,
+    use_mic: Option<bool>,
 ) -> Result<Value, String> {
-    let status = button.configure(&app, enabled, &host, key.as_deref())?;
+    let use_mic = use_mic.unwrap_or_else(|| button.status().use_mic);
+    let status = button.configure(&app, enabled, &host, key.as_deref(), use_mic)?;
     serde_json::to_value(status).map_err(map_err)
 }

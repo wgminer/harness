@@ -10,7 +10,7 @@ import { SettingsSwitch } from "./SettingsSwitch";
 function statusLine(status: ExternalButtonStatus): string {
   switch (status.state) {
     case "connected":
-      return `Connected to ${status.host}. Hold the centre button to dictate.`;
+      return `Connected to ${status.host}. Press the centre button to start dictating, and again to stop.`;
     case "searching":
       return `Looking for ${status.host}. Make sure it is powered on and on this network.`;
     case "error":
@@ -18,6 +18,16 @@ function statusLine(status: ExternalButtonStatus): string {
     default:
       return "";
   }
+}
+
+function micLine(status: ExternalButtonStatus): string {
+  if (status.state !== "connected") {
+    return "Dictation uses the Mac mic until the Voice PE connects.";
+  }
+  if (!status.micAvailable) {
+    return "The firmware on this Voice PE can't stream its mic yet, so dictation uses the Mac mic.";
+  }
+  return "Dictation records from the Voice PE. Slide its side switch to mute it.";
 }
 
 /** Voice PE centre button over the ESPHome API, standing in for the Fn key. */
@@ -40,7 +50,7 @@ export function ExternalButtonSettingsGroup() {
   }, []);
 
   const save = useCallback(
-    async (input: { enabled: boolean; host: string; key?: string }) => {
+    async (input: { enabled: boolean; host: string; key?: string; useMic?: boolean }) => {
       setBusy(true);
       setError(null);
       try {
@@ -111,6 +121,15 @@ export function ExternalButtonSettingsGroup() {
           ) : (
             <SettingsHint>{statusLine(status)}</SettingsHint>
           )}
+          <SettingsSwitch
+            id="externalButtonMicToggle"
+            testId="settings-external-button-mic"
+            label="Record from the Voice PE mic"
+            checked={status.useMic}
+            disabled={busy}
+            onChange={(e) => void save({ enabled: true, host, useMic: e.target.checked })}
+          />
+          {status.useMic ? <SettingsHint>{micLine(status)}</SettingsHint> : null}
         </>
       ) : null}
     </SettingsGroup>

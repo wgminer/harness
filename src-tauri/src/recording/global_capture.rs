@@ -24,6 +24,21 @@ pub struct NativeCapture {
     latest_peak: Arc<Mutex<f32>>,
     sample_rate: u32,
     stream: Option<cpal::Stream>,
+    /// Runs once when the take stops or is cancelled; ends an external source.
+    on_end: Option<Box<dyn FnOnce() + Send>>,
+}
+
+/// Feeds audio from a source outside cpal (the Voice PE) into a capture.
+#[derive(Clone)]
+pub struct CaptureFeed {
+    samples: Arc<Mutex<Vec<f32>>>,
+    latest_peak: Arc<Mutex<f32>>,
+}
+
+impl CaptureFeed {
+    pub fn push(&self, mono: &[f32]) {
+        append_samples(&self.samples, &self.latest_peak, mono, 1);
+    }
 }
 
 pub fn peak_amplitude(samples: &[f32]) -> f32 {
@@ -174,7 +189,32 @@ impl NativeCapture {
             latest_peak,
             sample_rate,
             stream: Some(stream),
+            on_end: None,
         })
+    }
+
+    /// A capture whose mono audio arrives through the returned feed. `on_end`
+    /// runs when the take stops or is cancelled.
+    pub fn external(sample_rate: u32, on_end: Box<dyn FnOnce() + Send>) -> (Self, CaptureFeed) {
+        let feed = CaptureFeed {
+            samples: Arc::new(Mutex::new(Vec::new())),
+            latest_peak: Arc::new(Mutex::new(0.0)),
+        };
+        let capture = Self {
+            samples: feed.samples.clone(),
+            latest_peak: feed.latest_peak.clone(),
+            sample_rate,
+            stream: None,
+            on_end: Some(on_end),
+        };
+        (capture, feed)
+    }
+
+    fn end_source(&mut self) {
+        self.stream = None;
+        if let Some(on_end) = self.on_end.take() {
+            on_end();
+        }
     }
 
     /// Peak of the latest input chunk, clamped to 0..1.
@@ -186,7 +226,7 @@ impl NativeCapture {
     }
 
     pub fn stop(mut self) -> Result<Vec<u8>, String> {
-        self.stream = None;
+        self.end_source();
         let samples = self.samples.lock().map_err(|e| e.to_string())?.clone();
         let peak = peak_amplitude(&samples);
         eprintln!(
@@ -206,8 +246,14 @@ impl NativeCapture {
     }
 
     pub fn cancel(mut self) {
-        self.stream = None;
+        self.end_source();
         eprintln!("[Harness:recording] capture cancelled");
+    }
+}
+
+impl Drop for NativeCapture {
+    fn drop(&mut self) {
+        self.end_source();
     }
 }
 

@@ -24,6 +24,8 @@ const externalButtonStub: ExternalButtonStatus = {
   keyConfigured: false,
   state: "off",
   message: null,
+  useMic: false,
+  micAvailable: false,
 };
 
 function browserSyncStatus(): SyncStatus {

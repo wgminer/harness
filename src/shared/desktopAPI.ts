@@ -107,6 +107,10 @@ export interface ExternalButtonStatus {
   keyConfigured: boolean;
   state: "off" | "searching" | "connected" | "error";
   message: string | null;
+  /** Record dictation from the device's microphone instead of the Mac's. */
+  useMic: boolean;
+  /** Connected to firmware that can stream its microphone. */
+  micAvailable: boolean;
 }
 
 /** One timed step of a dictation (transcribe, cleanup, paste, title, ...). */
@@ -185,8 +189,13 @@ export interface HarnessAPI {
   /** Voice PE centre button over the ESPHome API, standing in for Fn. */
   externalButton: {
     getStatus: () => Promise<ExternalButtonStatus>;
-    /** Saves and reconnects. Omit `key` (or pass "") to keep the stored one. */
-    configure: (input: { enabled: boolean; host: string; key?: string }) => Promise<ExternalButtonStatus>;
+    /** Saves and reconnects. Omit `key` (or pass "") to keep the stored one; omit `useMic` to keep it. */
+    configure: (input: {
+      enabled: boolean;
+      host: string;
+      key?: string;
+      useMic?: boolean;
+    }) => Promise<ExternalButtonStatus>;
     onStatus: (cb: (status: ExternalButtonStatus) => void) => () => void;
   };
   gmail: {

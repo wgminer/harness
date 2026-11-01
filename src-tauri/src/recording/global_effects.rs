@@ -141,6 +141,7 @@ fn spawn_recording_level_meter(app: AppHandle, runtime: Arc<GlobalRecordingRunti
                 "global-recording-level",
                 serde_json::json!({ "level": level }),
             );
+            ExternalButton::show_level(&app, level);
         }
     });
 }
@@ -320,6 +321,7 @@ async fn stop_pipeline(
 
     if was_focused {
         chime::play(Chime::Done);
+        ExternalButton::show_success(&app);
         let _ = app.emit("global-transcript-ready", serde_json::json!({ "text": text }));
     } else {
         match deliver_unfocused(
@@ -332,6 +334,7 @@ async fn stop_pipeline(
         .await {
             Ok(conversation_id) => {
                 chime::play(Chime::Done);
+                ExternalButton::show_success(&app);
                 let _ = app.emit(
                     "global-transcript-delivered",
                     serde_json::json!({ "conversationId": conversation_id }),
@@ -376,6 +379,9 @@ pub async fn run_recording_effects(
                 }
 
                 let capture_result = if is_harness_e2e() {
+                    Ok(())
+                } else if let Some(cap) = ExternalButton::start_mic(app) {
+                    *runtime.capture.lock().unwrap() = Some(cap);
                     Ok(())
                 } else if !crate::recording::mic_permission::request_microphone_access(app).await {
                     Err(crate::recording::mic_permission::MICROPHONE_PERMISSION_DENIED_MESSAGE.to_string())
