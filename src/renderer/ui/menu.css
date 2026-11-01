@@ -45,6 +45,10 @@
   transform-origin: bottom left;
 }
 
+.ui-menu[data-side="over"] {
+  --menu-shift-y: 0px;
+}
+
 .ui-menu[data-side="right"] {
   --menu-shift-x: -4px;
   --menu-shift-y: 0px;

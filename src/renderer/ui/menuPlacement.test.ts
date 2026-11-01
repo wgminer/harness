@@ -35,4 +35,12 @@ describe("placeMenu", () => {
     expect(pos.side).toBe("left");
     expect(pos.left + menu.width).toBeLessThanOrEqual(tight.left);
   });
+
+  it("centers the first item's icon over the anchor for over-start", () => {
+    const anchor = { top: 100, bottom: 128, left: 200, right: 228 };
+    const pos = placeMenu(anchor, menu, viewport, "over-start", gap, { x: 18, y: 20 });
+    expect(pos.side).toBe("over");
+    expect(pos.top).toBe(114 - 20);
+    expect(pos.left).toBe(214 - 18);
+  });
 });

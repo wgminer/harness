@@ -37,6 +37,19 @@ const TYPEAHEAD_RESET_MS = 500;
 
 const ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]';
 
+/** Center of the first item's icon (or the item itself), in the menu's untransformed layout box. */
+function firstIconCenter(menu: HTMLElement) {
+  const target = menu.querySelector<HTMLElement>(".ui-menu__icon") ?? menu.querySelector<HTMLElement>(ITEM_SELECTOR);
+  if (!target) return { x: 0, y: 0 };
+  let x = target.offsetWidth / 2;
+  let y = target.offsetHeight / 2;
+  for (let el: HTMLElement | null = target; el && el !== menu; el = el.offsetParent as HTMLElement | null) {
+    x += el.offsetLeft;
+    y += el.offsetTop;
+  }
+  return { x, y };
+}
+
 interface MenuContextValue {
   close: () => void;
 }
@@ -115,6 +128,7 @@ export function Menu({
         { width: window.innerWidth, height: window.innerHeight },
         placement,
         gap,
+        placement === "over-start" ? firstIconCenter(menu) : undefined,
       ),
     );
   }, [anchorRef, placement, gap]);
