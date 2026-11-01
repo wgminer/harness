@@ -1,0 +1,333 @@
+<title>Onboarding Sprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<style>
+/* Layout: one reading column for the sprint narrative; the prototype breaks out into a mock Harness window with a step rail. Dark-first, like Harness. */
+:root {
+  --bg: #111214;
+  --panel: #1b1c1f;
+  --raised: #24262a;
+  --line: #2c2e33;
+  --fg: #d2d4d8;
+  --muted: #8d9198;
+  --faint: #5e6269;
+  --accent: #5b9cf5;
+  --accent-soft: color-mix(in oklab, #5b9cf5 18%, #111214);
+  --add: #4caf6a;
+  --warn: #d99024;
+  --bad: #e05353;
+  --font-display: "VT323", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-body: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  --r: 6px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f3f4f6; --panel: #ffffff; --raised: #eceef1; --line: #dcdfe4;
+    --fg: #1d1f23; --muted: #5c6068; --faint: #9a9ea6; --accent: #2f6fd6;
+    --accent-soft: color-mix(in oklab, #2f6fd6 12%, #ffffff);
+    --add: #23863a; --warn: #a96a0c; --bad: #b8322a; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f3f4f6; --panel: #ffffff; --raised: #eceef1; --line: #dcdfe4;
+  --fg: #1d1f23; --muted: #5c6068; --faint: #9a9ea6; --accent: #2f6fd6;
+  --accent-soft: color-mix(in oklab, #2f6fd6 12%, #ffffff);
+  --add: #23863a; --warn: #a96a0c; --bad: #b8322a; color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body);
+  font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 80px;
+}
+.col { max-width: 760px; margin: 0 auto; display: grid; gap: 56px; }
+.wide { max-width: 1000px; margin: 0 auto; width: 100%; }
+h1, h2 { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+h1 { font-size: 64px; line-height: 0.95; }
+h2 { font-size: 34px; line-height: 1; }
+h3 { font-size: 15px; margin: 0; font-weight: 600; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 20px; display: grid; gap: 6px; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.stack { display: grid; gap: 14px; }
+.lede { font-size: 19px; line-height: 1.45; max-width: 60ch; }
+section { display: grid; gap: 20px; }
+.day { display: flex; align-items: baseline; gap: 12px; }
+.day .n { font-family: var(--font-display); font-size: 22px; color: var(--accent); }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.decision { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; display: grid; gap: 4px; }
+.decision b { font-weight: 600; }
+.journey { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.journey span { padding: 3px 8px; border-radius: 999px; background: var(--raised); color: var(--muted); }
+.journey span.hot { background: var(--accent-soft); color: var(--fg); }
+.journey i { color: var(--faint); font-style: normal; }
+.vote { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--line); }
+.vote:first-child { border-top: 0; }
+.vote .k { font-family: var(--font-display); font-size: 22px; color: var(--accent); }
+.vote .c { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* Prototype */
+.proto { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; }
+.rail { display: grid; gap: 4px; align-content: start; }
+.rail button {
+  font: inherit; font-size: 13px; text-align: left; color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: var(--r); padding: 8px 10px; cursor: pointer;
+}
+.rail button:hover { background: var(--raised); color: var(--fg); }
+.rail button[aria-current="true"] { background: var(--accent-soft); color: var(--fg); border-color: var(--line); }
+.rail button:focus-visible, .win button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rail .tested { font-size: 11px; color: var(--add); margin-left: 4px; }
+.rail .untested { font-size: 11px; color: var(--faint); margin-left: 4px; }
+.win { background: #111; color: #ccc; border: 1px solid #2c2e33; border-radius: 10px; overflow: hidden; display: grid; grid-template-rows: 28px minmax(0, 1fr); min-height: 440px; min-width: 0; }
+.win .bar { background: #1a1b1d; display: flex; align-items: center; gap: 6px; padding: 0 10px; }
+.win .bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a3c40; }
+.win .body { display: grid; grid-template-columns: 112px minmax(0, 1fr); min-width: 0; }
+.side { border-right: 1px solid #222; padding: 12px 8px; display: grid; gap: 2px; align-content: start; font-size: 13px; }
+.side span { padding: 5px 8px; border-radius: 4px; color: #999; }
+.side span.on { background: #26282b; color: #ddd; }
+.main { padding: 28px 24px; display: grid; justify-items: center; align-content: center; gap: 14px; text-align: center; min-width: 0; }
+.key { width: 64px; height: 56px; border-radius: 10px; border: 1px solid #555; background: #1e1f22; display: grid; place-items: center; font-family: var(--font-mono); font-size: 18px; color: #bbb; box-shadow: 0 3px 0 #2a2b2e; }
+.key.lit { border-color: #5b9cf5; color: #cfe0ff; box-shadow: 0 3px 0 #2a4a7a; }
+.hl { font-family: var(--font-display); font-size: 30px; line-height: 1; color: #e4e6ea; text-wrap: balance; }
+.sub { font-size: 13px; color: #999; max-width: 46ch; }
+.pad { width: min(100%, 380px); min-height: 60px; border: 1px solid #333; border-radius: 6px; background: #1a1b1d; padding: 10px 12px; text-align: left; font-size: 13px; color: #777; display: grid; gap: 6px; }
+.pad .raw { color: #999; }
+.pad .clean { color: #e4e6ea; background: color-mix(in oklab, #5b9cf5 14%, #1a1b1d); border-radius: 4px; padding: 6px 8px; }
+.pad .tag { font-size: 11px; color: #5b9cf5; letter-spacing: 0.04em; text-transform: uppercase; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.b { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid #3b3d40; background: #2e3033; color: #ddd; }
+.b.p { background: color-mix(in oklab, #5b9cf5 38%, #111); border-color: transparent; color: #cfe0ff; }
+.b.link { background: transparent; border-color: transparent; color: #8db8f8; padding: 6px 4px; }
+.status { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; font-size: 12px; color: #888; }
+.status span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #444; margin-right: 6px; vertical-align: 0; }
+.status span.ok::before { background: #4caf6a; }
+.status span.wait::before { background: #d99024; }
+.sys { width: min(100%, 300px); background: #2a2b2e; border: 1px solid #3a3c40; border-radius: 10px; padding: 14px; font-size: 12px; color: #ddd; display: grid; gap: 10px; text-align: left; }
+.sys .btns { justify-content: flex-end; }
+.foot { font-size: 11px; color: #666; }
+.note { font-size: 12px; color: var(--muted); }
+.chatex { width: min(100%, 420px); display: grid; gap: 8px; text-align: left; font-size: 13px; }
+.chatex .m { padding: 8px 10px; border-radius: 6px; background: #1a1b1d; border: 1px solid #262729; }
+.chatex .m.u { justify-self: end; background: #23262b; }
+.chatex .ex { font-size: 11px; color: #777; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Pattern grid */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 13px; }
+th, td { padding: 9px 12px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+thead th { border-top: 0; font-weight: 600; color: var(--muted); font-size: 12px; }
+td.m { text-align: center; font-family: var(--font-mono); width: 64px; }
+.y { color: var(--add); } .x { color: var(--bad); } .t { color: var(--warn); } .na { color: var(--faint); }
+.tally { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.slice { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.slice:first-child { border-top: 0; }
+.slice .k { font-family: var(--font-display); font-size: 24px; color: var(--accent); line-height: 1; }
+
+@media (max-width: 720px) {
+  h1 { font-size: 48px; }
+  .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .proto { grid-template-columns: minmax(0, 1fr); }
+  .rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .win .body { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .key.pulse { animation: pulse 2.4s ease-in-out 2; }
+  @keyframes pulse { 50% { border-color: #5b9cf5; } }
+}
+</style>
+
+<div class="col">
+  <header class="stack">
+    <p class="eyebrow">Design sprint · Harness desktop · Nov 2026</p>
+    <h1>Onboarding Sprint</h1>
+    <p class="lede">How should Harness open for someone with no AI keys? The team's answer: lead with on-device dictation, get to a first spoken sentence before asking for anything else, and make chat an upgrade the user chooses.</p>
+  </header>
+
+  <section>
+    <div class="day"><span class="n">1</span><h2>Map</h2></div>
+    <div class="decision">
+      <span class="eyebrow">Long-term goal</span>
+      <p>Someone Will hands Harness to is dictating with it daily within their first day, without ever needing an API key. They add a key or local model only when they want more.</p>
+    </div>
+    <div class="journey" aria-label="Journey map">
+      <span>Hears from Will</span><i>›</i><span>Installs</span><i>›</i><span class="hot">First screen</span><i>›</i><span class="hot">Mic</span><i>›</i><span class="hot">Speech</span><i>›</i><span class="hot">First dictation</span><i>›</i><span class="hot">Accessibility</span><i>›</i><span class="hot">fn in another app</span><i>›</i><span>Notices chat</span><i>›</i><span>Upgrades</span>
+    </div>
+    <div class="grid2">
+      <div class="box">
+        <h3>Today's first run</h3>
+        <p class="muted">A "Welcome to Harness" modal asks for an OpenAI key. "Skip for now" dismisses it for good, and chat then shows a disabled compose box that points at Settings &gt; Accounts. Dictation already works on-device, but nothing in the first run says so through action.</p>
+      </div>
+      <div class="box">
+        <h3>What the experts agreed on</h3>
+        <ul class="muted">
+          <li>Dictation is the wedge: no key, account, or card.</li>
+          <li>The real drop-off is the three macOS permissions, mainly Accessibility.</li>
+          <li>A greyed-out chat box reads as a broken app.</li>
+          <li>Local models handle polish and titles well and agentic chat badly.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="decision">
+      <span class="eyebrow">Decider calls</span>
+      <p><b>Target:</b> a Mac person Will knows, not an AI tinkerer, from launch to their first fn dictation into another app.</p>
+      <p><b>Local scope:</b> dictation plus local polish and titles (Apple Foundation Models where available, else a small optional download). Chat stays key-gated, without any dead UI.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="day"><span class="n">2</span><h2>Sketch</h2></div>
+    <p>Five teammates sketched alone: design, support, a skeptic founder, systems, and on-device ML. All five removed the modal, opened on "Hold fn and say something," asked for each permission at the moment the user acts, and showed a live status that flips to a check by itself. They split on five details.</p>
+    <div class="box">
+      <div class="vote"><span class="k">E</span><div><b>Escape hatch.</b> <span class="muted">If Accessibility is never granted, the user lands in "dictation inside Harness only" with a quiet menu bar badge.</span></div><span class="c">3 votes</span></div>
+      <div class="vote"><span class="k">B</span><div><b>Open Notes for me.</b> <span class="muted">Gives the user a guaranteed target app for the first try.</span></div><span class="c">1 vote</span></div>
+      <div class="vote"><span class="k">C</span><div><b>Cursor pill.</b> <span class="muted">"Listening... Cleaning up..." near the cursor, plus a toast when fn is pressed elsewhere before the grant.</span></div><span class="c">1 vote</span></div>
+      <div class="vote"><span class="k">A</span><div><b>Hold fn.</b> <span class="muted">Polish shown before Accessibility, and chat as a single honest line.</span></div><span class="c">0</span></div>
+      <div class="vote"><span class="k">D</span><div><b>First note.</b> <span class="muted">The first dictation is saved as a note.</span></div><span class="c">0</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="day"><span class="n">3</span><h2>Decide</h2></div>
+    <div class="decision">
+      <span class="eyebrow">Supervote</span>
+      <p>E as the base, with B's "Open Notes for me" and C's toast when fn is pressed in another app before the grant.</p>
+      <p>Polish appears in the practice pad <b>before</b> Accessibility, so the hard permission comes after a win. After onboarding, chat shows a <b>sample conversation</b> with costs in plain money terms. The practice pad stays <b>throwaway</b>; nothing is saved as a note.</p>
+    </div>
+  </section>
+</div>
+
+<section class="wide" style="margin-top: 56px;">
+  <div class="col" style="gap: 20px;">
+    <div class="day"><span class="n">4</span><h2>Prototype</h2></div>
+    <p class="muted">Six screens, as the participants heard them. Click a step to see it.</p>
+  </div>
+  <div class="proto" style="margin-top: 20px;">
+    <nav class="rail" aria-label="Prototype steps" id="rail"></nav>
+    <div class="win" aria-live="polite">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="body">
+        <div class="side" id="side"><span class="on">Home</span><span>Chat</span><span>Notes</span><span>Tasks</span></div>
+        <div class="main" id="screen"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="col" style="margin-top: 56px;">
+  <section>
+    <div class="day"><span class="n">5</span><h2>Test</h2></div>
+    <p>Five participants, each built to a screener: a Mac user who types a lot, has no OpenAI API key, isn't an AI tinkerer, and knows Will. They varied in macOS version, confidence, and motivation. Each one went through the Five-Act interview cold. The sprint stopped after the permission dialogs, so screens 3 to 6 were not tested.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Observation</th><th>Rosa<br><span class="muted">school admin, macOS 15</span></th><th>Jonah<br><span class="muted">PM, ChatGPT Plus</span></th><th>Amara<br><span class="muted">RSI, privacy</span></th><th>Pete<br><span class="muted">memoir, low confidence</span></th><th>Lena<br><span class="muted">designer, denies by default</span></th><th>Tally</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Understood "dictation" from screen 1 alone</td><td class="m y">✓</td><td class="m y">✓</td><td class="m y">✓</td><td class="m y">✓</td><td class="m y">✓</td><td class="tally">5 ✓</td></tr>
+          <tr><td>"No account needed" landed</td><td class="m y">✓</td><td class="m y">✓</td><td class="m y">✓</td><td class="m y">✓</td><td class="m y">✓</td><td class="tally">5 ✓</td></tr>
+          <tr><td>Allowed the microphone after the line explaining why</td><td class="m y">✓</td><td class="m y">✓</td><td class="m y">✓</td><td class="m y">✓</td><td class="m y">✓</td><td class="tally">5 ✓</td></tr>
+          <tr><td>"Everything stays on your Mac" noticed, but wanted proof</td><td class="m t">~</td><td class="m t">~</td><td class="m t">~</td><td class="m t">~</td><td class="m t">~</td><td class="tally">5 ~</td></tr>
+          <tr><td>The grey "Type in other apps" dot read as a threat, not a to-do</td><td class="m x">✗</td><td class="m x">✗</td><td class="m x">✗</td><td class="m x">✗</td><td class="m x">✗</td><td class="tally">5 ✗</td></tr>
+          <tr><td>The Speech Recognition prompt suggested audio goes to a server</td><td class="m x">✗</td><td class="m t">~</td><td class="m x">✗</td><td class="m x">✗</td><td class="m x">✗</td><td class="tally">4 ✗ 1 ~</td></tr>
+          <tr><td>Allowed Speech Recognition, after hesitating</td><td class="m t">~</td><td class="m t">~</td><td class="m t">~</td><td class="m t">~</td><td class="m t">~</td><td class="tally">5 ~</td></tr>
+          <tr><td>Said a third prompt would make them stop or wait</td><td class="m x">✗</td><td class="m x">✗</td><td class="m na">·</td><td class="m x">✗</td><td class="m x">✗</td><td class="tally">4 ✗</td></tr>
+          <tr><td>The Chat / Notes / Tasks sidebar made it feel like more app than they wanted</td><td class="m na">·</td><td class="m x">✗</td><td class="m x">✗</td><td class="m x">✗</td><td class="m x">✗</td><td class="tally">4 ✗</td></tr>
+          <tr><td>The pulsing key felt needy</td><td class="m x">✗</td><td class="m na">·</td><td class="m na">·</td><td class="m x">✗</td><td class="m x">✗</td><td class="tally">3 ✗</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Also: Jonah assumed his ChatGPT Plus plan would cover chat. Pete wasn't sure his Magic Keyboard has an fn key; newer Mac keyboards label it with a globe.</p>
+  </section>
+
+  <section>
+    <div class="day"><span class="n">→</span><h2>Debrief</h2></div>
+    <div class="decision">
+      <span class="eyebrow">Decision</span>
+      <p>The first half is validated. Opening on dictation, with each permission explained just before macOS asks, got all five participants through the microphone and speech prompts. The Accessibility step is still untested, and every participant was already wary of it before reaching it. Build the first half now and test Accessibility with real people before building it.</p>
+    </div>
+    <div class="box">
+      <h3>Copy and layout changes from the test</h3>
+      <ul class="muted">
+        <li>Show two steps at first, not three. Reveal "Type in other apps" after the first dictation, along with its reason.</li>
+        <li>Rename "Speech" to "Voice to text." Before the macOS prompt, say plainly that recognition runs on the Mac and nothing is sent to Apple, once that's verified.</li>
+        <li>Turn the footer into a link that shows how audio stays on the Mac. All five wanted proof.</li>
+        <li>Collapse the sidebar to Home until the first dictation, then let the rest appear.</li>
+        <li>Pulse the key twice, then stop. Draw fn or the globe key to match the keyboard.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Next slices</h3>
+      <div class="slice"><span class="k">1</span><div><b>Verify on-device speech.</b> <span class="muted">Every promise in this flow depends on it. Desktop Apple Speech runs through the helper's <code>--engine apple</code>; confirm it requires on-device recognition, or force it.</span></div></div>
+      <div class="slice"><span class="k">2</span><div><b>Dictation-first first run.</b> <span class="muted">Replace the key modal with the practice pad, add in-context Mic and Speech asks with live status and denial recovery, and use the copy above. Roughly one slice: it reuses the existing setup gaps and the mic permission code.</span></div></div>
+      <div class="slice"><span class="k">3</span><div><b>Honest chat without a key.</b> <span class="muted">A sample conversation, "billed per use, separate from ChatGPT Plus," and Add a key. This removes the disabled compose box.</span></div></div>
+      <div class="slice"><span class="k">4</span><div><b>Accessibility step.</b> <span class="muted">Test it on two or three real people first. Then build the live wait, relaunch-and-resume, the "inside Harness only" path, and the toast when fn is pressed elsewhere.</span></div></div>
+      <div class="slice"><span class="k">5</span><div><b>Local polish and titles.</b> <span class="muted">Apple Foundation Models behind the genai seam, with a diff guard. Offer a one-time download on Macs without it. About three slices.</span></div></div>
+    </div>
+    <p class="note">The participants and the team were simulated. Treat these findings as strong hypotheses. Check the Accessibility step, trust in the on-device claim, and Apple Speech accuracy on names and accents with real people before investing in slices 4 and 5.</p>
+  </section>
+</div>
+
+<script>
+const steps = [
+  { label: "First launch", tested: true, side: false, html: `
+    <div class="key pulse">fn</div>
+    <div class="hl">Hold fn and say something.</div>
+    <div class="sub">Harness types what you say. No account needed.</div>
+    <div class="pad">Your words appear here.</div>
+    <div class="btns"><span class="b p">Allow microphone</span></div>
+    <div class="status"><span>Microphone</span><span>Speech</span><span>Type in other apps</span></div>
+    <div class="foot">Everything stays on your Mac.</div>` },
+  { label: "Mic and speech", tested: true, side: false, html: `
+    <div class="sub">This turns your voice into text, on your Mac.</div>
+    <div class="sys"><b>"Harness" would like to access Speech Recognition.</b><span>Speech data from this app will be used to transcribe what you say.</span><div class="btns"><span class="b">Don't Allow</span><span class="b p">OK</span></div></div>
+    <div class="status"><span class="ok">Microphone</span><span class="wait">Speech</span><span>Type in other apps</span></div>
+    <div class="note" style="color:#888">Denied: "Microphone is off. Harness can't hear you without it." · Open Microphone settings · We'll notice when it's on.</div>` },
+  { label: "Practice pad", tested: false, side: false, html: `
+    <div class="key lit">fn</div>
+    <div class="hl">That's you, typed.</div>
+    <div class="pad"><span class="raw">um so remind me to uh call sam on friday</span><span class="tag">Cleaned up</span><span class="clean">Remind me to call Sam on Friday.</span></div>
+    <div class="btns"><span class="b p">Use cleaned up</span><span class="b">Keep as said</span></div>
+    <div class="foot">Cleanup runs on your Mac.</div>
+    <div class="btns"><span class="b p">Now make it work in any app</span></div>` },
+  { label: "Accessibility", tested: false, side: false, html: `
+    <div class="hl">One more switch so fn works in other apps.</div>
+    <div class="sub">macOS calls this Accessibility. Harness only uses it to type what you dictate.</div>
+    <div class="btns"><span class="b p">Open Accessibility settings</span></div>
+    <div class="status"><span class="ok">Microphone</span><span class="ok">Speech</span><span class="wait">Waiting for permission...</span></div>
+    <span class="b link">Not now, use dictation inside Harness only</span>` },
+  { label: "Try it for real", tested: false, side: false, html: `
+    <div class="hl">Now try it in another app.</div>
+    <div class="sub">Click into any text box, hold fn, and speak.</div>
+    <div class="btns"><span class="b">Open Notes for me</span></div>
+    <div class="sys"><b>Nice. That went into Notes.</b><span>fn works everywhere now.</span><div class="btns"><span class="b p">Done</span></div></div>` },
+  { label: "Chat, no key", tested: false, side: true, html: `
+    <div class="chatex"><span class="ex">Example</span><div class="m u">What's on my list for Friday?</div><div class="m">You have two tasks: call Sam, and send the parent newsletter.</div></div>
+    <div class="sub">Chat uses your own OpenAI account. It's billed per use, separate from ChatGPT Plus. Light use is about $1 a month.</div>
+    <div class="btns"><span class="b p">Add a key</span><span class="b link">What's a key?</span></div>` },
+];
+const rail = document.getElementById("rail");
+const screen = document.getElementById("screen");
+const side = document.getElementById("side");
+function show(i) {
+  screen.innerHTML = steps[i].html;
+  side.querySelectorAll("span").forEach((s, j) => s.classList.toggle("on", steps[i].side ? j === 1 : j === 0));
+  rail.querySelectorAll("button").forEach((b, j) => b.setAttribute("aria-current", j === i ? "true" : "false"));
+}
+steps.forEach((s, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.innerHTML = `${i + 1}. ${s.label}<span class="${s.tested ? "tested" : "untested"}">${s.tested ? "tested" : "not tested"}</span>`;
+  b.addEventListener("click", () => show(i));
+  rail.appendChild(b);
+});
+show(0);
+</script>
