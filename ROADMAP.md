@@ -42,6 +42,7 @@ Small, independent slices. Pick one up between bets.
 
 - [ ] **Menu bar tray icon**: replace the plain white squircle (`resources/icon-tray*.png` + recording/processing variants) with a clearer Harness mark, template-friendly at 18/36px. `[O1]`
 - [ ] **CSS consolidation**: fewer one-off surfaces. `[O1]`
+- [ ] **Reading calibration**: an eye-chart picker sets text size, plus reply font and line spacing with a live preview, and a one-switch no-glasses preset. Desktop only; iOS keeps Dynamic Type. Slices: one `--type-scale` drives every font size; a Reading group in Settings; the preset; an optional first-run step. `[O1]`
 - [ ] **Empty / loading / error states** on the main desktop and iOS surfaces. `[O1][O3]`
 - [ ] **iOS long messages**: overflow and tap-to-expand. `[O3]`
 - [ ] **More shared contracts** under `resources/contracts/` (prompts, model names, sync scopes) with parity tests. `[O4]`
