@@ -5,6 +5,7 @@ import { SETTINGS_PAGE_TITLE } from "../../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import type { Settings } from "../../shared/types";
 import { DEFAULT_ACCENT, applyAccent, normalizeAccentHex } from "../../shared/accent";
+import { applyCropCursor } from "../ui/cursors/whipCursor";
 import { applyAppearanceTheme } from "../../shared/timeOfDayBackground";
 import {
   DEFAULT_APPEARANCE_THEME,
@@ -97,6 +98,7 @@ type PersistedFormState = {
   r2AccessKeyId: string;
   accent: string;
   appearanceTheme: AppearanceTheme;
+  cropCursor: boolean;
   weatherZip: string;
 };
 
@@ -276,6 +278,9 @@ export function SettingsView({
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
     initialNonSecret?.appearanceTheme ?? D.appearance?.theme ?? DEFAULT_APPEARANCE_THEME,
   );
+  const [cropCursor, setCropCursor] = useState(
+    initialNonSecret?.cropCursor ?? D.appearance?.cropCursor ?? false,
+  );
   const [weatherZip, setWeatherZip] = useState(
     initialNonSecret?.weatherZip ?? D.weather!.defaultZip,
   );
@@ -322,6 +327,7 @@ export function SettingsView({
       r2AccessKeyId,
       accent,
       appearanceTheme,
+      cropCursor,
       weatherZip,
       ...overrides,
     }),
@@ -345,6 +351,7 @@ export function SettingsView({
       r2AccessKeyId,
       accent,
       appearanceTheme,
+      cropCursor,
       weatherZip,
     ],
   );
@@ -426,6 +433,7 @@ export function SettingsView({
         r2AccessKeyId: nonSecret.r2AccessKeyId,
         accent: nonSecret.accent,
         appearanceTheme: nonSecret.appearanceTheme,
+        cropCursor: nonSecret.cropCursor,
         weatherZip: nonSecret.weatherZip,
       };
       if (secrets) {
@@ -451,9 +459,11 @@ export function SettingsView({
       setR2AccessKeyId(hydrated.r2AccessKeyId);
       setAccent(hydrated.accent);
       setAppearanceTheme(hydrated.appearanceTheme);
+      setCropCursor(hydrated.cropCursor);
       setWeatherZip(hydrated.weatherZip);
       applyAccent(hydrated.accent);
       applyAppearanceTheme(hydrated.appearanceTheme);
+      applyCropCursor(hydrated.cropCursor);
       setNoteTemplates(nonSecret.noteTemplates);
       setDefaultNoteTemplateId(nonSecret.defaultNoteTemplateId);
       lastPersistedRef.current = serializeFormState(hydrated);
@@ -626,6 +636,7 @@ export function SettingsView({
         appearance: {
           accent: normalizeAccentHex(next.accent),
           theme: normalizeAppearanceTheme(next.appearanceTheme),
+          cropCursor: next.cropCursor,
         },
         weather: { defaultZip: next.weatherZip.trim() },
       });
@@ -730,6 +741,7 @@ export function SettingsView({
     r2AccessKeyId,
     accent,
     appearanceTheme,
+    cropCursor,
     weatherZip,
     persistSettings,
   ]);
@@ -857,6 +869,16 @@ export function SettingsView({
             >
               <ThemeModeField value={appearanceTheme} onChange={setAppearanceTheme} />
               <AccentColorField value={accent} onChange={setAccent} />
+              <SettingsSwitch
+                id="cropCursorToggle"
+                testId="settings-crop-cursor"
+                label="Riding crop cursor"
+                checked={cropCursor}
+                onChange={(e) => {
+                  setCropCursor(e.target.checked);
+                  applyCropCursor(e.target.checked);
+                }}
+              />
             </SettingsGroup>
 
             <SettingsGroup title="Behavior">

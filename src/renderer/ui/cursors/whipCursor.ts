@@ -4,6 +4,12 @@ const WHACK_FRAMES = [
   { pose: "strike", ms: 110 },
 ] as const;
 
+/** Turn the riding-crop cursor on or off (off uses the system arrow). */
+export function applyCropCursor(enabled: boolean): void {
+  if (enabled) document.documentElement.dataset.cropCursor = "";
+  else delete document.documentElement.dataset.cropCursor;
+}
+
 /** Swing the crop arrow on a primary press, only where the arrow is showing. */
 export function initWhipCursor(): void {
   const root = document.documentElement;

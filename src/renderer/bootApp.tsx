@@ -8,7 +8,7 @@ import { initGlobalHotkeyController } from "./recording/globalHotkeyController";
 import { RootApp } from "./RootApp";
 import { setCachedSettings } from "./settings/settingsSessionCache";
 import { isCurrentStickyWindow } from "./notes/stickyWindow";
-import { initWhipCursor } from "./ui/cursors/whipCursor";
+import { applyCropCursor, initWhipCursor } from "./ui/cursors/whipCursor";
 import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource-variable/newsreader/opsz-italic.css";
 import "@fontsource/vt323/400.css";
@@ -41,6 +41,7 @@ export function bootApp(harness: HarnessAPI, options: { web: boolean }): void {
       setCachedSettings(settings);
       applyAccent(settings.appearance?.accent);
       applyAppearanceTheme(normalizeAppearanceTheme(settings.appearance?.theme));
+      applyCropCursor(settings.appearance?.cropCursor ?? false);
     } catch {
       // Keep CSS default accent and dark chrome if settings fail to load.
     }

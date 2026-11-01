@@ -106,8 +106,8 @@
 :root {
   color-scheme: dark;
 
-  /* --- Cursors: riding crop replaces the arrow and whacks on click; clickable targets keep the system hand --- */
-  --cursor-default: url("./ui/cursors/crop.svg") 2 2, default;
+  /* --- Cursors: the system arrow, or (opt-in via data-crop-cursor) a riding crop that whacks on click --- */
+  --cursor-default: default;
   --cursor-windup: url("./ui/cursors/crop-windup.svg") 10 14, default;
   --cursor-strike: url("./ui/cursors/crop-strike.svg") 10 14, default;
   --cursor-pointer: pointer;
@@ -387,6 +387,10 @@ html, body, #root {
 
 html {
   overflow: hidden;
+}
+
+html[data-crop-cursor] {
+  --cursor-default: url("./ui/cursors/crop.svg") 2 2, default;
 }
 
 body {

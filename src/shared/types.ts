@@ -171,6 +171,8 @@ export interface Settings {
     accent?: string;
     /** `dark` is fixed chrome + accents; `time` tints the shell from the local hour. */
     theme?: AppearanceTheme;
+    /** Riding-crop mouse cursor in place of the system arrow. */
+    cropCursor?: boolean;
   };
   /** Defaults for compose ambient weather (US ZIP → Open-Meteo). */
   weather?: {
@@ -239,6 +241,7 @@ export const DEFAULT_SETTINGS: Settings = {
   appearance: {
     accent: DEFAULT_ACCENT,
     theme: DEFAULT_APPEARANCE_THEME,
+    cropCursor: false,
   },
   weather: {
     defaultZip: "12528",

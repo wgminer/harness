@@ -44,7 +44,8 @@ pub fn default_settings() -> Value {
         },
         "appearance": {
             "accent": DEFAULT_ACCENT,
-            "theme": "dark"
+            "theme": "dark",
+            "cropCursor": false
         },
         "weather": {
             "defaultZip": "12528"
@@ -285,6 +286,10 @@ fn parse_appearance(raw: Option<&Value>) -> Value {
     json!({
         "accent": normalize_accent_hex(raw.and_then(|v| v.get("accent"))),
         "theme": parse_appearance_theme(raw.and_then(|v| v.get("theme"))),
+        "cropCursor": raw
+            .and_then(|v| v.get("cropCursor"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
     })
 }
 
@@ -606,7 +611,7 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
         next["appearance"] = merge_object_fields(
             current.get("appearance").unwrap_or(&json!({})),
             appearance,
-            &["accent", "theme"],
+            &["accent", "theme", "cropCursor"],
         );
     }
 
