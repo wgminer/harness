@@ -1,5 +1,5 @@
 /**
- * Global design tokens — fixed dark palette and 16px type scale.
+ * Global design tokens — dark palette (light override below) and 16px type scale.
  */
 @property --bg {
   syntax: "<color>";
@@ -106,8 +106,8 @@
 :root {
   color-scheme: dark;
 
-  /* --- Cursors: riding crop replaces the arrow and whacks on click; clickable targets keep the system hand --- */
-  --cursor-default: url("./ui/cursors/crop.svg") 2 2, default;
+  /* --- Cursors: the system arrow, or (opt-in via data-crop-cursor) a riding crop that whacks on click --- */
+  --cursor-default: default;
   --cursor-windup: url("./ui/cursors/crop-windup.svg") 10 14, default;
   --cursor-strike: url("./ui/cursors/crop-strike.svg") 10 14, default;
   --cursor-pointer: pointer;
@@ -158,6 +158,10 @@
   --scrollbar-thumb: #6a6c6f;
   --scrollbar-track: #26282b;
 
+  /* --- Dictation waveform (canvas reads these once per session) --- */
+  --waveform-stroke: #fff;
+  --waveform-occlusion: #111;
+
   /* --- Semantic status (shared across themes) --- */
   --danger: #c0392b;
   --danger-fg: #e05353;
@@ -179,17 +183,13 @@
   --focus-ring: 2px solid var(--focus-ring-color);
 
   /* --- Typography --- */
-  --font-family: -apple-system, "system-ui", "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-family-serif: "New York", ui-serif, Georgia, "Times New Roman", serif;
-  --font-family-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
-  /* Assistant prose in the chat thread: VT323 (bundled via @fontsource), a phosphor-CRT pixel face.
-     It has one weight, so emphasis is underlined rather than bolded (see chat.css). */
-  --font-family-chat: "VT323", var(--font-family-mono);
-  --font-size-chat: 21px;
+  --font-family: system-ui, -apple-system, sans-serif;
+  --font-family-serif: ui-serif, Georgia, serif;
+  --font-family-mono: ui-monospace, Menlo, monospace;
+  /* Assistant prose in the chat thread: one of the three stacks above, picked in Appearance. */
+  --font-family-chat: var(--font-family);
+  --font-size-chat: 16px;
   --line-height-chat: 24px;
-  --font-weight-chat: 400;
-  --font-weight-chat-strong: 400;
-  --letter-spacing-chat: 0.02em;
   --font-size: var(--font-size-body);
   --font-size-caption: 12px;
   --font-size-sidebar: 14px;
@@ -315,6 +315,52 @@ html[data-appearance="time"] {
   --scrollbar-thumb: var(--tod-scrollbar-thumb, #6a6c6f);
 }
 
+/* Light theme: same roles, inverted brightness. Accent variants mix toward black for contrast. */
+html[data-appearance="light"] {
+  color-scheme: light;
+
+  --bg: #f4f4f2;
+  --bg-secondary: #fff;
+  --bg-elevated: #fff;
+  --fg: #222;
+  --fg-muted: #6b6b6b;
+
+  --accent-readable: color-mix(in oklab, var(--accent) 70%, black);
+
+  --border-light: #a0a0a0;
+  --border-edge: #e0e0de;
+  --border-input: #d2d2d0;
+
+  --btn-bg: #e8e8e6;
+  --btn-bg-hover: #dcdcda;
+  --btn-primary-bg: color-mix(in oklab, var(--accent) 22%, var(--bg));
+  --btn-primary-bg-hover: color-mix(in oklab, var(--accent) 32%, var(--bg));
+
+  --overlay-subtle: #efefed;
+  --overlay: #e6e6e4;
+  --overlay-strong: #d8d8d6;
+  --hover-bg: #eaeae8;
+  --hover-bg-strong: #e0e0de;
+
+  --selection-bg: color-mix(in oklab, var(--accent) 30%, white);
+
+  --scrollbar-thumb: #b4b4b2;
+  --scrollbar-track: #eaeae8;
+
+  --waveform-stroke: #222;
+  --waveform-occlusion: #f4f4f2;
+
+  --danger-fg: #b3261e;
+  --danger-muted: #e6a39b;
+  --danger-surface: #f9dedb;
+  --warning-fg: #a86400;
+  --success-fg: #1f7a35;
+
+  --scrim: rgba(0, 0, 0, 0.25);
+  --shadow-color: rgba(0, 0, 0, 0.12);
+  --shadow-drop: rgba(0, 0, 0, 0.08);
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     transition: none;
@@ -337,6 +383,18 @@ html, body, #root {
 
 html {
   overflow: hidden;
+}
+
+html[data-chat-font="serif"] {
+  --font-family-chat: var(--font-family-serif);
+}
+
+html[data-chat-font="mono"] {
+  --font-family-chat: var(--font-family-mono);
+}
+
+html[data-crop-cursor] {
+  --cursor-default: url("./ui/cursors/crop.svg") 2 2, default;
 }
 
 body {

@@ -2,9 +2,10 @@ export const MENU_GAP_PX = 4;
 export const MENU_VIEWPORT_MARGIN_PX = 8;
 
 /** Preferred side of the anchor, then alignment along it. Flips when the preferred side lacks room. */
-export type MenuPlacement = "bottom-start" | "bottom-end" | "top-start" | "top-end" | "right-start";
+export type MenuPlacement = "bottom-start" | "bottom-end" | "top-start" | "top-end" | "right-start" | "over-start";
 
-export type MenuSide = "top" | "bottom" | "left" | "right";
+/** "over" covers the anchor, with the first item's icon on top of it. */
+export type MenuSide = "top" | "bottom" | "left" | "right" | "over";
 
 export interface MenuAnchorRect {
   top: number;
@@ -29,10 +30,18 @@ export function placeMenu(
   viewport: { width: number; height: number },
   placement: MenuPlacement = "bottom-start",
   gap = MENU_GAP_PX,
+  /** For "over-start": center of the first item's icon, relative to the menu's top-left. */
+  overPoint: { x: number; y: number } = { x: 0, y: 0 },
 ): MenuPosition {
   const margin = MENU_VIEWPORT_MARGIN_PX;
   const maxLeft = viewport.width - menu.width - margin;
   const maxTop = viewport.height - menu.height - margin;
+
+  if (placement === "over-start") {
+    const top = (anchor.top + anchor.bottom) / 2 - overPoint.y;
+    const left = (anchor.left + anchor.right) / 2 - overPoint.x;
+    return { top: clamp(top, margin, maxTop), left: clamp(left, margin, maxLeft), side: "over" };
+  }
 
   if (placement === "right-start") {
     const spaceRight = viewport.width - anchor.right;

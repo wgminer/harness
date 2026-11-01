@@ -74,6 +74,7 @@ export function SidebarTitlebarActions({
           open={newMenuOpen}
           onClose={() => setNewMenuOpen(false)}
           anchorRef={newMenuRef}
+          placement="over-start"
           label="Create new"
           className="sidebar-new-menu"
         >

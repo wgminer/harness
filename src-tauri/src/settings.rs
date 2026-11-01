@@ -45,7 +45,9 @@ pub fn default_settings() -> Value {
         "model": crate::llm::parse_model_settings(None),
         "appearance": {
             "accent": DEFAULT_ACCENT,
-            "theme": "dark"
+            "theme": "dark",
+            "cropCursor": false,
+            "chatFont": "sans"
         },
         "weather": {
             "defaultZip": "12528"
@@ -277,7 +279,16 @@ fn normalize_accent_hex(raw: Option<&Value>) -> String {
 fn parse_appearance_theme(raw: Option<&Value>) -> &'static str {
     match raw.and_then(|v| v.as_str()) {
         Some("time") => "time",
+        Some("light") => "light",
         _ => "dark",
+    }
+}
+
+fn parse_chat_font(raw: Option<&Value>) -> &'static str {
+    match raw.and_then(|v| v.as_str()) {
+        Some("serif") => "serif",
+        Some("mono") => "mono",
+        _ => "sans",
     }
 }
 
@@ -285,6 +296,11 @@ fn parse_appearance(raw: Option<&Value>) -> Value {
     json!({
         "accent": normalize_accent_hex(raw.and_then(|v| v.get("accent"))),
         "theme": parse_appearance_theme(raw.and_then(|v| v.get("theme"))),
+        "cropCursor": raw
+            .and_then(|v| v.get("cropCursor"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        "chatFont": parse_chat_font(raw.and_then(|v| v.get("chatFont"))),
     })
 }
 
@@ -624,7 +640,7 @@ pub async fn set_settings(chains: &WriteChains, partial: &Value) -> Result<Value
         next["appearance"] = merge_object_fields(
             current.get("appearance").unwrap_or(&json!({})),
             appearance,
-            &["accent", "theme"],
+            &["accent", "theme", "cropCursor", "chatFont"],
         );
     }
 

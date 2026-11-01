@@ -21,7 +21,6 @@
 		12759CA5E3D21DF797BE03A4 /* ChatDisplayTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4BE010F294A5773AF7D18F8 /* ChatDisplayTextTests.swift */; };
 		12BDE068798000B6581108D9 /* CaptureHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7D65DE37A0BD2AD5AC33AC8 /* CaptureHomeView.swift */; };
 		144D622B8D99D3288476FDDD /* DictationRecordingAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2639D64FEF69FF760A26EC89 /* DictationRecordingAttributes.swift */; };
-		1457AF97430B554E616AF718 /* VT323-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A17EAFCBBC49459F460EC02C /* VT323-LICENSE.txt */; };
 		15343D10DAE5839B2BD76350 /* ConversationStoreDictationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F1D3FBD807711C44CE63C3 /* ConversationStoreDictationTests.swift */; };
 		1568A132FBC66C93D3F13232 /* HarnessTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD2B7F46DE25B3CD6ED6B90C /* HarnessTheme.swift */; };
 		15CB346142AB54C0CB543D7A /* ChatToolDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D23899F7341D75E8021ED49 /* ChatToolDefinitions.swift */; };
@@ -125,7 +124,6 @@
 		C8BBA6AB9024EA02BF81ECD0 /* ChatScrollLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5C6110C2CB2994B1A2BF92 /* ChatScrollLogic.swift */; };
 		C97786CC3CA855DC973C3FA8 /* ComposeChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF158BE0BA79A8B0916CCF8 /* ComposeChatView.swift */; };
 		D310CA6926A5B016FAB34DF8 /* HarnessMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 060D0E272118A569F2C349BE /* HarnessMobileApp.swift */; };
-		D559D1CBD1AC83BA94ECD458 /* VT323-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 21ECC3EA99BD9389793790B0 /* VT323-Regular.ttf */; };
 		D5DB4FE6A76C42AF31EC9567 /* ActivityShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BC30490E7E049CCC0843886 /* ActivityShareSheet.swift */; };
 		D654CDE83B5CE34ED57989EA /* StreamingMarkdownBlocksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D592F556DDF4B30E19716B /* StreamingMarkdownBlocksTests.swift */; };
 		D7B70933465EFBBFD61CF97A /* HarnessMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C5735508729C4F3B7EC3348 /* HarnessMarkdownView.swift */; };
@@ -210,7 +208,6 @@
 		1E10B07F1BF607A227328880 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		20B132FC0E08D6F1B4877524 /* SetupNoticeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupNoticeSheet.swift; sourceTree = "<group>"; };
 		21D0CE51605069EA771540E8 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
-		21ECC3EA99BD9389793790B0 /* VT323-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "VT323-Regular.ttf"; sourceTree = "<group>"; };
 		2639D64FEF69FF760A26EC89 /* DictationRecordingAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationRecordingAttributes.swift; sourceTree = "<group>"; };
 		2A4D2A2493AA2A75269530AF /* systemPrompt.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = systemPrompt.json; sourceTree = "<group>"; };
 		2D363056999F761CCBCE3AC6 /* SyncMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMerge.swift; sourceTree = "<group>"; };
@@ -281,7 +278,6 @@
 		9E1AA82EF9EF53609B518B43 /* StreamingMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownView.swift; sourceTree = "<group>"; };
 		9F9E0EE1AE362A7DA0ADA912 /* recentConversations.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = recentConversations.json; sourceTree = "<group>"; };
 		9FBAE9F76A8F49349D173680 /* HarnessMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HarnessMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A17EAFCBBC49459F460EC02C /* VT323-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "VT323-LICENSE.txt"; sourceTree = "<group>"; };
 		A1A707405489446956F32F0A /* SyncChangeSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncChangeSummaryTests.swift; sourceTree = "<group>"; };
 		A2351E29292CD00EA870CB08 /* VoiceMemoTranscriptExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMemoTranscriptExtractor.swift; sourceTree = "<group>"; };
 		A3CEE707D1D4D6B08ABF7405 /* ToolResultJSONTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolResultJSONTests.swift; sourceTree = "<group>"; };
@@ -370,7 +366,6 @@
 				2CC256CE5CD3B1800D6C3FBE /* Chat */,
 				534B4DA5E71B662D7CCE3A74 /* Data */,
 				362EFF4D80DC39813D78788C /* Dictation */,
-				5821A2FA3850FC2DEBC3C8C1 /* Resources */,
 				83AE6CEA45EEFB29D860B8F0 /* Sync */,
 				F450C91293438FC53F495222 /* UI */,
 			);
@@ -472,14 +467,6 @@
 			path = Data;
 			sourceTree = "<group>";
 		};
-		5821A2FA3850FC2DEBC3C8C1 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				C8A8E7B7DC470F97AEDCB3BE /* Fonts */,
-			);
-			path = Resources;
-			sourceTree = "<group>";
-		};
 		5F67EB393E03AF9A4A6AD26D /* SharedContracts */ = {
 			isa = PBXGroup;
 			children = (
@@ -573,15 +560,6 @@
 			);
 			name = harness;
 			path = ..;
-			sourceTree = "<group>";
-		};
-		C8A8E7B7DC470F97AEDCB3BE /* Fonts */ = {
-			isa = PBXGroup;
-			children = (
-				A17EAFCBBC49459F460EC02C /* VT323-LICENSE.txt */,
-				21ECC3EA99BD9389793790B0 /* VT323-Regular.ttf */,
-			);
-			path = Fonts;
 			sourceTree = "<group>";
 		};
 		F450C91293438FC53F495222 /* UI */ = {
@@ -744,8 +722,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				EDE4E8454465F36E27939DA4 /* Assets.xcassets in Resources */,
-				1457AF97430B554E616AF718 /* VT323-LICENSE.txt in Resources */,
-				D559D1CBD1AC83BA94ECD458 /* VT323-Regular.ttf in Resources */,
 				014C5B012FEE0F8825859159 /* chatModes.json in Resources */,
 				4907EDFD2A3A59632C58C634 /* chatStreamBatch.json in Resources */,
 				4202A058FDED11582CC3F1C1 /* codingTools.json in Resources */,

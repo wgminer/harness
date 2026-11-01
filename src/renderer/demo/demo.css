@@ -62,7 +62,7 @@ body::after {
     0 3px 0 #1c1c1e,
     0 6px 16px rgb(0 0 0 / 0.5);
   color: #e5e5e7;
-  font: 500 15px/1 -apple-system, system-ui, sans-serif;
+  font: 500 15px/1 var(--font-family);
   transform: translate(-50%, 0);
   transition:
     opacity 160ms ease,

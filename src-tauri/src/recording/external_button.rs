@@ -4,7 +4,11 @@
 //! 6053) and feeds button edges into the same path as Fn. Host and the enable
 //! switch are per profile (`external-button.json`), so Harness and Harness Dev
 //! do not both claim the button; the encryption key lives in the credential
-//! store.
+//! store. The LED ring follows recording (`ring`), and when the firmware has a
+//! "Mic stream" switch the device can be the dictation microphone (`mic`).
+
+mod mic;
+mod ring;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -14,20 +18,29 @@ use base64::Engine;
 use esphome_client::error::ClientError;
 use esphome_client::types::{
     DisconnectResponse, EspHomeMessage, ListEntitiesRequest, PingRequest, SubscribeStatesRequest,
+    VoiceAssistantResponse,
 };
-use esphome_client::EspHomeClient;
+use esphome_client::{EspHomeClient, EspHomeClientWriteStream};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
 use crate::credentials::{get_credential, set_credential, CredentialKey};
 use crate::paths::get_app_state_dir;
 use crate::recording::global::{dispatch_fn_edge, GlobalRecordingRuntime};
+use crate::recording::global_capture::{CaptureFeed, NativeCapture};
+use crate::recording::global_effects::TrayIconState;
+use ring::Ring;
 
 const DEFAULT_HOST: &str = "voicepe.local";
 const API_PORT: u16 = 6053;
 const BUTTON_NAME: &str = "Center button";
 const BUTTON_OBJECT_ID: &str = "center_button";
+const RING_NAME: &str = "LED ring";
+const RING_OBJECT_ID: &str = "led_ring";
+const MIC_SWITCH_NAME: &str = "Mic stream";
+const RING_OFF_TIMEOUT: Duration = Duration::from_millis(500);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Quiet this long and we ping; quiet for two in a row and the device is gone.
 const PING_INTERVAL: Duration = Duration::from_secs(20);
@@ -40,6 +53,9 @@ const STATUS_EVENT: &str = "external-button-status";
 struct Config {
     enabled: bool,
     host: String,
+    /// Record dictation from the device's microphone instead of the Mac's.
+    #[serde(default)]
+    use_mic: bool,
 }
 
 impl Default for Config {
@@ -47,6 +63,7 @@ impl Default for Config {
         Self {
             enabled: false,
             host: DEFAULT_HOST.to_string(),
+            use_mic: false,
         }
     }
 }
@@ -96,6 +113,17 @@ pub struct ExternalButtonStatus {
     pub key_configured: bool,
     pub state: ConnectionState,
     pub message: Option<String>,
+    pub use_mic: bool,
+    /// Connected to firmware that can stream its microphone.
+    pub mic_available: bool,
+}
+
+/// The live connection's writer and the keys of the entities Harness drives.
+#[derive(Clone)]
+struct Link {
+    writer: EspHomeClientWriteStream,
+    ring_key: Option<u32>,
+    mic_key: Option<u32>,
 }
 
 struct Inner {
@@ -103,11 +131,15 @@ struct Inner {
     state: ConnectionState,
     message: Option<String>,
     cancel: Option<CancellationToken>,
+    link: Option<Link>,
+    /// Where device audio goes while a take records from it.
+    mic_feed: Option<CaptureFeed>,
 }
 
 pub struct ExternalButton {
     runtime: Arc<GlobalRecordingRuntime>,
     inner: Mutex<Inner>,
+    ring: watch::Sender<Ring>,
 }
 
 impl ExternalButton {
@@ -119,8 +151,104 @@ impl ExternalButton {
                 state: ConnectionState::Off,
                 message: None,
                 cancel: None,
+                link: None,
+                mic_feed: None,
             }),
+            ring: watch::channel(Ring::Ready).0,
         })
+    }
+
+    /// Mirrors a tray icon change on the ring, whether or not a device is connected.
+    pub fn show_activity(app: &AppHandle, state: TrayIconState) {
+        let Some(button) = app.try_state::<Arc<ExternalButton>>() else {
+            return;
+        };
+        let next = match state {
+            TrayIconState::Ready => Ring::Ready,
+            TrayIconState::Recording => Ring::Recording { level: 0 },
+            TrayIconState::Processing => Ring::Processing,
+        };
+        button.ring.send_if_modified(|ring| ring::set_phase(ring, next));
+    }
+
+    /// Voice level while recording (0..1 peak), shown as red brightness.
+    pub fn show_level(app: &AppHandle, peak: f32) {
+        if let Some(button) = app.try_state::<Arc<ExternalButton>>() {
+            button.ring.send_if_modified(|ring| ring::set_level(ring, peak));
+        }
+    }
+
+    /// Flashes green for a delivered transcript, then goes back to ready.
+    pub fn show_success(app: &AppHandle) {
+        let Some(button) = app.try_state::<Arc<ExternalButton>>() else {
+            return;
+        };
+        let button = button.inner().clone();
+        button.ring.send_if_modified(|ring| ring::set_phase(ring, Ring::Success));
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(ring::SUCCESS_FLASH).await;
+            button.ring.send_if_modified(|ring| {
+                if *ring != Ring::Success {
+                    return false;
+                }
+                *ring = Ring::Ready;
+                true
+            });
+        });
+    }
+
+    /// A capture fed by the device microphone, when the user chose it and the
+    /// device can stream. `None` means record from the Mac as usual.
+    pub fn start_mic(app: &AppHandle) -> Option<NativeCapture> {
+        let button = app.try_state::<Arc<ExternalButton>>()?.inner().clone();
+        let (writer, switch_key) = {
+            let inner = button.inner.lock().unwrap();
+            if !inner.config.use_mic {
+                return None;
+            }
+            let link = inner.link.as_ref();
+            let Some((link, key)) = link.and_then(|l| l.mic_key.map(|k| (l, k))) else {
+                eprintln!("[Harness:recording] Voice PE mic not available, using the Mac mic");
+                return None;
+            };
+            (link.writer.clone(), key)
+        };
+        let stop_writer = writer.clone();
+        let stopping = button.clone();
+        let (capture, feed) = NativeCapture::external(
+            mic::SAMPLE_RATE,
+            Box::new(move || {
+                stopping.inner.lock().unwrap().mic_feed = None;
+                tauri::async_runtime::spawn(async move {
+                    let _ = mic::stop(&stop_writer, switch_key).await;
+                });
+            }),
+        );
+        button.inner.lock().unwrap().mic_feed = Some(feed);
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = mic::start(&writer, switch_key).await {
+                eprintln!("[Harness:recording] Voice PE mic did not start: {e}");
+            }
+        });
+        eprintln!("[Harness:recording] recording from the Voice PE mic");
+        Some(capture)
+    }
+
+    /// Switches the ring off before the app quits so it does not stay lit.
+    pub fn shutdown(&self) {
+        let Some(link) = self.inner.lock().unwrap().link.take() else {
+            return;
+        };
+        let Some(key) = link.ring_key else {
+            return;
+        };
+        tauri::async_runtime::block_on(async {
+            let _ = tokio::time::timeout(
+                RING_OFF_TIMEOUT,
+                link.writer.try_write(ring::command(key, Ring::Off)),
+            )
+            .await;
+        });
     }
 
     pub fn status(&self) -> ExternalButtonStatus {
@@ -131,6 +259,8 @@ impl ExternalButton {
             key_configured: stored_key().is_some(),
             state: inner.state,
             message: inner.message.clone(),
+            use_mic: inner.config.use_mic,
+            mic_available: inner.link.as_ref().is_some_and(|l| l.mic_key.is_some()),
         }
     }
 
@@ -141,6 +271,7 @@ impl ExternalButton {
         enabled: bool,
         host: &str,
         key: Option<&str>,
+        use_mic: bool,
     ) -> Result<ExternalButtonStatus, String> {
         if let Some(key) = key.map(str::trim).filter(|k| !k.is_empty()) {
             validate_key(key)?;
@@ -150,10 +281,23 @@ impl ExternalButton {
         let config = Config {
             enabled,
             host: if host.is_empty() { DEFAULT_HOST.to_string() } else { host.to_string() },
+            use_mic,
         };
         save_config(&config)?;
-        self.inner.lock().unwrap().config = config;
-        self.restart(app);
+        let reconnect = {
+            let mut inner = self.inner.lock().unwrap();
+            let reconnect = inner.config.enabled != config.enabled
+                || inner.config.host != config.host
+                || key.is_some_and(|k| !k.trim().is_empty());
+            inner.config = config;
+            reconnect
+        };
+        // The mic choice is read at the start of each take; no need to drop the connection.
+        if reconnect {
+            self.restart(app);
+        } else {
+            let _ = app.emit(STATUS_EVENT, self.status());
+        }
         Ok(self.status())
     }
 
@@ -213,7 +357,7 @@ async fn run(
     loop {
         let ended = tokio::select! {
             _ = cancel.cancelled() => None,
-            ended = session(&app, &button, &host, &key, &held) => Some(ended),
+            ended = session(&app, &button, &host, &key, &held, &cancel) => Some(ended),
         };
         // Losing the connection mid-press must not leave a recording running.
         if held.swap(false, Ordering::SeqCst) {
@@ -252,6 +396,7 @@ async fn session(
     host: &str,
     key: &str,
     held: &AtomicBool,
+    cancel: &CancellationToken,
 ) -> Ended {
     let mut client = match EspHomeClient::builder()
         .address(&format!("{host}:{API_PORT}"))
@@ -265,14 +410,17 @@ async fn session(
         Err(e) => return classify(e),
     };
 
-    let button_key = match find_button(&mut client).await {
-        Ok(Some(k)) => k,
-        Ok(None) => return Ended::Failed(format!("The device at {host} has no \"{BUTTON_NAME}\".")),
+    let entities = match find_entities(&mut client).await {
+        Ok(entities) => entities,
         Err(e) => return classify(e),
+    };
+    let Some(button_key) = entities.button else {
+        return Ended::Failed(format!("The device at {host} has no \"{BUTTON_NAME}\"."));
     };
     if let Err(e) = client.try_write(SubscribeStatesRequest {}).await {
         return classify(e);
     }
+    let _link = LinkGuard::start(button, &client, &entities, cancel);
     button.set_state(app, ConnectionState::Connected, None);
     eprintln!("[Harness:recording] external button connected to {host}");
 
@@ -304,6 +452,24 @@ async fn session(
                     dispatch_fn_edge(app, &button.runtime, phase, now_ms()).await;
                 }
             }
+            // The mic switch went on and the device asks to stream. Port 0
+            // means "send the audio over this connection".
+            EspHomeMessage::VoiceAssistantRequest(request) if request.start => {
+                let recording = button.inner.lock().unwrap().mic_feed.is_some();
+                let response = VoiceAssistantResponse {
+                    port: 0,
+                    error: !recording,
+                };
+                if client.try_write(response).await.is_err() {
+                    return Ended::Dropped;
+                }
+            }
+            EspHomeMessage::VoiceAssistantAudio(audio) => {
+                let feed = button.inner.lock().unwrap().mic_feed.clone();
+                if let Some(feed) = feed {
+                    feed.push(&mic::decode_pcm16(&audio.data));
+                }
+            }
             EspHomeMessage::DisconnectRequest(_) => {
                 let _ = client.try_write(DisconnectResponse {}).await;
                 return Ended::Dropped;
@@ -313,19 +479,80 @@ async fn session(
     }
 }
 
-async fn find_button(client: &mut EspHomeClient) -> Result<Option<u32>, ClientError> {
+#[derive(Default)]
+struct Entities {
+    button: Option<u32>,
+    ring: Option<u32>,
+    mic: Option<u32>,
+}
+
+/// Keys of the centre button and, when the firmware has them, the LED ring and
+/// mic switch. Matched on name because recent firmware sends empty object ids.
+async fn find_entities(client: &mut EspHomeClient) -> Result<Entities, ClientError> {
     client.try_write(ListEntitiesRequest {}).await?;
-    let mut found = None;
+    let mut found = Entities::default();
     loop {
         match client.try_read().await? {
             EspHomeMessage::ListEntitiesBinarySensorResponse(entity)
                 if entity.name == BUTTON_NAME || entity.object_id == BUTTON_OBJECT_ID =>
             {
-                found = Some(entity.key);
+                found.button = Some(entity.key);
+            }
+            EspHomeMessage::ListEntitiesLightResponse(entity)
+                if entity.name == RING_NAME || entity.object_id == RING_OBJECT_ID =>
+            {
+                found.ring = Some(entity.key);
+            }
+            EspHomeMessage::ListEntitiesSwitchResponse(entity) if entity.name == MIC_SWITCH_NAME => {
+                found.mic = Some(entity.key);
             }
             EspHomeMessage::ListEntitiesDoneResponse(_) => return Ok(found),
             _ => {}
         }
+    }
+}
+
+/// Publishes one connection's link and keeps the ring in step with it.
+/// Dropping it, when the connection ends, stops the ring updates and ends any
+/// take recording from the device mic with the audio it has so far.
+struct LinkGuard<'a> {
+    button: &'a ExternalButton,
+    ended: CancellationToken,
+}
+
+impl<'a> LinkGuard<'a> {
+    fn start(
+        button: &'a ExternalButton,
+        client: &EspHomeClient,
+        entities: &Entities,
+        cancel: &CancellationToken,
+    ) -> Self {
+        let link = Link {
+            writer: client.write_stream(),
+            ring_key: entities.ring,
+            mic_key: entities.mic,
+        };
+        let ended = CancellationToken::new();
+        if let Some(key) = link.ring_key {
+            tauri::async_runtime::spawn(ring::drive(
+                link.writer.clone(),
+                key,
+                button.ring.subscribe(),
+                cancel.clone(),
+                ended.clone(),
+            ));
+        }
+        button.inner.lock().unwrap().link = Some(link);
+        Self { button, ended }
+    }
+}
+
+impl Drop for LinkGuard<'_> {
+    fn drop(&mut self) {
+        self.ended.cancel();
+        let mut inner = self.button.inner.lock().unwrap();
+        inner.link = None;
+        inner.mic_feed = None;
     }
 }
 
@@ -390,5 +617,11 @@ mod tests {
     fn key_must_be_32_bytes() {
         assert!(validate_key("AAECAwQFBgcICRAREhMUFRYXGBkgISIjJCUmJygpMDE=").is_ok());
         assert!(validate_key("short").is_err());
+    }
+
+    #[test]
+    fn older_config_files_default_to_the_mac_mic() {
+        let config: Config = serde_json::from_str(r#"{"enabled":true,"host":"voicepe.local"}"#).unwrap();
+        assert!(!config.use_mic);
     }
 }

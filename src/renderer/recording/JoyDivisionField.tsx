@@ -25,8 +25,6 @@ const LEVEL_GAIN = 10;
 const PEAK_ROW_MULTIPLES = 6.2;
 /** Matches `jaggedNoise` clamp; used to reserve headroom above the first baseline. */
 const MAX_PROFILE_VALUE = 1.55;
-const STROKE = "#ffffff";
-const OCCLUSION = "#111111";
 /** Keep stroke/miter tips inside the canvas when peaks hit full amplitude. */
 const STROKE_PAD = 2;
 
@@ -132,6 +130,10 @@ export function JoyDivisionField({
     canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    const styles = getComputedStyle(canvas);
+    const stroke = styles.getPropertyValue("--waveform-stroke").trim() || "#ffffff";
+    const occlusion = styles.getPropertyValue("--waveform-occlusion").trim() || "#111111";
+
     const seedRows = () => {
       const count = Math.max(pointsPerRow, 8);
       const rows: RidgeRow[] = [];
@@ -215,7 +217,7 @@ export function JoyDivisionField({
         }
         ctx.lineTo(insetX + plotW, fillBottom);
         ctx.closePath();
-        ctx.fillStyle = OCCLUSION;
+        ctx.fillStyle = occlusion;
         ctx.fill();
 
         ctx.beginPath();
@@ -225,7 +227,7 @@ export function JoyDivisionField({
           const y = baselineY - profile[i]! * amplitude * peakScale;
           ctx.lineTo(x, y);
         }
-        ctx.strokeStyle = STROKE;
+        ctx.strokeStyle = stroke;
         ctx.lineWidth = 1.25;
         ctx.lineJoin = "miter";
         ctx.lineCap = "butt";

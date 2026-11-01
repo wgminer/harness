@@ -3,7 +3,9 @@ import {
   DEFAULT_APPEARANCE_THEME,
   DEFAULT_SETTINGS,
   normalizeAppearanceTheme,
+  normalizeChatFont,
   type AppearanceTheme,
+  type ChatFont,
   type Settings,
 } from "../../shared/types";
 import { migrateCleanupPrompt, resolveGlossary } from "../../shared/transcriptCleanup";
@@ -41,6 +43,8 @@ export type NonSecretSettingsHydration = {
   r2AccessKeyId: string;
   accent: string;
   appearanceTheme: AppearanceTheme;
+  cropCursor: boolean;
+  chatFont: ChatFont;
   noteTemplates: NoteTemplateConfig[];
   defaultNoteTemplateId: string;
   weatherZip: string;
@@ -143,6 +147,8 @@ export function nonSecretHydrationFromSettings(S: Settings): NonSecretSettingsHy
     appearanceTheme: normalizeAppearanceTheme(
       S.appearance?.theme ?? D.appearance?.theme ?? DEFAULT_APPEARANCE_THEME,
     ),
+    cropCursor: S.appearance?.cropCursor ?? D.appearance?.cropCursor ?? false,
+    chatFont: normalizeChatFont(S.appearance?.chatFont ?? D.appearance?.chatFont),
     noteTemplates: templates,
     defaultNoteTemplateId: normalizeDefaultNoteTemplateId(S.notes?.defaultTemplateId, templates),
     weatherZip: S.weather?.defaultZip ?? D.weather!.defaultZip,

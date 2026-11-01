@@ -255,6 +255,11 @@ pub fn run() {
                 if let Some(terminals) = app.try_state::<terminal::TerminalRuntime>() {
                     terminals.kill_all();
                 }
+                if let Some(button) =
+                    app.try_state::<std::sync::Arc<recording::external_button::ExternalButton>>()
+                {
+                    button.shutdown();
+                }
             }
             // Finder "Open With" / dropping files on the Dock icon.
             #[cfg(target_os = "macos")]

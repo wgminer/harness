@@ -3,15 +3,13 @@ import ReactDOM from "react-dom/client";
 import type { HarnessAPI } from "../shared/desktopAPI";
 import { applyAccent } from "../shared/accent";
 import { applyAppearanceTheme } from "../shared/timeOfDayBackground";
-import { normalizeAppearanceTheme, type Settings } from "../shared/types";
+import { normalizeAppearanceTheme, normalizeChatFont, type Settings } from "../shared/types";
 import { initGlobalHotkeyController } from "./recording/globalHotkeyController";
 import { RootApp } from "./RootApp";
 import { setCachedSettings } from "./settings/settingsSessionCache";
 import { isCurrentStickyWindow } from "./notes/stickyWindow";
-import { initWhipCursor } from "./ui/cursors/whipCursor";
-import "@fontsource-variable/newsreader/opsz.css";
-import "@fontsource-variable/newsreader/opsz-italic.css";
-import "@fontsource/vt323/400.css";
+import { applyCropCursor, initWhipCursor } from "./ui/cursors/whipCursor";
+import { applyChatFont } from "./chat/chatFont";
 import "./base.css";
 import "./ui/cursors/cursors.css";
 import "./ui/modal.css";
@@ -41,6 +39,8 @@ export function bootApp(harness: HarnessAPI, options: { web: boolean }): void {
       setCachedSettings(settings);
       applyAccent(settings.appearance?.accent);
       applyAppearanceTheme(normalizeAppearanceTheme(settings.appearance?.theme));
+      applyCropCursor(settings.appearance?.cropCursor ?? false);
+      applyChatFont(normalizeChatFont(settings.appearance?.chatFont));
     } catch {
       // Keep CSS default accent and dark chrome if settings fail to load.
     }

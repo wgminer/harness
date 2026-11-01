@@ -88,8 +88,13 @@ export function createHarnessAdapter(): HarnessAPI {
     },
     externalButton: {
       getStatus: () => invoke(cmd("externalButton:getStatus")),
-      configure: ({ enabled, host, key }) =>
-        invoke(cmd("externalButton:configure"), { enabled, host, key: key ?? null }),
+      configure: ({ enabled, host, key, useMic }) =>
+        invoke(cmd("externalButton:configure"), {
+          enabled,
+          host,
+          key: key ?? null,
+          useMic: useMic ?? null,
+        }),
       onStatus: (cb) => subscribe<ExternalButtonStatus>("externalButton:status", cb),
     },
     gmail: {
