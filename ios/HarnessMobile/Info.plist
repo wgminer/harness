@@ -51,10 +51,6 @@
 			</array>
 		</dict>
 	</array>
-	<key>UIAppFonts</key>
-	<array>
-		<string>VT323-Regular.ttf</string>
-	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

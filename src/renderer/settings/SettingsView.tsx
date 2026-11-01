@@ -6,11 +6,15 @@ import { DEFAULT_SETTINGS } from "../../shared/types";
 import type { Settings } from "../../shared/types";
 import { DEFAULT_ACCENT, applyAccent, normalizeAccentHex } from "../../shared/accent";
 import { applyCropCursor } from "../ui/cursors/whipCursor";
+import { applyChatFont } from "../chat/chatFont";
 import { applyAppearanceTheme } from "../../shared/timeOfDayBackground";
 import {
   DEFAULT_APPEARANCE_THEME,
+  DEFAULT_CHAT_FONT,
   normalizeAppearanceTheme,
+  normalizeChatFont,
   type AppearanceTheme,
+  type ChatFont,
 } from "../../shared/types";
 import {
   DEFAULT_NOTE_TEMPLATE_ID,
@@ -39,6 +43,7 @@ import {
   DataSettingsTab,
   AccentColorField,
   ThemeModeField,
+  ChatFontField,
   NotesTemplatesTab,
   VoiceSettingsTab,
 } from "./index";
@@ -99,6 +104,7 @@ type PersistedFormState = {
   accent: string;
   appearanceTheme: AppearanceTheme;
   cropCursor: boolean;
+  chatFont: ChatFont;
   weatherZip: string;
 };
 
@@ -281,6 +287,9 @@ export function SettingsView({
   const [cropCursor, setCropCursor] = useState(
     initialNonSecret?.cropCursor ?? D.appearance?.cropCursor ?? false,
   );
+  const [chatFont, setChatFont] = useState<ChatFont>(
+    initialNonSecret?.chatFont ?? D.appearance?.chatFont ?? DEFAULT_CHAT_FONT,
+  );
   const [weatherZip, setWeatherZip] = useState(
     initialNonSecret?.weatherZip ?? D.weather!.defaultZip,
   );
@@ -328,6 +337,7 @@ export function SettingsView({
       accent,
       appearanceTheme,
       cropCursor,
+      chatFont,
       weatherZip,
       ...overrides,
     }),
@@ -352,6 +362,7 @@ export function SettingsView({
       accent,
       appearanceTheme,
       cropCursor,
+      chatFont,
       weatherZip,
     ],
   );
@@ -434,6 +445,7 @@ export function SettingsView({
         accent: nonSecret.accent,
         appearanceTheme: nonSecret.appearanceTheme,
         cropCursor: nonSecret.cropCursor,
+        chatFont: nonSecret.chatFont,
         weatherZip: nonSecret.weatherZip,
       };
       if (secrets) {
@@ -460,10 +472,12 @@ export function SettingsView({
       setAccent(hydrated.accent);
       setAppearanceTheme(hydrated.appearanceTheme);
       setCropCursor(hydrated.cropCursor);
+      setChatFont(hydrated.chatFont);
       setWeatherZip(hydrated.weatherZip);
       applyAccent(hydrated.accent);
       applyAppearanceTheme(hydrated.appearanceTheme);
       applyCropCursor(hydrated.cropCursor);
+      applyChatFont(hydrated.chatFont);
       setNoteTemplates(nonSecret.noteTemplates);
       setDefaultNoteTemplateId(nonSecret.defaultNoteTemplateId);
       lastPersistedRef.current = serializeFormState(hydrated);
@@ -637,6 +651,7 @@ export function SettingsView({
           accent: normalizeAccentHex(next.accent),
           theme: normalizeAppearanceTheme(next.appearanceTheme),
           cropCursor: next.cropCursor,
+          chatFont: normalizeChatFont(next.chatFont),
         },
         weather: { defaultZip: next.weatherZip.trim() },
       });
@@ -742,6 +757,7 @@ export function SettingsView({
     accent,
     appearanceTheme,
     cropCursor,
+    chatFont,
     weatherZip,
     persistSettings,
   ]);
@@ -869,6 +885,7 @@ export function SettingsView({
             >
               <ThemeModeField value={appearanceTheme} onChange={setAppearanceTheme} />
               <AccentColorField value={accent} onChange={setAccent} />
+              <ChatFontField value={chatFont} onChange={setChatFont} />
               <SettingsSwitch
                 id="cropCursorToggle"
                 testId="settings-crop-cursor"

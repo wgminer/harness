@@ -71,19 +71,13 @@ private func makeHarnessTheme(assistantProse: Bool) -> Theme {
         .text {
             ForegroundColor(HarnessPalette.text)
             if assistantProse {
-                FontFamily(.custom(AssistantProseStyle.fontName))
                 FontSize(AssistantProseStyle.basePointSize)
             } else {
                 FontSize(.em(1.0))
             }
         }
         .strong {
-            if assistantProse {
-                // The reply face has a single weight, so bold is carried by an underline.
-                UnderlineStyle(.single)
-            } else {
-                FontWeight(.semibold)
-            }
+            FontWeight(.semibold)
             ForegroundColor(HarnessPalette.textStrong)
         }
         .emphasis {

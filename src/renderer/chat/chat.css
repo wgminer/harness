@@ -311,8 +311,6 @@
   font-family: var(--font-family-chat);
   font-size: var(--font-size-chat);
   line-height: var(--line-height-chat);
-  font-weight: var(--font-weight-chat);
-  letter-spacing: var(--letter-spacing-chat);
   font-kerning: normal;
   font-variant-ligatures: common-ligatures contextual;
   font-optical-sizing: auto;
@@ -546,14 +544,6 @@
 
 .message-block .content strong {
   font-weight: 600;
-}
-
-/* The reply face has a single weight, so bold and headings are carried by an underline. */
-.message-block.assistant .content strong,
-.message-block.assistant .content .md-heading {
-  font-weight: var(--font-weight-chat-strong);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 /* Markdown headings keep the body size (see MarkdownContent); weight and space carry the hierarchy. */
@@ -1957,7 +1947,7 @@ button.chat-attach-card__main:disabled {
   padding: var(--space-2) var(--space-3);
   max-height: calc(1.4em * 24 + var(--space-2) * 2);
   overflow: hidden;
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--font-family-mono);
   font-size: 11px;
   line-height: 1.4;
   white-space: pre-wrap;
