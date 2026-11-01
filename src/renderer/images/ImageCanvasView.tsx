@@ -983,7 +983,7 @@ export function ImageCanvasView({
               </div>
               <p className="image-canvas__hint">
                 {IMAGE_PROVIDER_OPTIONS.find((option) => option.value === provider)?.note ??
-                  "Add a Google AI or OpenAI key in Settings, under Accounts."}
+                  "Add a Google AI or OpenAI key in Settings, under Connections."}
               </p>
             </div>
           ) : null}

@@ -18,12 +18,16 @@ describe("settingsSessionCache", () => {
       expect(shouldLoadSettingsSecrets("general", false, false)).toBe(false);
     });
 
-    it("loads when Accounts tab is active", () => {
-      expect(shouldLoadSettingsSecrets("accounts", false, false)).toBe(true);
+    it("loads when Connections is active", () => {
+      expect(shouldLoadSettingsSecrets("connections", false, false)).toBe(true);
     });
 
-    it("does not load on Data", () => {
-      expect(shouldLoadSettingsSecrets("data", false, false)).toBe(false);
+    it("loads on Data, which holds the sync secret", () => {
+      expect(shouldLoadSettingsSecrets("data", false, false)).toBe(true);
+    });
+
+    it("does not load on Status", () => {
+      expect(shouldLoadSettingsSecrets("status", false, false)).toBe(false);
     });
 
     it("loads when Sync QR opens", () => {
@@ -31,7 +35,7 @@ describe("settingsSessionCache", () => {
     });
 
     it("skips once secrets are already loaded", () => {
-      expect(shouldLoadSettingsSecrets("accounts", true, true)).toBe(false);
+      expect(shouldLoadSettingsSecrets("connections", true, true)).toBe(false);
     });
   });
 

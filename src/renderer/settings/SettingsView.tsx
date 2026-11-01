@@ -1,26 +1,19 @@
 import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 import { SETTINGS_PAGE_TITLE } from "../../shared/settingsPage";
 import { SyncQrModal } from "./SyncQrModal";
-import { CliInstallSection } from "./CliInstallSection";
-import { ExternalButtonSettingsGroup } from "./ExternalButtonSettingsGroup";
-import { FnShortcutControls } from "./FnShortcutControls";
+import { CliInstallRow } from "./CliInstallRow";
+import { ConnectionsSettingsTab } from "./ConnectionsSettingsTab";
+import { DataSettingsTab } from "./DataSettingsTab";
+import { GeneralSettingsTab } from "./GeneralSettingsTab";
+import { NotesTemplatesTab } from "./NotesTemplatesTab";
+import { SettingsPane, SettingsSwitchRow } from "./SettingsPanel";
 import { SettingsSaveToast } from "./SettingsSaveToast";
+import { SettingsSwitchProvider } from "./SettingsSwitchContext";
+import { StatusTab } from "./StatusTab";
+import { SETTINGS_SYNC_SECTION_ID } from "./SyncPane";
+import { VoiceSettingsTab } from "./VoiceSettingsTab";
 import { WorkspaceHeader } from "../ui/WorkspaceHeader";
 import { useSyncStatus } from "../hooks/useSyncStatus";
-import {
-  AccountsSettingsTab,
-  SETTINGS_SYNC_SECTION_ID,
-  SettingsField,
-  SettingsGroup,
-  SettingsSwitch,
-  SettingsSwitchProvider,
-  SettingsTabPanel,
-  DataSettingsTab,
-  AccentColorField,
-  ThemeModeField,
-  NotesTemplatesTab,
-  VoiceSettingsTab,
-} from "./index";
 import type { SettingsTabId } from "./settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settingsNavConfig";
 import { shouldLoadSettingsSecrets } from "./settingsSessionCache";
@@ -52,13 +45,7 @@ export function SettingsView({
   openAIConfigured = false,
 }: SettingsViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const tabButtonRefs = useRef<Record<SettingsTabId, HTMLButtonElement | null>>({
-    general: null,
-    notes: null,
-    voice: null,
-    accounts: null,
-    data: null,
-  });
+  const tabButtonRefs = useRef<Partial<Record<SettingsTabId, HTMLButtonElement | null>>>({});
   const [activeTab, setActiveTab] = useState<SettingsTabId>(normalizeSettingsTab(initialTab));
   const [syncQrOpen, setSyncQrOpen] = useState(false);
   const { visibleError: syncError, dismissError: dismissSyncError } = useSyncStatus();
@@ -67,7 +54,7 @@ export function SettingsView({
   const form = useSettingsForm({
     onSettingsChanged,
     wantsSecrets: shouldLoadSettingsSecrets(activeTab, syncQrOpen, false),
-    pollRecordingStatus: activeTab === "voice",
+    pollRecordingStatus: activeTab === "voice" || activeTab === "status",
   });
   const {
     apiKey, setApiKey, tavilyApiKey, setTavilyApiKey, googleApiKey, setGoogleApiKey,
@@ -79,7 +66,8 @@ export function SettingsView({
     autoSend, setAutoSend, globalFnHotkey, setGlobalFnHotkey,
     bringToFrontOnBackgroundDictation, setBringToFrontOnBackgroundDictation,
     openToComposeOnLaunch, setOpenToComposeOnLaunch, selectionImageLookup, setSelectionImageLookup,
-    accent, setAccent, appearanceTheme, setAppearanceTheme, weatherZip, setWeatherZip,
+    accent, setAccent, appearanceTheme, setAppearanceTheme, cropCursor, setCropCursor,
+    weatherZip, setWeatherZip,
     saveStatus, secretsLoaded, switchAnimationsReady, persistSettings, registerDataRefresh,
     platform, isMac, accessibilityTrusted, setAccessibilityTrusted,
     globalRecordingStatus, refreshGlobalRecordingStatus,
@@ -97,13 +85,13 @@ export function SettingsView({
   };
 
   const reviewSyncError = () => {
-    switchTab("accounts");
+    switchTab("data");
     setPendingSyncReview(true);
   };
 
   // Land on the Sync group and put the cursor in the first empty field.
   useEffect(() => {
-    if (!pendingSyncReview || activeTab !== "accounts") return;
+    if (!pendingSyncReview || activeTab !== "data") return;
     setPendingSyncReview(false);
     const section = document.getElementById(SETTINGS_SYNC_SECTION_ID);
     if (!section) return;
@@ -179,7 +167,7 @@ export function SettingsView({
         </WorkspaceHeader>
         <SettingsSwitchProvider animationsReady={switchAnimationsReady}>
         <div className="workspace-content settings-content">
-          {syncError && activeTab !== "accounts" ? (
+          {syncError && activeTab !== "data" && activeTab !== "status" ? (
             <div className="settings-banner settings-banner--error" role="alert">
               <div className="settings-banner__text">
                 <strong>Sync failed</strong>
@@ -193,54 +181,31 @@ export function SettingsView({
               </button>
             </div>
           ) : null}
-          {activeTab === "general" && <SettingsTabPanel id="general">
-            <SettingsGroup
-              title="Appearance"
-              description="Dark chrome, or a shell tinted by the local hour. Accent colors controls and focus."
-            >
-              <ThemeModeField value={appearanceTheme} onChange={setAppearanceTheme} />
-              <AccentColorField value={accent} onChange={setAccent} />
-            </SettingsGroup>
+          {activeTab === "status" && (
+            <StatusTab
+              engine={transcriptionEngine}
+              globalFnHotkey={globalFnHotkey}
+              isMac={isMac}
+              onOpenTab={switchTab}
+            />
+          )}
 
-            <SettingsGroup title="Behavior">
-              <SettingsSwitch
-                id="openToComposeOnLaunchToggle"
-                testId="settings-open-to-compose-on-launch"
-                label="Open to compose on launch"
-                checked={openToComposeOnLaunch}
-                onChange={(e) => setOpenToComposeOnLaunch(e.target.checked)}
-              />
-              <SettingsSwitch
-                id="selectionImageLookupToggle"
-                testId="settings-selection-image-lookup"
-                label="Look up images on selection"
-                checked={selectionImageLookup}
-                onChange={(e) => setSelectionImageLookup(e.target.checked)}
-              />
-            </SettingsGroup>
-
-            <SettingsGroup
-              title="Weather"
-              description="US ZIP for the temperature shown on the compose screen. Open-Meteo, no API key."
-            >
-              <SettingsField label="Default ZIP" htmlFor="settings-weather-zip">
-                <input
-                  id="settings-weather-zip"
-                  data-testid="settings-weather-zip"
-                  type="text"
-                  value={weatherZip}
-                  onChange={(e) => setWeatherZip(e.target.value)}
-                  placeholder="12528"
-                  inputMode="numeric"
-                  autoComplete="postal-code"
-                  spellCheck={false}
-                  maxLength={5}
-                />
-              </SettingsField>
-            </SettingsGroup>
-
-            {isMac ? <CliInstallSection /> : null}
-          </SettingsTabPanel>}
+          {activeTab === "general" && (
+            <GeneralSettingsTab
+              appearanceTheme={appearanceTheme}
+              setAppearanceTheme={setAppearanceTheme}
+              accent={accent}
+              setAccent={setAccent}
+              cropCursor={cropCursor}
+              setCropCursor={setCropCursor}
+              openToComposeOnLaunch={openToComposeOnLaunch}
+              setOpenToComposeOnLaunch={setOpenToComposeOnLaunch}
+              weatherZip={weatherZip}
+              setWeatherZip={setWeatherZip}
+              selectionImageLookup={selectionImageLookup}
+              setSelectionImageLookup={setSelectionImageLookup}
+            />
+          )}
 
           {activeTab === "notes" && (
             <NotesTemplatesTab
@@ -248,79 +213,66 @@ export function SettingsView({
               defaultNoteTemplateId={defaultNoteTemplateId}
               onTemplatesChange={handleTemplatesChange}
             >
-              <SettingsGroup title="Windows">
-                <SettingsSwitch
+              <SettingsPane title="Opening">
+                <SettingsSwitchRow
                   id="openNoteInStickyWindowToggle"
                   testId="settings-open-note-in-window"
                   label="Open new notes in a window"
+                  description="A small window that stays beside your work, instead of the editor."
                   checked={openNoteInStickyWindow}
                   onChange={(e) => onOpenNoteInStickyWindowChange?.(e.target.checked)}
                 />
-              </SettingsGroup>
+                {isMac ? <CliInstallRow /> : null}
+              </SettingsPane>
             </NotesTemplatesTab>
           )}
 
           {activeTab === "voice" && (
             <VoiceSettingsTab
+              isMac={isMac}
+              globalFnHotkey={globalFnHotkey}
+              setGlobalFnHotkey={setGlobalFnHotkey}
+              accessibilityTrusted={accessibilityTrusted}
+              setAccessibilityTrusted={setAccessibilityTrusted}
+              globalRecordingStatus={globalRecordingStatus}
+              refreshGlobalRecordingStatus={refreshGlobalRecordingStatus}
+              transcriptionEngine={transcriptionEngine}
+              setTranscriptionEngine={setTranscriptionEngine}
               cleanupEnabled={cleanupEnabled}
               setCleanupEnabled={setCleanupEnabled}
               cleanupPrompt={cleanupPrompt}
               setCleanupPrompt={setCleanupPrompt}
               transcriptGlossary={transcriptGlossary}
               setTranscriptGlossary={setTranscriptGlossary}
-              transcriptionEngine={transcriptionEngine}
-              setTranscriptionEngine={setTranscriptionEngine}
+              autoSend={autoSend}
+              setAutoSend={setAutoSend}
+              bringToFrontOnBackgroundDictation={bringToFrontOnBackgroundDictation}
+              setBringToFrontOnBackgroundDictation={setBringToFrontOnBackgroundDictation}
               openAIConfigured={openAIConfigured}
               secretsLoaded={secretsLoaded}
               apiKey={apiKey}
-            >
-              <SettingsGroup title="Dictation">
-                <SettingsSwitch
-                  id="autoSendToggle"
-                  testId="settings-auto-send"
-                  label="Send after dictation"
-                  checked={autoSend}
-                  onChange={(e) => setAutoSend(e.target.checked)}
-                />
-                <SettingsSwitch
-                  id="bringToFrontOnBackgroundDictationToggle"
-                  testId="settings-bring-to-front-background-dictation"
-                  label="Focus window on background dictation"
-                  checked={bringToFrontOnBackgroundDictation}
-                  onChange={(e) => setBringToFrontOnBackgroundDictation(e.target.checked)}
-                />
-                {isMac ? (
-                  <>
-                    <SettingsSwitch
-                      id="globalFnHotkeyToggle"
-                      testId="settings-global-fn-hotkey"
-                      label="Menu bar shortcut"
-                      checked={globalFnHotkey}
-                      onChange={(e) => setGlobalFnHotkey(e.target.checked)}
-                    />
-                    {globalFnHotkey ? (
-                      <FnShortcutControls
-                        accessibilityTrusted={accessibilityTrusted}
-                        setAccessibilityTrusted={setAccessibilityTrusted}
-                        globalRecordingStatus={globalRecordingStatus}
-                        refreshGlobalRecordingStatus={refreshGlobalRecordingStatus}
-                      />
-                    ) : null}
-                  </>
-                ) : null}
-              </SettingsGroup>
-              {isMac ? <ExternalButtonSettingsGroup /> : null}
-            </VoiceSettingsTab>
+            />
           )}
 
-          {activeTab === "accounts" && (
-            <AccountsSettingsTab
+          {activeTab === "connections" && (
+            <ConnectionsSettingsTab
               apiKey={apiKey}
               setApiKey={setApiKey}
               tavilyApiKey={tavilyApiKey}
               setTavilyApiKey={setTavilyApiKey}
               googleApiKey={googleApiKey}
               setGoogleApiKey={setGoogleApiKey}
+              persistSettings={persistSettings}
+              secretsLoaded={secretsLoaded}
+            />
+          )}
+
+          {activeTab === "data" && (
+            <DataSettingsTab
+              platform={platform}
+              onImportComplete={onImportComplete}
+              onSyncComplete={onSyncComplete}
+              onRegisterRefresh={registerDataRefresh}
               r2AccountId={r2AccountId}
               setR2AccountId={setR2AccountId}
               r2Bucket={r2Bucket}
@@ -333,13 +285,7 @@ export function SettingsView({
               setR2SecretAccessKey={setR2SecretAccessKey}
               persistSettings={persistSettings}
               onShowSyncQr={() => setSyncQrOpen(true)}
-              onSyncComplete={onSyncComplete}
-              onRegisterRefresh={registerDataRefresh}
             />
-          )}
-
-          {activeTab === "data" && (
-            <DataSettingsTab platform={platform} onImportComplete={onImportComplete} />
           )}
 
           <SyncQrModal

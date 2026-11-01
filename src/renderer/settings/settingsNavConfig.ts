@@ -1,128 +1,82 @@
 import { SETTINGS_NOTES_TAB_LABEL } from "../../shared/settingsPage";
 
-export type SettingsTabId = "general" | "notes" | "voice" | "accounts" | "data";
-
-export type SettingsNavIconId =
-  | "SlidersHorizontal"
-  | "StickyNote"
-  | "Mic"
-  | "KeyRound"
-  | "Database";
+export type SettingsTabId = "status" | "general" | "notes" | "voice" | "connections" | "data";
 
 export const SETTINGS_NAV: Array<{
   id: SettingsTabId;
   label: string;
-  subtitle?: string;
-  icon: SettingsNavIconId;
   keywords: string[];
 }> = [
   {
+    id: "status",
+    label: "Status",
+    keywords: ["status", "health", "usage", "stats", "ready", "permissions"],
+  },
+  {
     id: "general",
     label: "General",
-    subtitle: "Theme & behavior",
-    icon: "SlidersHorizontal",
     keywords: [
       "theme",
       "dark",
+      "light",
       "time",
-      "tint",
-      "sky",
       "accent",
       "color",
-      "hex",
+      "cursor",
       "launch",
       "compose",
-      "behavior",
       "selection",
       "image",
       "weather",
       "zip",
-      "temperature",
-      "cli",
-      "command line",
-      "terminal",
     ],
   },
   {
     id: "notes",
     label: SETTINGS_NOTES_TAB_LABEL,
-    subtitle: "Windows & templates",
-    icon: "StickyNote",
-    keywords: [
-      "notes",
-      "writing",
-      "editor",
-      "template",
-      "grid",
-      "overlay",
-      "window",
-      "sticky",
-    ],
+    keywords: ["notes", "editor", "template", "window", "sticky", "cli", "command line", "terminal"],
   },
   {
     id: "voice",
     label: "Voice",
-    subtitle: "Dictation & cleanup",
-    icon: "Mic",
     keywords: [
       "transcription",
       "dictation",
       "cleanup",
       "spelling",
       "glossary",
-      "names",
       "auto-send",
       "fn",
-      "menu bar",
       "shortcut",
       "accessibility",
       "microphone",
+      "voice pe",
       "recordings",
-      "retry",
+      "timing",
     ],
   },
   {
-    id: "accounts",
-    label: "Accounts",
-    subtitle: "Sync, keys, connections",
-    icon: "KeyRound",
+    id: "connections",
+    label: "Connections",
+    keywords: ["openai", "api", "key", "tavily", "web search", "google", "gmail", "connection"],
+  },
+  {
+    id: "data",
+    label: "Data",
     keywords: [
       "sync",
       "backup",
       "r2",
       "cloudflare",
+      "iphone",
       "qr",
-      "openai",
-      "api",
-      "key",
-      "tavily",
-      "web search",
-      "gmail",
-      "google",
-      "connection",
-    ],
-  },
-  {
-    id: "data",
-    label: "Data",
-    subtitle: "Memory, import, storage",
-    icon: "Database",
-    keywords: [
       "memory",
-      "memories",
       "import",
       "chatgpt",
       "claude",
       "storage",
-      "paths",
       "finder",
-      "folder",
       "system prompt",
-      "prompt",
-      "timing",
-      "latency",
-      "slow",
-      "dictation",
     ],
   },
 ];
@@ -133,17 +87,9 @@ export const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = SETTIN
 );
 
 export function normalizeSettingsTab(tab: string | undefined): SettingsTabId {
-  if (tab === "tools") return "general";
-  if (tab === "appearance") return "general";
+  if (tab === "tools" || tab === "appearance") return "general";
+  if (tab === "accounts") return "connections";
   if (tab === "memory") return "data";
-  if (
-    tab === "general" ||
-    tab === "notes" ||
-    tab === "voice" ||
-    tab === "accounts" ||
-    tab === "data"
-  ) {
-    return tab;
-  }
-  return "general";
+  if (SETTINGS_NAV.some((item) => item.id === tab)) return tab as SettingsTabId;
+  return "status";
 }
