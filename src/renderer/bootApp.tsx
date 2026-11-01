@@ -19,6 +19,7 @@ import "./sidebar/sidebar.css";
 import "./chat/chat.css";
 import "./workspaceShell.css";
 import "./settings/settings.css";
+import "./settings/settingsPanels.css";
 import "./tasks/tasks.css";
 import "./search/search.css";
 import "./notes/notes.css";

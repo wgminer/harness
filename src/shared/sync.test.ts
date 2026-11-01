@@ -99,7 +99,7 @@ describe("decideSyncAction", () => {
 describe("syncNowButtonTooltip", () => {
   it("explains when backup is not configured", () => {
     expect(syncNowButtonTooltip({ busy: false, configured: false })).toBe(
-      "Set up backup in System → Accounts",
+      "Set up backup in System → Data",
     );
   });
 
@@ -132,7 +132,7 @@ describe("sidebarSyncStatusTooltip", () => {
         lastError: null,
         lastSuccessAt: null,
       }),
-    ).toBe("Set up sync in System → Accounts");
+    ).toBe("Set up sync in System → Data");
   });
 
   it("prefers last-synced when healthy", () => {
@@ -155,6 +155,6 @@ describe("sidebarSyncStatusTooltip", () => {
         lastError: "R2 unavailable",
         lastSuccessAt: null,
       }),
-    ).toBe("Sync failed: R2 unavailable\nClick to open System → Accounts.");
+    ).toBe("Sync failed: R2 unavailable\nClick to open System → Data.");
   });
 });

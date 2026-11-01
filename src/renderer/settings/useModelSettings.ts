@@ -10,7 +10,7 @@ import type { Settings } from "../../shared/types";
 
 type ModelSettings = NonNullable<Settings["model"]>;
 
-/** Settings > Model: provider choice, local endpoint, and the Anthropic key. Saves on its own. */
+/** System > Connections > Chat model: provider choice, local endpoint, and the Anthropic key. Saves on its own. */
 export function useModelSettings({ onSaved }: { onSaved?: () => void }) {
   const [provider, setProvider] = useState<ChatProviderId>(DEFAULT_CHAT_PROVIDER);
   const [localBaseUrl, setLocalBaseUrl] = useState(DEFAULT_LOCAL_BASE_URL);

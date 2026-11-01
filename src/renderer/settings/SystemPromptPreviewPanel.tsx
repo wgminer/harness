@@ -2,7 +2,6 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { SystemPromptPreview } from "../../shared/types";
 import { CHAT_MODES, DEFAULT_CHAT_MODE, type ChatModeId } from "../../shared/chatModes";
-import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";
 
 type PreviewPlatform = "desktop" | "ios";
@@ -104,13 +103,8 @@ function PromptLayerCard({
   );
 }
 
-export function SystemPromptPreviewPanel({
-  collapsible = false,
-  defaultOpen = true,
-}: {
-  collapsible?: boolean;
-  defaultOpen?: boolean;
-} = {}) {
+/** Layered system prompt preview; the body of the Data tab's disclosure. */
+export function SystemPromptPreviewPanel() {
   const [platform, setPlatform] = useState<PreviewPlatform>("desktop");
   const [previewMode, setPreviewMode] = useState<ChatModeId>(DEFAULT_CHAT_MODE);
   const [preview, setPreview] = useState<SystemPromptPreview | null>(null);
@@ -198,11 +192,7 @@ export function SystemPromptPreviewPanel({
   ).length;
 
   return (
-    <SettingsGroup
-      title="System prompt"
-      collapsible={collapsible}
-      defaultOpen={defaultOpen}
-    >
+    <>
       <div
         className="settings-prompt-preview-controls"
         aria-label="System prompt preview filters"
@@ -411,6 +401,6 @@ export function SystemPromptPreviewPanel({
           </div>
         </>
       )}
-    </SettingsGroup>
+    </>
   );
 }

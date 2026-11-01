@@ -4,7 +4,7 @@ import { LLM_CONTEXT_EXPORT_PROMPT } from "../../shared/memoryImport";
 import { sortedMemoryEntries } from "../../shared/memoryInjection";
 import { Modal } from "../ui/Modal";
 import { SettingsActions } from "./SettingsActions";
-import { SettingsGroup } from "./SettingsGroup";
+import { SettingsDisclosure, SettingsPane, SettingsPanelBlock } from "./SettingsPanel";
 import { SettingsHint } from "./SettingsHint";
 import { SystemPromptPreviewPanel } from "./SystemPromptPreviewPanel";
 import { useMemorySettings } from "./useMemorySettings";
@@ -103,7 +103,7 @@ function MemoriesList({ memory }: { memory: MemorySettingsController }) {
             data-testid="settings-add-memory"
             onClick={memory.openAddMemoryModal}
           >
-            Add Memory
+            Add memory
           </button>
         </SettingsActions>
         {showPager ? (
@@ -142,18 +142,18 @@ function MemoriesList({ memory }: { memory: MemorySettingsController }) {
   );
 }
 
-/** Memories list + system prompt + add/edit modal. Used inside Data. */
+/** Memory pane: the list, the system prompt it feeds, and the add/edit modal. Used inside Data. */
 export function MemorySettingsSections({ memory }: { memory: MemorySettingsController }) {
   return (
     <>
-      <SettingsGroup
-        title="Memory"
-        description="What Harness remembers about you. Synced with backup."
-      >
-        <MemoriesList memory={memory} />
-      </SettingsGroup>
-
-      <SystemPromptPreviewPanel collapsible defaultOpen={false} />
+      <SettingsPane title="Memory" description="What Harness remembers about you. Synced with backup.">
+        <SettingsPanelBlock>
+          <MemoriesList memory={memory} />
+        </SettingsPanelBlock>
+        <SettingsDisclosure label="System prompt" description="What chat sees before your first message.">
+          <SystemPromptPreviewPanel />
+        </SettingsDisclosure>
+      </SettingsPane>
 
       <Modal
         open={memory.memoryModalOpen}

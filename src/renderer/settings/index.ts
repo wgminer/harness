@@ -5,22 +5,21 @@ export { SettingsSwitch, type SettingsSwitchProps } from "./SettingsSwitch";
 export { SettingsSwitchProvider, useSettingsSwitchAnimationsReady } from "./SettingsSwitchContext";
 export { SettingsActions, type SettingsActionsProps } from "./SettingsActions";
 export { SettingsHint, type SettingsHintProps } from "./SettingsHint";
-export { SettingsSubsection, type SettingsSubsectionProps } from "./SettingsSubsection";
 export { SettingsEntryRow, type SettingsEntryRowProps } from "./SettingsEntryRow";
 export { SecretField, type SecretFieldProps } from "./SecretField";
 export { SettingsTabPanel, type SettingsTabPanelProps } from "./SettingsTabPanel";
 export { SystemPromptPreviewPanel } from "./SystemPromptPreviewPanel";
 export { DataSettingsTab } from "./DataSettingsTab";
-export { AccountsSettingsTab, SETTINGS_SYNC_SECTION_ID } from "./AccountsSettingsTab";
+export { ConnectionsSettingsTab } from "./ConnectionsSettingsTab";
+export { SyncPane, SETTINGS_SYNC_SECTION_ID } from "./SyncPane";
+export { StatusTab } from "./StatusTab";
+export { GeneralSettingsTab } from "./GeneralSettingsTab";
 export {
   MemorySettingsSections,
   MemoryImportSection,
   useMemorySettings,
   type MemorySettingsController,
 } from "./MemorySettingsTab";
-export { AccentColorField, type AccentColorFieldProps } from "./AccentColorField";
-export { ThemeModeField, type ThemeModeFieldProps } from "./ThemeModeField";
-export { ChatFontField, type ChatFontFieldProps } from "./ChatFontField";
 export { VoiceSettingsTab, type VoiceSettingsTabProps } from "./VoiceSettingsTab";
 export { NotesTemplatesTab, type NotesTemplatesTabProps } from "./NotesTemplatesTab";
 export {

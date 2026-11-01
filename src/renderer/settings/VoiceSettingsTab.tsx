@@ -1,5 +1,6 @@
-import { Loader2 } from "lucide-react";
-import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { ArrowRight, Loader2 } from "lucide-react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import type { GlobalRecordingStatus } from "../../shared/desktopAPI";
 import { settingsSection } from "../../shared/settingsPage";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import {
@@ -8,18 +9,32 @@ import {
   type TranscriptionEngineStatus,
 } from "../../shared/transcriptionEngines";
 import { Modal } from "../ui/Modal";
-import { RecentRecordingsSection } from "./RecentRecordingsSection";
-import { SettingsActions } from "./SettingsActions";
-import { SettingsEntryRow } from "./SettingsEntryRow";
-import { SettingsGroup } from "./SettingsGroup";
-import { SettingsHint } from "./SettingsHint";
-import { SettingsSubsection } from "./SettingsSubsection";
-import { SettingsSwitch } from "./SettingsSwitch";
+import { DictationTimingBody } from "./DictationTimingBody";
+import { ExternalButtonRows } from "./ExternalButtonRows";
+import { RecentRecordingsRows } from "./RecentRecordingsRows";
+import {
+  SettingsDisclosure,
+  SettingsPane,
+  SettingsPanelBlock,
+  SettingsPill,
+  SettingsRow,
+  SettingsSwitchRow,
+} from "./SettingsPanel";
 import { SettingsTabPanel } from "./SettingsTabPanel";
+import { SpellingTagInput } from "./SpellingTagInput";
+import { VoicePermissionRows } from "./VoicePermissionRows";
+import { VoicePipeline } from "./VoicePipeline";
 
 const D = DEFAULT_SETTINGS;
 
 const ENGINE_STATUS_POLL_MS = 2000;
+
+const SECTION = {
+  trigger: "settings-voice-trigger",
+  transcribe: "settings-voice-transcribe",
+  cleanup: "settings-voice-cleanup",
+  deliver: "settings-voice-deliver",
+} as const;
 
 /** Parakeet model readiness; starts the one-time download when models are missing. */
 function useEngineStatus(engine: TranscriptionEngineId) {
@@ -64,39 +79,56 @@ function useEngineStatus(engine: TranscriptionEngineId) {
 }
 
 export interface VoiceSettingsTabProps {
+  isMac: boolean;
+  globalFnHotkey: boolean;
+  setGlobalFnHotkey: (value: boolean) => void;
+  accessibilityTrusted: boolean | null;
+  setAccessibilityTrusted: (value: boolean | null) => void;
+  globalRecordingStatus: GlobalRecordingStatus | null;
+  refreshGlobalRecordingStatus: () => Promise<void>;
+  transcriptionEngine: TranscriptionEngineId;
+  setTranscriptionEngine: (value: TranscriptionEngineId) => void;
   cleanupEnabled: boolean;
   setCleanupEnabled: (value: boolean) => void;
   cleanupPrompt: string;
   setCleanupPrompt: (value: string) => void;
   transcriptGlossary: string[];
   setTranscriptGlossary: Dispatch<SetStateAction<string[]>>;
-  transcriptionEngine: TranscriptionEngineId;
-  setTranscriptionEngine: (value: TranscriptionEngineId) => void;
-  /** True when the provider in Model can run (its key is saved, or it is local). */
+  autoSend: boolean;
+  setAutoSend: (value: boolean) => void;
+  bringToFrontOnBackgroundDictation: boolean;
+  setBringToFrontOnBackgroundDictation: (value: boolean) => void;
+  /** True when the chosen chat provider can run (its key is saved, or it is local). */
   openAIConfigured: boolean;
-  /** Dictation behavior group, rendered above Cleanup. */
-  children?: ReactNode;
 }
 
 export function VoiceSettingsTab({
+  isMac,
+  globalFnHotkey,
+  setGlobalFnHotkey,
+  accessibilityTrusted,
+  setAccessibilityTrusted,
+  globalRecordingStatus,
+  refreshGlobalRecordingStatus,
+  transcriptionEngine,
+  setTranscriptionEngine,
   cleanupEnabled,
   setCleanupEnabled,
   cleanupPrompt,
   setCleanupPrompt,
   transcriptGlossary,
   setTranscriptGlossary,
-  transcriptionEngine,
-  setTranscriptionEngine,
+  autoSend,
+  setAutoSend,
+  bringToFrontOnBackgroundDictation,
+  setBringToFrontOnBackgroundDictation,
   openAIConfigured,
-  children,
 }: VoiceSettingsTabProps) {
   const [cleanupPromptDraft, setCleanupPromptDraft] = useState(cleanupPrompt);
   const [cleanupPromptModalOpen, setCleanupPromptModalOpen] = useState(false);
-  const [glossaryModalOpen, setGlossaryModalOpen] = useState(false);
-  const [editingGlossaryTerm, setEditingGlossaryTerm] = useState<string | null>(null);
-  const [glossaryDraft, setGlossaryDraft] = useState("");
   const { status: engineStatus, retry: retryEngineDownload } = useEngineStatus(transcriptionEngine);
-  const engineDefinition = TRANSCRIPTION_ENGINES.find((e) => e.id === transcriptionEngine);
+  const engineLabel = TRANSCRIPTION_ENGINES.find((e) => e.id === transcriptionEngine)?.label ?? "";
+  const fnActive = isMac && globalFnHotkey;
 
   const openCleanupPromptModal = () => {
     setCleanupPromptDraft(cleanupPrompt);
@@ -119,49 +151,74 @@ export function VoiceSettingsTab({
     setCleanupPromptDraft(D.transcription?.cleanup?.prompt ?? "");
   };
 
-  const closeGlossaryModal = () => {
-    setGlossaryModalOpen(false);
-    setEditingGlossaryTerm(null);
-    setGlossaryDraft("");
-  };
-
-  const openAddGlossaryModal = () => {
-    setEditingGlossaryTerm(null);
-    setGlossaryDraft("");
-    setGlossaryModalOpen(true);
-  };
-
-  const openEditGlossaryModal = (term: string) => {
-    setEditingGlossaryTerm(term);
-    setGlossaryDraft(term);
-    setGlossaryModalOpen(true);
-  };
-
-  const saveGlossaryTerm = () => {
-    const term = glossaryDraft.trim();
-    if (!term) return;
-    const filtered = transcriptGlossary.filter((entry) => {
-      if (editingGlossaryTerm && entry === editingGlossaryTerm) return false;
-      return entry.toLowerCase() !== term.toLowerCase();
-    });
-    setTranscriptGlossary([...filtered, term]);
-    closeGlossaryModal();
-  };
-
-  const deleteGlossaryTerm = (term: string) => {
-    setTranscriptGlossary((prev) => prev.filter((entry) => entry !== term));
-  };
+  const spellingCount = transcriptGlossary.length;
 
   return (
     <>
       <SettingsTabPanel id="voice">
-        {children}
-        <SettingsGroup title="Transcription">
-          <div className="settings-section" data-testid="settings-transcription-engine">
+        <VoicePipeline
+          steps={[
+            {
+              targetId: SECTION.trigger,
+              label: fnActive ? "You hold Fn" : "You press record",
+              value: fnActive ? "Anywhere on your Mac" : "In Harness",
+            },
+            {
+              targetId: SECTION.transcribe,
+              label: "Speech becomes text",
+              value: engineStatus?.state === "downloading" ? `${engineLabel}, downloading` : engineLabel,
+            },
+            {
+              targetId: SECTION.cleanup,
+              label: "Text gets cleaned",
+              value: !cleanupEnabled
+                ? "Off"
+                : spellingCount > 0
+                  ? `${spellingCount} preferred spelling${spellingCount === 1 ? "" : "s"}`
+                  : "On",
+              off: !cleanupEnabled,
+            },
+            {
+              targetId: SECTION.deliver,
+              label: "It lands",
+              value: autoSend ? "Sent right away" : "Waits in the composer",
+            },
+          ]}
+        />
+
+        <SettingsPane title="Trigger" id={SECTION.trigger}>
+          {isMac ? (
+            <>
+              <SettingsSwitchRow
+                id="globalFnHotkeyToggle"
+                testId="settings-global-fn-hotkey"
+                label="Hold Fn to dictate"
+                description="Works in any app. Release to stop."
+                checked={globalFnHotkey}
+                onChange={(e) => setGlobalFnHotkey(e.target.checked)}
+              />
+              {globalFnHotkey ? (
+                <VoicePermissionRows
+                  accessibilityTrusted={accessibilityTrusted}
+                  setAccessibilityTrusted={setAccessibilityTrusted}
+                  globalRecordingStatus={globalRecordingStatus}
+                  refreshGlobalRecordingStatus={refreshGlobalRecordingStatus}
+                />
+              ) : null}
+              <ExternalButtonRows />
+            </>
+          ) : (
+            <SettingsRow label="Mic button" description="Press the mic in the composer to start and stop." />
+          )}
+        </SettingsPane>
+
+        <SettingsPane title="Transcribe" id={SECTION.transcribe}>
+          <SettingsPanelBlock>
             <div
-              className="settings-system-prompt-toggle"
+              className="settings-engine-cards"
               role="radiogroup"
               aria-label="Transcription engine"
+              data-testid="settings-transcription-engine"
             >
               {TRANSCRIPTION_ENGINES.map((engine) => {
                 const selected = transcriptionEngine === engine.id;
@@ -171,42 +228,48 @@ export function VoiceSettingsTab({
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    className={`settings-system-prompt-toggle__btn${
-                      selected ? " settings-system-prompt-toggle__btn--active" : ""
-                    }`}
+                    className={`settings-engine-card${selected ? " settings-engine-card--selected" : ""}`}
                     onClick={() => setTranscriptionEngine(engine.id)}
                   >
-                    {engine.label}
+                    <span className="settings-engine-card__head">
+                      {engine.label}
+                      <span className="settings-engine-card__radio" aria-hidden />
+                    </span>
+                    <span className="settings-row__desc">{engine.description}</span>
                   </button>
                 );
               })}
             </div>
-          </div>
-          {engineDefinition ? <SettingsHint>{engineDefinition.description}</SettingsHint> : null}
+          </SettingsPanelBlock>
           {engineStatus?.state === "downloading" ? (
-            <SettingsHint className="settings-group__hint--busy">
-              <Loader2 size={14} className="voice-spinner" aria-hidden />
-              Downloading the model. Apple Speech is used until it's ready.
-            </SettingsHint>
+            <SettingsRow
+              label="Downloading the model"
+              description="Apple Speech is used until it's ready."
+              leading={<Loader2 size={16} className="voice-spinner" aria-hidden />}
+            />
           ) : null}
           {engineStatus?.state === "failed" ? (
-            <>
-              <SettingsHint>
-                Model download failed{engineStatus.error ? `: ${engineStatus.error}` : "."} Apple
-                Speech is used instead.
-              </SettingsHint>
-              <SettingsActions>
-                <button type="button" className="btn" onClick={() => void retryEngineDownload()}>
-                  Retry download
-                </button>
-              </SettingsActions>
-            </>
+            <SettingsRow
+              label="The model didn't download"
+              description={`${engineStatus.error ? `${engineStatus.error}. ` : ""}Apple Speech is used instead.`}
+            >
+              <button type="button" className="btn btn-sm" onClick={() => void retryEngineDownload()}>
+                Retry download
+              </button>
+            </SettingsRow>
           ) : null}
-        </SettingsGroup>
-        <SettingsGroup title="Cleanup">
-          <SettingsSwitch
+          {engineStatus?.state === "ready" ? (
+            <SettingsRow label="Model" description="Downloaded and ready on this Mac.">
+              <SettingsPill tone="ok">Ready</SettingsPill>
+            </SettingsRow>
+          ) : null}
+        </SettingsPane>
+
+        <SettingsPane title="Clean up" id={SECTION.cleanup}>
+          <SettingsSwitchRow
             id="transcriptCleanupToggle"
             label="Clean up transcripts"
+            description="Removes filler words and fixes punctuation with your chat model."
             checked={cleanupEnabled}
             onChange={(e) => {
               const enabled = e.target.checked;
@@ -214,53 +277,81 @@ export function VoiceSettingsTab({
               if (!enabled) setCleanupPromptModalOpen(false);
             }}
           />
-          {cleanupEnabled ? (
-            <SettingsActions>
-              <button type="button" className="btn" onClick={openCleanupPromptModal}>
-                Edit Prompt
-              </button>
-            </SettingsActions>
-          ) : null}
           {cleanupEnabled && !openAIConfigured ? (
-            <SettingsHint>
-              Cleanup needs a model: an OpenAI API key in {settingsSection("Accounts")}, or another
-              provider in {settingsSection("Model")}.
-            </SettingsHint>
+            <SettingsRow
+              label="Needs a chat model"
+              description={`Add an OpenAI key, or pick another provider, in ${settingsSection("Connections")}.`}
+            />
           ) : null}
+          {cleanupEnabled ? (
+            <>
+              <SettingsPanelBlock>
+                <div className="settings-row__text">
+                  <label className="settings-row__label" htmlFor="settings-spellings-input">
+                    Preferred spellings
+                  </label>
+                  <span className="settings-row__desc">
+                    Names and terms cleanup should prefer, including close variants.
+                  </span>
+                </div>
+                <SpellingTagInput
+                  id="settings-spellings-input"
+                  terms={transcriptGlossary}
+                  setTerms={setTranscriptGlossary}
+                />
+                <div className="settings-cleanup-example" aria-label="Example">
+                  <div className="settings-cleanup-example__side">
+                    <span className="settings-cleanup-example__label">Heard</span>
+                    <span className="settings-cleanup-example__heard">
+                      um, so ask cloud code to, uh, check the harness build
+                    </span>
+                  </div>
+                  <ArrowRight size={14} className="settings-cleanup-example__arrow" aria-hidden />
+                  <div className="settings-cleanup-example__side">
+                    <span className="settings-cleanup-example__label">Cleaned</span>
+                    <span className="settings-cleanup-example__clean">
+                      Ask <mark>Claude Code</mark> to check the <mark>Harness</mark> build.
+                    </span>
+                  </div>
+                </div>
+              </SettingsPanelBlock>
+              <SettingsRow label="Prompt" description="The instructions cleanup follows.">
+                <button type="button" className="btn btn-sm" onClick={openCleanupPromptModal}>
+                  Edit
+                </button>
+              </SettingsRow>
+            </>
+          ) : null}
+        </SettingsPane>
 
-          <SettingsSubsection
-            title="Preferred spellings"
-            description={
-              cleanupEnabled
-                ? "Names and terms cleanup should prefer, including close variants."
-                : "Turn on cleanup to apply these names and terms, including close variants."
-            }
-          >
-            {transcriptGlossary.length === 0 ? (
-              <SettingsHint flush>No preferred spellings yet.</SettingsHint>
-            ) : (
-              <div className="settings-entry-list">
-                {transcriptGlossary.map((term) => (
-                  <SettingsEntryRow
-                    key={term}
-                    title={term}
-                    onEdit={() => openEditGlossaryModal(term)}
-                    onDelete={() => deleteGlossaryTerm(term)}
-                    editAriaLabel={`Edit preferred spelling ${term}`}
-                    deleteAriaLabel={`Remove preferred spelling ${term}`}
-                  />
-                ))}
-              </div>
-            )}
-            <SettingsActions>
-              <button type="button" className="btn" onClick={openAddGlossaryModal}>
-                Add spelling
-              </button>
-            </SettingsActions>
-          </SettingsSubsection>
-        </SettingsGroup>
+        <SettingsPane title="Deliver" id={SECTION.deliver}>
+          <SettingsSwitchRow
+            id="autoSendToggle"
+            testId="settings-auto-send"
+            label="Send after dictation"
+            description="Off leaves the text in the composer to edit first."
+            checked={autoSend}
+            onChange={(e) => setAutoSend(e.target.checked)}
+          />
+          <SettingsSwitchRow
+            id="bringToFrontOnBackgroundDictationToggle"
+            testId="settings-bring-to-front-background-dictation"
+            label="Bring Harness forward"
+            description="When you dictate from another app."
+            checked={bringToFrontOnBackgroundDictation}
+            onChange={(e) => setBringToFrontOnBackgroundDictation(e.target.checked)}
+          />
+        </SettingsPane>
 
-        <RecentRecordingsSection />
+        <SettingsPane
+          title="Recordings"
+          description="Audio is saved even when transcription fails. Retry sends a take through dictation again."
+        >
+          <RecentRecordingsRows />
+          <SettingsDisclosure label="Dictation timing" description="How long each step took, last five.">
+            <DictationTimingBody />
+          </SettingsDisclosure>
+        </SettingsPane>
       </SettingsTabPanel>
 
       <Modal
@@ -300,37 +391,6 @@ export function VoiceSettingsTab({
         </div>
       </Modal>
 
-      <Modal
-        open={glossaryModalOpen}
-        onClose={closeGlossaryModal}
-        title={editingGlossaryTerm ? "Edit preferred spelling" : "Add preferred spelling"}
-        footer={
-          <>
-            <button type="button" className="btn" onClick={closeGlossaryModal}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={saveGlossaryTerm}
-              disabled={!glossaryDraft.trim()}
-            >
-              {editingGlossaryTerm ? "Update" : "Save"}
-            </button>
-          </>
-        }
-      >
-        <label className="app-modal-field">
-          <span className="app-modal-field__label">Name or term</span>
-          <input
-            type="text"
-            value={glossaryDraft}
-            onChange={(e) => setGlossaryDraft(e.target.value)}
-            className="app-modal-input"
-            autoComplete="off"
-          />
-        </label>
-      </Modal>
     </>
   );
 }

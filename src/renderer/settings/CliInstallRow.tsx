@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SettingsGroup } from "./SettingsGroup";
+import { SettingsPanelBlock, SettingsRow } from "./SettingsPanel";
 
 type InstallState =
   | { kind: "idle" }
@@ -7,8 +7,8 @@ type InstallState =
   | { kind: "done"; path: string; onPath: boolean }
   | { kind: "error"; message: string };
 
-/** Installs the `harness <path>` shell command. */
-export function CliInstallSection() {
+/** Panel row that installs the `harness <path>` shell command. */
+export function CliInstallRow() {
   const [state, setState] = useState<InstallState>({ kind: "idle" });
 
   const install = async () => {
@@ -22,16 +22,16 @@ export function CliInstallSection() {
   };
 
   return (
-    <SettingsGroup
-      title="Command line"
-      description={
-        <>
-          Open files from the terminal with <code>harness notes.md</code>. Markdown and text files
-          open in their own editor window and save in place.
-        </>
-      }
-    >
-      <div className="cli-install">
+    <>
+      <SettingsRow
+        label="Command line"
+        description={
+          <>
+            Open files from the terminal with <code>harness notes.md</code>. They open in their own
+            editor window and save in place.
+          </>
+        }
+      >
         <button
           type="button"
           className="btn btn-sm"
@@ -39,18 +39,22 @@ export function CliInstallSection() {
           disabled={state.kind === "installing"}
           data-testid="settings-install-cli"
         >
-          {state.kind === "done" ? "Reinstall harness command" : "Install harness command"}
+          {state.kind === "done" ? "Reinstall" : "Install"}
         </button>
-        {state.kind === "done" ? (
-          <p className="cli-install__result">
+      </SettingsRow>
+      {state.kind === "done" ? (
+        <SettingsPanelBlock>
+          <p className="settings-row__desc">
             Installed at <code>{state.path}</code>.
             {state.onPath ? null : " Add its folder to your PATH to use it."}
           </p>
-        ) : null}
-        {state.kind === "error" ? (
-          <p className="cli-install__result cli-install__result--error">{state.message}</p>
-        ) : null}
-      </div>
-    </SettingsGroup>
+        </SettingsPanelBlock>
+      ) : null}
+      {state.kind === "error" ? (
+        <SettingsPanelBlock>
+          <p className="settings-inline-error">{state.message}</p>
+        </SettingsPanelBlock>
+      ) : null}
+    </>
   );
 }

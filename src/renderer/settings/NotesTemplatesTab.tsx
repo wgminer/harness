@@ -10,7 +10,7 @@ import {
   type NoteTemplateConfig,
 } from "../../shared/writing";
 import { Modal } from "../ui/Modal";
-import { SettingsGroup } from "./SettingsGroup";
+import { SettingsPane } from "./SettingsPanel";
 import { SettingsTabPanel } from "./SettingsTabPanel";
 
 export interface NotesTemplatesTabProps {
@@ -20,7 +20,7 @@ export interface NotesTemplatesTabProps {
     nextTemplates: NoteTemplateConfig[],
     nextDefaultId: string,
   ) => void | Promise<void>;
-  /** Groups rendered above the templates (e.g. window behavior). */
+  /** Panes rendered above the templates (e.g. opening behavior). */
   children?: ReactNode;
 }
 
@@ -112,7 +112,7 @@ export function NotesTemplatesTab({
     <>
       <SettingsTabPanel id="notes">
         {children}
-        <SettingsGroup title="Editor templates">
+        <SettingsPane title="Templates" description="What a new note starts with. Click one to edit it." bare>
           <div className="settings-template-grid">
             {noteTemplates.map((template) => {
               const isDefault = template.id === defaultNoteTemplateId;
@@ -149,7 +149,7 @@ export function NotesTemplatesTab({
               <span className="settings-template-card__add-label">Add template</span>
             </button>
           </div>
-        </SettingsGroup>
+        </SettingsPane>
       </SettingsTabPanel>
 
       <Modal

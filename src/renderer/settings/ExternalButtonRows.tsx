@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ExternalButtonStatus } from "../../shared/desktopAPI";
 import { SecretField } from "./SecretField";
-import { SettingsActions } from "./SettingsActions";
 import { SettingsField } from "./SettingsField";
-import { SettingsGroup } from "./SettingsGroup";
-import { SettingsHint } from "./SettingsHint";
-import { SettingsSwitch } from "./SettingsSwitch";
+import { SettingsPanelBlock, SettingsSwitchRow } from "./SettingsPanel";
 
 function statusLine(status: ExternalButtonStatus): string {
   switch (status.state) {
@@ -30,8 +27,8 @@ function micLine(status: ExternalButtonStatus): string {
   return "Dictation records from the Voice PE. Slide its side switch to mute it.";
 }
 
-/** Voice PE centre button over the ESPHome API, standing in for the Fn key. */
-export function ExternalButtonSettingsGroup() {
+/** Voice PE centre button over the ESPHome API, standing in for the Fn key. Panel rows. */
+export function ExternalButtonRows() {
   const [status, setStatus] = useState<ExternalButtonStatus | null>(null);
   const [host, setHost] = useState("");
   const [key, setKey] = useState("");
@@ -70,68 +67,64 @@ export function ExternalButtonSettingsGroup() {
   const hostChanged = host.trim() !== status.host;
 
   return (
-    <SettingsGroup title="External button">
-      <SettingsSwitch
+    <>
+      <SettingsSwitchRow
         id="externalButtonToggle"
         testId="settings-external-button"
         label="Voice PE button"
+        description="Press the centre button of a Home Assistant Voice PE instead of holding Fn."
         checked={status.enabled}
         disabled={busy}
         onChange={(e) => void save({ enabled: e.target.checked, host })}
       />
       {status.enabled ? (
-        <>
-          <SettingsField label="Host" htmlFor="settings-external-button-host">
-            <input
-              id="settings-external-button-host"
-              type="text"
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
-              onBlur={() => {
-                if (hostChanged) void save({ enabled: true, host });
-              }}
-              placeholder="voicepe.local"
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </SettingsField>
-          <SettingsField label="Encryption key" htmlFor="settings-external-button-key">
-            <SecretField
-              id="settings-external-button-key"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              ariaLabel="Voice PE encryption key"
-              placeholder={status.keyConfigured ? "Saved" : "api_key from the ESPHome config"}
-            />
-          </SettingsField>
-          {key.trim() ? (
-            <SettingsActions>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={busy}
-                onClick={() => void save({ enabled: true, host, key: key.trim() })}
-              >
-                Save key
-              </button>
-            </SettingsActions>
-          ) : null}
+        <SettingsPanelBlock>
+          <div className="settings-field-grid">
+            <SettingsField label="Host" htmlFor="settings-external-button-host">
+              <input
+                id="settings-external-button-host"
+                type="text"
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                onBlur={() => {
+                  if (hostChanged) void save({ enabled: true, host });
+                }}
+                placeholder="voicepe.local"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </SettingsField>
+            <SettingsField label="Encryption key" htmlFor="settings-external-button-key">
+              <SecretField
+                id="settings-external-button-key"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                onBlur={() => {
+                  if (key.trim()) void save({ enabled: true, host, key: key.trim() });
+                }}
+                ariaLabel="Voice PE encryption key"
+                placeholder={status.keyConfigured ? "Saved" : "api_key from the ESPHome config"}
+              />
+            </SettingsField>
+          </div>
           {error ? (
-            <p className="settings-import-status__errors">{error}</p>
+            <p className="settings-inline-error">{error}</p>
           ) : (
-            <SettingsHint>{statusLine(status)}</SettingsHint>
+            <p className="settings-row__desc">{statusLine(status)}</p>
           )}
-          <SettingsSwitch
-            id="externalButtonMicToggle"
-            testId="settings-external-button-mic"
-            label="Record from the Voice PE mic"
-            checked={status.useMic}
-            disabled={busy}
-            onChange={(e) => void save({ enabled: true, host, useMic: e.target.checked })}
-          />
-          {status.useMic ? <SettingsHint>{micLine(status)}</SettingsHint> : null}
-        </>
+        </SettingsPanelBlock>
       ) : null}
-    </SettingsGroup>
+      {status.enabled ? (
+        <SettingsSwitchRow
+          id="externalButtonMicToggle"
+          testId="settings-external-button-mic"
+          label="Record from the Voice PE mic"
+          description={status.useMic ? micLine(status) : "Off records from the Mac mic."}
+          checked={status.useMic}
+          disabled={busy}
+          onChange={(e) => void save({ enabled: true, host, useMic: e.target.checked })}
+        />
+      ) : null}
+    </>
   );
 }

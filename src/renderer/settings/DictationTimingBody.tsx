@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import type { DictationTiming } from "../../shared/desktopAPI";
 import { formatMediumTimestamp } from "../../shared/formatMediumTimestamp";
 import { SettingsActions } from "./SettingsActions";
-import { SettingsGroup } from "./SettingsGroup";
 import { SettingsHint } from "./SettingsHint";
 import { dictationTimeline, formatSeconds } from "./dictationTimeline";
 
@@ -60,8 +59,8 @@ function DictationTimingCard({ timing }: { timing: DictationTiming }) {
   );
 }
 
-/** Step-by-step timing for the last few dictations. */
-export function DictationTimingSection() {
+/** Step-by-step timing for the last few dictations; the body of a disclosure. */
+export function DictationTimingBody() {
   const [timings, setTimings] = useState<DictationTiming[] | null>(null);
 
   const refresh = useCallback(() => {
@@ -76,12 +75,11 @@ export function DictationTimingSection() {
   }, [refresh]);
 
   return (
-    <SettingsGroup
-      title="Dictation timing"
-      description="The last five, newest first. Bars that overlap ran at the same time; the line marks when the text was ready."
-      collapsible
-      defaultOpen={false}
-    >
+    <>
+      <SettingsHint flush>
+        The last five, newest first. Bars that overlap ran at the same time; the line marks when the
+        text was ready.
+      </SettingsHint>
       {timings && timings.length > 0 ? (
         <div className="settings-entry-list">
           {timings.map((t) => (
@@ -92,10 +90,10 @@ export function DictationTimingSection() {
         <SettingsHint flush>No dictations recorded yet.</SettingsHint>
       ) : null}
       <SettingsActions>
-        <button type="button" className="btn" onClick={refresh}>
+        <button type="button" className="btn btn-sm" onClick={refresh}>
           Refresh
         </button>
       </SettingsActions>
-    </SettingsGroup>
+    </>
   );
 }

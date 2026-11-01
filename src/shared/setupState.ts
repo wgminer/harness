@@ -7,12 +7,12 @@ export interface SetupGap {
   title: string;
   detail: string;
   /** Settings tab to open when the user chooses "Set up". */
-  settingsTab: "general" | "voice" | "accounts";
+  settingsTab: "general" | "voice" | "connections" | "data";
   severity: "required" | "recommended";
 }
 
 export function chatRequiresApiKeyMessage(): string {
-  return `Chat needs a model. Add an OpenAI API key in ${settingsSection("Accounts")}, or pick another provider in ${settingsSection("Model")}.`;
+  return `Chat needs a model. Add an OpenAI API key, or pick another provider, in ${settingsSection("Connections")}.`;
 }
 
 export function collectSetupGaps(input: {
@@ -29,7 +29,7 @@ export function collectSetupGaps(input: {
       title: "OpenAI API key",
       detail:
         "Chat, polish, and optional transcript cleanup need an API key. Voice transcription runs locally on your Mac without one.",
-      settingsTab: "accounts",
+      settingsTab: "connections",
       severity: "required",
     });
   }
@@ -40,7 +40,7 @@ export function collectSetupGaps(input: {
       title: "Cloud sync (R2)",
       detail:
         "Connect a Cloudflare R2 bucket to sync conversations and settings across devices.",
-      settingsTab: "accounts",
+      settingsTab: "data",
       severity: "recommended",
     });
   }
