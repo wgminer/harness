@@ -4,7 +4,8 @@
 //! 6053) and feeds button edges into the same path as Fn. Host and the enable
 //! switch are per profile (`external-button.json`), so Harness and Harness Dev
 //! do not both claim the button; the encryption key lives in the credential
-//! store.
+//! store. The LED ring follows the tray icon: dim when ready, red while
+//! recording, pulsing while the take is processed.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -13,21 +14,28 @@ use std::time::Duration;
 use base64::Engine;
 use esphome_client::error::ClientError;
 use esphome_client::types::{
-    DisconnectResponse, EspHomeMessage, ListEntitiesRequest, PingRequest, SubscribeStatesRequest,
+    DisconnectResponse, EspHomeMessage, LightCommandRequest, ListEntitiesRequest, PingRequest,
+    SubscribeStatesRequest,
 };
-use esphome_client::EspHomeClient;
+use esphome_client::{EspHomeClient, EspHomeClientWriteStream};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
 use crate::credentials::{get_credential, set_credential, CredentialKey};
 use crate::paths::get_app_state_dir;
 use crate::recording::global::{dispatch_fn_edge, GlobalRecordingRuntime};
+use crate::recording::global_effects::TrayIconState;
 
 const DEFAULT_HOST: &str = "voicepe.local";
 const API_PORT: u16 = 6053;
 const BUTTON_NAME: &str = "Center button";
 const BUTTON_OBJECT_ID: &str = "center_button";
+const RING_OBJECT_ID: &str = "led_ring";
+/// Effect name from the firmware's `led_ring` light.
+const RING_PULSE: &str = "Pulse";
+const RING_OFF_TIMEOUT: Duration = Duration::from_millis(500);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Quiet this long and we ping; quiet for two in a row and the device is gone.
 const PING_INTERVAL: Duration = Duration::from_secs(20);
@@ -98,16 +106,28 @@ pub struct ExternalButtonStatus {
     pub message: Option<String>,
 }
 
+/// What the LED ring shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Ring {
+    Off,
+    Ready,
+    Recording,
+    Processing,
+}
+
 struct Inner {
     config: Config,
     state: ConnectionState,
     message: Option<String>,
     cancel: Option<CancellationToken>,
+    /// Writer and light key of the live connection, to switch the ring off on quit.
+    ring: Option<(EspHomeClientWriteStream, u32)>,
 }
 
 pub struct ExternalButton {
     runtime: Arc<GlobalRecordingRuntime>,
     inner: Mutex<Inner>,
+    activity: watch::Sender<Ring>,
 }
 
 impl ExternalButton {
@@ -119,8 +139,36 @@ impl ExternalButton {
                 state: ConnectionState::Off,
                 message: None,
                 cancel: None,
+                ring: None,
             }),
+            activity: watch::channel(Ring::Ready).0,
         })
+    }
+
+    /// Mirrors a tray icon change on the ring, whether or not a device is connected.
+    pub fn show_activity(app: &AppHandle, state: TrayIconState) {
+        let Some(button) = app.try_state::<Arc<ExternalButton>>() else {
+            return;
+        };
+        button.activity.send_replace(match state {
+            TrayIconState::Ready => Ring::Ready,
+            TrayIconState::Recording => Ring::Recording,
+            TrayIconState::Processing => Ring::Processing,
+        });
+    }
+
+    /// Switches the ring off before the app quits so it does not stay lit.
+    pub fn shutdown(&self) {
+        let Some((writer, key)) = self.inner.lock().unwrap().ring.take() else {
+            return;
+        };
+        tauri::async_runtime::block_on(async {
+            let _ = tokio::time::timeout(
+                RING_OFF_TIMEOUT,
+                writer.try_write(ring_command(key, Ring::Off)),
+            )
+            .await;
+        });
     }
 
     pub fn status(&self) -> ExternalButtonStatus {
@@ -213,7 +261,7 @@ async fn run(
     loop {
         let ended = tokio::select! {
             _ = cancel.cancelled() => None,
-            ended = session(&app, &button, &host, &key, &held) => Some(ended),
+            ended = session(&app, &button, &host, &key, &held, &cancel) => Some(ended),
         };
         // Losing the connection mid-press must not leave a recording running.
         if held.swap(false, Ordering::SeqCst) {
@@ -252,6 +300,7 @@ async fn session(
     host: &str,
     key: &str,
     held: &AtomicBool,
+    cancel: &CancellationToken,
 ) -> Ended {
     let mut client = match EspHomeClient::builder()
         .address(&format!("{host}:{API_PORT}"))
@@ -265,9 +314,11 @@ async fn session(
         Err(e) => return classify(e),
     };
 
-    let button_key = match find_button(&mut client).await {
-        Ok(Some(k)) => k,
-        Ok(None) => return Ended::Failed(format!("The device at {host} has no \"{BUTTON_NAME}\".")),
+    let (button_key, ring_key) = match find_entities(&mut client).await {
+        Ok((Some(k), ring)) => (k, ring),
+        Ok((None, _)) => {
+            return Ended::Failed(format!("The device at {host} has no \"{BUTTON_NAME}\"."))
+        }
         Err(e) => return classify(e),
     };
     if let Err(e) = client.try_write(SubscribeStatesRequest {}).await {
@@ -275,6 +326,7 @@ async fn session(
     }
     button.set_state(app, ConnectionState::Connected, None);
     eprintln!("[Harness:recording] external button connected to {host}");
+    let _ring = ring_key.map(|key| RingLink::start(button, client.write_stream(), key, cancel));
 
     let mut seen_first = false;
     let mut awaiting_pong = false;
@@ -313,19 +365,122 @@ async fn session(
     }
 }
 
-async fn find_button(client: &mut EspHomeClient) -> Result<Option<u32>, ClientError> {
+/// Keys of the centre button and, when the firmware has one, the LED ring.
+async fn find_entities(
+    client: &mut EspHomeClient,
+) -> Result<(Option<u32>, Option<u32>), ClientError> {
     client.try_write(ListEntitiesRequest {}).await?;
-    let mut found = None;
+    let mut button = None;
+    let mut ring = None;
     loop {
         match client.try_read().await? {
             EspHomeMessage::ListEntitiesBinarySensorResponse(entity)
                 if entity.name == BUTTON_NAME || entity.object_id == BUTTON_OBJECT_ID =>
             {
-                found = Some(entity.key);
+                button = Some(entity.key);
             }
-            EspHomeMessage::ListEntitiesDoneResponse(_) => return Ok(found),
+            EspHomeMessage::ListEntitiesLightResponse(entity)
+                if entity.object_id == RING_OBJECT_ID =>
+            {
+                ring = Some(entity.key);
+            }
+            EspHomeMessage::ListEntitiesDoneResponse(_) => return Ok((button, ring)),
             _ => {}
         }
+    }
+}
+
+/// Keeps the ring in step with recording activity for one connection. Dropping
+/// it, when the connection ends, stops the updates.
+struct RingLink<'a> {
+    button: &'a ExternalButton,
+    ended: CancellationToken,
+}
+
+impl<'a> RingLink<'a> {
+    fn start(
+        button: &'a ExternalButton,
+        writer: EspHomeClientWriteStream,
+        key: u32,
+        cancel: &CancellationToken,
+    ) -> Self {
+        button.inner.lock().unwrap().ring = Some((writer.clone(), key));
+        let ended = CancellationToken::new();
+        tauri::async_runtime::spawn(drive_ring(
+            writer,
+            key,
+            button.activity.subscribe(),
+            cancel.clone(),
+            ended.clone(),
+        ));
+        Self { button, ended }
+    }
+}
+
+impl Drop for RingLink<'_> {
+    fn drop(&mut self) {
+        self.ended.cancel();
+        self.button.inner.lock().unwrap().ring = None;
+    }
+}
+
+async fn drive_ring(
+    writer: EspHomeClientWriteStream,
+    key: u32,
+    mut activity: watch::Receiver<Ring>,
+    cancel: CancellationToken,
+    ended: CancellationToken,
+) {
+    loop {
+        let ring = *activity.borrow_and_update();
+        if writer.try_write(ring_command(key, ring)).await.is_err() {
+            return;
+        }
+        tokio::select! {
+            // Turned off in Settings: leave the ring dark. Checked first because
+            // the connection ends at the same moment.
+            biased;
+            _ = cancel.cancelled() => {
+                let _ = writer.try_write(ring_command(key, Ring::Off)).await;
+                return;
+            }
+            _ = ended.cancelled() => return,
+            changed = activity.changed() => {
+                if changed.is_err() {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+fn ring_command(key: u32, ring: Ring) -> LightCommandRequest {
+    let ([red, green, blue], brightness, effect) = match ring {
+        Ring::Off => {
+            return LightCommandRequest {
+                key,
+                has_state: true,
+                state: false,
+                ..Default::default()
+            }
+        }
+        Ring::Ready => ([1.0, 1.0, 1.0], 0.15, "None"),
+        Ring::Recording => ([1.0, 0.08, 0.04], 0.8, "None"),
+        Ring::Processing => ([0.3, 0.5, 1.0], 0.6, RING_PULSE),
+    };
+    LightCommandRequest {
+        key,
+        has_state: true,
+        state: true,
+        has_brightness: true,
+        brightness,
+        has_rgb: true,
+        red,
+        green,
+        blue,
+        has_effect: true,
+        effect: effect.to_string(),
+        ..Default::default()
     }
 }
 
@@ -384,6 +539,20 @@ mod tests {
     #[test]
     fn lost_press_still_pairs_edges() {
         assert_eq!(button_edges(false, false, false), ["down", "up"]);
+    }
+
+    #[test]
+    fn ring_off_only_sets_state() {
+        let off = ring_command(7, Ring::Off);
+        assert!(off.has_state && !off.state);
+        assert!(!off.has_rgb && !off.has_effect);
+    }
+
+    #[test]
+    fn ring_pulses_only_while_processing() {
+        assert_eq!(ring_command(7, Ring::Processing).effect, RING_PULSE);
+        assert_eq!(ring_command(7, Ring::Recording).effect, "None");
+        assert_eq!(ring_command(7, Ring::Ready).effect, "None");
     }
 
     #[test]

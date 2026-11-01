@@ -8,6 +8,7 @@ use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 use crate::memory::title::finalize_voice_dictation_session;
 use crate::recording::chime::{self, Chime};
+use crate::recording::external_button::ExternalButton;
 use crate::recording::dictation_index;
 use crate::env_util::is_harness_e2e;
 use crate::recording::global_capture::{NativeCapture, TARGET_SAMPLE_RATE};
@@ -61,6 +62,7 @@ pub async fn set_tray_state(
     runtime: &GlobalRecordingRuntime,
     state: TrayIconState,
 ) {
+    ExternalButton::show_activity(app, state);
     let Some(tray_id) = runtime.tray_id.lock().await.clone() else {
         return;
     };
