@@ -179,7 +179,7 @@ export function useChatComposer({
       const settings = (await window.harness.settings.get()) as Settings;
       const credentialStatus = await window.harness.credentials.getStatus();
       const autoSend = settings.recording?.autoSend ?? true;
-      const canChat = credentialStatus.hasOpenAIApiKey;
+      const canChat = credentialStatus.chatModelReady;
       if (autoSend && canChat && !pendingHotkeyDraftOnly) {
         return submitMessageRef.current(trimmed, {
           fromDictation: true,

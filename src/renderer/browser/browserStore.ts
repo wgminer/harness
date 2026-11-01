@@ -20,6 +20,7 @@ export type KeyValueStore = {
 
 export type BrowserSecrets = {
   openaiApiKey: string;
+  anthropicApiKey: string;
   tavilyApiKey: string;
   r2SecretAccessKey: string;
   googleApiKey: string;
@@ -50,6 +51,7 @@ export type BrowserState = {
 
 const EMPTY_SECRETS: BrowserSecrets = {
   openaiApiKey: "",
+  anthropicApiKey: "",
   tavilyApiKey: "",
   r2SecretAccessKey: "",
   googleApiKey: "",

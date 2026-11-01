@@ -72,10 +72,8 @@ export interface VoiceSettingsTabProps {
   setTranscriptGlossary: Dispatch<SetStateAction<string[]>>;
   transcriptionEngine: TranscriptionEngineId;
   setTranscriptionEngine: (value: TranscriptionEngineId) => void;
-  /** True when OpenAI key is known configured (before secrets hydrate). */
+  /** True when the provider in Model can run (its key is saved, or it is local). */
   openAIConfigured: boolean;
-  secretsLoaded: boolean;
-  apiKey: string;
   /** Dictation behavior group, rendered above Cleanup. */
   children?: ReactNode;
 }
@@ -90,8 +88,6 @@ export function VoiceSettingsTab({
   transcriptionEngine,
   setTranscriptionEngine,
   openAIConfigured,
-  secretsLoaded,
-  apiKey,
   children,
 }: VoiceSettingsTabProps) {
   const [cleanupPromptDraft, setCleanupPromptDraft] = useState(cleanupPrompt);
@@ -225,10 +221,10 @@ export function VoiceSettingsTab({
               </button>
             </SettingsActions>
           ) : null}
-          {cleanupEnabled &&
-          !(secretsLoaded ? apiKey.trim().length > 0 : openAIConfigured) ? (
+          {cleanupEnabled && !openAIConfigured ? (
             <SettingsHint>
-              Cleanup needs an OpenAI API key in {settingsSection("Accounts")}.
+              Cleanup needs a model: an OpenAI API key in {settingsSection("Accounts")}, or another
+              provider in {settingsSection("Model")}.
             </SettingsHint>
           ) : null}
 

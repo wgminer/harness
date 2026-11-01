@@ -29,7 +29,6 @@ use tokio::process::Command as TokioCommand;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::credentials::resolve_openai_api_key;
 use crate::env_util::is_harness_e2e;
 use crate::memory::show_item_in_folder;
 use crate::paths::{get_recordings_dir, resolve_bundled_resource};
@@ -38,7 +37,6 @@ use crate::recording::transcript_cleanup::{append_preferred_spellings, resolve_g
 pub use crate::recording::transcription_engine::{TranscriptionEngine, DEFAULT_TRANSCRIPTION_ENGINE};
 use crate::recording::transcription_engine::{parakeet_status, start_parakeet_prepare, EngineStatus};
 
-const OPENAI_TRANSCRIPT_CLEANUP_MODEL: &str = "gpt-6-luna";
 const HARNESS_E2E_TRANSCRIBE_TEXT: &str = "E2E transcribed text.";
 
 const EXIT_PERMISSION_DENIED: i32 = 2;
@@ -329,42 +327,28 @@ fn resolve_cleanup_output(original: &str, cleaned: &str) -> String {
 
 async fn run_transcript_cleanup(
     text: &str,
-    api_key: &str,
+    provider: &crate::llm::Provider,
     user_instructions: &str,
 ) -> Result<String, String> {
     let system_prompt = build_cleanup_system_prompt(user_instructions);
     let user_message = build_cleanup_user_message(text);
 
-    let client = reqwest::Client::new();
-    let timer = StepTimer::start("Cleanup", OPENAI_TRANSCRIPT_CLEANUP_MODEL);
-    let body = serde_json::json!({
-        "model": OPENAI_TRANSCRIPT_CLEANUP_MODEL,
-        "messages": [
-            { "role": "system", "content": system_prompt },
-            { "role": "user", "content": user_message }
-        ],
-        "reasoning_effort": crate::openai::SMALL_MODEL_REASONING_EFFORT
-    });
-
-    let response = client
-        .post("https://api.openai.com/v1/chat/completions")
-        .bearer_auth(api_key)
-        .json(&body)
-        .timeout(cleanup_timeout(text))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let parsed: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    let timer = StepTimer::start("Cleanup", provider.model(crate::llm::ModelTier::Cleanup));
+    let cleaned = crate::llm::complete(
+        provider,
+        crate::llm::Completion {
+            tier: crate::llm::ModelTier::Cleanup,
+            system: &system_prompt,
+            user: &user_message,
+            max_tokens: None,
+            reasoning_effort: crate::openai::SMALL_MODEL_REASONING_EFFORT,
+            json: false,
+            timeout: cleanup_timeout(text),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
     timer.ok();
-    let cleaned = parsed
-        .get("choices")
-        .and_then(|v| v.get(0))
-        .and_then(|v| v.get("message"))
-        .and_then(|v| v.get("content"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
     Ok(resolve_cleanup_output(text, &cleaned))
 }
 
@@ -391,13 +375,12 @@ async fn polish_transcript(
         };
     }
 
-    let key = resolve_openai_api_key().await.trim().to_string();
-    if key.is_empty() {
+    let Ok(provider) = crate::llm::Provider::active().await else {
         return TranscriptPolish {
             text,
             cleanup_skipped: Some("no_api_key".into()),
         };
-    }
+    };
 
     let cleanup_prompt = settings
         .get("transcription")
@@ -416,7 +399,7 @@ async fn polish_transcript(
     let glossary = resolve_glossary(settings.get("transcription"));
     let instructions = append_preferred_spellings(&cleanup_prompt, &glossary);
 
-    match run_transcript_cleanup(&text, &key, &instructions).await {
+    match run_transcript_cleanup(&text, &provider, &instructions).await {
         Ok(cleaned) => TranscriptPolish {
             text: cleaned,
             cleanup_skipped: None,

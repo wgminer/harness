@@ -1,10 +1,9 @@
 use std::path::Path;
 
-use crate::credentials::resolve_openai_api_key;
+use crate::llm::{Completion, ModelTier, Provider};
 use crate::state::AppState;
 use crate::memory::get_memory_dir;
 use crate::memory::distill::{merge_memories, parse_memories_response, DistilledMemory, MemoryCompileLlm};
-use crate::openai::{chat_completion_json, openai_transcript_cleanup_model};
 
 pub const LLM_CONTEXT_IMPORT_CHAR_LIMIT: usize = 80_000;
 const SETTINGS_PAGE_TITLE: &str = "System";
@@ -28,21 +27,24 @@ pub struct LlmContextImportResult {
     pub import_source: Option<String>,
 }
 
-struct OpenAiImportDistiller {
-    api_key: String,
+struct ImportDistiller {
+    provider: Provider,
 }
 
 #[async_trait::async_trait]
-impl MemoryCompileLlm for OpenAiImportDistiller {
+impl MemoryCompileLlm for ImportDistiller {
     async fn distill(&self, export_text: &str) -> Result<Vec<DistilledMemory>, String> {
-        let raw = chat_completion_json(
-            &self.api_key,
-            &openai_transcript_cleanup_model(),
-            IMPORT_SYSTEM_PROMPT,
-            export_text,
-            2500,
-            crate::openai::SMALL_MODEL_REASONING_EFFORT,
-            90,
+        let raw = crate::llm::complete(
+            &self.provider,
+            Completion {
+                tier: ModelTier::Cleanup,
+                system: IMPORT_SYSTEM_PROMPT,
+                user: export_text,
+                max_tokens: Some(2500),
+                reasoning_effort: crate::openai::SMALL_MODEL_REASONING_EFFORT,
+                json: true,
+                timeout: std::time::Duration::from_secs(90),
+            },
         )
         .await
         .map_err(|e| e.to_string())?;
@@ -80,10 +82,8 @@ fn source_memory(source: &str) -> DistilledMemory {
     }
 }
 
-pub fn create_openai_import_distiller(api_key: impl Into<String>) -> Box<dyn MemoryCompileLlm> {
-    Box::new(OpenAiImportDistiller {
-        api_key: api_key.into(),
-    })
+fn create_import_distiller(provider: Provider) -> Box<dyn MemoryCompileLlm> {
+    Box::new(ImportDistiller { provider })
 }
 
 pub async fn import_llm_context_in(
@@ -130,11 +130,7 @@ pub async fn import_llm_context_in(
 }
 
 async fn build_import_llm_from_settings() -> Option<Box<dyn MemoryCompileLlm>> {
-    let api_key = resolve_openai_api_key().await.trim().to_string();
-    if api_key.is_empty() {
-        return None;
-    }
-    Some(create_openai_import_distiller(api_key))
+    Provider::active().await.ok().map(create_import_distiller)
 }
 
 pub async fn run_llm_context_import_now(

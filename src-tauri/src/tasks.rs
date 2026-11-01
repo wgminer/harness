@@ -661,10 +661,7 @@ pub async fn breakdown_task(state: &AppState, id: &str) -> Result<TasksPayload, 
     if task.parent_id.is_some() {
         return Err("Subtasks cannot be broken down further.".into());
     }
-    let api_key = crate::credentials::resolve_openai_api_key().await.trim().to_string();
-    if api_key.is_empty() {
-        return Err("OpenAI API key required.".into());
-    }
+    let provider = crate::llm::Provider::active().await?;
     let existing: Vec<&str> = task_state
         .tasks
         .iter()
@@ -678,14 +675,17 @@ pub async fn breakdown_task(state: &AppState, id: &str) -> Result<TasksPayload, 
             existing.join("\n- ")
         ));
     }
-    let raw = crate::openai::chat_completion_json(
-        &api_key,
-        crate::openai::openai_chat_model().as_str(),
-        BREAKDOWN_SYSTEM,
-        &user,
-        2500,
-        crate::openai::CHAT_REASONING_EFFORT,
-        45,
+    let raw = crate::llm::complete(
+        &provider,
+        crate::llm::Completion {
+            tier: crate::llm::ModelTier::Chat,
+            system: BREAKDOWN_SYSTEM,
+            user: &user,
+            max_tokens: Some(2500),
+            reasoning_effort: crate::openai::CHAT_REASONING_EFFORT,
+            json: true,
+            timeout: std::time::Duration::from_secs(45),
+        },
     )
     .await
     .map_err(|e| e.to_string())?;

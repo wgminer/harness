@@ -1,0 +1,27 @@
+{
+  "default": "openai",
+  "providers": [
+    {
+      "id": "openai",
+      "label": "OpenAI",
+      "description": "OpenAI's models, with the API key in Accounts.",
+      "chatModel": "gpt-6.1-sol",
+      "smallModel": "gpt-6-luna"
+    },
+    {
+      "id": "claude",
+      "label": "Claude",
+      "description": "Anthropic's models. Needs an Anthropic API key.",
+      "chatModel": "claude-opus-5-5",
+      "smallModel": "claude-haiku-5-5"
+    },
+    {
+      "id": "local",
+      "label": "Local",
+      "description": "A model running on this Mac in Ollama or LM Studio. No API key.",
+      "chatModel": "qwen3:4b",
+      "smallModel": "qwen3:4b",
+      "defaultBaseUrl": "http://localhost:11434/v1"
+    }
+  ]
+}

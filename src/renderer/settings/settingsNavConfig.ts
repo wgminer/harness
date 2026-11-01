@@ -1,9 +1,10 @@
 import { SETTINGS_NOTES_TAB_LABEL } from "../../shared/settingsPage";
 
-export type SettingsTabId = "general" | "notes" | "voice" | "accounts" | "data";
+export type SettingsTabId = "general" | "model" | "notes" | "voice" | "accounts" | "data";
 
 export type SettingsNavIconId =
   | "SlidersHorizontal"
+  | "Cpu"
   | "StickyNote"
   | "Mic"
   | "KeyRound"
@@ -41,6 +42,24 @@ export const SETTINGS_NAV: Array<{
       "cli",
       "command line",
       "terminal",
+    ],
+  },
+  {
+    id: "model",
+    label: "Model",
+    subtitle: "OpenAI, Claude, or local",
+    icon: "Cpu",
+    keywords: [
+      "model",
+      "provider",
+      "llm",
+      "openai",
+      "claude",
+      "anthropic",
+      "local",
+      "ollama",
+      "lm studio",
+      "offline",
     ],
   },
   {
@@ -138,6 +157,7 @@ export function normalizeSettingsTab(tab: string | undefined): SettingsTabId {
   if (tab === "memory") return "data";
   if (
     tab === "general" ||
+    tab === "model" ||
     tab === "notes" ||
     tab === "voice" ||
     tab === "accounts" ||

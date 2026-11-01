@@ -31,14 +31,15 @@ export function useSetupState({ uiSessionReady }: { uiSessionReady: boolean }) {
       setCachedAccessibilityTrusted(accessibilityTrusted);
     }
     const gaps = collectSetupGaps({
-      hasOpenAIApiKey: credentialStatus.hasOpenAIApiKey,
+      // The welcome notice asks for an OpenAI key, so only nag while OpenAI is picked.
+      hasOpenAIApiKey: credentialStatus.chatProvider !== "openai" || credentialStatus.hasOpenAIApiKey,
       syncConfigured: syncStatus.configured,
       platform,
       accessibilityTrusted,
     });
     setSetupGaps(gaps);
     setWebClient(webClient);
-    setOpenAIConfigured(credentialStatus.hasOpenAIApiKey);
+    setOpenAIConfigured(credentialStatus.chatModelReady);
     setSetupStateLoaded(true);
     return gaps;
   }, []);

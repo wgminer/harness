@@ -11,6 +11,7 @@ use crate::paths::get_credentials_path;
 pub const SERVICE: &str = "com.harness.credentials";
 
 pub const KEY_OPENAI_API_KEY: &str = "openai.apiKey";
+pub const KEY_ANTHROPIC_API_KEY: &str = "anthropic.apiKey";
 pub const KEY_TAVILY_API_KEY: &str = "search.tavilyApiKey";
 pub const KEY_R2_SECRET_ACCESS_KEY: &str = "r2.secretAccessKey";
 pub const KEY_GOOGLE_API_KEY: &str = "google.apiKey";
@@ -23,6 +24,7 @@ pub const KEY_EXTERNAL_BUTTON_KEY: &str = "externalButton.encryptionKey";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CredentialKey {
     OpenAiApiKey,
+    AnthropicApiKey,
     TavilyApiKey,
     R2SecretAccessKey,
     GoogleApiKey,
@@ -37,6 +39,7 @@ impl CredentialKey {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::OpenAiApiKey => KEY_OPENAI_API_KEY,
+            Self::AnthropicApiKey => KEY_ANTHROPIC_API_KEY,
             Self::TavilyApiKey => KEY_TAVILY_API_KEY,
             Self::R2SecretAccessKey => KEY_R2_SECRET_ACCESS_KEY,
             Self::GoogleApiKey => KEY_GOOGLE_API_KEY,
@@ -51,6 +54,7 @@ impl CredentialKey {
     pub fn from_str(key: &str) -> Option<Self> {
         match key {
             KEY_OPENAI_API_KEY => Some(Self::OpenAiApiKey),
+            KEY_ANTHROPIC_API_KEY => Some(Self::AnthropicApiKey),
             KEY_TAVILY_API_KEY => Some(Self::TavilyApiKey),
             KEY_R2_SECRET_ACCESS_KEY => Some(Self::R2SecretAccessKey),
             KEY_GOOGLE_API_KEY => Some(Self::GoogleApiKey),
@@ -69,11 +73,16 @@ impl CredentialKey {
 pub struct CredentialStatus {
     #[serde(rename = "hasOpenAIApiKey")]
     pub has_open_ai_api_key: bool,
+    pub has_anthropic_api_key: bool,
     pub has_tavily_api_key: bool,
     pub has_r2_secret_access_key: bool,
     /// Includes a key supplied through the environment.
     pub has_google_api_key: bool,
     pub encryption_available: bool,
+    /// The provider text calls use (`chatProviders.json` id).
+    pub chat_provider: String,
+    /// The chosen provider has what it needs to run (its key, or none for local).
+    pub chat_model_ready: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +90,8 @@ pub struct CredentialStatus {
 pub struct SettingsSecrets {
     #[serde(rename = "openaiApiKey")]
     pub openai_api_key: String,
+    #[serde(rename = "anthropicApiKey")]
+    pub anthropic_api_key: String,
     #[serde(rename = "tavilyApiKey")]
     pub tavily_api_key: String,
     #[serde(rename = "r2SecretAccessKey")]
@@ -136,6 +147,7 @@ fn migrate_keyring_to_file_once() {
         let mut store = HashMap::new();
         for key in [
             CredentialKey::OpenAiApiKey,
+            CredentialKey::AnthropicApiKey,
             CredentialKey::TavilyApiKey,
             CredentialKey::R2SecretAccessKey,
             CredentialKey::GoogleApiKey,
@@ -256,6 +268,7 @@ pub fn delete_credential(key: CredentialKey) -> Result<(), keyring::Error> {
 pub async fn get_secrets_for_settings() -> SettingsSecrets {
     SettingsSecrets {
         openai_api_key: get_credential(CredentialKey::OpenAiApiKey).unwrap_or_default(),
+        anthropic_api_key: get_credential(CredentialKey::AnthropicApiKey).unwrap_or_default(),
         tavily_api_key: get_credential(CredentialKey::TavilyApiKey).unwrap_or_default(),
         r2_secret_access_key: get_credential(CredentialKey::R2SecretAccessKey).unwrap_or_default(),
         google_api_key: get_credential(CredentialKey::GoogleApiKey).unwrap_or_default(),
@@ -264,12 +277,16 @@ pub async fn get_secrets_for_settings() -> SettingsSecrets {
 
 pub async fn get_credential_status() -> CredentialStatus {
     let secrets = get_secrets_for_settings().await;
+    let chat = crate::llm::chat_provider_status().await;
     CredentialStatus {
         has_open_ai_api_key: !secrets.openai_api_key.trim().is_empty(),
+        has_anthropic_api_key: !secrets.anthropic_api_key.trim().is_empty(),
         has_tavily_api_key: !secrets.tavily_api_key.trim().is_empty(),
         has_r2_secret_access_key: !secrets.r2_secret_access_key.trim().is_empty(),
         has_google_api_key: !resolve_google_api_key().await.trim().is_empty(),
         encryption_available: encryption_available(),
+        chat_provider: chat.provider,
+        chat_model_ready: chat.ready,
     }
 }
 
@@ -313,6 +330,10 @@ pub async fn migrate_secrets_from_settings_raw(raw: &mut serde_json::Value) -> b
 
 pub async fn resolve_openai_api_key() -> String {
     get_credential(CredentialKey::OpenAiApiKey).unwrap_or_default()
+}
+
+pub async fn resolve_anthropic_api_key() -> String {
+    get_credential(CredentialKey::AnthropicApiKey).unwrap_or_default()
 }
 
 pub async fn resolve_tavily_api_key() -> String {
@@ -359,12 +380,14 @@ mod tests {
     fn settings_secrets_use_frontend_field_names() {
         let secrets = SettingsSecrets {
             openai_api_key: "sk-test".into(),
+            anthropic_api_key: "sk-ant-test".into(),
             tavily_api_key: "tvly-test".into(),
             r2_secret_access_key: "r2-test".into(),
             google_api_key: "g-test".into(),
         };
         let json = serde_json::to_value(secrets).expect("serialize");
         assert_eq!(json.get("openaiApiKey").and_then(|v| v.as_str()), Some("sk-test"));
+        assert_eq!(json.get("anthropicApiKey").and_then(|v| v.as_str()), Some("sk-ant-test"));
         assert_eq!(json.get("tavilyApiKey").and_then(|v| v.as_str()), Some("tvly-test"));
         assert_eq!(
             json.get("r2SecretAccessKey").and_then(|v| v.as_str()),

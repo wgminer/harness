@@ -116,6 +116,7 @@ pub fn run() {
             commands::credentials::credentials_get_status,
             commands::credentials::credentials_get_secrets_for_settings,
             commands::credentials::credentials_set_open_ai_api_key,
+            commands::credentials::credentials_set_anthropic_api_key,
             commands::credentials::credentials_set_tavily_api_key,
             commands::credentials::credentials_set_google_api_key,
             commands::credentials::credentials_set_r2_secret_access_key,

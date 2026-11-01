@@ -93,14 +93,21 @@ export function createBrowserAdapter(): HarnessAPI {
     credentials: {
       getStatus: async () => ({
         hasOpenAIApiKey: store.secrets().openaiApiKey.trim().length > 0,
+        hasAnthropicApiKey: store.secrets().anthropicApiKey.trim().length > 0,
         hasTavilyApiKey: store.secrets().tavilyApiKey.trim().length > 0,
         hasR2SecretAccessKey: false,
         hasGoogleApiKey: false,
         encryptionAvailable: false,
+        // The browser shell only streams from OpenAI (or dummy replies).
+        chatProvider: "openai",
+        chatModelReady: store.secrets().openaiApiKey.trim().length > 0,
       }),
       getSecretsForSettings: async () => ({ ...store.secrets() }),
       setOpenAIApiKey: async (value) => {
         store.setSecret("openaiApiKey", value.trim());
+      },
+      setAnthropicApiKey: async (value) => {
+        store.setSecret("anthropicApiKey", value.trim());
       },
       setTavilyApiKey: async (value) => {
         store.setSecret("tavilyApiKey", value.trim());

@@ -3,11 +3,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
-use crate::credentials::resolve_openai_api_key;
 use crate::env_util::is_harness_e2e;
+use crate::llm::{generate_thread_title, ModelTier, Provider};
 use crate::state::AppState;
 use crate::memory::{format_voice_dictation_title, mark_voice_dictation_session, ConversationMeta, ConversationSessionKind, ConversationTitleSource, MessageRecord};
-use crate::openai::generate_thread_title_with_openai;
 
 const CONTEXT_MAX_CHARS: usize = 2400;
 const REFINE_EVERY: usize = 4;
@@ -224,8 +223,7 @@ pub fn schedule_conversation_title_refinement(
       emit_title_generation_started(&app, &conversation_id);
       notified_start = true;
 
-      let openai_key = resolve_openai_api_key().await.trim().to_string();
-      if openai_key.is_empty() {
+      let Ok(provider) = Provider::active().await else {
         // Prefer a message snippet (or Dictation label) over a display-only empty-chat placeholder.
         apply_fallback_title_if_placeholder(
           &app,
@@ -237,7 +235,7 @@ pub fn schedule_conversation_title_refinement(
         )
         .await?;
         return Ok(());
-      }
+      };
 
       // Match iOS: don't treat time placeholders as a real previous title.
       let previous_title = meta
@@ -248,10 +246,10 @@ pub fn schedule_conversation_title_refinement(
       let timer = crate::dictation_timing::StepTimer::for_conversation(
         &conversation_id,
         "Title",
-        crate::openai::openai_title_model(),
+        provider.model(ModelTier::Small),
       );
-      let raw_title = generate_thread_title_with_openai(
-        &openai_key,
+      let raw_title = generate_thread_title(
+        &provider,
         previous_title,
         &context,
       )

@@ -43,6 +43,7 @@ import {
 } from "./index";
 import type { SettingsTabId } from "./settingsNavConfig";
 import { normalizeSettingsTab, SETTINGS_TABS } from "./settingsNavConfig";
+import { ModelSettingsTab } from "./ModelSettingsTab";
 import {
   getCachedAccessibilityTrusted,
   getCachedSecrets,
@@ -360,6 +361,7 @@ export function SettingsView({
   const scrollRef = useRef<HTMLDivElement>(null);
   const tabButtonRefs = useRef<Record<SettingsTabId, HTMLButtonElement | null>>({
     general: null,
+    model: null,
     notes: null,
     voice: null,
     accounts: null,
@@ -899,6 +901,8 @@ export function SettingsView({
             {isMac ? <CliInstallSection /> : null}
           </SettingsTabPanel>}
 
+          {activeTab === "model" && <ModelSettingsTab onSaved={onSettingsChanged} />}
+
           {activeTab === "notes" && (
             <NotesTemplatesTab
               noteTemplates={noteTemplates}
@@ -928,8 +932,6 @@ export function SettingsView({
               transcriptionEngine={transcriptionEngine}
               setTranscriptionEngine={setTranscriptionEngine}
               openAIConfigured={openAIConfigured}
-              secretsLoaded={secretsLoaded}
-              apiKey={apiKey}
             >
               <SettingsGroup title="Dictation">
                 <SettingsSwitch

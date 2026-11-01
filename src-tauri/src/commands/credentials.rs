@@ -27,6 +27,11 @@ pub fn credentials_set_open_ai_api_key(value: String) -> Result<(), String> {
 }
 
 #[command(rename_all = "camelCase")]
+pub fn credentials_set_anthropic_api_key(value: String) -> Result<(), String> {
+    set_credential(CredentialKey::AnthropicApiKey, &value).map_err(map_err)
+}
+
+#[command(rename_all = "camelCase")]
 pub fn credentials_set_tavily_api_key(value: String) -> Result<(), String> {
     set_credential(CredentialKey::TavilyApiKey, &value).map_err(map_err)
 }

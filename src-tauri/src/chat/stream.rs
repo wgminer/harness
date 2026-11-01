@@ -8,11 +8,12 @@ use tokio_util::sync::CancellationToken;
 
 use crate::memory::title::schedule_conversation_title_refinement;
 use crate::credentials::resolve_openai_api_key;
+use crate::llm::{ChatClient, ModelTier, Provider};
 use crate::env_util::is_harness_e2e;
 use crate::memory::{append_message, AppendMessageMeta, ToolCallRecord};
 use crate::notes;
 use crate::openai::{
-    map_http_cancel, tool_error_result, ChatMessageParam, OpenAIChatClient, ToolCallExecContext,
+    map_http_cancel, tool_error_result, ChatMessageParam, ToolCallExecContext,
 };
 
 use super::gated_checkpoint::{clear_checkpoint, load_all_checkpoints, GatedCheckpoint};
@@ -44,8 +45,11 @@ impl ChatController {
         self.cancel_all_gated_tools("Stopped.").await;
     }
 
-    pub(crate) fn active_chat_model_label() -> String {
-        crate::openai::openai_chat_model()
+    /// The model a turn runs on; Pi coding turns and e2e runs use OpenAI's.
+    pub(crate) fn chat_model_label(provider: Option<&Provider>) -> String {
+        provider
+            .map(|p| p.model(ModelTier::Chat))
+            .unwrap_or_else(crate::openai::openai_chat_model)
     }
 
     fn harness_e2e_stream_delay_ms() -> u64 {
@@ -212,10 +216,7 @@ impl ChatController {
         clear_checkpoint(&checkpoint.pending_id);
 
         let conversation_id = checkpoint.conversation_id.clone();
-        let api_key = resolve_openai_api_key().await.trim().to_string();
-        if api_key.is_empty() {
-            return Err("OpenAI API key required.".into());
-        }
+        let provider = Provider::active().await?;
 
         let cancel = CancellationToken::new();
         {
@@ -233,7 +234,7 @@ impl ChatController {
         *self.note_stream.lock().unwrap() = None;
         self.active_stream_reasoning.lock().unwrap().clear();
 
-        let model_label = Self::active_chat_model_label();
+        let model_label = Self::chat_model_label(Some(&provider));
         let tool_calls_this_turn = Arc::new(Mutex::new(checkpoint.tool_records_so_far.clone()));
 
         // Show resolving state on the approval card.
@@ -351,7 +352,7 @@ impl ChatController {
             .flatten()
             .is_some();
         let tools = crate::openai::tools_for_request(include_coding);
-        let client = OpenAIChatClient::new(api_key).map_err(|e| e.to_string())?;
+        let client = ChatClient::new(&provider).map_err(|e| e.to_string())?;
         let conversation_id_owned = conversation_id.clone();
         let controller = self.clone();
         let tool_calls_cb = tool_calls_this_turn.clone();
@@ -424,8 +425,22 @@ impl ChatController {
             return self.stream_e2e_reply(conversation_id).await;
         }
 
-        let api_key = resolve_openai_api_key().await.trim().to_string();
-        if api_key.is_empty() {
+        // Conversations with a coding scope run through Pi, which owns the loop and tools.
+        let coding_scope = crate::memory::get_conversation_coding_scope(&self.state, conversation_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|meta| crate::coding::scope_from_meta(&meta).ok());
+        // Pi runs on OpenAI whatever provider is picked.
+        let provider = match coding_scope {
+            Some(_) => None,
+            None => Some(Provider::active().await?),
+        };
+        let api_key = match provider {
+            Some(_) => String::new(),
+            None => resolve_openai_api_key().await.trim().to_string(),
+        };
+        if provider.is_none() && api_key.is_empty() {
             return Err("OpenAI API key required.".into());
         }
 
@@ -445,14 +460,8 @@ impl ChatController {
         *self.note_stream.lock().unwrap() = None;
         self.active_stream_reasoning.lock().unwrap().clear();
 
-        let model_label = Self::active_chat_model_label();
+        let model_label = Self::chat_model_label(provider.as_ref());
 
-        // Conversations with a coding scope run through Pi, which owns the loop and tools.
-        let coding_scope = crate::memory::get_conversation_coding_scope(&self.state, conversation_id)
-            .await
-            .ok()
-            .flatten()
-            .and_then(|meta| crate::coding::scope_from_meta(&meta).ok());
         if let Some(scope) = coding_scope {
             let prompt = trailing_user_prompt(&messages);
             let mut tool_records = Vec::<ToolCallRecord>::new();
@@ -483,7 +492,11 @@ impl ChatController {
 
         let tool_calls_this_turn = Arc::new(Mutex::new(Vec::<ToolCallRecord>::new()));
 
-        let client = OpenAIChatClient::new(api_key).map_err(|e| e.to_string())?;
+        // Only coding turns (handled above) run without a provider.
+        let Some(provider) = provider else {
+            return Err("OpenAI API key required.".into());
+        };
+        let client = ChatClient::new(&provider).map_err(|e| e.to_string())?;
         let conversation_id_owned = conversation_id.to_string();
         let controller = self.clone();
         let tool_calls_cb = tool_calls_this_turn.clone();
@@ -730,7 +743,7 @@ impl ChatController {
     }
 
     async fn stream_e2e_reply(&self, conversation_id: &str) -> Result<(), String> {
-        let model_label = Self::active_chat_model_label();
+        let model_label = Self::chat_model_label(None);
         let synthetic = HARNESS_E2E_ASSISTANT_REPLY;
         let stream_delay_ms = Self::harness_e2e_stream_delay_ms();
         let cancel = CancellationToken::new();
