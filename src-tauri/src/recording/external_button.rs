@@ -32,6 +32,7 @@ const DEFAULT_HOST: &str = "voicepe.local";
 const API_PORT: u16 = 6053;
 const BUTTON_NAME: &str = "Center button";
 const BUTTON_OBJECT_ID: &str = "center_button";
+const RING_NAME: &str = "LED ring";
 const RING_OBJECT_ID: &str = "led_ring";
 /// Effect name from the firmware's `led_ring` light.
 const RING_PULSE: &str = "Pulse";
@@ -380,7 +381,7 @@ async fn find_entities(
                 button = Some(entity.key);
             }
             EspHomeMessage::ListEntitiesLightResponse(entity)
-                if entity.object_id == RING_OBJECT_ID =>
+                if entity.name == RING_NAME || entity.object_id == RING_OBJECT_ID =>
             {
                 ring = Some(entity.key);
             }
