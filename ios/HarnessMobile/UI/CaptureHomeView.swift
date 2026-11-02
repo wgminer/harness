@@ -11,6 +11,8 @@ struct CaptureHomeView: View {
 
     @State private var showSaved = false
     @State private var savedGeneration = 0
+    /// The capture that just saved, so the flash can link to its transcript.
+    @State private var savedConversationId: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -28,9 +30,9 @@ struct CaptureHomeView: View {
                     mode: .createSession,
                     style: .immersive,
                     isPresented: capturingBinding,
-                    onConversationCreated: { _ in
+                    onConversationCreated: { conversationId in
                         app.dismissDictation()
-                        flashSaved()
+                        flashSaved(conversationId: conversationId)
                     }
                 )
                 .transition(.opacity)
@@ -61,11 +63,23 @@ struct CaptureHomeView: View {
             )
             .overlay {
                 if showSaved {
-                    Text("Saved")
-                        .font(.title2.weight(.medium))
-                        .foregroundStyle(HarnessPalette.textStrong)
-                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
-                        .allowsHitTesting(false)
+                    VStack(spacing: 10) {
+                        Text("Saved")
+                            .font(.title2.weight(.medium))
+                            .foregroundStyle(HarnessPalette.textStrong)
+                        if let savedConversationId {
+                            // Stays put on the capture screen; the transcript is one quiet tap away.
+                            Button("View") { viewSaved(conversationId: savedConversationId) }
+                                .font(.subheadline)
+                                .foregroundStyle(HarnessPalette.textMuted)
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .contentShape(Rectangle())
+                                .accessibilityLabel("View transcript")
+                        }
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
                 } else {
                     Button(action: startCapture) {
                         Circle()
@@ -105,12 +119,21 @@ struct CaptureHomeView: View {
         app.beginCreateSessionDictation()
     }
 
-    private func flashSaved() {
+    private func viewSaved(conversationId: String) {
+        HapticFeedback.light()
+        savedGeneration += 1
+        showSaved = false
+        app.openThread(id: conversationId)
+    }
+
+    private func flashSaved(conversationId: String) {
         savedGeneration += 1
         let generation = savedGeneration
+        savedConversationId = conversationId
         withAnimation(.easeOut(duration: 0.2)) { showSaved = true }
         Task {
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            // Long enough to reach the View link.
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard generation == savedGeneration else { return }
             withAnimation(.easeIn(duration: 0.4)) { showSaved = false }
         }

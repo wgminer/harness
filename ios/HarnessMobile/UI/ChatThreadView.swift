@@ -260,7 +260,8 @@ struct ChatThreadView: View {
                     }
                 )
             )
-            .scrollDisabled(centerSingleMessage)
+            // A centered dictation sits still, but an expanded transcript taller than the sheet must scroll.
+            .scrollBounceBehavior(centerSingleMessage ? .basedOnSize : .automatic)
             .defaultScrollAnchor(.top)
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(
