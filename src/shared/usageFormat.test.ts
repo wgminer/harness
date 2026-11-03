@@ -22,13 +22,13 @@ describe("formatRelativeTime", () => {
 });
 
 describe("formatAudioDuration", () => {
-  it("shows minutes under an hour", () => {
-    expect(formatAudioDuration(0)).toBe("0 min");
-    expect(formatAudioDuration(45 * 60_000)).toBe("45 min");
+  it("shows minutes and seconds under an hour", () => {
+    expect(formatAudioDuration(0)).toBe("0:00");
+    expect(formatAudioDuration(45 * 60_000 + 7_000)).toBe("45:07");
   });
 
-  it("shows hours and minutes", () => {
-    expect(formatAudioDuration(3 * 3_600_000)).toBe("3 h");
-    expect(formatAudioDuration(3 * 3_600_000 + 12 * 60_000)).toBe("3 h 12 min");
+  it("shows hours, minutes and seconds", () => {
+    expect(formatAudioDuration(3 * 3_600_000)).toBe("3:00:00");
+    expect(formatAudioDuration(2 * 3_600_000 + 47 * 60_000 + 5_400)).toBe("2:47:05");
   });
 });

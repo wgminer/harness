@@ -13,12 +13,12 @@ export function formatRelativeTime(ms: number, now: number = Date.now()): string
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** Total recorded audio, e.g. `0 min`, `45 min`, `3 h 12 min`. */
+/** Total recorded audio as a clock, e.g. `0:00`, `45:07`, `2:47:05`. */
 export function formatAudioDuration(ms: number): string {
-  const totalMinutes = Math.round(Math.max(0, ms) / MINUTE_MS);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes} min`;
-  if (minutes === 0) return `${hours} h`;
-  return `${hours} h ${minutes} min`;
+  const totalSeconds = Math.floor(Math.max(0, ms) / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  if (hours === 0) return `${minutes}:${seconds}`;
+  return `${hours}:${String(minutes).padStart(2, "0")}:${seconds}`;
 }
