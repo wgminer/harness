@@ -254,7 +254,7 @@
   transition: border-color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
-.settings-tile:not(.settings-tile--static):hover {
+.settings-tile:not(.settings-tile--summary):hover {
   border-color: var(--border-input);
 }
 
@@ -263,8 +263,26 @@
   outline-offset: 2px;
 }
 
-.settings-tile--static {
+.settings-tile--summary {
   cursor: default;
+}
+
+.settings-tile--summary-ok {
+  border-color: color-mix(in oklab, var(--success-fg) 35%, var(--border-edge));
+  background: color-mix(in oklab, var(--success-fg) 12%, var(--settings-panel-bg));
+}
+
+.settings-tile--summary-ok .settings-tile__value {
+  color: var(--success-fg);
+}
+
+.settings-tile--summary-attention {
+  border-color: color-mix(in oklab, var(--warning-fg) 40%, var(--border-edge));
+  background: color-mix(in oklab, var(--warning-fg) 12%, var(--settings-panel-bg));
+}
+
+.settings-tile--summary-attention .settings-tile__value {
+  color: var(--warning-fg);
 }
 
 .settings-tile--attention {
