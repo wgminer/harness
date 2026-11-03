@@ -271,7 +271,7 @@ export function StatusTab({ engine, globalFnHotkey, isMac, onOpenTab }: StatusTa
         </SettingsPane>
       ) : null}
 
-      <SettingsPane title="Harness" bare>
+      <SettingsPane title="Overview" bare>
         <div className="settings-tiles">
           <div
             className={`settings-tile settings-tile--summary settings-tile--summary-${summary.tone}`}
