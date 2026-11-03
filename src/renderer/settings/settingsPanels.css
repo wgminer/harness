@@ -229,18 +229,10 @@
   color: var(--fg);
 }
 
-.settings-all-clear {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-2) 2px;
-  font-weight: 500;
-  color: var(--success-fg);
-}
-
+/* Fixed columns so the 9 tiles (status + 8) and 8 stats fill whole rows. */
 .settings-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -262,13 +254,17 @@
   transition: border-color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
-.settings-tile:hover {
+.settings-tile:not(.settings-tile--static):hover {
   border-color: var(--border-input);
 }
 
 .settings-tile:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
+}
+
+.settings-tile--static {
+  cursor: default;
 }
 
 .settings-tile--attention {
@@ -320,7 +316,7 @@
 
 .settings-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--border-edge);
   border-radius: var(--radius-lg);
   background: var(--settings-panel-bg);
