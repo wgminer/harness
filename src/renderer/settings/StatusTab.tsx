@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Check, Download, KeyRound, Keyboard, Mic, RefreshCw } from "lucide-react";
+import { Download, KeyRound, Keyboard, Mic, RefreshCw } from "lucide-react";
 import { CHAT_PROVIDERS } from "../../shared/chatProviders";
 import { TRANSCRIPTION_ENGINES, type TranscriptionEngineId } from "../../shared/transcriptionEngines";
 import { formatAudioDuration, formatRelativeTime } from "../../shared/usageFormat";
@@ -25,7 +25,7 @@ interface Tile {
   value: string;
   detail: string;
   tone: Tone;
-  tab: SettingsTabId;
+  tab?: SettingsTabId;
 }
 
 export interface StatusTabProps {
@@ -204,6 +204,19 @@ function statusTiles(
   ];
 }
 
+function TileBody({ tile }: { tile: Tile }) {
+  return (
+    <>
+      <span className="settings-tile__top">
+        {tile.label}
+        <span className={`settings-dot settings-dot--${tile.tone}`} aria-hidden />
+      </span>
+      <span className="settings-tile__value">{tile.value}</span>
+      <span className="settings-tile__detail">{tile.detail}</span>
+    </>
+  );
+}
+
 export function StatusTab({ engine, globalFnHotkey, isMac, onOpenTab }: StatusTabProps) {
   const { status, allowMicrophone, allowAccessibility } = useSystemStatus({ engine, isMac });
   const context = { engine, globalFnHotkey, isMac };
@@ -215,6 +228,18 @@ export function StatusTab({ engine, globalFnHotkey, isMac, onOpenTab }: StatusTa
   const tiles = statusTiles(status, context);
   const usage = status.usage;
   const loaded = status.keys != null && status.microphone != null;
+  const summary: Tile =
+    attention.length > 0
+      ? {
+          id: "summary",
+          label: "Status",
+          value: attention.length === 1 ? "1 issue" : `${attention.length} issues`,
+          detail: "See above",
+          tone: "attention",
+        }
+      : loaded
+        ? { id: "summary", label: "Status", value: "All systems go", detail: "", tone: "ok" }
+        : { id: "summary", label: "Status", value: LOADING, detail: "", tone: "idle" };
 
   const stats: Array<{ label: string; value: string }> = [
     { label: "Conversations", value: count(usage.conversations) },
@@ -244,28 +269,26 @@ export function StatusTab({ engine, globalFnHotkey, isMac, onOpenTab }: StatusTa
             </div>
           ))}
         </SettingsPane>
-      ) : loaded ? (
-        <p className="settings-all-clear" role="status">
-          <Check size={16} aria-hidden /> Nothing needs you.
-        </p>
       ) : null}
 
-      <SettingsPane title="Harness" bare>
+      <SettingsPane title="Overview" bare>
         <div className="settings-tiles">
+          <div
+            className={`settings-tile settings-tile--summary settings-tile--summary-${summary.tone}`}
+            data-testid="settings-status-summary"
+            role="status"
+          >
+            <TileBody tile={summary} />
+          </div>
           {tiles.map((tile) => (
             <button
               key={tile.id}
               type="button"
               className={`settings-tile${tile.tone === "attention" ? " settings-tile--attention" : ""}`}
               data-testid={`settings-status-${tile.id}`}
-              onClick={() => onOpenTab(tile.tab)}
+              onClick={() => tile.tab && onOpenTab(tile.tab)}
             >
-              <span className="settings-tile__top">
-                {tile.label}
-                <span className={`settings-dot settings-dot--${tile.tone}`} aria-hidden />
-              </span>
-              <span className="settings-tile__value">{tile.value}</span>
-              <span className="settings-tile__detail">{tile.detail}</span>
+              <TileBody tile={tile} />
             </button>
           ))}
         </div>

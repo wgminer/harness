@@ -229,18 +229,10 @@
   color: var(--fg);
 }
 
-.settings-all-clear {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-2) 2px;
-  font-weight: 500;
-  color: var(--success-fg);
-}
-
+/* Fixed columns so the 9 tiles (status + 8) and 8 stats fill whole rows. */
 .settings-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -262,13 +254,35 @@
   transition: border-color var(--motion-duration-ui) var(--motion-ease-standard);
 }
 
-.settings-tile:hover {
+.settings-tile:not(.settings-tile--summary):hover {
   border-color: var(--border-input);
 }
 
 .settings-tile:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
+}
+
+.settings-tile--summary {
+  cursor: default;
+}
+
+.settings-tile--summary-ok {
+  border-color: color-mix(in oklab, var(--success-fg) 35%, var(--border-edge));
+  background: color-mix(in oklab, var(--success-fg) 12%, var(--settings-panel-bg));
+}
+
+.settings-tile--summary-ok .settings-tile__value {
+  color: var(--success-fg);
+}
+
+.settings-tile--summary-attention {
+  border-color: color-mix(in oklab, var(--warning-fg) 40%, var(--border-edge));
+  background: color-mix(in oklab, var(--warning-fg) 12%, var(--settings-panel-bg));
+}
+
+.settings-tile--summary-attention .settings-tile__value {
+  color: var(--warning-fg);
 }
 
 .settings-tile--attention {
@@ -320,7 +334,8 @@
 
 .settings-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
   border: 1px solid var(--border-edge);
   border-radius: var(--radius-lg);
   background: var(--settings-panel-bg);
@@ -330,18 +345,27 @@
 .settings-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
+  min-width: 0;
   margin: 0 -1px -1px 0;
-  padding: 14px var(--space-4);
+  padding: var(--space-4);
   border-right: 1px solid var(--border-edge);
   border-bottom: 1px solid var(--border-edge);
 }
 
+.settings-stat__value,
+.settings-stat__label {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .settings-stat__value {
-  font-size: 20px;
+  font-size: 22px;
   line-height: 28px;
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--fg);
 }
